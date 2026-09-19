@@ -1,0 +1,66 @@
+rules_version = '2';
+
+// RASCUNHO da v1. Teste no "Playground de regras" do console (ou no Emulator)
+// antes de publicar. Pressupõe login anônimo ativado (request.auth.uid).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function campaignPath(campaignId) {
+      return /databases/$(database)/documents/campaigns/$(campaignId);
+    }
+
+    // ---------- Personagens e criaturas: só o dono lê e escreve ----------
+    match /characters/{characterId} {
+      allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn()
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    // ---------- Campanhas ----------
+    // O ID do documento É o ID de entrada. Quem tem o ID consegue abrir a campanha;
+    // listar campanhas só funciona para o mestre ou para quem já participa.
+    match /campaigns/{campaignId} {
+      allow get: if signedIn();
+
+      allow list: if signedIn()
+                  && (resource.data.ownerUid == request.auth.uid
+                      || request.auth.uid in resource.data.memberUids);
+
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      allow update: if signedIn() && (
+        // o mestre edita a própria campanha
+        (resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == resource.data.ownerUid)
+        ||
+        // qualquer pessoa logada só pode se adicionar em memberUids (entrar)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
+          && request.resource.data.memberUids.hasAll(resource.data.memberUids)
+          && request.auth.uid in request.resource.data.memberUids
+          && request.resource.data.memberUids.size() <= resource.data.memberUids.size() + 1)
+      );
+
+      // ---------- Candidatos (cópia de nome e tipo do personagem) ----------
+      match /members/{characterId} {
+        allow read: if signedIn()
+                    && (request.auth.uid in get(campaignPath(campaignId)).data.memberUids
+                        || get(campaignPath(campaignId)).data.ownerUid == request.auth.uid);
+
+        // getAfter: no mesmo lote, a pessoa já precisa estar em memberUids
+        allow create: if signedIn()
+                      && request.resource.data.ownerUid == request.auth.uid
+                      && request.auth.uid in getAfter(campaignPath(campaignId)).data.memberUids;
+
+        allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      }
+    }
+  }
+}
