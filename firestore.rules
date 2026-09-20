@@ -1,9 +1,14 @@
 rules_version = '2';
 
-// Vortex | regras de segurança do Firestore
+// Vortex | regras de segurança do Firestore (versão 2: fichas públicas)
 // Cole este conteúdo em: Firebase > Firestore Database > Regras > Publicar.
 // Pressupõe o login Anônimo ativado (Authentication > Método de login).
 // Teste no "Playground de regras" antes de divulgar o site.
+//
+// Modelo de confiança: o jogo funciona na boa-fé.
+//  - Qualquer pessoa logada LÊ e EDITA qualquer ficha.
+//  - Só quem criou a ficha (ownerUid) pode EXCLUIR.
+//  - Para restringir a edição só ao dono, troque a regra "allow update" de /characters.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -23,31 +28,43 @@ service cloud.firestore {
     // ---------- Nomes reservados (impede nomes repetidos) ----------
     // Cada nome vira um documento c_nome (personagem/criatura) ou k_nome (campanha).
     // Criar um documento que já existe é uma atualização, e atualização é proibida:
-    // por isso dois nomes iguais nunca passam.
+    // por isso dois nomes iguais nunca passam. Como qualquer pessoa pode renomear
+    // uma ficha, qualquer pessoa logada também pode apagar uma reserva antiga.
     match /names/{key} {
       allow get: if signedIn();
       allow create: if signedIn()
                     && key.matches('(c|k)_.+')
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.kind in ['character', 'campaign'];
-      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if signedIn();
     }
 
-    // ---------- Personagens e criaturas: só o dono lê e escreve ----------
+    // ---------- Personagens e criaturas: públicos e editáveis ----------
     match /characters/{characterId} {
-      allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      // limites para uma ficha válida (protege contra lixo, já que qualquer um edita)
+      function validChar() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['ownerUid', 'name', 'nameKey', 'type', 'image', 'thumb', 'species', 'age',
+                                 'origin', 'campaignIds', 'searchKeys', 'createdAt', 'updatedAt'])
+            && d.type in ['personagem', 'criatura']
+            && d.name is string && d.name.size() >= 2 && d.name.size() <= 40
+            && d.species.size() <= 40 && d.age.size() <= 20 && d.origin.size() <= 60
+            && d.image.size() <= 150000 && d.thumb.size() <= 20000;
+      }
+
+      allow read: if signedIn();   // vale para abrir uma ficha e para a busca
 
       allow create: if signedIn()
-                    && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.type in ['personagem', 'criatura']
-                    && request.resource.data.image.size() <= 150000
-                    && request.resource.data.thumb.size() <= 20000;
+                    && validChar()
+                    && request.resource.data.ownerUid == request.auth.uid;
 
       allow update: if signedIn()
-                    && resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.image.size() <= 150000
-                    && request.resource.data.thumb.size() <= 20000;
+                    && validChar()
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.type == resource.data.type;
+
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     // ---------- Campanhas ----------
@@ -82,7 +99,7 @@ service cloud.firestore {
           ))
       );
 
-      // ---------- Candidatos (cópia de nome, tipo e miniatura do personagem) ----------
+      // ---------- Candidatos: só o vínculo (a ficha é lida direto de /characters) ----------
       match /members/{characterId} {
         allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
 
@@ -91,12 +108,8 @@ service cloud.firestore {
                       && request.resource.data.ownerUid == request.auth.uid
                       && request.auth.uid in getAfter(campaignRef(campaignId)).data.memberUids;
 
-        allow update: if signedIn()
-                      && resource.data.ownerUid == request.auth.uid
-                      && request.resource.data.ownerUid == request.auth.uid;
-
-        allow delete: if signedIn()
-                      && (resource.data.ownerUid == request.auth.uid || isCampaignOwner(campaignId));
+        // quem participa da campanha (ou o mestre) pode tirar um vínculo
+        allow delete: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
       }
 
       // ---------- Chat de dados (rolagens não podem ser editadas) ----------

@@ -27,6 +27,10 @@
       <svg class="brand__mark" viewBox="-100 -100 200 200" aria-hidden="true" focusable="false"><use href="#vx-mark"/></svg>
       <span>Vortex</span>
     </a>
+    <nav class="app-nav" aria-label="Principal">
+      <a class="app-nav__link" data-nav="home" href="#/home">Início</a>
+      <a class="app-nav__link" data-nav="search" href="#/search">Buscar</a>
+    </nav>
     <!-- Mostra onde os dados estão sendo salvos: modo local ou Firebase -->
     <span class="mode-pill" id="mode-pill" role="status">Modo local</span>
   </header>
@@ -69,19 +73,49 @@
 
       <div class="two-col">
         <section class="block" aria-labelledby="quick-title">
-          <h2 class="block__title" id="quick-title">Personagens e criaturas</h2>
+          <h2 class="block__title" id="quick-title"><button class="help" type="button" data-help="fichas">Personagens e criaturas</button></h2>
           <p class="block__hint">Acesso rápido, salvo neste aparelho.</p>
           <ul class="rows" id="quick-list"></ul>
           <p class="empty" id="quick-empty">Nada por aqui ainda. Crie o primeiro acima.</p>
         </section>
 
         <section class="block" aria-labelledby="camps-title">
-          <h2 class="block__title" id="camps-title">Campanhas</h2>
+          <h2 class="block__title" id="camps-title"><button class="help" type="button" data-help="campanhas">Campanhas</button></h2>
           <p class="block__hint">Criadas por você ou onde um personagem seu participa.</p>
           <ul class="rows" id="camp-list"></ul>
           <p class="empty" id="camp-empty">Nenhuma campanha ainda. Crie uma acima ou abra um personagem e entre com um ID de entrada.</p>
         </section>
       </div>
+    </section>
+
+    <!-- ===================== TELA: BUSCAR ===================== -->
+    <section class="screen" data-screen="search" data-title="Buscar" aria-labelledby="search-title" hidden>
+      <header class="screen__head">
+        <h1 id="search-title" tabindex="-1">Buscar fichas</h1>
+      </header>
+
+      <form class="search-form" id="form-search" role="search" novalidate>
+        <div class="field">
+          <label class="field__label" for="search-input">Nome, espécie ou origem</label>
+          <input class="input input--lg" id="search-input" name="q" type="search" autocomplete="off" autocapitalize="off"
+                 spellcheck="false" placeholder="Ex.: Kael, elfa, Porto">
+        </div>
+        <fieldset class="field">
+          <legend class="field__label">Tipo</legend>
+          <div class="segmented">
+            <label class="segmented__opt"><input type="radio" name="stype" value="" checked><span>Todos</span></label>
+            <label class="segmented__opt"><input type="radio" name="stype" value="personagem"><span>Personagens</span></label>
+            <label class="segmented__opt"><input type="radio" name="stype" value="criatura"><span>Criaturas</span></label>
+          </div>
+        </fieldset>
+      </form>
+
+      <section class="block" aria-labelledby="results-title">
+        <h2 class="block__title" id="results-title"><button class="help" type="button" data-help="busca">Resultados</button></h2>
+        <p class="block__hint" id="search-hint" role="status"></p>
+        <ul class="rows" id="search-list"></ul>
+        <p class="empty" id="search-empty">Nenhuma ficha encontrada. Confira a grafia ou tente só o começo do nome.</p>
+      </section>
     </section>
 
     <!-- ===================== TELA: FICHA ===================== -->
@@ -101,12 +135,17 @@
           <span class="badge" id="sheet-badge"></span>
           <h1 id="sheet-title" tabindex="-1"></h1>
           <p class="save-status" id="sheet-status" aria-live="polite"></p>
+          <div class="sheet-actions">
+            <button class="btn btn--ghost btn--sm" type="button" id="export-open">Exportar ficha</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="pin-toggle">Fixar no acesso rápido</button>
+          </div>
         </div>
       </header>
 
       <div class="two-col">
         <section class="block" aria-labelledby="basic-title">
-          <h2 class="block__title" id="basic-title">Dados básicos</h2>
+          <h2 class="block__title" id="basic-title"><button class="help" type="button" data-help="dados-basicos">Dados básicos</button></h2>
+          <p class="block__hint">Todas as fichas são públicas: qualquer pessoa pode ver e editar.</p>
           <div class="fields-grid">
             <div class="field field--wide">
               <label class="field__label" for="f-name">Nome</label>
@@ -129,7 +168,7 @@
         </section>
 
         <section class="block" aria-labelledby="attach-title">
-          <h2 class="block__title" id="attach-title">Campanhas</h2>
+          <h2 class="block__title" id="attach-title"><button class="help" type="button" data-help="campanhas">Campanhas</button></h2>
           <form class="inline-form" id="form-attach" novalidate>
             <div class="field">
               <label class="field__label" for="attach-code">ID de entrada da campanha</label>
@@ -144,7 +183,7 @@
         </section>
       </div>
 
-      <div class="danger-zone">
+      <div class="danger-zone" id="danger-zone">
         <button class="btn btn--danger" type="button" id="delete-character">Excluir personagem</button>
       </div>
     </section>
@@ -164,7 +203,7 @@
 
       <div class="two-col two-col--chat">
         <section class="block chat" aria-labelledby="chat-title">
-          <h2 class="block__title" id="chat-title">Dados</h2>
+          <h2 class="block__title" id="chat-title"><button class="help" type="button" data-help="rolagens">Dados</button></h2>
 
           <div class="field" id="speaker-field">
             <label class="field__label" for="speaker">Rolando como</label>
@@ -198,7 +237,7 @@
         </section>
 
         <section class="block" aria-labelledby="members-title">
-          <h2 class="block__title" id="members-title">Candidatos<span class="count" id="members-count"></span></h2>
+          <h2 class="block__title" id="members-title"><button class="help" type="button" data-help="candidatos">Candidatos</button><span class="count" id="members-count"></span></h2>
           <ul class="rows" id="member-list"></ul>
           <p class="empty" id="member-empty">Ninguém entrou ainda. Compartilhe o ID de entrada.</p>
         </section>
@@ -207,6 +246,19 @@
       <div class="danger-zone" id="camp-danger" hidden>
         <button class="btn btn--danger" type="button" id="delete-campaign">Excluir campanha</button>
       </div>
+    </section>
+
+    <!-- ===================== TELA: REGRAS (esqueleto) ===================== -->
+    <section class="screen" data-screen="rules" data-title="Regras" aria-labelledby="rules-title" hidden>
+      <a class="back-link" id="rules-back" href="#/home">Voltar</a>
+      <header class="screen__head">
+        <h1 id="rules-title" tabindex="-1">Regras</h1>
+      </header>
+      <p class="notice">A aba Regras está em construção. Ela vai existir dentro da ficha, avulsa e ligada à campanha. Por enquanto este é o índice dos tópicos, para os atalhos de ajuda já apontarem para o lugar certo.</p>
+      <section class="block rules-index" aria-labelledby="rules-topic-h">
+        <h2 class="block__title" id="rules-topic-h">Tópico: <span id="rules-topic"></span></h2>
+        <ul class="rows" id="rules-list"></ul>
+      </section>
     </section>
 
   </main>
@@ -219,6 +271,31 @@
       <div class="dialog__actions">
         <button class="btn btn--ghost" value="cancel">Cancelar</button>
         <button class="btn btn--danger" value="ok" id="confirm-ok">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Balão de ajuda (um só; o script o coloca ao lado do nome da aba) -->
+  <div class="help-pop" id="help-pop" role="dialog" aria-labelledby="help-pop-title" hidden>
+    <p class="help-pop__title" id="help-pop-title"></p>
+    <p class="help-pop__text" id="help-pop-text"></p>
+    <a class="btn btn--ghost btn--sm" id="help-pop-link" href="#/rules">Ver nas regras</a>
+  </div>
+
+  <!-- Exportar a ficha -->
+  <dialog class="dialog" id="export-dialog" aria-labelledby="export-title">
+    <form method="dialog">
+      <h2 id="export-title">Exportar ficha</h2>
+      <p>Escolha o formato. O arquivo é gerado no seu aparelho.</p>
+      <div class="export-list">
+        <button class="btn btn--ghost" type="button" data-export="pdf">PDF (.pdf)</button>
+        <button class="btn btn--ghost" type="button" data-export="docx">Word (.docx)</button>
+        <button class="btn btn--ghost" type="button" data-export="txt">Texto (.txt)</button>
+        <button class="btn btn--ghost" type="button" data-export="copy">Copiar texto</button>
+      </div>
+      <p class="field__hint">Para o Google Docs: baixe o .docx, envie ao Google Drive e abra com o Docs.</p>
+      <div class="dialog__actions">
+        <button class="btn btn--ghost" type="button" id="export-close">Fechar</button>
       </div>
     </form>
   </dialog>

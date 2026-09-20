@@ -131,6 +131,19 @@ code { font-family: var(--fonte-ui); }
 .brand__mark { width: 1.9rem; height: 1.9rem; color: var(--ambar); }
 
 /* Etiqueta que mostra onde os dados estão sendo salvos */
+.app-nav { display: flex; gap: 0.25rem; margin-right: auto; }
+.app-nav__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  color: var(--nevoa-2);
+  font-weight: 600;
+  text-decoration: none;
+}
+.app-nav__link:hover { color: var(--nevoa); }
+.app-nav__link[aria-current="page"] { color: var(--nevoa); box-shadow: inset 0 -3px 0 var(--ambar); }
+
 .mode-pill {
   padding: 0.2rem 0.75rem;
   border: 1px solid var(--linha-forte);
@@ -167,7 +180,7 @@ code { font-family: var(--fonte-ui); }
 }
 .screen__head h1 { font-size: var(--t-2xl); font-weight: 800; overflow-wrap: anywhere; }
 
-.block { padding-top: 1.25rem; border-top: 1px solid var(--linha); }
+.block { position: relative; padding-top: 1.25rem; border-top: 1px solid var(--linha); }
 .block__title { margin-bottom: 0.5rem; font-size: var(--t-xl); }
 .block__hint { margin-bottom: 1rem; font-size: var(--t-s); color: var(--nevoa-2); }
 .block__title + :not(.block__hint) { margin-top: 0.5rem; }
@@ -191,6 +204,46 @@ code { font-family: var(--fonte-ui); }
   color: var(--mare);
   font-weight: 600;
 }
+
+/* Nome da aba com explicação (passe o mouse ou clique) */
+.help {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: help;
+}
+.help::after {
+  content: "?";
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1px solid var(--linha-forte);
+  border-radius: 50%;
+  color: var(--nevoa-2);
+  font: 700 0.7rem/1 var(--fonte-ui);
+}
+.help:hover::after, .help[aria-expanded="true"]::after { border-color: var(--ambar); color: var(--ambar); }
+
+.help-pop {
+  position: absolute;
+  z-index: 30;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 1rem 1.1rem;
+  background: var(--casco);
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--r-s);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.help-pop__title { font-family: var(--fonte-titulo); font-size: var(--t-l); font-weight: 700; }
+.help-pop__text { margin: 0.35rem 0 0.9rem; font-size: var(--t-s); color: var(--nevoa-2); }
 
 /* ---------- 3. BOTÕES E CAMPOS ---------- */
 .btn {
@@ -393,7 +446,39 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .field--wide { grid-column: 1 / -1; }
 .danger-zone { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--linha); }
 
+.sheet-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem; }
+
+/* ---------- Buscar ---------- */
+.search-form { display: grid; gap: 1.25rem; max-width: 34rem; margin-bottom: 2rem; }
+
+/* ---------- Exportar ---------- */
+.export-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin: 1rem 0; }
+
+/* ---------- Regras (esqueleto) ---------- */
+.rules-index { margin-top: 1.5rem; }
+.rows > li.is-current { background: var(--casco); box-shadow: inset 3px 0 0 var(--ambar); }
+
 /* ---------- 7. CAMPANHA E DADOS ---------- */
+.member__toggle { width: 100%; }
+.member__toggle::after {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: 0 0.4rem 0.2rem 0.25rem;
+  border-right: 2px solid var(--nevoa-2);
+  border-bottom: 2px solid var(--nevoa-2);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+.member__toggle[aria-expanded="true"]::after { transform: rotate(-135deg); margin-bottom: -0.2rem; }
+.member__panel { display: flex; gap: 1.25rem; padding: 0.25rem 0.25rem 1.1rem; }
+.member__pic { width: 5.5rem; height: 5.5rem; font-size: 2.2rem; }
+.member__info { display: grid; gap: 0.75rem; min-width: 0; align-content: start; }
+.member__data { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.9rem; margin: 0; }
+.member__data dt { font-size: var(--t-s); color: var(--nevoa-2); }
+.member__data dd { margin: 0; overflow-wrap: anywhere; }
+
 .code-chip {
   display: flex;
   flex-wrap: wrap;
@@ -497,6 +582,12 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
 
 /* ---------- 9. CELULAR E TOQUE ---------- */
 @media (max-width: 640px) {
+  .help { min-height: 44px; }
+  .app-bar { flex-wrap: wrap; }
+  .brand { margin-right: auto; }
+  .app-nav { order: 3; width: 100%; margin-right: 0; }
+  .member__panel { flex-direction: column; }
+  .export-list { grid-template-columns: 1fr; }
   .entry-form { max-width: none; }
   .entry-form .btn { width: 100%; }
   .segmented { display: flex; }
@@ -520,4 +611,5 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
 }
 @media (pointer: coarse) {
   .btn--sm { min-height: 44px; }
+  .help { min-height: 44px; }
 }
