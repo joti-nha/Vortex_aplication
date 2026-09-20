@@ -1,25 +1,11 @@
-/* =====================================================================
-   VORTEX | app.js
-   Índice: 1 Firebase (config) · 2 Utilidades · 3 Dados (rolagem)
-           4 Banco local · 5 Banco Firebase · 6 Acesso rápido e interface
-           7 Telas · 8 Início do app
-   ===================================================================== */
-
-/* ---------------------------------------------------------------------
-   1. FIREBASE: COLE AQUI OS DADOS DO SEU PROJETO
-   Console do Firebase > Configurações do projeto > Seus apps > Web >
-   copie os valores de "firebaseConfig" para os campos abaixo.
-   Deixe TUDO VAZIO para usar o modo local (dados só neste aparelho).
-   Ao preencher, a etiqueta no topo do site passa a mostrar
-   "Firebase conectado". As regras de segurança ficam em firestore.rules.
-   --------------------------------------------------------------------- */
 const FIREBASE_CONFIG = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: ''
+  apiKey: 'AIzaSyDEaRWcliVKrFGSGslzO-YODgZDZxgI5yE',
+  authDomain: 'vortex-7faa5.firebaseapp.com',
+  projectId: 'vortex-7faa5',
+  storageBucket: 'vortex-7faa5.firebasestorage.app',
+  messagingSenderId: '174536440512',
+  appId: '1:174536440512:web:e62bab9f3a255039644b25',
+  measurementId: 'G-FK6E5GTTHR'
 };
 
 (function () {
@@ -86,6 +72,9 @@ const FIREBASE_CONFIG = {
     console.error(err);
     const code = err && err.code;
     if (code === 'permission-denied') return 'O Firebase recusou a operação. Confira o login anônimo e as regras (veja o guia).';
+    if (code === 'auth/network-request-failed') return 'Não foi possível acessar o Firebase. Confira sua conexão e tente de novo.';
+    if (code === 'failed-precondition') return 'O Firestore ainda não está configurado neste projeto. Crie o banco e publique as regras.';
+    if (code === 'auth/configuration-not-found') return 'O Firebase não encontrou a configuração de autenticação deste projeto.';
     if (code === 'unavailable') return 'Sem conexão com o Firebase. Tente de novo.';
     return 'Algo deu errado. Tente de novo.';
   }
@@ -661,6 +650,8 @@ const FIREBASE_CONFIG = {
     if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation') return 'Ative o login Anônimo em Authentication > Método de login.';
     if (code === 'auth/unauthorized-domain') return 'Adicione este endereço em Authentication > Configurações > Domínios autorizados.';
     if (code === 'auth/invalid-api-key' || code === 'auth/api-key-not-valid') return 'A apiKey parece errada. Copie o firebaseConfig de novo.';
+    if (code === 'auth/network-request-failed') return 'A conexão com o Firebase falhou. Confira sua rede e tente novamente.';
+    if (code === 'failed-precondition') return 'O Firestore ainda não foi criado ou está indisponível neste projeto.';
     if (location.protocol === 'file:') return 'Abra o site por um endereço http (extensão Live Server) ou publique-o; com duplo clique o Firebase pode não conectar.';
     return (err && err.message) || 'Não foi possível conectar.';
   }
