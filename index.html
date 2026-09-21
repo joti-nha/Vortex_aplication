@@ -28,8 +28,8 @@
       <span>Vortex</span>
     </a>
     <nav class="app-nav" aria-label="Principal">
-      <a class="app-nav__link" data-nav="home" href="#/home">Início</a>
-      <a class="app-nav__link" data-nav="search" href="#/search">Buscar</a>
+      <a class="app-nav__link" data-nav="character-options" href="#/character-options">Opções de personagem</a>
+      <a class="app-nav__link" data-nav="items" href="#/items">Itens</a>
     </nav>
     <!-- Mostra onde os dados estão sendo salvos: modo local ou Firebase -->
     <span class="mode-pill" id="mode-pill" role="status">Modo local</span>
@@ -68,6 +68,7 @@
           </div>
 
           <button class="btn btn--primary btn--lg" type="submit" id="create-button">Criar personagem</button>
+            <button class="btn btn--ghost" type="button" id="open-character-options-create">Abrir opções de personagem</button>
         </form>
       </div>
 
@@ -108,6 +109,8 @@
             <label class="segmented__opt"><input type="radio" name="stype" value="criatura"><span>Criaturas</span></label>
           </div>
         </fieldset>
+        <button class="btn btn--ghost" type="button" id="open-character-options-search">Abrir opções de personagem</button>
+        <button class="btn btn--ghost" type="button" id="open-global-search">Busca avançada</button>
       </form>
 
       <section class="block" aria-labelledby="results-title">
@@ -248,17 +251,80 @@
       </div>
     </section>
 
-    <!-- ===================== TELA: REGRAS (esqueleto) ===================== -->
-    <section class="screen" data-screen="rules" data-title="Regras" aria-labelledby="rules-title" hidden>
-      <a class="back-link" id="rules-back" href="#/home">Voltar</a>
+    <!-- ===================== TELA: OPÇÕES DE PERSONAGEM ===================== -->
+    <section class="screen" data-screen="character-options" data-title="Opções de personagem" aria-labelledby="options-title" hidden>
+      <a class="back-link" id="options-back" href="#/home">Voltar</a>
       <header class="screen__head">
-        <h1 id="rules-title" tabindex="-1">Regras</h1>
+        <h1 id="options-title" tabindex="-1">Opções de personagem</h1>
       </header>
-      <p class="notice">A aba Regras está em construção. Ela vai existir dentro da ficha, avulsa e ligada à campanha. Por enquanto este é o índice dos tópicos, para os atalhos de ajuda já apontarem para o lugar certo.</p>
-      <section class="block rules-index" aria-labelledby="rules-topic-h">
-        <h2 class="block__title" id="rules-topic-h">Tópico: <span id="rules-topic"></span></h2>
-        <ul class="rows" id="rules-list"></ul>
-      </section>
+
+      <div class="options-shell">
+        <aside class="options-sidebar" aria-label="Categorias de opções">
+          <div class="options-tabs" id="options-tabs"></div>
+        </aside>
+
+        <main class="options-content" id="options-content" tabindex="0" aria-live="polite">
+          <div class="options-toolbar">
+            <label class="field" for="options-search">
+              <span class="field__label">Buscar recomendações</span>
+              <input class="input" id="options-search" type="search" autocomplete="off" spellcheck="false" placeholder="Ex.: origem, arma, transformação, humano..." aria-describedby="options-count">
+            </label>
+            <p class="options-count" id="options-count" role="status"></p>
+          </div>
+          <div class="options-list" id="options-list"></div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ===================== TELA: ITENS ===================== -->
+    <section class="screen" data-screen="items" data-title="Itens" aria-labelledby="items-title" hidden>
+      <a class="back-link" href="#/home">Voltar</a>
+      <header class="screen__head">
+        <div>
+          <h1 id="items-title" tabindex="-1">Itens</h1>
+          <p class="screen__lead">Inventário completo, ordenável e pesquisável.</p>
+        </div>
+        <button class="btn btn--primary" type="button" id="open-item-creator">Criar item</button>
+      </header>
+      <div class="item-browser">
+        <div class="item-browser__toolbar">
+          <label class="field">
+            <span class="field__label">Buscar itens</span>
+            <input class="input" id="item-search" type="search" placeholder="Nome, tag, tipo ou descrição..." autocomplete="off">
+          </label>
+          <label class="field">
+            <span class="field__label">Tipo</span>
+            <select class="input" id="item-type-filter">
+              <option value="">Todos os tipos</option>
+              <option value="arma">Armas</option>
+              <option value="armadura">Armaduras</option>
+              <option value="ferramenta">Ferramentas</option>
+              <option value="acao">Ações e consumíveis</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">Valor máximo</span>
+            <input class="input" id="item-value-filter" type="number" min="0" step="1" placeholder="Sem limite">
+          </label>
+          <label class="field">
+            <span class="field__label">Tags</span>
+            <input class="input" id="item-tag-filter" type="search" placeholder="Ex.: fogo, cura" autocomplete="off">
+          </label>
+          <label class="field">
+            <span class="field__label">Ordenar por</span>
+            <select class="input" id="item-sort">
+              <option value="custom">Minha ordem</option>
+              <option value="name">Nome</option>
+              <option value="value-asc">Valor crescente</option>
+              <option value="value-desc">Valor decrescente</option>
+              <option value="type">Tipo</option>
+            </select>
+          </label>
+        </div>
+        <p class="options-count" id="item-count" role="status"></p>
+        <div class="inventory-grid" id="inventory-grid"></div>
+        <p class="empty" id="items-empty" hidden>Nenhum item corresponde aos filtros atuais.</p>
+      </div>
     </section>
 
   </main>
@@ -279,8 +345,21 @@
   <div class="help-pop" id="help-pop" role="dialog" aria-labelledby="help-pop-title" hidden>
     <p class="help-pop__title" id="help-pop-title"></p>
     <p class="help-pop__text" id="help-pop-text"></p>
-    <a class="btn btn--ghost btn--sm" id="help-pop-link" href="#/rules">Ver nas regras</a>
+    <a class="btn btn--ghost btn--sm" id="help-pop-link" href="#/character-options">Ver nas opções</a>
   </div>
+
+  <dialog class="dialog item-dialog" id="item-dialog" aria-labelledby="item-dialog-title">
+    <form id="item-form" novalidate>
+      <h2 id="item-dialog-title">Criar item</h2>
+      <p class="field__hint">Preencha os dados do item. A ordem personalizada será preservada no inventário.</p>
+      <div class="item-form__grid" id="item-form-fields"></div>
+      <p class="field__error" id="item-form-error" role="alert"></p>
+      <div class="dialog__actions">
+        <button class="btn btn--ghost" type="button" id="item-dialog-cancel">Cancelar</button>
+        <button class="btn btn--primary" type="submit">Adicionar item</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Exportar a ficha -->
   <dialog class="dialog" id="export-dialog" aria-labelledby="export-title">

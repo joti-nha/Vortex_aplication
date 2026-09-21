@@ -67,6 +67,35 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
+    // ---------- Catálogo de itens ----------
+    match /items/{itemId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.name is string
+                    && request.resource.data.type in ['arma', 'armadura', 'ferramenta', 'acao']
+                    && request.resource.data.value is number
+                    && request.resource.data.value >= 0;
+      allow update: if signedIn() && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // ---------- Poderes oficiais e melhorias ----------
+    match /officialPowers/{powerId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /upgrades/{upgradeId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.officialPowerId is string
+                    && exists(/databases/$(database)/documents/officialPowers/$(request.resource.data.officialPowerId));
+      allow update: if signedIn() && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
     // ---------- Campanhas ----------
     // O ID do documento é o ID de entrada. Quem tem o ID consegue abrir a campanha;
     // listar só funciona para o mestre ou para quem já participa.

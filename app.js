@@ -239,7 +239,17 @@ const FIREBASE_CONFIG = {
       let d = null;
       try { d = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* começa do zero */ }
       if (!d || !d.characters || !d.campaigns) d = { characters: {}, campaigns: {} };
-      if (!d.v) { addDemo(d); d.v = 2; write(d, true); } // migração da versão anterior
+      if (!d.items) d.items = clone(ITEM_CATALOG).reduce((map, item) => { map[item.id] = item; return map; }, {});
+      if (!d.upgrades) d.upgrades = {};
+      if (!d.officialPowers) d.officialPowers = clone(OFFICIAL_POWERS).reduce((map, power) => { map[power.id] = power; return map; }, {});
+      if (!Object.keys(d.upgrades).length) {
+        const improvementCategory = OPTION_CATEGORIES.find((category) => category.id === 'melhorias');
+        (improvementCategory ? improvementCategory.items : []).forEach((item) => {
+          d.upgrades[item.id] = { id: item.id, name: item.name, description: item.description, highlights: item.highlights, tags: item.tags, officialPowerId: item.officialPowerId, createdAt: Date.now() };
+        });
+      }
+      if (!d.v) { addDemo(d); d.v = 3; write(d, true); } // migração da versão anterior
+      else if (d.v < 3) { d.v = 3; write(d, true); }
       return d;
     }
 
@@ -254,6 +264,8 @@ const FIREBASE_CONFIG = {
       species: c.species || '', age: c.age || '', origin: c.origin || '',
       campaignIds: (c.campaignIds || []).slice(), mine: c.ownerUid === ME
     });
+    const toItem = (item) => Object.assign({}, item, { tags: (item.tags || []).slice(), properties: (item.properties || []).slice() });
+    const toUpgrade = (upgrade, power) => Object.assign({}, upgrade, { officialPower: power ? Object.assign({}, power) : null });
     const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
 
     const listeners = {}; // campaignId -> Set de callbacks
@@ -296,6 +308,43 @@ const FIREBASE_CONFIG = {
           .sort((a, b) => (words(query).length ? byName(a, b) : (b.updatedAt || 0) - (a.updatedAt || 0)))
           .slice(0, 60)
           .map(toChar);
+      },
+
+      async listItems() {
+        return Object.values(read().items).map(toItem).sort((a, b) => (a.order || 0) - (b.order || 0));
+      },
+
+      async createItem(item) {
+        const d = read();
+        const id = item.id || uid();
+        const next = Object.assign({ id, createdAt: Date.now(), updatedAt: Date.now() }, item, { id });
+        d.items[id] = next;
+        write(d);
+        return toItem(next);
+      },
+
+      async saveItemOrder(ids) {
+        const d = read();
+        ids.forEach((id, index) => { if (d.items[id]) d.items[id].order = (index + 1) * 10; });
+        write(d);
+      },
+
+      async listOfficialPowers() {
+        return Object.values(read().officialPowers).map((power) => Object.assign({}, power));
+      },
+
+      async listUpgrades() {
+        const d = read();
+        return Object.values(d.upgrades).map((upgrade) => toUpgrade(upgrade, d.officialPowers[upgrade.officialPowerId]));
+      },
+
+      async createUpgrade(upgrade) {
+        const d = read();
+        if (!upgrade.officialPowerId || !d.officialPowers[upgrade.officialPowerId]) throw new UserError('Toda melhoria precisa estar vinculada a um Poder Oficial.');
+        const next = Object.assign({ id: uid(), createdAt: Date.now() }, upgrade);
+        d.upgrades[next.id] = next;
+        write(d);
+        return toUpgrade(next, d.officialPowers[next.officialPowerId]);
       },
 
       async createCharacter({ name, type }) {
@@ -435,6 +484,9 @@ const FIREBASE_CONFIG = {
     const FV = firebase.firestore.FieldValue;
     const chars = () => fs.collection('characters');
     const camps = () => fs.collection('campaigns');
+    const items = () => fs.collection('items');
+    const officialPowers = () => fs.collection('officialPowers');
+    const upgrades = () => fs.collection('upgrades');
     const names = () => fs.collection('names');
     const nameDoc = (kind, name) => names().doc((kind === 'campaign' ? 'k_' : 'c_') + nameKey(name));
 
@@ -447,6 +499,7 @@ const FIREBASE_CONFIG = {
       };
     };
     const toCamp = (snap) => ({ id: snap.id, name: snap.data().name, isOwner: snap.data().ownerUid === me });
+    const toItem = (snap) => Object.assign({ id: snap.id }, snap.data());
 
     // Fichas criadas antes da busca não têm searchKeys: completa em segundo plano
     function backfillKeys(snap) {
@@ -480,6 +533,45 @@ const FIREBASE_CONFIG = {
         return snap.docs.map(toChar)
           .filter((c) => (!type || c.type === type) && matchesQuery(c, query))
           .sort((a, b) => (qs.length ? a.name.localeCompare(b.name, 'pt-BR') : 0));
+      },
+
+      async listItems() {
+        const snap = await items().orderBy('order', 'asc').limit(500).get();
+        return snap.empty ? clone(ITEM_CATALOG) : snap.docs.map(toItem);
+      },
+
+      async createItem(item) {
+        const ref = items().doc();
+        const next = Object.assign({}, item, { ownerUid: me, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
+        await ref.set(next);
+        return Object.assign({ id: ref.id }, item);
+      },
+
+      async saveItemOrder(ids) {
+        const batch = fs.batch();
+        ids.forEach((id, index) => batch.update(items().doc(id), { order: (index + 1) * 10, updatedAt: FV.serverTimestamp() }));
+        await batch.commit();
+      },
+
+      async listOfficialPowers() {
+        const snap = await officialPowers().get();
+        return snap.empty ? clone(OFFICIAL_POWERS) : snap.docs.map((power) => Object.assign({ id: power.id }, power.data()));
+      },
+
+      async listUpgrades() {
+        const [upgradeSnap, powerSnap] = await Promise.all([upgrades().get(), officialPowers().get()]);
+        const powers = Object.fromEntries(powerSnap.docs.map((power) => [power.id, Object.assign({ id: power.id }, power.data())]));
+        if (upgradeSnap.empty) return clone(OPTION_CATEGORIES.find((category) => category.id === 'melhorias')?.items || []).map((upgrade) => Object.assign({}, upgrade, { officialPower: OFFICIAL_POWERS.find((power) => power.id === upgrade.officialPowerId) || null }));
+        return upgradeSnap.docs.map((upgrade) => Object.assign({ id: upgrade.id, officialPower: powers[upgrade.data().officialPowerId] || null }, upgrade.data()));
+      },
+
+      async createUpgrade(upgrade) {
+        if (!upgrade.officialPowerId) throw new UserError('Toda melhoria precisa estar vinculada a um Poder Oficial.');
+        const power = await officialPowers().doc(upgrade.officialPowerId).get();
+        if (!power.exists) throw new UserError('Poder Oficial não encontrado.');
+        const ref = upgrades().doc();
+        await ref.set(Object.assign({}, upgrade, { ownerUid: me, createdAt: FV.serverTimestamp() }));
+        return Object.assign({ id: ref.id, officialPower: Object.assign({ id: power.id }, power.data()) }, upgrade);
       },
 
       async createCharacter({ name, type }) {
@@ -1173,6 +1265,177 @@ const FIREBASE_CONFIG = {
     }
   };
 
+  const OPTION_CATEGORIES = [
+    {
+      id: 'tendo',
+      title: 'Tendo',
+      description: 'Sugestões de bases, traços e situações iniciais para o personagem.',
+      items: [
+        { name: 'Tendo de Engenharia', description: 'Especialista em tecnologia e improviso mecânico.', highlights: ['+1 em tecnologia', 'acesso a kit de ferramentas', 'reparo e manutenção'], tags: ['engenharia', 'tecnologia', 'reparo'] },
+        { name: 'Tendo de Sobrevivência', description: 'Aventureiro adaptado ao ambiente hostil e ao improviso.', highlights: ['+1 em resistência', 'acesso a suprimentos básicos', 'manutenção de rota e abrigo'], tags: ['sobrevivência', 'exploração', 'campo'] },
+        { name: 'Tendo Social', description: 'Habilidade de negociar, liderar e conviver em grupos de alto risco.', highlights: ['+1 em diplomacia', 'reconhecimento social', 'controle de grupo'], tags: ['social', 'liderança', 'grupo'] }
+      ]
+    },
+    {
+      id: 'origem',
+      title: 'Origem',
+      description: 'Arquétipos de pedigree, vivência e materiais iniciais do personagem.',
+      items: [
+        {
+          name: 'Engenheiro',
+          description: 'Ex-funcionário de megacorporação ou catador com cérebro afiado.',
+          highlights: ['1 ferramenta multifunção (permite utilizar a perícia de tecnologia)', '1 pistola básica ou rifle (3 slots de munição)', '1 anel Chirlez backup (20 slots digitais de itens)', '1 vestimenta de proteção leve (armadura leve +2)'],
+          tags: ['engenheiro', 'tecnologia', 'origem']
+        },
+        {
+          name: 'Operador de Campo',
+          description: 'Pessoal treinado para trabalhar em zonas de guerra e uso intensivo de equipamentos.',
+          highlights: ['1 kit de emergência', '1 arma leve', '1 rádio de campanha'],
+          tags: ['campo', 'arma', 'sobrevivência']
+        },
+        {
+          name: 'Catarata do Bairro',
+          description: 'Pessoa que vive na rua e sabe improvisar em qualquer situação.',
+          highlights: ['1 kit improvisado', '1 bolsa de materiais', '1 item de sobrevivência'],
+          tags: ['rua', 'improviso', 'sobrevivência']
+        }
+      ]
+    },
+    {
+      id: 'especime',
+      title: 'Espécime',
+      description: 'Variedades de seres, criaturas e construções com regras especiais de início.',
+      items: [
+        {
+          name: 'Humano',
+          description: 'Nada de especial, talvez sua experiência passada: tome 3 UP points de início.',
+          highlights: ['pontos iniciais extras', 'versátil', 'sem penalidade especial'],
+          tags: ['humano', 'versátil', 'iniciante']
+        },
+        {
+          name: 'Robô',
+          description: 'Meio que é ... feito de lata, né não? Núcleo: você contém núcleo, depende do mesmo para sobreviver.',
+          highlights: ['núcleo +2 comum desde o início', 'PV convertidos para blindagem e escudo', 'não vivo e resistente a efeitos biológicos'],
+          tags: ['robô', 'núcleo', 'não vivo']
+        },
+        {
+          name: 'Não vivo',
+          description: 'Você é lata; lata não é afetada por coisas biológicas e não precisa descansar.',
+          highlights: ['não recupera PV por descanso', 'pode ser consertado com tecnologia', 'reparo exige descanso longo'],
+          tags: ['não vivo', 'tecnologia', 'reparo']
+        }
+      ]
+    },
+    {
+      id: 'poderes',
+      title: 'Poderes',
+      description: 'Lista de poderes e transformações com custos e efeitos baseados no documento.',
+      items: [
+        {
+          name: 'Transformação',
+          description: 'Utilizando uma ação, você pode assumir uma nova forma, criando uma transformação e realocando seus UP Points livremente.',
+          highlights: ['transformação com custo de UP', 'pontos de ação para transformações adicionais', 'items da forma original podem ser inutilizados ou mantidos conforme custo'],
+          tags: ['transformação', 'forma', 'up']
+        },
+        {
+          name: 'Mutável',
+          description: 'As transformações têm seus custos em UP diminuídos pela metade e podem ser usadas com menos custo de PA.',
+          highlights: ['transformações mais frequentes', 'custo reduzido', 'pré-requisito: transformação'],
+          tags: ['mutável', 'melhoria', 'transformação']
+        }
+      ]
+    },
+    {
+      id: 'melhorias',
+      title: 'Melhorias',
+      description: 'Aprimoramentos vinculados a um Poder Oficial específico.',
+      items: [
+        { id: 'melhoria-mutacao', name: 'Mutação controlada', description: 'Reduz o custo de uma transformação e amplia sua frequência de uso.', highlights: ['Poder Oficial: Transformação', 'custo reduzido', 'requer vínculo com o poder'], tags: ['melhoria', 'transformação', 'up'], officialPowerId: 'poder-transformacao' },
+        { id: 'melhoria-nucleo', name: 'Núcleo aprimorado', description: 'Aumenta a estabilidade e a capacidade de um núcleo artificial.', highlights: ['Poder Oficial: Núcleo', 'reserva ampliada', 'requer vínculo com o poder'], tags: ['melhoria', 'núcleo', 'robô'], officialPowerId: 'poder-nucleo' }
+      ]
+    },
+    {
+      id: 'itens',
+      title: 'Itens',
+      description: 'Busque itens e crie novos itens com formulários específicos por tipo.',
+      items: [
+        { name: 'Pistola Básica', description: 'Arma padrão de defesa pessoal e combate curto.', highlights: ['dano moderado', 'uso prático', 'cadência simples'], tags: ['arma', 'fogo', 'pistola'] },
+        { name: 'Armadura Leve', description: 'Proteção simples sem penalidade de carga.', highlights: ['+2 de armadura', 'leve', 'carga baixa'], tags: ['armadura', 'proteção', 'leve'] },
+        { name: 'Kit de Ferramentas', description: 'Conjunto para manutenção, tecnologia e improvisos.', highlights: ['tecnologia', 'reparo', 'uso prático'], tags: ['ferramenta', 'tecnologia', 'reparo'] }
+      ]
+    }
+  ];
+
+  const OFFICIAL_POWERS = [
+    { id: 'poder-transformacao', name: 'Transformação', description: 'Permite assumir uma nova forma e realocar UP Points.' },
+    { id: 'poder-nucleo', name: 'Núcleo', description: 'Define a fonte de estabilidade e energia de construções e próteses.' }
+  ];
+  const CHARACTER_OPTION_CATEGORIES = OPTION_CATEGORIES.filter((category) => category.id !== 'itens');
+
+  const ITEM_CATALOG = [
+    { id: 'item-pistola-basica', name: 'Pistola Básica', type: 'arma', value: 120, rarity: 'Comum', description: 'Arma padrão de defesa pessoal e combate curto.', tags: ['arma', 'fogo', 'pistola'], properties: ['dano moderado', 'cadência simples'], order: 10 },
+    { id: 'item-armadura-leve', name: 'Armadura Leve', type: 'armadura', value: 180, rarity: 'Comum', description: 'Proteção simples sem penalidade de carga.', tags: ['armadura', 'proteção', 'leve'], properties: ['+2 armadura', 'carga baixa'], order: 20 },
+    { id: 'item-kit-ferramentas', name: 'Kit de Ferramentas', type: 'ferramenta', value: 80, rarity: 'Comum', description: 'Conjunto para manutenção, tecnologia e improvisos.', tags: ['ferramenta', 'tecnologia', 'reparo'], properties: ['uso prático', 'reparo'], order: 30 },
+    { id: 'item-coquetel-cura', name: 'Coquetel de Cura', type: 'acao', value: 60, rarity: 'Comum', description: 'Consumível de emergência para recuperar resistência.', tags: ['ação', 'cura', 'consumível'], properties: ['recupera 5 PV', 'ação padrão'], order: 40 }
+  ];
+
+  const ITEM_FORM_TYPES = {
+    arma: {
+      label: 'Arma',
+      fields: [
+        { name: 'name', label: 'Nome do item', type: 'text', placeholder: 'Ex.: Rifle de precisão' },
+        { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'] },
+        { name: 'damage', label: 'Dano', type: 'text', placeholder: 'Ex.: 2d6 + 2' },
+        { name: 'cadence', label: 'Cadência', type: 'text', placeholder: 'Ex.: Semi e automático' },
+        { name: 'range', label: 'Alcance', type: 'text', placeholder: 'Ex.: Médio a longo' },
+        { name: 'load', label: 'Carga', type: 'text', placeholder: 'Ex.: 2' }
+      ]
+    },
+    armadura: {
+      label: 'Armadura',
+      fields: [
+        { name: 'name', label: 'Nome da armadura', type: 'text', placeholder: 'Ex.: Armadura leve reforçada' },
+        { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'] },
+        { name: 'armor', label: 'Armadura', type: 'text', placeholder: 'Ex.: +3' },
+        { name: 'penalty', label: 'Penalidade', type: 'text', placeholder: 'Ex.: -1' },
+        { name: 'type', label: 'Tipo', type: 'select', options: ['Leve', 'Média', 'Pesada'] },
+        { name: 'load', label: 'Carga', type: 'text', placeholder: 'Ex.: 2' }
+      ]
+    },
+    ferramenta: {
+      label: 'Ferramenta',
+      fields: [
+        { name: 'name', label: 'Nome da ferramenta', type: 'text', placeholder: 'Ex.: Kit multifuncional' },
+        { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'] },
+        { name: 'usage', label: 'Uso', type: 'text', placeholder: 'Ex.: Reparo, tecnologia, improviso' },
+        { name: 'slot', label: 'Espaço de uso', type: 'text', placeholder: 'Ex.: 1' }
+      ]
+    },
+    acao: {
+      label: 'Ação / Consumível',
+      fields: [
+        { name: 'name', label: 'Nome', type: 'text', placeholder: 'Ex.: Coquetel de cura' },
+        { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'] },
+        { name: 'effect', label: 'Efeito', type: 'text', placeholder: 'Ex.: Recupera 5 PV ou ativa um efeito' },
+        { name: 'trigger', label: 'Ação de uso', type: 'text', placeholder: 'Ex.: Ação padrão' }
+      ]
+    }
+  };
+
+  const normalizeOptionText = (value) => nameKey(String(value || ''));
+  const OPTION_SEARCH_INDEX = OPTION_CATEGORIES.flatMap((category) => category.items.map((item) => ({
+    categoryId: category.id,
+    item,
+    text: normalizeOptionText([
+      category.title,
+      category.description,
+      item.name,
+      item.description,
+      ...(item.tags || []),
+      ...(item.highlights || [])
+    ].join(' '))
+  })));
+
   const pop = $('#help-pop');
   const helpState = { trigger: null, pinned: false, openTimer: 0, closeTimer: 0 };
   let rulesBack = '#/home'; // de onde a pessoa veio ao abrir as regras
@@ -1199,7 +1462,7 @@ const FIREBASE_CONFIG = {
     helpState.pinned = Boolean(pin);
     $('#help-pop-title').textContent = topic.title;
     $('#help-pop-text').textContent = topic.text;
-    $('#help-pop-link').href = '#/rules/' + trigger.dataset.help;
+    $('#help-pop-link').href = '#/character-options';
     trigger.setAttribute('aria-expanded', 'true');
     trigger.setAttribute('aria-controls', 'help-pop');
     placeHelp(trigger);
@@ -1349,12 +1612,12 @@ const FIREBASE_CONFIG = {
 
   /* =====================================================================
      7. TELAS: navegação por endereço
-        #/home  #/search  #/character/ID  #/campaign/ID  #/rules/TÓPICO
+        #/home  #/search  #/character/ID  #/campaign/ID  #/character-options/CATEGORIA  #/items
      ===================================================================== */
   const views = {};
   let onLeave = null; // cada tela pode registrar uma limpeza (ex.: parar de ouvir os dados)
   let lastCharacterId = null;
-  const NAV_FOR = { home: 'home', search: 'search' }; // nas outras telas nenhum item fica marcado
+  const NAV_FOR = { 'character-options': 'character-options', items: 'items' };
 
   function go(name, param) {
     const next = '#/' + name + (param ? '/' + encodeURIComponent(param) : '');
@@ -1365,9 +1628,10 @@ const FIREBASE_CONFIG = {
     if (onLeave) { onLeave(); onLeave = null; }
     closeHelp(false);
     const parts = location.hash.replace(/^#\/?/, '').split('/');
-    const name = parts[0] || 'home';
+    let name = parts[0] || 'character-options';
+    if (name === 'options') name = 'character-options';
     const param = parts[1] ? decodeURIComponent(parts.slice(1).join('/')) : null;
-    if (!(name in views)) return go('home');
+    if (!(name in views)) return go('character-options');
 
     const target = $('[data-screen="' + name + '"]');
     $$('[data-screen]').forEach((s) => { s.hidden = s !== target; });
@@ -1796,23 +2060,389 @@ const FIREBASE_CONFIG = {
     onLeave = () => { if (typeof stop === 'function') stop(); };
   };
 
-  /* ---------- Regras (esqueleto: o conteúdo entra nas próximas versões) ---------- */
-  $('#rules-back').addEventListener('click', (ev) => {
-    ev.preventDefault();
-    go(rulesBack.replace(/^#\//, '').split('/')[0], decodeURIComponent(rulesBack.replace(/^#\//, '').split('/').slice(1).join('/')) || undefined);
-  });
+  /* ---------- Regras ---------- */
+  const rulesBackBtn = $('#rules-back');
+  if (rulesBackBtn) {
+    rulesBackBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      go(rulesBack.replace(/^#\//, '').split('/')[0], decodeURIComponent(rulesBack.replace(/^#\//, '').split('/').slice(1).join('/')) || undefined);
+    });
+  }
+
+  function buildSkillCard(skill) {
+    const card = h('article', 'skill-card');
+    const head = h('div', 'skill-card__head',
+      h('h3', 'skill-card__title', skill.title),
+      h('span', 'skill-card__meta', 'Perícia'));
+    card.append(head);
+
+    const tests = h('div', 'skill-card__tests');
+    skill.tests.forEach((test) => {
+      const button = h('button', 'skill-card__test', test);
+      button.type = 'button';
+      button.addEventListener('click', () => go('rules', skill.anchor));
+      tests.append(button);
+    });
+    card.append(tests);
+
+    const desc = h('p', 'skill-card__desc', skill.description);
+    card.append(desc);
+
+    const ref = h('button', 'skill-card__link', 'Ver regra relacionada');
+    ref.type = 'button';
+    ref.addEventListener('click', () => go('rules', skill.anchor));
+    card.append(ref);
+
+    return card;
+  }
+
+  function renderRulesTopic(topicId) {
+    const tabs = $('#rules-tabs');
+    const content = $('#rules-content');
+    const quick = $('#rules-quick');
+    const topic = RULES_TOPICS.find((entry) => entry.id === topicId) || RULES_TOPICS[0];
+
+    tabs.replaceChildren(...RULES_TOPICS.map((entry) => {
+      const btn = h('button', 'rules-tab' + (entry.id === topic.id ? ' is-active' : ''), entry.title);
+      btn.type = 'button';
+      btn.setAttribute('aria-pressed', String(entry.id === topic.id));
+      btn.addEventListener('click', () => go('rules', entry.id));
+      return btn;
+    }));
+
+    if (topic.id === 'pericias') {
+      const sorted = [...RULES_SKILLS].sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'));
+      content.replaceChildren(...sorted.map((skill) => buildSkillCard(skill)));
+      quick.replaceChildren(...sorted.map((skill) => {
+        const li = h('li', 'rules-quick__item');
+        const link = h('a', 'rules-quick__link', skill.title);
+        link.href = '#/rules/pericias/' + skill.id;
+        li.append(link);
+        return li;
+      }));
+      return;
+    }
+
+    content.replaceChildren(...topic.sections.map((section, index) => {
+      const article = h('article', 'rule-section', h('h3', 'rule-section__title', section.title));
+      article.id = 'rule-' + topic.id + '-' + index;
+
+      (section.paragraphs || []).forEach((text) => {
+        article.append(h('p', 'rule-section__text', text));
+      });
+
+      if (section.list && section.list.length) {
+        const list = h('ul', 'rule-section__list');
+        section.list.forEach((item) => list.append(h('li', '', item)));
+        article.append(list);
+      }
+
+      return article;
+    }));
+
+    quick.replaceChildren(...topic.sections.map((section, index) => {
+      const li = h('li', 'rules-quick__item');
+      const link = h('a', 'rules-quick__link', section.title);
+      link.href = '#rule-' + topic.id + '-' + index;
+      li.append(link);
+      return li;
+    }));
+  }
 
   views.rules = async function showRules(slug) {
-    const list = $('#rules-list');
-    list.replaceChildren(...Object.keys(TOPICS).map((key) => {
-      const t = TOPICS[key];
-      const a = h('a', 'row__open', h('span', 'row__main', h('span', 'row__title', t.title), h('span', 'row__meta', t.text)));
-      a.href = '#/rules/' + key;
-      if (key === slug) a.setAttribute('aria-current', 'true');
-      return h('li', 'row' + (key === slug ? ' is-current' : ''), a);
-    }));
-    $('#rules-topic').textContent = TOPICS[slug] ? TOPICS[slug].title : 'Índice de tópicos';
+    const raw = slug || '';
+    const [topicId, detailId] = raw.split('/').filter(Boolean);
+    const key = RULES_TOPICS.some((entry) => entry.id === topicId) ? topicId : RULES_TOPICS[0].id;
+
+    if (key === 'pericias' && detailId) {
+      const skill = RULES_SKILLS.find((entry) => entry.id === detailId) || RULES_SKILLS[0];
+      const tabs = $('#rules-tabs');
+      const content = $('#rules-content');
+      const quick = $('#rules-quick');
+      tabs.replaceChildren(...RULES_TOPICS.map((entry) => {
+        const btn = h('button', 'rules-tab' + (entry.id === key ? ' is-active' : ''), entry.title);
+        btn.type = 'button';
+        btn.setAttribute('aria-pressed', String(entry.id === key));
+        btn.addEventListener('click', () => go('rules', entry.id));
+        return btn;
+      }));
+
+      const article = h('article', 'rule-section skill-detail');
+      article.append(h('h3', 'rule-section__title', skill.title));
+      article.append(h('p', 'rule-section__text', skill.description));
+      const tests = h('div', 'skill-detail__tests');
+      skill.tests.forEach((test) => {
+        const btn = h('button', 'skill-detail__test', test);
+        btn.type = 'button';
+        btn.addEventListener('click', () => go('rules', skill.anchor));
+        tests.append(btn);
+      });
+      article.append(tests);
+
+      const related = h('div', 'skill-detail__meta');
+      related.append(h('strong', '', 'Regra relacionada: '), h('span', '', skill.rule));
+      article.append(related);
+
+      content.replaceChildren(article);
+      quick.replaceChildren(...RULES_SKILLS.sort((a, b) => a.title.localeCompare(b.title, 'pt-BR')).map((entry) => {
+        const li = h('li', 'rules-quick__item');
+        const link = h('a', 'rules-quick__link', entry.title);
+        link.href = '#/rules/pericias/' + entry.id;
+        li.append(link);
+        return li;
+      }));
+      return;
+    }
+
+    renderRulesTopic(key);
   };
+
+  /* ---------- Opções ---------- */
+  function buildOptionCard(item) {
+    const card = h('article', 'option-card');
+    const glyph = h('span', 'option-card__glyph', item.name.trim().charAt(0).toUpperCase());
+    const head = h('div', 'option-card__head',
+      h('h3', 'option-card__title', item.name),
+      h('span', 'option-card__tag', item.tags && item.tags[0] ? item.tags[0] : 'item'));
+    card.append(glyph, head);
+    if (item.description) card.append(h('p', 'option-card__desc', item.description));
+    if (item.highlights && item.highlights.length) {
+      const list = h('ul', 'option-card__list');
+      item.highlights.forEach((line) => list.append(h('li', '', line)));
+      card.append(list);
+    }
+    return card;
+  }
+
+  function renderOptionsTabList(activeId) {
+    const tabs = $('#options-tabs');
+    tabs.replaceChildren(...CHARACTER_OPTION_CATEGORIES.map((category) => {
+      const btn = h('button', 'options-tab' + (category.id === activeId ? ' is-active' : ''), category.title);
+      btn.type = 'button';
+      btn.dataset.category = category.id;
+      btn.setAttribute('aria-pressed', String(category.id === activeId));
+      btn.addEventListener('click', () => {
+        location.hash = '#/character-options/' + encodeURIComponent(category.id);
+      });
+      return btn;
+    }));
+  }
+
+  views.characterOptions = async function showCharacterOptions(slug) {
+    const raw = (slug || '').split('/').filter(Boolean);
+    const tabId = raw[0] || CHARACTER_OPTION_CATEGORIES[0].id;
+    const selectedType = raw[1] || 'arma';
+    const query = raw.length > 2 ? decodeURIComponent(raw.slice(2).join('/')) : $('#options-search')?.value || '';
+
+    const activeCategory = CHARACTER_OPTION_CATEGORIES.some((cat) => cat.id === tabId) ? tabId : CHARACTER_OPTION_CATEGORIES[0].id;
+    const listRoot = $('#options-list');
+    const search = $('#options-search');
+    const keyword = (search ? search.value : '').trim();
+
+    renderOptionsTabList(activeCategory);
+    if (search) search.value = query || keyword;
+
+    const q = normalizeOptionText(query || keyword);
+    const filtered = OPTION_SEARCH_INDEX
+      .filter((entry) => entry.categoryId === activeCategory && (!q || entry.text.includes(q)))
+      .map((entry) => entry.item);
+
+    let optionItems = filtered;
+    if (activeCategory === 'melhorias') {
+      const upgrades = await db.listUpgrades();
+      optionItems = upgrades.map((upgrade) => Object.assign({}, upgrade, {
+        description: upgrade.description + (upgrade.officialPower ? ' Poder Oficial vinculado: ' + upgrade.officialPower.name + '.' : ''),
+        highlights: (upgrade.highlights || []).concat(upgrade.officialPower ? ['Poder Oficial: ' + upgrade.officialPower.name] : []),
+        tags: (upgrade.tags || []).concat('melhoria')
+      }));
+      if (q) optionItems = optionItems.filter((item) => normalizeOptionText([item.name, item.description, ...(item.tags || []), ...(item.highlights || [])].join(' ')).includes(q));
+    }
+    listRoot.replaceChildren(...optionItems.map(buildOptionCard));
+    $('#options-count').textContent = optionItems.length + (optionItems.length === 1 ? ' resultado' : ' resultados');
+    $('#options-count').textContent = filtered.length + (filtered.length === 1 ? ' resultado' : ' resultados');
+
+  };
+
+  const openOptionsBtn = $('#open-character-options-create');
+  if (openOptionsBtn) openOptionsBtn.addEventListener('click', () => { window.location.hash = '#/character-options'; });
+  const openOptionsSearchBtn = $('#open-character-options-search');
+  if (openOptionsSearchBtn) openOptionsSearchBtn.addEventListener('click', () => { window.location.hash = '#/character-options'; });
+  const openGlobalSearchBtn = $('#open-global-search');
+  if (openGlobalSearchBtn) openGlobalSearchBtn.addEventListener('click', () => { window.location.hash = '#/search'; });
+
+  const optionsBackBtn = $('#options-back');
+  if (optionsBackBtn) {
+    optionsBackBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      go('home');
+    });
+  }
+
+  const optionsSearchInput = $('#options-search');
+  if (optionsSearchInput) {
+    optionsSearchInput.addEventListener('input', () => {
+      const active = $('#options-tabs .options-tab.is-active');
+      const category = active?.dataset.category || CHARACTER_OPTION_CATEGORIES[0].id;
+      const q = normalizeOptionText(optionsSearchInput.value.trim());
+      const filtered = OPTION_SEARCH_INDEX
+        .filter((entry) => entry.categoryId === category && (!q || entry.text.includes(q)))
+        .map((entry) => entry.item);
+      $('#options-list').replaceChildren(...filtered.map(buildOptionCard));
+      $('#options-count').textContent = filtered.length + (filtered.length === 1 ? ' resultado' : ' resultados');
+    });
+  }
+
+  /* ---------- Itens: inventário, busca e criação isolada ---------- */
+  const itemDialog = $('#item-dialog');
+  const itemForm = $('#item-form');
+  const itemFormFields = $('#item-form-fields');
+  const itemFormError = $('#item-form-error');
+  const itemSearch = $('#item-search');
+  const itemTypeFilter = $('#item-type-filter');
+  const itemValueFilter = $('#item-value-filter');
+  const itemTagFilter = $('#item-tag-filter');
+  const itemSort = $('#item-sort');
+  let inventoryItems = [];
+
+  function itemTypeLabel(type) {
+    return { arma: 'Arma', armadura: 'Armadura', ferramenta: 'Ferramenta', acao: 'Ação' }[type] || type;
+  }
+
+  function itemSearchText(item) {
+    return normalizeOptionText([item.name, item.type, item.rarity, item.description, ...(item.tags || []), ...(item.properties || [])].join(' '));
+  }
+
+  function buildInventoryCard(item, canMove) {
+    const card = h('article', 'inventory-card');
+    card.draggable = canMove;
+    card.dataset.id = item.id;
+    if (canMove) {
+      card.addEventListener('dragstart', (ev) => {
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', item.id);
+        card.classList.add('is-dragging');
+      });
+      card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
+      card.addEventListener('dragover', (ev) => { ev.preventDefault(); card.classList.add('is-drop-target'); });
+      card.addEventListener('dragleave', () => card.classList.remove('is-drop-target'));
+      card.addEventListener('drop', async (ev) => {
+        ev.preventDefault();
+        card.classList.remove('is-drop-target');
+        const draggedId = ev.dataTransfer.getData('text/plain');
+        if (!draggedId || draggedId === item.id) return;
+        const ids = inventoryItems.map((entry) => entry.id);
+        const from = ids.indexOf(draggedId);
+        const to = ids.indexOf(item.id);
+        if (from < 0 || to < 0) return;
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        await db.saveItemOrder(ids);
+        await renderItems();
+      });
+    }
+    card.append(
+      h('div', 'inventory-card__icon', item.name.trim().charAt(0).toUpperCase()),
+      h('div', 'inventory-card__body',
+        h('div', 'inventory-card__top', h('h2', 'inventory-card__name', item.name), h('span', 'inventory-card__type', itemTypeLabel(item.type))),
+        h('p', 'inventory-card__description', item.description || 'Sem descrição.'),
+        h('div', 'inventory-card__tags', ...(item.tags || []).map((tag) => h('span', 'inventory-card__tag', tag))),
+        h('div', 'inventory-card__footer', h('span', 'inventory-card__rarity', item.rarity || 'Comum'), h('strong', 'inventory-card__value', String(item.value || 0) + ' créditos'))
+      )
+    );
+    return card;
+  }
+
+  function filteredItems() {
+    const query = normalizeOptionText(itemSearch.value.trim());
+    const type = itemTypeFilter.value;
+    const tagQuery = words(itemTagFilter.value).map(normalizeOptionText);
+    const maxValue = itemValueFilter.value === '' ? Infinity : Number(itemValueFilter.value);
+    const filtering = Boolean(query || type || tagQuery.length || Number.isFinite(maxValue));
+    const result = inventoryItems.filter((item) => {
+      const tags = (item.tags || []).map(normalizeOptionText);
+      return (!query || itemSearchText(item).includes(query))
+        && (!type || item.type === type)
+        && (!tagQuery.length || tagQuery.every((tag) => tags.includes(tag)))
+        && item.value <= maxValue;
+    });
+    const sort = itemSort.value;
+    if (filtering || sort !== 'custom') {
+      result.sort((a, b) => {
+        if (sort === 'value-asc') return a.value - b.value;
+        if (sort === 'value-desc') return b.value - a.value;
+        if (sort === 'type') return itemTypeLabel(a.type).localeCompare(itemTypeLabel(b.type), 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR');
+        return a.name.localeCompare(b.name, 'pt-BR');
+      });
+    }
+    return { result, filtering: filtering || sort !== 'custom' };
+  }
+
+  async function renderItems() {
+    inventoryItems = await db.listItems();
+    const { result, filtering } = filteredItems();
+    $('#inventory-grid').replaceChildren(...result.map((item) => buildInventoryCard(item, !filtering)));
+    $('#items-empty').hidden = result.length > 0;
+    $('#item-count').textContent = result.length + (result.length === 1 ? ' item' : ' itens') + (filtering ? ' encontrados' : ' na ordem personalizada');
+  }
+
+  function renderItemForm() {
+    itemFormFields.replaceChildren();
+    const fields = [
+      { name: 'name', label: 'Nome', type: 'text', required: true, placeholder: 'Ex.: Rifle de precisão' },
+      { name: 'type', label: 'Tipo', type: 'select', options: Object.entries(ITEM_FORM_TYPES).map(([value, meta]) => ({ value, label: meta.label })) },
+      { name: 'value', label: 'Valor', type: 'number', required: true, placeholder: 'Ex.: 120' },
+      { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'].map((value) => ({ value, label: value })) },
+      { name: 'tags', label: 'Tags', type: 'text', placeholder: 'Ex.: fogo, alcance, precisão' },
+      { name: 'description', label: 'Descrição', type: 'text', placeholder: 'Descreva o uso do item' },
+      { name: 'properties', label: 'Propriedades', type: 'text', placeholder: 'Ex.: dano 2d6, alcance médio' }
+    ];
+    fields.forEach((field) => {
+      const label = h('label', 'field');
+      label.append(h('span', 'field__label', field.label));
+      const input = field.type === 'select' ? h('select', 'input') : h('input', 'input');
+      input.name = field.name;
+      if (field.type !== 'select') input.type = field.type;
+      input.placeholder = field.placeholder || '';
+      input.required = Boolean(field.required);
+      if (field.options) field.options.forEach((option) => input.append(h('option', '', option.label))); 
+      label.append(input);
+      itemFormFields.append(label);
+    });
+  }
+
+  function openItemCreator() {
+    itemForm.reset();
+    itemFormError.textContent = '';
+    renderItemForm();
+    if (typeof itemDialog.showModal === 'function') itemDialog.showModal();
+    else itemDialog.setAttribute('open', '');
+  }
+
+  views.items = async function showItems() {
+    await renderItems();
+  };
+
+  $('#open-item-creator').addEventListener('click', openItemCreator);
+  $('#item-dialog-cancel').addEventListener('click', () => itemDialog.close());
+  itemForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const data = Object.fromEntries(new FormData(itemForm).entries());
+    const value = Number(data.value);
+    if (!data.name.trim() || !Number.isFinite(value) || value < 0) {
+      itemFormError.textContent = 'Informe um nome e um valor válido.';
+      return;
+    }
+    try {
+      await db.createItem(Object.assign({}, data, {
+        name: cleanName(data.name), value, tags: words(data.tags), properties: data.properties.split(',').map((part) => part.trim()).filter(Boolean), order: inventoryItems.length * 10 + 10
+      }));
+      itemDialog.close();
+      toast('Item adicionado ao inventário.');
+      if (location.hash.replace(/^#\//, '').split('/')[0] === 'items') await renderItems();
+    } catch (err) { itemFormError.textContent = errorMessage(err); }
+  });
+  [itemSearch, itemTypeFilter, itemValueFilter, itemTagFilter, itemSort].forEach((input) => input.addEventListener('input', renderItems));
+  itemTypeFilter.addEventListener('change', renderItems);
+  itemSort.addEventListener('change', renderItems);
 
   /* =====================================================================
      8. INÍCIO DO APP
