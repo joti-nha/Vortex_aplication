@@ -28,8 +28,11 @@
       <span>Vortex</span>
     </a>
     <nav class="app-nav" aria-label="Principal">
-      <a class="app-nav__link" data-nav="character-options" href="#/character-options">Opções de personagem</a>
-      <a class="app-nav__link" data-nav="items" href="#/items">Itens</a>
+      <a class="app-nav__link" data-nav="home" href="#/home">Início</a>
+      <a class="app-nav__link" data-nav="personagens" href="#/personagens">Personagens</a>
+      <a class="app-nav__link" data-nav="campanhas" href="#/campanhas">Campanhas</a>
+      <a class="app-nav__link" data-nav="itens" href="#/itens">Itens</a>
+      <a class="app-nav__link" data-nav="rules" href="#/rules">Regras</a>
     </nav>
     <!-- Mostra onde os dados estão sendo salvos: modo local ou Firebase -->
     <span class="mode-pill" id="mode-pill" role="status">Modo local</span>
@@ -37,26 +40,53 @@
 
   <main class="container" id="conteudo" tabindex="-1">
 
-    <!-- ===================== TELA: INÍCIO ===================== -->
+    <!-- ===================== TELA: INÍCIO (vitrine) ===================== -->
     <section class="screen" data-screen="home" data-title="Início" aria-labelledby="home-title" hidden>
       <p class="notice" id="mode-notice" role="status" hidden></p>
 
+      <div class="hero hero--landing">
+        <div class="hero__spiral" aria-hidden="true"><svg viewBox="-100 -100 200 200" focusable="false"><use href="#vx-hero"/></svg></div>
+        <h1 id="home-title" tabindex="-1">Vortex</h1>
+        <p class="hero__lead">Fichas, campanhas e o equipamento de um RPG de ruínas e tecnologia. Comece por onde quiser.</p>
+        <a class="btn btn--primary btn--lg" href="#/novo">Criar personagem</a>
+      </div>
+
+      <div class="landing-grid">
+        <a class="landing-card" href="#/personagens">
+          <span class="landing-card__title">Personagens</span>
+          <span class="landing-card__text">Acesso rápido e busca entre todas as fichas públicas.</span>
+        </a>
+        <a class="landing-card" href="#/campanhas">
+          <span class="landing-card__title">Campanhas</span>
+          <span class="landing-card__text">Crie uma campanha ou veja as suas.</span>
+        </a>
+        <a class="landing-card" href="#/itens">
+          <span class="landing-card__title">Itens</span>
+          <span class="landing-card__text">Monte armas, armaduras e implantes a partir das regras.</span>
+        </a>
+        <a class="landing-card" href="#/rules">
+          <span class="landing-card__title">Regras</span>
+          <span class="landing-card__text">O livro completo, em abas, com índice.</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- ===================== TELA: CRIAR PERSONAGEM ===================== -->
+    <section class="screen" data-screen="novo" data-title="Criar personagem" aria-labelledby="novo-title" hidden>
+      <a class="back-link" href="#/personagens">Voltar a Personagens</a>
       <div class="hero">
         <div class="hero__spiral" aria-hidden="true"><svg viewBox="-100 -100 200 200" focusable="false"><use href="#vx-hero"/></svg></div>
-
-        <h1 id="home-title" tabindex="-1">O que vamos criar?</h1>
-        <p class="hero__lead">Personagens, criaturas e campanhas ficam salvos e prontos para abrir.</p>
+        <h1 id="novo-title" tabindex="-1">Quem vamos criar?</h1>
+        <p class="hero__lead">O nome precisa ser único; o resto você completa na ficha.</p>
 
         <form class="entry-form" id="form-create" novalidate>
           <fieldset class="field">
-            <legend class="field__label">Criar</legend>
+            <legend class="field__label">Tipo</legend>
             <div class="segmented" id="create-types">
               <label class="segmented__opt"><input type="radio" name="kind" value="personagem" checked
                 data-label="Nome do personagem" data-button="Criar personagem" data-placeholder="Ex.: Ilyra Voss"><span>Personagem</span></label>
               <label class="segmented__opt"><input type="radio" name="kind" value="criatura"
                 data-label="Nome da criatura" data-button="Criar criatura" data-placeholder="Ex.: Sombra do Poço"><span>Criatura</span></label>
-              <label class="segmented__opt"><input type="radio" name="kind" value="campanha"
-                data-label="Nome da campanha" data-button="Criar campanha" data-placeholder="Ex.: A Queda de Vortex"><span>Campanha</span></label>
             </div>
           </fieldset>
 
@@ -68,62 +98,135 @@
           </div>
 
           <button class="btn btn--primary btn--lg" type="submit" id="create-button">Criar personagem</button>
-            <button class="btn btn--ghost" type="button" id="open-character-options-create">Abrir opções de personagem</button>
         </form>
-      </div>
-
-      <div class="two-col">
-        <section class="block" aria-labelledby="quick-title">
-          <h2 class="block__title" id="quick-title"><button class="help" type="button" data-help="fichas">Personagens e criaturas</button></h2>
-          <p class="block__hint">Acesso rápido, salvo neste aparelho.</p>
-          <ul class="rows" id="quick-list"></ul>
-          <p class="empty" id="quick-empty">Nada por aqui ainda. Crie o primeiro acima.</p>
-        </section>
-
-        <section class="block" aria-labelledby="camps-title">
-          <h2 class="block__title" id="camps-title"><button class="help" type="button" data-help="campanhas">Campanhas</button></h2>
-          <p class="block__hint">Criadas por você ou onde um personagem seu participa.</p>
-          <ul class="rows" id="camp-list"></ul>
-          <p class="empty" id="camp-empty">Nenhuma campanha ainda. Crie uma acima ou abra um personagem e entre com um ID de entrada.</p>
-        </section>
       </div>
     </section>
 
-    <!-- ===================== TELA: BUSCAR ===================== -->
-    <section class="screen" data-screen="search" data-title="Buscar" aria-labelledby="search-title" hidden>
+    <!-- ===================== TELA: PERSONAGENS (acesso rápido + busca) ===================== -->
+    <section class="screen" data-screen="personagens" data-title="Personagens" aria-labelledby="personagens-title" hidden>
       <header class="screen__head">
-        <h1 id="search-title" tabindex="-1">Buscar fichas</h1>
+        <div>
+          <h1 id="personagens-title" tabindex="-1">Personagens</h1>
+          <p class="screen__sub">Todas as fichas são públicas: qualquer pessoa pode ver e editar.</p>
+        </div>
+        <a class="btn btn--primary" href="#/novo">Criar personagem</a>
       </header>
 
-      <form class="search-form" id="form-search" role="search" novalidate>
-        <div class="field">
-          <label class="field__label" for="search-input">Nome, espécie ou origem</label>
-          <input class="input input--lg" id="search-input" name="q" type="search" autocomplete="off" autocapitalize="off"
-                 spellcheck="false" placeholder="Ex.: Kael, elfa, Porto">
-        </div>
-        <fieldset class="field">
-          <legend class="field__label">Tipo</legend>
-          <div class="segmented">
-            <label class="segmented__opt"><input type="radio" name="stype" value="" checked><span>Todos</span></label>
-            <label class="segmented__opt"><input type="radio" name="stype" value="personagem"><span>Personagens</span></label>
-            <label class="segmented__opt"><input type="radio" name="stype" value="criatura"><span>Criaturas</span></label>
-          </div>
-        </fieldset>
-        <button class="btn btn--ghost" type="button" id="open-character-options-search">Abrir opções de personagem</button>
-        <button class="btn btn--ghost" type="button" id="open-global-search">Busca avançada</button>
-      </form>
+      <section class="block" aria-labelledby="quick-title">
+        <h2 class="block__title" id="quick-title"><button class="help" type="button" data-help="fichas">Acesso rápido</button></h2>
+        <p class="block__hint">Salvo neste aparelho.</p>
+        <ul class="rows" id="quick-list"></ul>
+        <p class="empty" id="quick-empty">Nada por aqui ainda. Crie um personagem ou encontre um pela busca abaixo.</p>
+      </section>
 
       <section class="block" aria-labelledby="results-title">
-        <h2 class="block__title" id="results-title"><button class="help" type="button" data-help="busca">Resultados</button></h2>
+        <h2 class="block__title" id="results-title"><button class="help" type="button" data-help="busca">Buscar</button></h2>
+
+        <form class="search-form" id="form-search" role="search" novalidate>
+          <div class="field">
+            <label class="field__label" for="search-input">Nome, espécie ou origem</label>
+            <input class="input input--lg" id="search-input" name="q" type="search" autocomplete="off" autocapitalize="off"
+                   spellcheck="false" placeholder="Ex.: Kael, elfa, Porto">
+          </div>
+          <fieldset class="field">
+            <legend class="field__label">Tipo</legend>
+            <div class="segmented">
+              <label class="segmented__opt"><input type="radio" name="stype" value="" checked><span>Todos</span></label>
+              <label class="segmented__opt"><input type="radio" name="stype" value="personagem"><span>Personagens</span></label>
+              <label class="segmented__opt"><input type="radio" name="stype" value="criatura"><span>Criaturas</span></label>
+            </div>
+          </fieldset>
+        </form>
+
         <p class="block__hint" id="search-hint" role="status"></p>
         <ul class="rows" id="search-list"></ul>
         <p class="empty" id="search-empty">Nenhuma ficha encontrada. Confira a grafia ou tente só o começo do nome.</p>
       </section>
     </section>
 
+    <!-- ===================== TELA: CAMPANHAS ===================== -->
+    <section class="screen" data-screen="campanhas" data-title="Campanhas" aria-labelledby="campanhas-title" hidden>
+      <header class="screen__head">
+        <h1 id="campanhas-title" tabindex="-1"><button class="help" type="button" data-help="campanhas">Campanhas</button></h1>
+      </header>
+
+      <div class="two-col">
+        <section class="block" aria-labelledby="camps-title">
+          <h2 class="block__title" id="camps-title">Suas campanhas</h2>
+          <p class="block__hint">Criadas por você ou onde algum personagem seu participa.</p>
+          <ul class="rows" id="camp-list"></ul>
+          <p class="empty" id="camp-empty">Nenhuma campanha ainda.</p>
+        </section>
+
+        <section class="block" aria-labelledby="create-camp-title">
+          <h2 class="block__title" id="create-camp-title">Criar campanha</h2>
+          <form class="inline-form" id="form-create-campaign" novalidate>
+            <div class="field">
+              <label class="field__label" for="campaign-name">Nome da campanha</label>
+              <input class="input" id="campaign-name" type="text" maxlength="50" autocomplete="off"
+                     placeholder="Ex.: A Queda de Vortex" aria-describedby="campaign-name-error">
+              <p class="field__error" id="campaign-name-error" role="alert"></p>
+            </div>
+            <button class="btn btn--primary" type="submit">Criar campanha</button>
+          </form>
+          <p class="field__hint">Para entrar em uma campanha com um ID de entrada, abra a ficha do personagem e use o campo "Campanhas" nela.</p>
+        </section>
+      </div>
+    </section>
+
+    <!-- ===================== TELA: ITENS ===================== -->
+    <section class="screen" data-screen="itens" data-title="Itens" aria-labelledby="itens-title" hidden>
+      <header class="screen__head">
+        <h1 id="itens-title" tabindex="-1">Montar item</h1>
+      </header>
+
+      <nav class="item-steps" aria-label="Passos">
+        <button class="item-steps__step" type="button" data-item-step="categoria" id="step-categoria-btn">1. Categoria</button>
+        <button class="item-steps__step" type="button" data-item-step="tipo" id="step-tipo-btn" hidden>2. Tipo</button>
+        <button class="item-steps__step" type="button" data-item-step="form" id="step-form-btn" hidden>3. Detalhes</button>
+      </nav>
+
+      <section class="item-panel" id="item-panel-categoria" aria-labelledby="itens-title">
+        <p class="block__hint">Escolha o que você quer montar.</p>
+        <div class="item-grid" id="item-category-grid"></div>
+      </section>
+
+      <section class="item-panel" id="item-panel-tipo" hidden>
+        <a class="back-link" href="#" id="item-back-categoria">Voltar às categorias</a>
+        <h2 class="block__title" id="item-tipo-title"></h2>
+        <p class="block__hint" id="item-tipo-hint"></p>
+        <div class="item-grid" id="item-type-grid"></div>
+      </section>
+
+      <section class="item-panel" id="item-panel-form" hidden>
+        <a class="back-link" href="#" id="item-back-tipo">Voltar</a>
+        <h2 class="block__title" id="item-form-title"></h2>
+        <p class="block__hint" id="item-form-hint"></p>
+        <form class="item-form" id="form-item" novalidate>
+          <div class="fields-grid" id="item-fields"></div>
+          <div class="item-form__actions">
+            <button class="btn btn--primary" type="submit">Salvar item</button>
+            <button class="btn btn--ghost" type="button" id="item-reset">Recomeçar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="item-panel" id="item-panel-soon" hidden>
+        <a class="back-link" href="#" id="item-back-soon">Voltar às categorias</a>
+        <h2 class="block__title" id="item-soon-title"></h2>
+        <p class="notice">Esta categoria ainda não tem regras publicadas. Assim que as regras chegarem (Mods e Propriedades), o formulário aparece aqui.</p>
+      </section>
+
+      <section class="block" aria-labelledby="my-items-title" id="my-items-block" hidden>
+        <h2 class="block__title" id="my-items-title">Seus itens</h2>
+        <p class="block__hint">Salvos neste aparelho.</p>
+        <ul class="rows" id="my-items-list"></ul>
+      </section>
+    </section>
+
     <!-- ===================== TELA: FICHA ===================== -->
     <section class="screen" data-screen="character" data-title="Ficha" aria-labelledby="sheet-title" hidden>
-      <a class="back-link" href="#/home">Voltar ao início</a>
+      <a class="back-link" href="#/personagens">Voltar a Personagens</a>
 
       <header class="sheet-head">
         <div class="portrait">
@@ -193,7 +296,7 @@
 
     <!-- ===================== TELA: CAMPANHA ===================== -->
     <section class="screen" data-screen="campaign" data-title="Campanha" aria-labelledby="campaign-title" hidden>
-      <a class="back-link" href="#/home">Voltar ao início</a>
+      <a class="back-link" href="#/campanhas">Voltar a Campanhas</a>
 
       <header class="screen__head">
         <h1 id="campaign-title" tabindex="-1"></h1>
@@ -251,79 +354,42 @@
       </div>
     </section>
 
-    <!-- ===================== TELA: OPÇÕES DE PERSONAGEM ===================== -->
-    <section class="screen" data-screen="character-options" data-title="Opções de personagem" aria-labelledby="options-title" hidden>
-      <a class="back-link" id="options-back" href="#/home">Voltar</a>
-      <header class="screen__head">
-        <h1 id="options-title" tabindex="-1">Opções de personagem</h1>
+    <!-- ===================== TELA: REGRAS (livro em abas) ===================== -->
+    <section class="screen" data-screen="rules" data-title="Regras" aria-labelledby="rules-title" hidden>
+      <a class="back-link" id="rules-back" href="#/home" hidden>Voltar</a>
+
+      <header class="rules-head">
+        <h1 id="rules-title" tabindex="-1">Regras do Vortex</h1>
+        <p>Um capítulo por aba. Use o índice ao lado da rolagem para pular direto para qualquer regra.</p>
       </header>
 
-      <div class="options-shell">
-        <aside class="options-sidebar" aria-label="Categorias de opções">
-          <div class="options-tabs" id="options-tabs"></div>
-        </aside>
-
-        <main class="options-content" id="options-content" tabindex="0" aria-live="polite">
-          <div class="options-toolbar">
-            <label class="field" for="options-search">
-              <span class="field__label">Buscar recomendações</span>
-              <input class="input" id="options-search" type="search" autocomplete="off" spellcheck="false" placeholder="Ex.: origem, arma, transformação, humano..." aria-describedby="options-count">
-            </label>
-            <p class="options-count" id="options-count" role="status"></p>
-          </div>
-          <div class="options-list" id="options-list"></div>
-        </main>
+      <div class="rules-tabs-wrap">
+        <div class="rules-tabs" id="rules-tabs" role="tablist" aria-label="Capítulos das regras"></div>
       </div>
-    </section>
 
-    <!-- ===================== TELA: ITENS ===================== -->
-    <section class="screen" data-screen="items" data-title="Itens" aria-labelledby="items-title" hidden>
-      <a class="back-link" href="#/home">Voltar</a>
-      <header class="screen__head">
-        <div>
-          <h1 id="items-title" tabindex="-1">Itens</h1>
-          <p class="screen__lead">Inventário completo, ordenável e pesquisável.</p>
-        </div>
-        <button class="btn btn--primary" type="button" id="open-item-creator">Criar item</button>
-      </header>
-      <div class="item-browser">
-        <div class="item-browser__toolbar">
-          <label class="field">
-            <span class="field__label">Buscar itens</span>
-            <input class="input" id="item-search" type="search" placeholder="Nome, tag, tipo ou descrição..." autocomplete="off">
-          </label>
-          <label class="field">
-            <span class="field__label">Tipo</span>
-            <select class="input" id="item-type-filter">
-              <option value="">Todos os tipos</option>
-              <option value="arma">Armas</option>
-              <option value="armadura">Armaduras</option>
-              <option value="ferramenta">Ferramentas</option>
-              <option value="acao">Ações e consumíveis</option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">Valor máximo</span>
-            <input class="input" id="item-value-filter" type="number" min="0" step="1" placeholder="Sem limite">
-          </label>
-          <label class="field">
-            <span class="field__label">Tags</span>
-            <input class="input" id="item-tag-filter" type="search" placeholder="Ex.: fogo, cura" autocomplete="off">
-          </label>
-          <label class="field">
-            <span class="field__label">Ordenar por</span>
-            <select class="input" id="item-sort">
-              <option value="custom">Minha ordem</option>
-              <option value="name">Nome</option>
-              <option value="value-asc">Valor crescente</option>
-              <option value="value-desc">Valor decrescente</option>
-              <option value="type">Tipo</option>
-            </select>
-          </label>
-        </div>
-        <p class="options-count" id="item-count" role="status"></p>
-        <div class="inventory-grid" id="inventory-grid"></div>
-        <p class="empty" id="items-empty" hidden>Nenhum item corresponde aos filtros atuais.</p>
+      <div class="rules-layout" id="rules-layout">
+        <article class="rules-body" id="rules-body" role="tabpanel" tabindex="-1"></article>
+
+        <aside class="rules-rail" id="rules-rail" aria-label="Índice das regras" tabindex="-1">
+          <div class="rules-rail__progress" aria-hidden="true"><span id="rules-progress"></span></div>
+          <div class="rules-rail__inner">
+            <div class="rules-rail__head">
+              <p class="rules-rail__title">Ir para uma regra</p>
+              <button class="btn btn--ghost btn--sm rules-rail__close" type="button" id="rules-close">Fechar</button>
+            </div>
+            <label class="visually-hidden" for="rules-filter">Buscar uma regra pelo título</label>
+            <input class="input" id="rules-filter" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar título de regra">
+
+            <div class="rules-chapters-wrap">
+              <p class="rules-rail__sub" id="rules-chapters-title">Capítulos</p>
+              <nav aria-labelledby="rules-chapters-title"><ol class="toc" id="rules-chapters"></ol></nav>
+            </div>
+
+            <p class="rules-rail__sub" id="rules-toc-title">Nesta aba</p>
+            <nav id="rules-toc-nav" aria-labelledby="rules-toc-title"><ol class="toc" id="rules-toc"></ol></nav>
+            <ol class="toc toc--hits" id="rules-hits" aria-label="Resultados" hidden></ol>
+          </div>
+        </aside>
       </div>
     </section>
 
@@ -341,25 +407,16 @@
     </form>
   </dialog>
 
+  <!-- Índice das regras no celular: botão flutuante + fundo do painel -->
+  <button class="toc-fab btn btn--primary" type="button" id="rules-fab" aria-controls="rules-rail" aria-expanded="false" hidden>Índice</button>
+  <div class="rail-backdrop" id="rules-backdrop" hidden></div>
+
   <!-- Balão de ajuda (um só; o script o coloca ao lado do nome da aba) -->
   <div class="help-pop" id="help-pop" role="dialog" aria-labelledby="help-pop-title" hidden>
     <p class="help-pop__title" id="help-pop-title"></p>
     <p class="help-pop__text" id="help-pop-text"></p>
-    <a class="btn btn--ghost btn--sm" id="help-pop-link" href="#/character-options">Ver nas opções</a>
+    <a class="btn btn--ghost btn--sm" id="help-pop-link" href="#/rules">Ver nas regras</a>
   </div>
-
-  <dialog class="dialog item-dialog" id="item-dialog" aria-labelledby="item-dialog-title">
-    <form id="item-form" novalidate>
-      <h2 id="item-dialog-title">Criar item</h2>
-      <p class="field__hint">Preencha os dados do item. A ordem personalizada será preservada no inventário.</p>
-      <div class="item-form__grid" id="item-form-fields"></div>
-      <p class="field__error" id="item-form-error" role="alert"></p>
-      <div class="dialog__actions">
-        <button class="btn btn--ghost" type="button" id="item-dialog-cancel">Cancelar</button>
-        <button class="btn btn--primary" type="submit">Adicionar item</button>
-      </div>
-    </form>
-  </dialog>
 
   <!-- Exportar a ficha -->
   <dialog class="dialog" id="export-dialog" aria-labelledby="export-title">
@@ -381,6 +438,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="regras.js"></script>
+  <script src="items.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

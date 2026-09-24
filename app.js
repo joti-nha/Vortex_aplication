@@ -239,17 +239,7 @@ const FIREBASE_CONFIG = {
       let d = null;
       try { d = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* começa do zero */ }
       if (!d || !d.characters || !d.campaigns) d = { characters: {}, campaigns: {} };
-      if (!d.items) d.items = clone(ITEM_CATALOG).reduce((map, item) => { map[item.id] = item; return map; }, {});
-      if (!d.upgrades) d.upgrades = {};
-      if (!d.officialPowers) d.officialPowers = clone(OFFICIAL_POWERS).reduce((map, power) => { map[power.id] = power; return map; }, {});
-      if (!Object.keys(d.upgrades).length) {
-        const improvementCategory = OPTION_CATEGORIES.find((category) => category.id === 'melhorias');
-        (improvementCategory ? improvementCategory.items : []).forEach((item) => {
-          d.upgrades[item.id] = { id: item.id, name: item.name, description: item.description, highlights: item.highlights, tags: item.tags, officialPowerId: item.officialPowerId, createdAt: Date.now() };
-        });
-      }
-      if (!d.v) { addDemo(d); d.v = 3; write(d, true); } // migração da versão anterior
-      else if (d.v < 3) { d.v = 3; write(d, true); }
+      if (!d.v) { addDemo(d); d.v = 2; write(d, true); } // migração da versão anterior
       return d;
     }
 
@@ -264,8 +254,6 @@ const FIREBASE_CONFIG = {
       species: c.species || '', age: c.age || '', origin: c.origin || '',
       campaignIds: (c.campaignIds || []).slice(), mine: c.ownerUid === ME
     });
-    const toItem = (item) => Object.assign({}, item, { tags: (item.tags || []).slice(), properties: (item.properties || []).slice() });
-    const toUpgrade = (upgrade, power) => Object.assign({}, upgrade, { officialPower: power ? Object.assign({}, power) : null });
     const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
 
     const listeners = {}; // campaignId -> Set de callbacks
@@ -308,43 +296,6 @@ const FIREBASE_CONFIG = {
           .sort((a, b) => (words(query).length ? byName(a, b) : (b.updatedAt || 0) - (a.updatedAt || 0)))
           .slice(0, 60)
           .map(toChar);
-      },
-
-      async listItems() {
-        return Object.values(read().items).map(toItem).sort((a, b) => (a.order || 0) - (b.order || 0));
-      },
-
-      async createItem(item) {
-        const d = read();
-        const id = item.id || uid();
-        const next = Object.assign({ id, createdAt: Date.now(), updatedAt: Date.now() }, item, { id });
-        d.items[id] = next;
-        write(d);
-        return toItem(next);
-      },
-
-      async saveItemOrder(ids) {
-        const d = read();
-        ids.forEach((id, index) => { if (d.items[id]) d.items[id].order = (index + 1) * 10; });
-        write(d);
-      },
-
-      async listOfficialPowers() {
-        return Object.values(read().officialPowers).map((power) => Object.assign({}, power));
-      },
-
-      async listUpgrades() {
-        const d = read();
-        return Object.values(d.upgrades).map((upgrade) => toUpgrade(upgrade, d.officialPowers[upgrade.officialPowerId]));
-      },
-
-      async createUpgrade(upgrade) {
-        const d = read();
-        if (!upgrade.officialPowerId || !d.officialPowers[upgrade.officialPowerId]) throw new UserError('Toda melhoria precisa estar vinculada a um Poder Oficial.');
-        const next = Object.assign({ id: uid(), createdAt: Date.now() }, upgrade);
-        d.upgrades[next.id] = next;
-        write(d);
-        return toUpgrade(next, d.officialPowers[next.officialPowerId]);
       },
 
       async createCharacter({ name, type }) {
@@ -484,9 +435,6 @@ const FIREBASE_CONFIG = {
     const FV = firebase.firestore.FieldValue;
     const chars = () => fs.collection('characters');
     const camps = () => fs.collection('campaigns');
-    const items = () => fs.collection('items');
-    const officialPowers = () => fs.collection('officialPowers');
-    const upgrades = () => fs.collection('upgrades');
     const names = () => fs.collection('names');
     const nameDoc = (kind, name) => names().doc((kind === 'campaign' ? 'k_' : 'c_') + nameKey(name));
 
@@ -499,7 +447,6 @@ const FIREBASE_CONFIG = {
       };
     };
     const toCamp = (snap) => ({ id: snap.id, name: snap.data().name, isOwner: snap.data().ownerUid === me });
-    const toItem = (snap) => Object.assign({ id: snap.id }, snap.data());
 
     // Fichas criadas antes da busca não têm searchKeys: completa em segundo plano
     function backfillKeys(snap) {
@@ -533,45 +480,6 @@ const FIREBASE_CONFIG = {
         return snap.docs.map(toChar)
           .filter((c) => (!type || c.type === type) && matchesQuery(c, query))
           .sort((a, b) => (qs.length ? a.name.localeCompare(b.name, 'pt-BR') : 0));
-      },
-
-      async listItems() {
-        const snap = await items().orderBy('order', 'asc').limit(500).get();
-        return snap.empty ? clone(ITEM_CATALOG) : snap.docs.map(toItem);
-      },
-
-      async createItem(item) {
-        const ref = items().doc();
-        const next = Object.assign({}, item, { ownerUid: me, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
-        await ref.set(next);
-        return Object.assign({ id: ref.id }, item);
-      },
-
-      async saveItemOrder(ids) {
-        const batch = fs.batch();
-        ids.forEach((id, index) => batch.update(items().doc(id), { order: (index + 1) * 10, updatedAt: FV.serverTimestamp() }));
-        await batch.commit();
-      },
-
-      async listOfficialPowers() {
-        const snap = await officialPowers().get();
-        return snap.empty ? clone(OFFICIAL_POWERS) : snap.docs.map((power) => Object.assign({ id: power.id }, power.data()));
-      },
-
-      async listUpgrades() {
-        const [upgradeSnap, powerSnap] = await Promise.all([upgrades().get(), officialPowers().get()]);
-        const powers = Object.fromEntries(powerSnap.docs.map((power) => [power.id, Object.assign({ id: power.id }, power.data())]));
-        if (upgradeSnap.empty) return clone(OPTION_CATEGORIES.find((category) => category.id === 'melhorias')?.items || []).map((upgrade) => Object.assign({}, upgrade, { officialPower: OFFICIAL_POWERS.find((power) => power.id === upgrade.officialPowerId) || null }));
-        return upgradeSnap.docs.map((upgrade) => Object.assign({ id: upgrade.id, officialPower: powers[upgrade.data().officialPowerId] || null }, upgrade.data()));
-      },
-
-      async createUpgrade(upgrade) {
-        if (!upgrade.officialPowerId) throw new UserError('Toda melhoria precisa estar vinculada a um Poder Oficial.');
-        const power = await officialPowers().doc(upgrade.officialPowerId).get();
-        if (!power.exists) throw new UserError('Poder Oficial não encontrado.');
-        const ref = upgrades().doc();
-        await ref.set(Object.assign({}, upgrade, { ownerUid: me, createdAt: FV.serverTimestamp() }));
-        return Object.assign({ id: ref.id, officialPower: Object.assign({ id: power.id }, power.data()) }, upgrade);
       },
 
       async createCharacter({ name, type }) {
@@ -1236,209 +1144,45 @@ const FIREBASE_CONFIG = {
   }
 
   /* ---------- Ajuda: passe o mouse ou clique no nome da aba ---------- */
-  // Cada tópico também será um capítulo da futura aba Regras
-  // (dentro da ficha, avulsa e ligada à campanha).
+  // Cada tópico pode apontar para um trecho da aba Regras (campo "rule": capítulo/seção).
+  // Sem "rule", o balão não mostra o botão "Ver nas regras".
   const TOPICS = {
     fichas: {
       title: 'Personagens e criaturas',
-      text: 'Atalho para as fichas que você criou ou fixou. A lista fica salva neste aparelho; o conteúdo das fichas fica no Firebase (ou só no navegador, no modo local). Todas as fichas são públicas e qualquer pessoa pode editar.'
+      text: 'Atalho para as fichas que você criou ou fixou. A lista fica salva neste aparelho; o conteúdo das fichas fica no Firebase (ou só no navegador, no modo local). Todas as fichas são públicas e qualquer pessoa pode editar.',
+      rule: 'ficha'
     },
     campanhas: {
       title: 'Campanhas',
-      text: 'Cada campanha tem um ID de entrada de 6 caracteres. Quem tem o ID vincula um personagem a ela, e um personagem pode estar em quantas campanhas quiser.'
+      text: 'Cada campanha tem um ID de entrada de 6 caracteres. Quem tem o ID vincula um personagem a ela, e um personagem pode estar em quantas campanhas quiser.',
+      rule: null
     },
     'dados-basicos': {
       title: 'Dados básicos',
-      text: 'Nome, espécie, idade e origem. O nome é único. Qualquer pessoa pode editar a ficha, então o jogo depende da boa-fé de todos.'
+      text: 'Nome, espécie, idade e origem. O nome é único. Qualquer pessoa pode editar a ficha, então o jogo depende da boa-fé de todos.',
+      rule: 'ficha/modelo-de-ficha'
     },
     rolagens: {
       title: 'Dados',
-      text: 'Chat de rolagens da campanha. Comandos: d20, 2d6+3, 4d6kh3 (fica com os 3 maiores), 2d20kl1 (fica com o menor) e um comentário depois de #. A rolagem sai em nome do personagem escolhido em "Rolando como".'
+      text: 'Chat de rolagens da campanha. Comandos: d20, 2d6+3, 4d6kh3 (fica com os 3 maiores), 2d20kl1 (fica com o menor) e um comentário depois de #. A rolagem sai em nome do personagem escolhido em "Rolando como". Nas regras, todos os testes usam 2d6 + Atributo + Perícia.',
+      rule: 'testes-e-dados/rolagens'
     },
     candidatos: {
       title: 'Candidatos',
-      text: 'Personagens e criaturas vinculados à campanha. Toque num nome para ver a ficha resumida e abrir a ficha completa.'
+      text: 'Personagens e criaturas vinculados à campanha. Toque num nome para ver a ficha resumida e abrir a ficha completa.',
+      rule: null
     },
     busca: {
       title: 'Buscar',
-      text: 'Procura fichas por nome, espécie ou origem; basta o começo de uma palavra. Todas as fichas são públicas.'
+      text: 'Procura fichas por nome, espécie ou origem; basta o começo de uma palavra. Todas as fichas são públicas.',
+      rule: null
     }
   };
-
-  const OPTION_CATEGORIES = [
-    {
-      id: 'tendo',
-      title: 'Tendo',
-      description: 'Sugestões de bases, traços e situações iniciais para o personagem.',
-      items: [
-        { name: 'Tendo de Engenharia', description: 'Especialista em tecnologia e improviso mecânico.', highlights: ['+1 em tecnologia', 'acesso a kit de ferramentas', 'reparo e manutenção'], tags: ['engenharia', 'tecnologia', 'reparo'] },
-        { name: 'Tendo de Sobrevivência', description: 'Aventureiro adaptado ao ambiente hostil e ao improviso.', highlights: ['+1 em resistência', 'acesso a suprimentos básicos', 'manutenção de rota e abrigo'], tags: ['sobrevivência', 'exploração', 'campo'] },
-        { name: 'Tendo Social', description: 'Habilidade de negociar, liderar e conviver em grupos de alto risco.', highlights: ['+1 em diplomacia', 'reconhecimento social', 'controle de grupo'], tags: ['social', 'liderança', 'grupo'] }
-      ]
-    },
-    {
-      id: 'origem',
-      title: 'Origem',
-      description: 'Arquétipos de pedigree, vivência e materiais iniciais do personagem.',
-      items: [
-        {
-          name: 'Engenheiro',
-          description: 'Ex-funcionário de megacorporação ou catador com cérebro afiado.',
-          highlights: ['1 ferramenta multifunção (permite utilizar a perícia de tecnologia)', '1 pistola básica ou rifle (3 slots de munição)', '1 anel Chirlez backup (20 slots digitais de itens)', '1 vestimenta de proteção leve (armadura leve +2)'],
-          tags: ['engenheiro', 'tecnologia', 'origem']
-        },
-        {
-          name: 'Operador de Campo',
-          description: 'Pessoal treinado para trabalhar em zonas de guerra e uso intensivo de equipamentos.',
-          highlights: ['1 kit de emergência', '1 arma leve', '1 rádio de campanha'],
-          tags: ['campo', 'arma', 'sobrevivência']
-        },
-        {
-          name: 'Catarata do Bairro',
-          description: 'Pessoa que vive na rua e sabe improvisar em qualquer situação.',
-          highlights: ['1 kit improvisado', '1 bolsa de materiais', '1 item de sobrevivência'],
-          tags: ['rua', 'improviso', 'sobrevivência']
-        }
-      ]
-    },
-    {
-      id: 'especime',
-      title: 'Espécime',
-      description: 'Variedades de seres, criaturas e construções com regras especiais de início.',
-      items: [
-        {
-          name: 'Humano',
-          description: 'Nada de especial, talvez sua experiência passada: tome 3 UP points de início.',
-          highlights: ['pontos iniciais extras', 'versátil', 'sem penalidade especial'],
-          tags: ['humano', 'versátil', 'iniciante']
-        },
-        {
-          name: 'Robô',
-          description: 'Meio que é ... feito de lata, né não? Núcleo: você contém núcleo, depende do mesmo para sobreviver.',
-          highlights: ['núcleo +2 comum desde o início', 'PV convertidos para blindagem e escudo', 'não vivo e resistente a efeitos biológicos'],
-          tags: ['robô', 'núcleo', 'não vivo']
-        },
-        {
-          name: 'Não vivo',
-          description: 'Você é lata; lata não é afetada por coisas biológicas e não precisa descansar.',
-          highlights: ['não recupera PV por descanso', 'pode ser consertado com tecnologia', 'reparo exige descanso longo'],
-          tags: ['não vivo', 'tecnologia', 'reparo']
-        }
-      ]
-    },
-    {
-      id: 'poderes',
-      title: 'Poderes',
-      description: 'Lista de poderes e transformações com custos e efeitos baseados no documento.',
-      items: [
-        {
-          name: 'Transformação',
-          description: 'Utilizando uma ação, você pode assumir uma nova forma, criando uma transformação e realocando seus UP Points livremente.',
-          highlights: ['transformação com custo de UP', 'pontos de ação para transformações adicionais', 'items da forma original podem ser inutilizados ou mantidos conforme custo'],
-          tags: ['transformação', 'forma', 'up']
-        },
-        {
-          name: 'Mutável',
-          description: 'As transformações têm seus custos em UP diminuídos pela metade e podem ser usadas com menos custo de PA.',
-          highlights: ['transformações mais frequentes', 'custo reduzido', 'pré-requisito: transformação'],
-          tags: ['mutável', 'melhoria', 'transformação']
-        }
-      ]
-    },
-    {
-      id: 'melhorias',
-      title: 'Melhorias',
-      description: 'Aprimoramentos vinculados a um Poder Oficial específico.',
-      items: [
-        { id: 'melhoria-mutacao', name: 'Mutação controlada', description: 'Reduz o custo de uma transformação e amplia sua frequência de uso.', highlights: ['Poder Oficial: Transformação', 'custo reduzido', 'requer vínculo com o poder'], tags: ['melhoria', 'transformação', 'up'], officialPowerId: 'poder-transformacao' },
-        { id: 'melhoria-nucleo', name: 'Núcleo aprimorado', description: 'Aumenta a estabilidade e a capacidade de um núcleo artificial.', highlights: ['Poder Oficial: Núcleo', 'reserva ampliada', 'requer vínculo com o poder'], tags: ['melhoria', 'núcleo', 'robô'], officialPowerId: 'poder-nucleo' }
-      ]
-    },
-    {
-      id: 'itens',
-      title: 'Itens',
-      description: 'Busque itens e crie novos itens com formulários específicos por tipo.',
-      items: [
-        { name: 'Pistola Básica', description: 'Arma padrão de defesa pessoal e combate curto.', highlights: ['dano moderado', 'uso prático', 'cadência simples'], tags: ['arma', 'fogo', 'pistola'] },
-        { name: 'Armadura Leve', description: 'Proteção simples sem penalidade de carga.', highlights: ['+2 de armadura', 'leve', 'carga baixa'], tags: ['armadura', 'proteção', 'leve'] },
-        { name: 'Kit de Ferramentas', description: 'Conjunto para manutenção, tecnologia e improvisos.', highlights: ['tecnologia', 'reparo', 'uso prático'], tags: ['ferramenta', 'tecnologia', 'reparo'] }
-      ]
-    }
-  ];
-
-  const OFFICIAL_POWERS = [
-    { id: 'poder-transformacao', name: 'Transformação', description: 'Permite assumir uma nova forma e realocar UP Points.' },
-    { id: 'poder-nucleo', name: 'Núcleo', description: 'Define a fonte de estabilidade e energia de construções e próteses.' }
-  ];
-  const CHARACTER_OPTION_CATEGORIES = OPTION_CATEGORIES.filter((category) => category.id !== 'itens');
-
-  const ITEM_CATALOG = [
-    { id: 'item-pistola-basica', name: 'Pistola Básica', type: 'arma', value: 120, rarity: 'Comum', description: 'Arma padrão de defesa pessoal e combate curto.', tags: ['arma', 'fogo', 'pistola'], properties: ['dano moderado', 'cadência simples'], order: 10 },
-    { id: 'item-armadura-leve', name: 'Armadura Leve', type: 'armadura', value: 180, rarity: 'Comum', description: 'Proteção simples sem penalidade de carga.', tags: ['armadura', 'proteção', 'leve'], properties: ['+2 armadura', 'carga baixa'], order: 20 },
-    { id: 'item-kit-ferramentas', name: 'Kit de Ferramentas', type: 'ferramenta', value: 80, rarity: 'Comum', description: 'Conjunto para manutenção, tecnologia e improvisos.', tags: ['ferramenta', 'tecnologia', 'reparo'], properties: ['uso prático', 'reparo'], order: 30 },
-    { id: 'item-coquetel-cura', name: 'Coquetel de Cura', type: 'acao', value: 60, rarity: 'Comum', description: 'Consumível de emergência para recuperar resistência.', tags: ['ação', 'cura', 'consumível'], properties: ['recupera 5 PV', 'ação padrão'], order: 40 }
-  ];
-
-  const ITEM_FORM_TYPES = {
-    arma: {
-      label: 'Arma',
-      fields: [
-        { name: 'name', label: 'Nome do item', type: 'text', placeholder: 'Ex.: Rifle de precisão' },
-        { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'] },
-        { name: 'damage', label: 'Dano', type: 'text', placeholder: 'Ex.: 2d6 + 2' },
-        { name: 'cadence', label: 'Cadência', type: 'text', placeholder: 'Ex.: Semi e automático' },
-        { name: 'range', label: 'Alcance', type: 'text', placeholder: 'Ex.: Médio a longo' },
-        { name: 'load', label: 'Carga', type: 'text', placeholder: 'Ex.: 2' }
-      ]
-    },
-    armadura: {
-      label: 'Armadura',
-      fields: [
-        { name: 'name', label: 'Nome da armadura', type: 'text', placeholder: 'Ex.: Armadura leve reforçada' },
-        { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'] },
-        { name: 'armor', label: 'Armadura', type: 'text', placeholder: 'Ex.: +3' },
-        { name: 'penalty', label: 'Penalidade', type: 'text', placeholder: 'Ex.: -1' },
-        { name: 'type', label: 'Tipo', type: 'select', options: ['Leve', 'Média', 'Pesada'] },
-        { name: 'load', label: 'Carga', type: 'text', placeholder: 'Ex.: 2' }
-      ]
-    },
-    ferramenta: {
-      label: 'Ferramenta',
-      fields: [
-        { name: 'name', label: 'Nome da ferramenta', type: 'text', placeholder: 'Ex.: Kit multifuncional' },
-        { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'] },
-        { name: 'usage', label: 'Uso', type: 'text', placeholder: 'Ex.: Reparo, tecnologia, improviso' },
-        { name: 'slot', label: 'Espaço de uso', type: 'text', placeholder: 'Ex.: 1' }
-      ]
-    },
-    acao: {
-      label: 'Ação / Consumível',
-      fields: [
-        { name: 'name', label: 'Nome', type: 'text', placeholder: 'Ex.: Coquetel de cura' },
-        { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'] },
-        { name: 'effect', label: 'Efeito', type: 'text', placeholder: 'Ex.: Recupera 5 PV ou ativa um efeito' },
-        { name: 'trigger', label: 'Ação de uso', type: 'text', placeholder: 'Ex.: Ação padrão' }
-      ]
-    }
-  };
-
-  const normalizeOptionText = (value) => nameKey(String(value || ''));
-  const OPTION_SEARCH_INDEX = OPTION_CATEGORIES.flatMap((category) => category.items.map((item) => ({
-    categoryId: category.id,
-    item,
-    text: normalizeOptionText([
-      category.title,
-      category.description,
-      item.name,
-      item.description,
-      ...(item.tags || []),
-      ...(item.highlights || [])
-    ].join(' '))
-  })));
 
   const pop = $('#help-pop');
   const helpState = { trigger: null, pinned: false, openTimer: 0, closeTimer: 0 };
   let rulesBack = '#/home'; // de onde a pessoa veio ao abrir as regras
+  let rulesFromHelp = false; // chegou às regras pelo botão do balão de ajuda?
 
   function placeHelp(trigger) {
     const heading = trigger.parentElement;
@@ -1462,7 +1206,9 @@ const FIREBASE_CONFIG = {
     helpState.pinned = Boolean(pin);
     $('#help-pop-title').textContent = topic.title;
     $('#help-pop-text').textContent = topic.text;
-    $('#help-pop-link').href = '#/character-options';
+    const link = $('#help-pop-link');
+    link.hidden = !topic.rule;
+    if (topic.rule) link.href = '#/rules/' + topic.rule;
     trigger.setAttribute('aria-expanded', 'true');
     trigger.setAttribute('aria-controls', 'help-pop');
     placeHelp(trigger);
@@ -1496,7 +1242,7 @@ const FIREBASE_CONFIG = {
   });
   pop.addEventListener('mouseenter', () => clearTimeout(helpState.closeTimer));
   pop.addEventListener('mouseleave', scheduleHelpClose);
-  $('#help-pop-link').addEventListener('click', () => { rulesBack = location.hash || '#/home'; closeHelp(false); });
+  $('#help-pop-link').addEventListener('click', () => { rulesBack = location.hash || '#/home'; rulesFromHelp = true; closeHelp(false); });
   document.addEventListener('click', (ev) => {
     if (!helpState.trigger) return;
     if (ev.target.closest('.help') || ev.target.closest('#help-pop')) return;
@@ -1519,8 +1265,8 @@ const FIREBASE_CONFIG = {
     act.type = 'button';
     act.setAttribute('aria-label', (c.mine ? 'Excluir ' : 'Tirar do acesso rápido: ') + c.name);
     act.addEventListener('click', async () => {
-      if (c.mine) { if (await deleteCharacterFlow(c)) showHome(); }
-      else { quickRemove(c.id); showHome(); }
+      if (c.mine) { if (await deleteCharacterFlow(c)) views.personagens(); }
+      else { quickRemove(c.id); views.personagens(); }
     });
     return h('li', 'row', open, act);
   }
@@ -1612,12 +1358,13 @@ const FIREBASE_CONFIG = {
 
   /* =====================================================================
      7. TELAS: navegação por endereço
-        #/home  #/search  #/character/ID  #/campaign/ID  #/character-options/CATEGORIA  #/items
+        #/home  #/novo  #/personagens  #/campanhas  #/itens
+        #/character/ID  #/campaign/ID  #/rules/TÓPICO
      ===================================================================== */
   const views = {};
   let onLeave = null; // cada tela pode registrar uma limpeza (ex.: parar de ouvir os dados)
   let lastCharacterId = null;
-  const NAV_FOR = { 'character-options': 'character-options', items: 'items' };
+  const NAV_FOR = { home: 'home', personagens: 'personagens', campanhas: 'campanhas', itens: 'itens', rules: 'rules' };
 
   function go(name, param) {
     const next = '#/' + name + (param ? '/' + encodeURIComponent(param) : '');
@@ -1628,11 +1375,13 @@ const FIREBASE_CONFIG = {
     if (onLeave) { onLeave(); onLeave = null; }
     closeHelp(false);
     const parts = location.hash.replace(/^#\/?/, '').split('/');
-    let name = parts[0] || 'character-options';
-    if (name === 'options') name = 'character-options';
+    const name = parts[0] || 'home';
     const param = parts[1] ? decodeURIComponent(parts.slice(1).join('/')) : null;
-    if (!(name in views)) return go('character-options');
+    if (!(name in views)) return go('home');
 
+    if (name !== 'rules') rulesFromHelp = false;
+    $('#conteudo').classList.toggle('container--wide', name === 'rules'); // as regras usam a largura toda
+    $('#rules-fab').hidden = name !== 'rules';
     const target = $('[data-screen="' + name + '"]');
     $$('[data-screen]').forEach((s) => { s.hidden = s !== target; });
     target.classList.remove('is-entering');
@@ -1648,12 +1397,15 @@ const FIREBASE_CONFIG = {
     catch (err) { toast(errorMessage(err)); }
     target.removeAttribute('aria-busy');
 
-    if (name === 'search' && window.matchMedia('(pointer: fine)').matches) $('#search-input').focus();
+    if (name === 'personagens' && window.matchMedia('(pointer: fine)').matches) $('#search-input').focus();
     else { const heading = $('h1', target); if (heading) heading.focus({ preventScroll: true }); }
     window.scrollTo(0, 0);
   }
 
-  /* ---------- Início ---------- */
+  /* ---------- Início (vitrine) ---------- */
+  views.home = async function showHome() { /* só a etiqueta de modo, tratada por setMode() */ };
+
+  /* ---------- Criar personagem ---------- */
   const formCreate = $('#form-create');
   const inCreate = $('#create-name');
   const errCreate = $('#create-error');
@@ -1671,12 +1423,11 @@ const FIREBASE_CONFIG = {
   let createSeq = 0;
   const liveCheckCreate = debounce(async () => {
     const seq = createSeq;
-    const kind = formCreate.elements.kind.value;
     const name = cleanName(inCreate.value);
     if (validateName(name)) return;
     try {
-      const taken = await db.nameTaken(kind === 'campanha' ? 'campaign' : 'character', name);
-      if (seq === createSeq && taken) setError(errCreate, inCreate, kind === 'campanha' ? DUP_CAMPAIGN : DUP_CHARACTER);
+      const taken = await db.nameTaken('character', name);
+      if (seq === createSeq && taken) setError(errCreate, inCreate, DUP_CHARACTER);
     } catch (e) { /* a checagem final acontece ao criar */ }
   }, 350);
 
@@ -1695,22 +1446,20 @@ const FIREBASE_CONFIG = {
     if (bad) { setError(errCreate, inCreate, bad); inCreate.focus(); return; }
     btnCreate.disabled = true;
     try {
-      if (kind === 'campanha') {
-        const camp = await db.createCampaign(name);
-        inCreate.value = '';
-        toast('Campanha criada. Vincule um personagem pela ficha dele para rolar dados.');
-        go('campaign', camp.id);
-      } else {
-        const c = await db.createCharacter({ name, type: kind });
-        quickAdd(c);
-        inCreate.value = '';
-        go('character', c.id);
-      }
+      const c = await db.createCharacter({ name, type: kind });
+      quickAdd(c);
+      inCreate.value = '';
+      go('character', c.id);
     } catch (err) {
       setError(errCreate, inCreate, errorMessage(err));
       inCreate.focus();
     } finally { btnCreate.disabled = false; }
   });
+
+  views.novo = async function showNovo() {
+    formCreate.reset();
+    applyKind();
+  };
 
   async function deleteCampaignFlow(c) {
     const ok = await askConfirm({
@@ -1723,22 +1472,7 @@ const FIREBASE_CONFIG = {
     catch (err) { toast(errorMessage(err)); return false; }
   }
 
-  views.home = async function showHome() {
-    applyKind();
-    const [quick, camps] = await Promise.all([
-      refreshQuick(),
-      db.listMyCampaigns().catch((e) => { toast(errorMessage(e)); return []; })
-    ]);
-    $('#quick-list').replaceChildren(...quick.map(characterRow));
-    $('#quick-empty').hidden = quick.length > 0;
-    $('#camp-list').replaceChildren(...camps.map((c) => campaignRow(c, c.isOwner
-      ? { label: 'Excluir', onClick: async () => { if (await deleteCampaignFlow(c)) showHome(); } }
-      : null)));
-    $('#camp-empty').hidden = camps.length > 0;
-  };
-  const showHome = () => views.home();
-
-  /* ---------- Buscar ---------- */
+  /* ---------- Personagens (acesso rápido + busca) ---------- */
   const formSearch = $('#form-search');
   const inSearch = $('#search-input');
   let searchSeq = 0;
@@ -1764,7 +1498,227 @@ const FIREBASE_CONFIG = {
   inSearch.addEventListener('input', liveSearch);
   $$('input[name="stype"]', formSearch).forEach((r) => r.addEventListener('change', runSearch));
   formSearch.addEventListener('submit', (ev) => { ev.preventDefault(); runSearch(); });
-  views.search = () => runSearch();
+
+  views.personagens = async function showPersonagens() {
+    const quick = await refreshQuick();
+    $('#quick-list').replaceChildren(...quick.map(characterRow));
+    $('#quick-empty').hidden = quick.length > 0;
+    await runSearch();
+  };
+
+  /* ---------- Campanhas ---------- */
+  const formCreateCamp = $('#form-create-campaign');
+  const inCampName = $('#campaign-name');
+  const errCampName = $('#campaign-name-error');
+
+  inCampName.addEventListener('input', () => setError(errCampName, inCampName, ''));
+  formCreateCamp.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const name = cleanName(inCampName.value);
+    if (name.length < 3) { setError(errCampName, inCampName, 'Dê um nome com pelo menos 3 letras.'); inCampName.focus(); return; }
+    try {
+      const camp = await db.createCampaign(name);
+      formCreateCamp.reset();
+      toast('Campanha criada. Vincule um personagem pela ficha dele para rolar dados.');
+      go('campaign', camp.id);
+    } catch (err) {
+      setError(errCampName, inCampName, errorMessage(err));
+    }
+  });
+
+  views.campanhas = async function showCampanhas() {
+    setError(errCampName, inCampName, '');
+    const camps = await db.listMyCampaigns().catch((e) => { toast(errorMessage(e)); return []; });
+    $('#camp-list').replaceChildren(...camps.map((c) => campaignRow(c, c.isOwner
+      ? { label: 'Excluir', onClick: async () => { if (await deleteCampaignFlow(c)) views.campanhas(); } }
+      : null)));
+    $('#camp-empty').hidden = camps.length > 0;
+  };
+
+
+  /* ---------- Itens: categoria → tipo → formulário ----------
+     Os dados vêm de items.js (window.VORTEX_ITEMS). Os itens montados ficam
+     só neste aparelho (localStorage) — ainda não há um lugar nas campanhas
+     ou fichas para guardá-los de verdade. */
+  const ITEMS_KEY = 'vortex.items.v1';
+  const ITEM_DATA = window.VORTEX_ITEMS || { categories: [], raridades: [], tiposDano: [] };
+  const itemState = { categoryId: null, typeId: null, step: 'categoria' };
+
+  function itemsLoad() {
+    try { const l = JSON.parse(localStorage.getItem(ITEMS_KEY)); return Array.isArray(l) ? l : []; }
+    catch (e) { return []; }
+  }
+  function itemsSave(list) {
+    try { localStorage.setItem(ITEMS_KEY, JSON.stringify(list)); }
+    catch (e) { toast('Não foi possível salvar: o armazenamento está cheio.'); }
+  }
+
+  const findCategory = (id) => ITEM_DATA.categories.find((c) => c.id === id);
+  const findType = (cat, id) => (cat.types || []).find((t) => t.id === id);
+  const optionsFor = (key) => ITEM_DATA[key] || [];
+
+  function itemCard(title, hint, onClick, helpRule) {
+    const btn = h('button', 'item-card', h('span', 'item-card__title', title), hint ? h('span', 'item-card__hint', hint) : null);
+    btn.type = 'button';
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  function setItemStep(step) {
+    itemState.step = step;
+    ['categoria', 'tipo', 'form', 'soon'].forEach((s) => { $('#item-panel-' + s).hidden = s !== step; });
+    $$('.item-steps__step').forEach((b) => {
+      const on = b.dataset.itemStep === step;
+      b.setAttribute('aria-current', on ? 'step' : 'false');
+    });
+    $('#step-tipo-btn').hidden = !itemState.categoryId || !findCategory(itemState.categoryId).types;
+    $('#step-form-btn').hidden = step === 'categoria' || (step === 'tipo');
+    if (step !== 'form') $('#step-form-btn').hidden = true;
+    const heading = $('.item-panel:not([hidden]) h2, .item-panel:not([hidden]) [tabindex]');
+    if (heading) heading.focus({ preventScroll: true });
+  }
+
+  function renderCategoryGrid() {
+    const grid = $('#item-category-grid');
+    grid.replaceChildren();
+    let lastGroup = null;
+    ITEM_DATA.categories.forEach((c) => {
+      if (c.group !== lastGroup) { grid.append(h('p', 'item-grid__group', c.group)); lastGroup = c.group; }
+      grid.append(itemCard(c.title, c.comingSoon ? 'Em breve' : c.hint, () => openCategory(c.id)));
+    });
+  }
+
+  function openCategory(id) {
+    const cat = findCategory(id);
+    if (!cat) return;
+    itemState.categoryId = id;
+    itemState.typeId = null;
+    if (cat.comingSoon) {
+      $('#item-soon-title').textContent = cat.title;
+      setItemStep('soon');
+      return;
+    }
+    if (cat.types) {
+      $('#item-tipo-title').textContent = cat.title;
+      $('#item-tipo-hint').textContent = cat.hint || '';
+      $('#item-type-grid').replaceChildren(...cat.types.map((t) => itemCard(t.title, null, () => openType(id, t.id))));
+      setItemStep('tipo');
+      return;
+    }
+    openForm(id, null);
+  }
+
+  function openType(categoryId, typeId) {
+    itemState.categoryId = categoryId;
+    itemState.typeId = typeId;
+    openForm(categoryId, typeId);
+  }
+
+  function fieldControl(field, value) {
+    if (field.kind === 'select') {
+      const sel = h('select', 'input');
+      sel.id = 'item-f-' + field.key;
+      h('option', '', '—'); // placeholder, não usado diretamente
+      sel.append(h('option', '', 'Escolha...'));
+      optionsFor(field.options).forEach((op) => {
+        const o = h('option', '', op);
+        if (op === value) o.selected = true;
+        sel.append(o);
+      });
+      return sel;
+    }
+    if (field.kind === 'textarea') {
+      const ta = h('textarea', 'input');
+      ta.id = 'item-f-' + field.key;
+      ta.rows = 3;
+      ta.value = value || '';
+      return ta;
+    }
+    const inp = h('input', 'input');
+    inp.type = 'text';
+    inp.id = 'item-f-' + field.key;
+    inp.autocomplete = 'off';
+    inp.value = value || '';
+    return inp;
+  }
+
+  function openForm(categoryId, typeId) {
+    const cat = findCategory(categoryId);
+    const type = typeId ? findType(cat, typeId) : null;
+    $('#item-form-title').textContent = cat.title + (type ? ' · ' + type.title : '');
+    $('#item-form-hint').textContent = type && type.rule
+      ? 'Os valores de ' + type.title + ' vêm da média de criação das regras; edite como quiser.'
+      : (cat.hint || '');
+
+    const grid = $('#item-fields');
+    grid.replaceChildren();
+    cat.fields.forEach((f) => {
+      const defVal = f.fromType && type ? (type.defaults[f.key] || '') : '';
+      const wrap = h('div', 'field' + (f.big ? ' field--wide' : ''), h('label', 'field__label', f.label), fieldControl(f, defVal));
+      grid.append(wrap);
+    });
+    setItemStep('form');
+  }
+
+  function itemRow(it) {
+    const cat = findCategory(it.categoryId);
+    const label = (cat ? cat.title : it.categoryId) + (it.typeTitle ? ' · ' + it.typeTitle : '');
+    const row = h('li', 'row',
+      h('span', 'row__open row__open--static',
+        h('span', 'row__main', h('span', 'row__title', it.name || 'Sem nome'), h('span', 'row__meta', label))));
+    const del = h('button', 'btn btn--danger btn--sm', 'Excluir');
+    del.type = 'button';
+    del.addEventListener('click', () => {
+      itemsSave(itemsLoad().filter((x) => x.id !== it.id));
+      renderMyItems();
+    });
+    row.append(del);
+    return row;
+  }
+
+  function renderMyItems() {
+    const list = itemsLoad();
+    $('#my-items-block').hidden = list.length === 0;
+    $('#my-items-list').replaceChildren(...list.map(itemRow));
+  }
+
+  $('#item-back-categoria').addEventListener('click', (ev) => { ev.preventDefault(); setItemStep('categoria'); });
+  $('#item-back-soon').addEventListener('click', (ev) => { ev.preventDefault(); setItemStep('categoria'); });
+  $('#item-back-tipo').addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const cat = findCategory(itemState.categoryId);
+    if (cat && cat.types) setItemStep('tipo'); else setItemStep('categoria');
+  });
+  $$('.item-steps__step').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.itemStep === 'categoria') setItemStep('categoria');
+    else if (b.dataset.itemStep === 'tipo' && itemState.categoryId) setItemStep('tipo');
+    else if (b.dataset.itemStep === 'form' && itemState.categoryId) setItemStep('form');
+  }));
+
+  $('#item-reset').addEventListener('click', () => setItemStep('categoria'));
+  $('#form-item').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const cat = findCategory(itemState.categoryId);
+    const type = itemState.typeId ? findType(cat, itemState.typeId) : null;
+    const values = {};
+    cat.fields.forEach((f) => { values[f.key] = $('#item-f-' + f.key).value.trim(); });
+    if (!values.nome) { toast('Dê um nome para o item.'); $('#item-f-nome').focus(); return; }
+    const item = {
+      id: uid(), categoryId: cat.id, typeId: type ? type.id : null, typeTitle: type ? type.title : '',
+      name: values.nome, values, createdAt: Date.now()
+    };
+    itemsSave([item].concat(itemsLoad()));
+    toast('Item salvo.');
+    renderMyItems();
+    setItemStep('categoria');
+  });
+
+  views.itens = async function showItens() {
+    renderCategoryGrid();
+    renderMyItems();
+    if (!itemState.categoryId) setItemStep('categoria');
+    else setItemStep(itemState.step);
+  };
 
   /* ---------- Ficha ---------- */
   let sheetChar = null;
@@ -1923,7 +1877,7 @@ const FIREBASE_CONFIG = {
     renderPin();
   });
 
-  $('#delete-character').addEventListener('click', async () => { if (await deleteCharacterFlow(sheetChar)) go('home'); });
+  $('#delete-character').addEventListener('click', async () => { if (await deleteCharacterFlow(sheetChar)) go('personagens'); });
 
   /* Exportar: PDF, Word, texto ou copiar */
   const exportDlg = $('#export-dialog');
@@ -1953,7 +1907,7 @@ const FIREBASE_CONFIG = {
   views.character = async function showSheet(id) {
     await flushSave(); // não perde edição pendente da ficha anterior
     const c = await db.getCharacter(id);
-    if (!c) { toast('Não encontramos essa ficha.'); go('home'); return; }
+    if (!c) { toast('Não encontramos essa ficha.'); go('personagens'); return; }
     sheetChar = c;
     dirty.clear();
     lastCharacterId = id;
@@ -2014,12 +1968,12 @@ const FIREBASE_CONFIG = {
   });
 
   $('#delete-campaign').addEventListener('click', async () => {
-    if (await deleteCampaignFlow(currentCamp)) go('home');
+    if (await deleteCampaignFlow(currentCamp)) go('campanhas');
   });
 
   views.campaign = async function showCampaign(id) {
     const camp = await db.getCampaign(id);
-    if (!camp) { toast('Não encontramos essa campanha.'); go('home'); return; }
+    if (!camp) { toast('Não encontramos essa campanha.'); go('campanhas'); return; }
     currentCamp = camp;
     firstRolls = true;
     $('#campaign-title').textContent = camp.name;
@@ -2060,389 +2014,398 @@ const FIREBASE_CONFIG = {
     onLeave = () => { if (typeof stop === 'function') stop(); };
   };
 
-  /* ---------- Regras ---------- */
-  const rulesBackBtn = $('#rules-back');
-  if (rulesBackBtn) {
-    rulesBackBtn.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      go(rulesBack.replace(/^#\//, '').split('/')[0], decodeURIComponent(rulesBack.replace(/^#\//, '').split('/').slice(1).join('/')) || undefined);
-    });
-  }
+  /* ---------- Regras: livro em abas, no estilo de tutorial ----------
+     O texto vem de regras.js. Um capítulo por aba; ao lado da rolagem fica o índice
+     com o título de cada regra (marca onde você está e pula direto para qualquer uma). */
+  const CHAPTERS = (window.VORTEX_REGRAS && window.VORTEX_REGRAS.chapters) || [];
+  const rulesUi = { tab: null, headings: [], spySlug: null, spyQueued: false };
+  const rulesTabsEl = $('#rules-tabs');
+  const rulesBodyEl = $('#rules-body');
+  const rulesRail = $('#rules-rail');
+  const rulesTocEl = $('#rules-toc');
+  const rulesHitsEl = $('#rules-hits');
+  const rulesFilter = $('#rules-filter');
+  const rulesProgress = $('#rules-progress');
+  const rulesFab = $('#rules-fab');
+  const rulesBackdrop = $('#rules-backdrop');
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const slugify = (s) => nameKey(s).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'secao';
+  const plainText = (s) => String(s).replace(/\*/g, '');
+  const ruleHref = (tab, slug) => '#/rules/' + tab + (slug ? '/' + slug : '');
 
-  function buildSkillCard(skill) {
-    const card = h('article', 'skill-card');
-    const head = h('div', 'skill-card__head',
-      h('h3', 'skill-card__title', skill.title),
-      h('span', 'skill-card__meta', 'Perícia'));
-    card.append(head);
-
-    const tests = h('div', 'skill-card__tests');
-    skill.tests.forEach((test) => {
-      const button = h('button', 'skill-card__test', test);
-      button.type = 'button';
-      button.addEventListener('click', () => go('rules', skill.anchor));
-      tests.append(button);
-    });
-    card.append(tests);
-
-    const desc = h('p', 'skill-card__desc', skill.description);
-    card.append(desc);
-
-    const ref = h('button', 'skill-card__link', 'Ver regra relacionada');
-    ref.type = 'button';
-    ref.addEventListener('click', () => go('rules', skill.anchor));
-    card.append(ref);
-
-    return card;
-  }
-
-  function renderRulesTopic(topicId) {
-    const tabs = $('#rules-tabs');
-    const content = $('#rules-content');
-    const quick = $('#rules-quick');
-    const topic = RULES_TOPICS.find((entry) => entry.id === topicId) || RULES_TOPICS[0];
-
-    tabs.replaceChildren(...RULES_TOPICS.map((entry) => {
-      const btn = h('button', 'rules-tab' + (entry.id === topic.id ? ' is-active' : ''), entry.title);
-      btn.type = 'button';
-      btn.setAttribute('aria-pressed', String(entry.id === topic.id));
-      btn.addEventListener('click', () => go('rules', entry.id));
-      return btn;
-    }));
-
-    if (topic.id === 'pericias') {
-      const sorted = [...RULES_SKILLS].sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'));
-      content.replaceChildren(...sorted.map((skill) => buildSkillCard(skill)));
-      quick.replaceChildren(...sorted.map((skill) => {
-        const li = h('li', 'rules-quick__item');
-        const link = h('a', 'rules-quick__link', skill.title);
-        link.href = '#/rules/pericias/' + skill.id;
-        li.append(link);
-        return li;
-      }));
-      return;
-    }
-
-    content.replaceChildren(...topic.sections.map((section, index) => {
-      const article = h('article', 'rule-section', h('h3', 'rule-section__title', section.title));
-      article.id = 'rule-' + topic.id + '-' + index;
-
-      (section.paragraphs || []).forEach((text) => {
-        article.append(h('p', 'rule-section__text', text));
+  // Lista os títulos do capítulo (seções, subseções e cartões) e dá um endereço único a cada um
+  function indexChapter(ch) {
+    if (ch._toc) return ch._toc;
+    const used = {};
+    const toc = [];
+    const slugs = new Map();
+    (function walk(blocks) {
+      blocks.forEach((b) => {
+        const t = b[0];
+        if (t !== 'h2' && t !== 'h3' && t !== 'h4' && t !== 'card') return;
+        const level = t === 'card' ? (b[3] || 3) : Number(t.slice(1));
+        let slug = slugify(plainText(b[1]));
+        used[slug] = (used[slug] || 0) + 1;
+        if (used[slug] > 1) slug += '-' + used[slug];
+        slugs.set(b, slug);
+        toc.push({ level, title: plainText(b[1]), slug });
+        if (t === 'card') walk(b[2]);
       });
+    })(ch.blocks);
+    ch._toc = toc;
+    ch._slugs = slugs;
+    return toc;
+  }
 
-      if (section.list && section.list.length) {
-        const list = h('ul', 'rule-section__list');
-        section.list.forEach((item) => list.append(h('li', '', item)));
-        article.append(list);
+  // **negrito** e *itálico* do texto viram elementos (nunca HTML solto)
+  function rich(text) {
+    const frag = document.createDocumentFragment();
+    String(text).split(/(\*\*[^*]+\*\*|\*[^*]+\*)/).forEach((part) => {
+      if (!part) return;
+      if (part.slice(0, 2) === '**' && part.length > 4) frag.append(h('strong', '', part.slice(2, -2)));
+      else if (part[0] === '*' && part.length > 2) frag.append(h('em', '', part.slice(1, -1)));
+      else frag.append(part);
+    });
+    return frag;
+  }
+
+  const bulletList = (items) => h('ul', 'r-list', ...items.map((x) => h('li', '', rich(x))));
+
+  function headingEl(ch, level, text, slug) {
+    const el = h('h' + (level + 1), 'r-h r-h' + level, rich(text));
+    el.id = 'r-' + slug;
+    el.tabIndex = -1;
+    const a = h('a', 'r-anchor', '#');
+    a.href = ruleHref(ch.id, slug);
+    a.dataset.tab = ch.id;
+    a.dataset.slug = slug;
+    a.setAttribute('aria-label', 'Link para ' + plainText(text));
+    el.append(a);
+    return el;
+  }
+
+  function renderBlock(ch, b) {
+    switch (b[0]) {
+      case 'h2': case 'h3': case 'h4': return headingEl(ch, Number(b[0][1]), b[1], ch._slugs.get(b));
+      case 'p': return h('p', '', rich(b[1]));
+      case 'ul': return bulletList(b[1]);
+      case 'formula': return h('div', 'formula', b[1] ? h('span', 'formula__label', b[1]) : null, h('span', 'formula__text', b[2]));
+      case 'example': return h('aside', 'callout callout--example', h('p', 'callout__label', 'Exemplo'), h('p', '', rich(b[1])));
+      case 'note': return h('aside', 'callout callout--note', h('p', 'callout__label', b[1]), Array.isArray(b[2]) ? bulletList(b[2]) : h('p', '', rich(b[2])));
+      case 'table': {
+        const head = h('tr');
+        b[1].forEach((x) => { const th = h('th', '', x); th.scope = 'col'; head.append(th); });
+        const body = h('tbody');
+        b[2].forEach((row) => {
+          const tr = h('tr');
+          row.forEach((c, i) => { const cell = h(i === 0 ? 'th' : 'td', '', rich(c)); if (i === 0) cell.scope = 'row'; tr.append(cell); });
+          body.append(tr);
+        });
+        return h('div', 'table-wrap', h('table', 'r-table', h('thead', '', head), body));
       }
-
-      return article;
-    }));
-
-    quick.replaceChildren(...topic.sections.map((section, index) => {
-      const li = h('li', 'rules-quick__item');
-      const link = h('a', 'rules-quick__link', section.title);
-      link.href = '#rule-' + topic.id + '-' + index;
-      li.append(link);
-      return li;
-    }));
+      case 'dl': {
+        const dl = h('dl', 'defs');
+        b[1].forEach((pair) => {
+          dl.append(h('dt', '', rich(pair[0])), h('dd', '', Array.isArray(pair[1]) ? bulletList(pair[1]) : rich(pair[1])));
+        });
+        return dl;
+      }
+      case 'kv': {
+        const dl = h('dl');
+        b[2].forEach((pair) => dl.append(h('dt', '', pair[0]), h('dd', '', rich(pair[1]))));
+        return h('div', 'kv', b[1] ? h('p', 'kv__cap', b[1]) : null, dl);
+      }
+      case 'fields': return h('ul', 'tpl', ...b[1].map((x) => h('li', 'tpl__field', x ? rich(x) : null)));
+      case 'card': {
+        const card = h('section', 'r-card', headingEl(ch, b[3] || 3, b[1], ch._slugs.get(b)));
+        b[2].forEach((x) => card.append(renderBlock(ch, x)));
+        return card;
+      }
+      default: return h('p', '', String(b[0]));
+    }
   }
 
-  views.rules = async function showRules(slug) {
-    const raw = slug || '';
-    const [topicId, detailId] = raw.split('/').filter(Boolean);
-    const key = RULES_TOPICS.some((entry) => entry.id === topicId) ? topicId : RULES_TOPICS[0].id;
-
-    if (key === 'pericias' && detailId) {
-      const skill = RULES_SKILLS.find((entry) => entry.id === detailId) || RULES_SKILLS[0];
-      const tabs = $('#rules-tabs');
-      const content = $('#rules-content');
-      const quick = $('#rules-quick');
-      tabs.replaceChildren(...RULES_TOPICS.map((entry) => {
-        const btn = h('button', 'rules-tab' + (entry.id === key ? ' is-active' : ''), entry.title);
-        btn.type = 'button';
-        btn.setAttribute('aria-pressed', String(entry.id === key));
-        btn.addEventListener('click', () => go('rules', entry.id));
-        return btn;
-      }));
-
-      const article = h('article', 'rule-section skill-detail');
-      article.append(h('h3', 'rule-section__title', skill.title));
-      article.append(h('p', 'rule-section__text', skill.description));
-      const tests = h('div', 'skill-detail__tests');
-      skill.tests.forEach((test) => {
-        const btn = h('button', 'skill-detail__test', test);
-        btn.type = 'button';
-        btn.addEventListener('click', () => go('rules', skill.anchor));
-        tests.append(btn);
-      });
-      article.append(tests);
-
-      const related = h('div', 'skill-detail__meta');
-      related.append(h('strong', '', 'Regra relacionada: '), h('span', '', skill.rule));
-      article.append(related);
-
-      content.replaceChildren(article);
-      quick.replaceChildren(...RULES_SKILLS.sort((a, b) => a.title.localeCompare(b.title, 'pt-BR')).map((entry) => {
-        const li = h('li', 'rules-quick__item');
-        const link = h('a', 'rules-quick__link', entry.title);
-        link.href = '#/rules/pericias/' + entry.id;
-        li.append(link);
-        return li;
-      }));
-      return;
-    }
-
-    renderRulesTopic(key);
-  };
-
-  /* ---------- Opções ---------- */
-  function buildOptionCard(item) {
-    const card = h('article', 'option-card');
-    const glyph = h('span', 'option-card__glyph', item.name.trim().charAt(0).toUpperCase());
-    const head = h('div', 'option-card__head',
-      h('h3', 'option-card__title', item.name),
-      h('span', 'option-card__tag', item.tags && item.tags[0] ? item.tags[0] : 'item'));
-    card.append(glyph, head);
-    if (item.description) card.append(h('p', 'option-card__desc', item.description));
-    if (item.highlights && item.highlights.length) {
-      const list = h('ul', 'option-card__list');
-      item.highlights.forEach((line) => list.append(h('li', '', line)));
-      card.append(list);
-    }
-    return card;
+  function pagerLink(ch, label) {
+    const a = h('a', 'r-pager__link', h('span', 'r-pager__label', label), h('strong', '', ch.title));
+    a.href = ruleHref(ch.id);
+    a.dataset.tab = ch.id;
+    return a;
   }
 
-  function renderOptionsTabList(activeId) {
-    const tabs = $('#options-tabs');
-    tabs.replaceChildren(...CHARACTER_OPTION_CATEGORIES.map((category) => {
-      const btn = h('button', 'options-tab' + (category.id === activeId ? ' is-active' : ''), category.title);
-      btn.type = 'button';
-      btn.dataset.category = category.id;
-      btn.setAttribute('aria-pressed', String(category.id === activeId));
-      btn.addEventListener('click', () => {
-        location.hash = '#/character-options/' + encodeURIComponent(category.id);
-      });
-      return btn;
+  function renderChapter(idx) {
+    const ch = CHAPTERS[idx];
+    const toc = indexChapter(ch);
+    const frag = document.createDocumentFragment();
+    const head = h('header', 'r-chapter',
+      h('p', 'r-chapter__num', 'Capítulo ' + (idx + 1) + ' de ' + CHAPTERS.length + ' · ' + ch.group),
+      h('h2', 'r-chapter__title', ch.title));
+    const secs = toc.filter((t) => t.level === 2);
+    if (secs.length > 1) {
+      const list = h('ol', 'r-inchapter__list', ...secs.map((t) => {
+        const a = h('a', '', t.title);
+        a.href = ruleHref(ch.id, t.slug);
+        a.dataset.tab = ch.id;
+        a.dataset.slug = t.slug;
+        return h('li', '', a);
+      }));
+      const nav = h('nav', 'r-inchapter', h('p', 'r-inchapter__title', 'Neste capítulo'), list);
+      nav.setAttribute('aria-label', 'Neste capítulo');
+      head.append(nav);
+    }
+    frag.append(head);
+    ch.blocks.forEach((b) => frag.append(renderBlock(ch, b)));
+    const prev = CHAPTERS[idx - 1];
+    const next = CHAPTERS[idx + 1];
+    const pager = h('nav', 'r-pager', prev ? pagerLink(prev, 'Capítulo anterior') : h('span'), next ? pagerLink(next, 'Próximo capítulo') : h('span'));
+    pager.setAttribute('aria-label', 'Outros capítulos');
+    frag.append(pager);
+    return frag;
+  }
+
+  /* Abas (uma por capítulo) */
+  function renderTabs() {
+    rulesTabsEl.replaceChildren();
+    let lastGroup = null;
+    CHAPTERS.forEach((c, i) => {
+      if (c.group !== lastGroup) {
+        const g = h('span', 'rules-tabs__group', c.group);
+        g.setAttribute('aria-hidden', 'true');
+        rulesTabsEl.append(g);
+        lastGroup = c.group;
+      }
+      const b = h('button', 'rules-tab', h('span', 'rules-tab__n', String(i + 1)), c.title);
+      b.type = 'button';
+      b.id = 'tab-' + c.id;
+      b.dataset.tab = c.id;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', 'false');
+      b.setAttribute('aria-controls', 'rules-body');
+      b.tabIndex = -1;
+      b.addEventListener('click', () => openRule(c.id, null));
+      rulesTabsEl.append(b);
+    });
+    $('#rules-chapters').replaceChildren(...CHAPTERS.map((c, i) => {
+      const a = h('a', '', h('span', 'toc__num', String(i + 1)), c.title);
+      a.href = ruleHref(c.id);
+      a.dataset.tab = c.id;
+      return h('li', 'toc__item toc__l2', a);
     }));
   }
 
-  views.characterOptions = async function showCharacterOptions(slug) {
-    const raw = (slug || '').split('/').filter(Boolean);
-    const tabId = raw[0] || CHARACTER_OPTION_CATEGORIES[0].id;
-    const selectedType = raw[1] || 'arma';
-    const query = raw.length > 2 ? decodeURIComponent(raw.slice(2).join('/')) : $('#options-search')?.value || '';
+  /* Índice ao lado da rolagem */
+  function renderRail(ch, idx) {
+    let n = 0;
+    rulesTocEl.replaceChildren(...ch._toc.map((t) => {
+      if (t.level === 2) n++;
+      const a = h('a', '', t.level === 2 ? h('span', 'toc__num', (idx + 1) + '.' + n) : null, t.title);
+      a.href = ruleHref(ch.id, t.slug);
+      a.dataset.slug = t.slug;
+      return h('li', 'toc__item toc__l' + t.level, a);
+    }));
+    if (!ch._toc.length) rulesTocEl.append(h('li', 'toc__empty', 'Esta aba não tem seções.'));
+  }
 
-    const activeCategory = CHARACTER_OPTION_CATEGORIES.some((cat) => cat.id === tabId) ? tabId : CHARACTER_OPTION_CATEGORIES[0].id;
-    const listRoot = $('#options-list');
-    const search = $('#options-search');
-    const keyword = (search ? search.value : '').trim();
-
-    renderOptionsTabList(activeCategory);
-    if (search) search.value = query || keyword;
-
-    const q = normalizeOptionText(query || keyword);
-    const filtered = OPTION_SEARCH_INDEX
-      .filter((entry) => entry.categoryId === activeCategory && (!q || entry.text.includes(q)))
-      .map((entry) => entry.item);
-
-    let optionItems = filtered;
-    if (activeCategory === 'melhorias') {
-      const upgrades = await db.listUpgrades();
-      optionItems = upgrades.map((upgrade) => Object.assign({}, upgrade, {
-        description: upgrade.description + (upgrade.officialPower ? ' Poder Oficial vinculado: ' + upgrade.officialPower.name + '.' : ''),
-        highlights: (upgrade.highlights || []).concat(upgrade.officialPower ? ['Poder Oficial: ' + upgrade.officialPower.name] : []),
-        tags: (upgrade.tags || []).concat('melhoria')
-      }));
-      if (q) optionItems = optionItems.filter((item) => normalizeOptionText([item.name, item.description, ...(item.tags || []), ...(item.highlights || [])].join(' ')).includes(q));
-    }
-    listRoot.replaceChildren(...optionItems.map(buildOptionCard));
-    $('#options-count').textContent = optionItems.length + (optionItems.length === 1 ? ' resultado' : ' resultados');
-    $('#options-count').textContent = filtered.length + (filtered.length === 1 ? ' resultado' : ' resultados');
-
-  };
-
-  const openOptionsBtn = $('#open-character-options-create');
-  if (openOptionsBtn) openOptionsBtn.addEventListener('click', () => { window.location.hash = '#/character-options'; });
-  const openOptionsSearchBtn = $('#open-character-options-search');
-  if (openOptionsSearchBtn) openOptionsSearchBtn.addEventListener('click', () => { window.location.hash = '#/character-options'; });
-  const openGlobalSearchBtn = $('#open-global-search');
-  if (openGlobalSearchBtn) openGlobalSearchBtn.addEventListener('click', () => { window.location.hash = '#/search'; });
-
-  const optionsBackBtn = $('#options-back');
-  if (optionsBackBtn) {
-    optionsBackBtn.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      go('home');
+  // Digitou no campo: procura o título em todos os capítulos
+  function showHits(q) {
+    const query = nameKey(q);
+    const searching = query.length > 0;
+    rulesHitsEl.hidden = !searching;
+    $('#rules-toc-title').hidden = $('#rules-toc-nav').hidden = searching;
+    $('.rules-chapters-wrap').hidden = searching;
+    if (!searching) return;
+    const hits = [];
+    CHAPTERS.forEach((c) => {
+      if (nameKey(c.title).indexOf(query) >= 0) hits.push({ c, t: null });
+      indexChapter(c).forEach((t) => { if (nameKey(t.title).indexOf(query) >= 0) hits.push({ c, t }); });
     });
+    rulesHitsEl.replaceChildren(...(hits.length
+      ? hits.slice(0, 40).map(({ c, t }) => {
+        const a = h('a', '', t ? t.title : c.title, h('span', 'toc__tab', t ? c.title : 'Capítulo'));
+        a.href = ruleHref(c.id, t && t.slug);
+        a.dataset.tab = c.id;
+        if (t) a.dataset.slug = t.slug;
+        return h('li', 'toc__item toc__l2', a);
+      })
+      : [h('li', 'toc__empty', 'Nenhuma regra com esse título.')]));
   }
 
-  const optionsSearchInput = $('#options-search');
-  if (optionsSearchInput) {
-    optionsSearchInput.addEventListener('input', () => {
-      const active = $('#options-tabs .options-tab.is-active');
-      const category = active?.dataset.category || CHARACTER_OPTION_CATEGORIES[0].id;
-      const q = normalizeOptionText(optionsSearchInput.value.trim());
-      const filtered = OPTION_SEARCH_INDEX
-        .filter((entry) => entry.categoryId === category && (!q || entry.text.includes(q)))
-        .map((entry) => entry.item);
-      $('#options-list').replaceChildren(...filtered.map(buildOptionCard));
-      $('#options-count').textContent = filtered.length + (filtered.length === 1 ? ' resultado' : ' resultados');
-    });
+  /* Alturas fixas no topo (barra do site e abas), para o índice e as âncoras não ficarem escondidos */
+  function updateOffsets() {
+    const wrap = $('.rules-tabs-wrap');
+    const barH = $('.app-bar').offsetHeight;
+    const sticky = getComputedStyle(wrap).position === 'sticky';
+    const root = document.documentElement.style;
+    root.setProperty('--bar-h', barH + 'px');
+    root.setProperty('--scroll-off', (barH + (sticky ? wrap.offsetHeight : 0) + 12) + 'px');
+  }
+  const scrollOffset = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--scroll-off')) || 0;
+
+  function scrollToRule(slug, smooth) {
+    const el = document.getElementById('r-' + slug);
+    if (!el) return;
+    // cálculo manual: scrollIntoView + scroll-padding-top é inconsistente entre navegadores
+    const y = el.getBoundingClientRect().top + window.scrollY - scrollOffset();
+    window.scrollTo({ top: Math.max(0, y), behavior: smooth && !reduceMotion() ? 'smooth' : 'auto' });
+    history.replaceState(null, '', ruleHref(rulesUi.tab, slug));
+    el.focus({ preventScroll: true });
   }
 
-  /* ---------- Itens: inventário, busca e criação isolada ---------- */
-  const itemDialog = $('#item-dialog');
-  const itemForm = $('#item-form');
-  const itemFormFields = $('#item-form-fields');
-  const itemFormError = $('#item-form-error');
-  const itemSearch = $('#item-search');
-  const itemTypeFilter = $('#item-type-filter');
-  const itemValueFilter = $('#item-value-filter');
-  const itemTagFilter = $('#item-tag-filter');
-  const itemSort = $('#item-sort');
-  let inventoryItems = [];
-
-  function itemTypeLabel(type) {
-    return { arma: 'Arma', armadura: 'Armadura', ferramenta: 'Ferramenta', acao: 'Ação' }[type] || type;
+  function centerActiveTab() {
+    const t = $('.rules-tab[aria-selected="true"]', rulesTabsEl);
+    if (t) rulesTabsEl.scrollTo({ left: t.offsetLeft - (rulesTabsEl.clientWidth - t.offsetWidth) / 2, behavior: reduceMotion() ? 'auto' : 'smooth' });
   }
 
-  function itemSearchText(item) {
-    return normalizeOptionText([item.name, item.type, item.rarity, item.description, ...(item.tags || []), ...(item.properties || [])].join(' '));
+  /* Marca no índice a regra que está na tela e mostra o quanto do capítulo já foi lido */
+  function queueSpy() {
+    if (rulesUi.spyQueued) return;
+    rulesUi.spyQueued = true;
+    requestAnimationFrame(updateSpy);
   }
-
-  function buildInventoryCard(item, canMove) {
-    const card = h('article', 'inventory-card');
-    card.draggable = canMove;
-    card.dataset.id = item.id;
-    if (canMove) {
-      card.addEventListener('dragstart', (ev) => {
-        ev.dataTransfer.effectAllowed = 'move';
-        ev.dataTransfer.setData('text/plain', item.id);
-        card.classList.add('is-dragging');
+  function updateSpy() {
+    rulesUi.spyQueued = false;
+    if (rulesBodyEl.closest('[hidden]')) return;
+    const off = scrollOffset() + 6;
+    let cur = null;
+    for (const el of rulesUi.headings) { if (el.getBoundingClientRect().top <= off) cur = el; else break; }
+    const slug = cur ? cur.id.slice(2) : null;
+    if (slug !== rulesUi.spySlug) {
+      rulesUi.spySlug = slug;
+      let active = null;
+      $$('a', rulesTocEl).forEach((a) => {
+        if (a.dataset.slug === slug) { a.setAttribute('aria-current', 'location'); active = a; }
+        else a.removeAttribute('aria-current');
       });
-      card.addEventListener('dragend', () => card.classList.remove('is-dragging'));
-      card.addEventListener('dragover', (ev) => { ev.preventDefault(); card.classList.add('is-drop-target'); });
-      card.addEventListener('dragleave', () => card.classList.remove('is-drop-target'));
-      card.addEventListener('drop', async (ev) => {
-        ev.preventDefault();
-        card.classList.remove('is-drop-target');
-        const draggedId = ev.dataTransfer.getData('text/plain');
-        if (!draggedId || draggedId === item.id) return;
-        const ids = inventoryItems.map((entry) => entry.id);
-        const from = ids.indexOf(draggedId);
-        const to = ids.indexOf(item.id);
-        if (from < 0 || to < 0) return;
-        ids.splice(to, 0, ids.splice(from, 1)[0]);
-        await db.saveItemOrder(ids);
-        await renderItems();
-      });
+      const inner = $('.rules-rail__inner');
+      if (active && window.matchMedia('(min-width: 1001px)').matches) { // mantém o item atual à vista no índice
+        const lr = active.getBoundingClientRect();
+        const ir = inner.getBoundingClientRect();
+        if (lr.top < ir.top + 8 || lr.bottom > ir.bottom - 8) inner.scrollTop += lr.top - ir.top - ir.height / 3;
+      }
     }
-    card.append(
-      h('div', 'inventory-card__icon', item.name.trim().charAt(0).toUpperCase()),
-      h('div', 'inventory-card__body',
-        h('div', 'inventory-card__top', h('h2', 'inventory-card__name', item.name), h('span', 'inventory-card__type', itemTypeLabel(item.type))),
-        h('p', 'inventory-card__description', item.description || 'Sem descrição.'),
-        h('div', 'inventory-card__tags', ...(item.tags || []).map((tag) => h('span', 'inventory-card__tag', tag))),
-        h('div', 'inventory-card__footer', h('span', 'inventory-card__rarity', item.rarity || 'Comum'), h('strong', 'inventory-card__value', String(item.value || 0) + ' créditos'))
-      )
-    );
-    return card;
+    const r = rulesBodyEl.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (off - r.top) / Math.max(1, r.height - (window.innerHeight - off))));
+    rulesProgress.style.height = (pct * 100).toFixed(1) + '%';
   }
 
-  function filteredItems() {
-    const query = normalizeOptionText(itemSearch.value.trim());
-    const type = itemTypeFilter.value;
-    const tagQuery = words(itemTagFilter.value).map(normalizeOptionText);
-    const maxValue = itemValueFilter.value === '' ? Infinity : Number(itemValueFilter.value);
-    const filtering = Boolean(query || type || tagQuery.length || Number.isFinite(maxValue));
-    const result = inventoryItems.filter((item) => {
-      const tags = (item.tags || []).map(normalizeOptionText);
-      return (!query || itemSearchText(item).includes(query))
-        && (!type || item.type === type)
-        && (!tagQuery.length || tagQuery.every((tag) => tags.includes(tag)))
-        && item.value <= maxValue;
+  function showTab(id, slug) {
+    const idx = Math.max(0, CHAPTERS.findIndex((c) => c.id === id));
+    const ch = CHAPTERS[idx];
+    if (rulesUi.tab !== ch.id || !rulesBodyEl.childElementCount) {
+      indexChapter(ch);
+      rulesBodyEl.style.setProperty('--chap', '"' + (idx + 1) + '"');
+      rulesBodyEl.replaceChildren(renderChapter(idx));
+      renderRail(ch, idx);
+      rulesFilter.value = '';
+      showHits('');
+      rulesUi.headings = $$('.r-h', rulesBodyEl);
+      rulesUi.spySlug = undefined;
+    }
+    rulesUi.tab = ch.id;
+    $$('.rules-tab', rulesTabsEl).forEach((t) => {
+      const on = t.dataset.tab === ch.id;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
     });
-    const sort = itemSort.value;
-    if (filtering || sort !== 'custom') {
-      result.sort((a, b) => {
-        if (sort === 'value-asc') return a.value - b.value;
-        if (sort === 'value-desc') return b.value - a.value;
-        if (sort === 'type') return itemTypeLabel(a.type).localeCompare(itemTypeLabel(b.type), 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR');
-        return a.name.localeCompare(b.name, 'pt-BR');
-      });
-    }
-    return { result, filtering: filtering || sort !== 'custom' };
+    $$('#rules-chapters a').forEach((a) => {
+      if (a.dataset.tab === ch.id) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+    rulesBodyEl.setAttribute('aria-labelledby', 'tab-' + ch.id);
+    document.title = 'Regras: ' + ch.title + ' | Vortex';
+    history.replaceState(null, '', ruleHref(ch.id, slug));
   }
 
-  async function renderItems() {
-    inventoryItems = await db.listItems();
-    const { result, filtering } = filteredItems();
-    $('#inventory-grid').replaceChildren(...result.map((item) => buildInventoryCard(item, !filtering)));
-    $('#items-empty').hidden = result.length > 0;
-    $('#item-count').textContent = result.length + (result.length === 1 ? ' item' : ' itens') + (filtering ? ' encontrados' : ' na ordem personalizada');
-  }
-
-  function renderItemForm() {
-    itemFormFields.replaceChildren();
-    const fields = [
-      { name: 'name', label: 'Nome', type: 'text', required: true, placeholder: 'Ex.: Rifle de precisão' },
-      { name: 'type', label: 'Tipo', type: 'select', options: Object.entries(ITEM_FORM_TYPES).map(([value, meta]) => ({ value, label: meta.label })) },
-      { name: 'value', label: 'Valor', type: 'number', required: true, placeholder: 'Ex.: 120' },
-      { name: 'rarity', label: 'Raridade', type: 'select', options: ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'].map((value) => ({ value, label: value })) },
-      { name: 'tags', label: 'Tags', type: 'text', placeholder: 'Ex.: fogo, alcance, precisão' },
-      { name: 'description', label: 'Descrição', type: 'text', placeholder: 'Descreva o uso do item' },
-      { name: 'properties', label: 'Propriedades', type: 'text', placeholder: 'Ex.: dano 2d6, alcance médio' }
-    ];
-    fields.forEach((field) => {
-      const label = h('label', 'field');
-      label.append(h('span', 'field__label', field.label));
-      const input = field.type === 'select' ? h('select', 'input') : h('input', 'input');
-      input.name = field.name;
-      if (field.type !== 'select') input.type = field.type;
-      input.placeholder = field.placeholder || '';
-      input.required = Boolean(field.required);
-      if (field.options) field.options.forEach((option) => input.append(h('option', '', option.label))); 
-      label.append(input);
-      itemFormFields.append(label);
+  function openRule(tabId, slug) {
+    const changed = rulesUi.tab !== tabId;
+    showTab(tabId, slug);
+    requestAnimationFrame(() => {
+      if (slug) scrollToRule(slug, !changed);
+      else if (changed) { // abriu outro capítulo: volta ao começo dele, sem perder as abas de vista
+        const top = $('#rules-layout').getBoundingClientRect().top + window.scrollY - scrollOffset() - 8;
+        if (window.scrollY > top) window.scrollTo(0, top);
+      }
+      centerActiveTab();
+      queueSpy();
     });
   }
 
-  function openItemCreator() {
-    itemForm.reset();
-    itemFormError.textContent = '';
-    renderItemForm();
-    if (typeof itemDialog.showModal === 'function') itemDialog.showModal();
-    else itemDialog.setAttribute('open', '');
+  function openSheet() {
+    rulesRail.classList.add('is-open');
+    rulesBackdrop.hidden = false;
+    rulesFab.setAttribute('aria-expanded', 'true');
+    rulesRail.focus();
+  }
+  function closeSheet() {
+    rulesRail.classList.remove('is-open');
+    rulesBackdrop.hidden = true;
+    rulesFab.setAttribute('aria-expanded', 'false');
   }
 
-  views.items = async function showItems() {
-    await renderItems();
-  };
-
-  $('#open-item-creator').addEventListener('click', openItemCreator);
-  $('#item-dialog-cancel').addEventListener('click', () => itemDialog.close());
-  itemForm.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const data = Object.fromEntries(new FormData(itemForm).entries());
-    const value = Number(data.value);
-    if (!data.name.trim() || !Number.isFinite(value) || value < 0) {
-      itemFormError.textContent = 'Informe um nome e um valor válido.';
-      return;
-    }
-    try {
-      await db.createItem(Object.assign({}, data, {
-        name: cleanName(data.name), value, tags: words(data.tags), properties: data.properties.split(',').map((part) => part.trim()).filter(Boolean), order: inventoryItems.length * 10 + 10
-      }));
-      itemDialog.close();
-      toast('Item adicionado ao inventário.');
-      if (location.hash.replace(/^#\//, '').split('/')[0] === 'items') await renderItems();
-    } catch (err) { itemFormError.textContent = errorMessage(err); }
+  // liga os controles uma vez só
+  renderTabs();
+  rulesFab.addEventListener('click', () => (rulesRail.classList.contains('is-open') ? closeSheet() : openSheet()));
+  $('#rules-close').addEventListener('click', closeSheet);
+  rulesBackdrop.addEventListener('click', closeSheet);
+  rulesFilter.addEventListener('input', () => showHits(rulesFilter.value));
+  rulesFilter.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); const first = $('a', rulesHitsEl); if (first) first.click(); }
+    if (ev.key === 'Escape' && rulesFilter.value) { ev.stopPropagation(); rulesFilter.value = ''; showHits(''); }
   });
-  [itemSearch, itemTypeFilter, itemValueFilter, itemTagFilter, itemSort].forEach((input) => input.addEventListener('input', renderItems));
-  itemTypeFilter.addEventListener('change', renderItems);
-  itemSort.addEventListener('change', renderItems);
+  function onRuleLink(ev) { // índice, "Neste capítulo", links das seções e "anterior/próximo"
+    const a = ev.target.closest('a[data-tab], a[data-slug]');
+    if (!a || !a.href) return;
+    ev.preventDefault();
+    closeSheet();
+    if (rulesFilter.value) { rulesFilter.value = ''; showHits(''); } // sai do modo de busca ao escolher um resultado
+    openRule(a.dataset.tab || rulesUi.tab, a.dataset.slug || null);
+  }
+  rulesRail.addEventListener('click', onRuleLink);
+  rulesBodyEl.addEventListener('click', onRuleLink);
+  rulesTabsEl.addEventListener('keydown', (ev) => { // setas, Home e End trocam de aba
+    const tabs = $$('.rules-tab', rulesTabsEl);
+    const i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    let j = null;
+    if (ev.key === 'ArrowRight') j = (i + 1) % tabs.length;
+    else if (ev.key === 'ArrowLeft') j = (i - 1 + tabs.length) % tabs.length;
+    else if (ev.key === 'Home') j = 0;
+    else if (ev.key === 'End') j = tabs.length - 1;
+    if (j === null) return;
+    ev.preventDefault();
+    tabs[j].focus();
+    openRule(tabs[j].dataset.tab, null);
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && rulesRail.classList.contains('is-open')) closeSheet(); });
+
+  $('#rules-back').addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const parts = rulesBack.replace(/^#\/?/, '').split('/');
+    go(parts[0] || 'home', parts.slice(1).join('/') ? decodeURIComponent(parts.slice(1).join('/')) : undefined);
+  });
+
+  function onRulesResize() { updateOffsets(); queueSpy(); }
+
+  views.rules = async function showRules(param) {
+    const parts = (param || '').split('/');
+    const tabId = CHAPTERS.some((c) => c.id === parts[0]) ? parts[0] : (CHAPTERS[0] && CHAPTERS[0].id);
+    const slug = parts[1] || null;
+    if (!tabId) return;
+    $('#rules-back').hidden = !rulesFromHelp;
+    updateOffsets();
+    showTab(tabId, slug);
+    window.addEventListener('scroll', queueSpy, { passive: true });
+    window.addEventListener('resize', onRulesResize);
+    onLeave = () => {
+      window.removeEventListener('scroll', queueSpy);
+      window.removeEventListener('resize', onRulesResize);
+      closeSheet();
+    };
+    requestAnimationFrame(() => { // depois de o roteador voltar ao topo
+      if (slug) scrollToRule(slug, false);
+      centerActiveTab();
+      queueSpy();
+    });
+  };
+
 
   /* =====================================================================
      8. INÍCIO DO APP
