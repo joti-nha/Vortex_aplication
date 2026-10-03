@@ -62,7 +62,7 @@
         </a>
         <a class="landing-card" href="#/itens">
           <span class="landing-card__title">Itens</span>
-          <span class="landing-card__text">Monte armas, armaduras e implantes a partir das regras.</span>
+          <span class="landing-card__text">Oficina e banco de itens, mods, propriedades, acessórios, espécimes e poderes.</span>
         </a>
         <a class="landing-card" href="#/rules">
           <span class="landing-card__title">Regras</span>
@@ -174,10 +174,13 @@
       </div>
     </section>
 
-    <!-- ===================== TELA: ITENS ===================== -->
+    <!-- ===================== TELA: ITENS (Oficina + banco de dados) ===================== -->
     <section class="screen" data-screen="itens" data-title="Itens" aria-labelledby="itens-title" hidden>
       <header class="screen__head">
-        <h1 id="itens-title" tabindex="-1">Montar item</h1>
+        <div>
+          <h1 id="itens-title" tabindex="-1">Oficina</h1>
+          <p class="screen__sub">Crie itens, mods, propriedades, acessórios, espécimes e poderes. Tudo o que for salvo entra no banco de dados e aparece na pesquisa das fichas.</p>
+        </div>
       </header>
 
       <nav class="item-steps" aria-label="Passos">
@@ -187,40 +190,66 @@
       </nav>
 
       <section class="item-panel" id="item-panel-categoria" aria-labelledby="itens-title">
-        <p class="block__hint">Escolha o que você quer montar.</p>
+        <p class="block__hint">Escolha o que você quer criar.</p>
         <div class="item-grid" id="item-category-grid"></div>
       </section>
 
       <section class="item-panel" id="item-panel-tipo" hidden>
         <a class="back-link" href="#" id="item-back-categoria">Voltar às categorias</a>
-        <h2 class="block__title" id="item-tipo-title"></h2>
+        <h2 class="block__title" id="item-tipo-title" tabindex="-1"></h2>
         <p class="block__hint" id="item-tipo-hint"></p>
         <div class="item-grid" id="item-type-grid"></div>
       </section>
 
       <section class="item-panel" id="item-panel-form" hidden>
         <a class="back-link" href="#" id="item-back-tipo">Voltar</a>
-        <h2 class="block__title" id="item-form-title"></h2>
+        <h2 class="block__title" id="item-form-title" tabindex="-1"></h2>
         <p class="block__hint" id="item-form-hint"></p>
         <form class="item-form" id="form-item" novalidate>
-          <div class="fields-grid" id="item-fields"></div>
+          <div class="item-form__top">
+            <div class="item-image" id="item-image-slot" hidden>
+              <button class="item-image__btn" type="button" id="item-image-btn" aria-label="Escolher imagem">
+                <img id="item-image-img" alt="" hidden>
+                <span id="item-image-empty">Adicionar imagem</span>
+              </button>
+              <input type="file" id="item-image-file" accept="image/*" hidden>
+              <button class="btn btn--ghost btn--sm" type="button" id="item-image-remove" hidden>Remover imagem</button>
+            </div>
+            <div class="fields-grid" id="item-fields"></div>
+          </div>
+
+          <div id="item-slots"></div>
+
+          <details class="bonus" id="item-bonus-wrap">
+            <summary>Bônus automáticos na ficha</summary>
+            <p class="field__hint">Opcional. Quem tiver isto equipado (ou como poder ou espécime) recebe estes valores sozinho: PV, Escudo e Blindagem entram na barra de resistência, cada um com a sua cor.</p>
+            <div class="bonus__grid" id="item-bonus"></div>
+          </details>
+
           <div class="item-form__actions">
-            <button class="btn btn--primary" type="submit">Salvar item</button>
-            <button class="btn btn--ghost" type="button" id="item-reset">Recomeçar</button>
+            <button class="btn btn--primary" type="submit" id="item-save">Salvar no banco</button>
+            <button class="btn btn--ghost" type="button" id="item-reset">Cancelar</button>
           </div>
         </form>
       </section>
 
-      <section class="item-panel" id="item-panel-soon" hidden>
-        <a class="back-link" href="#" id="item-back-soon">Voltar às categorias</a>
-        <h2 class="block__title" id="item-soon-title"></h2>
-        <p class="notice">Esta categoria ainda não tem regras publicadas. Assim que as regras chegarem (Mods e Propriedades), o formulário aparece aqui.</p>
-      </section>
-
-      <section class="block" aria-labelledby="my-items-title" id="my-items-block" hidden>
-        <h2 class="block__title" id="my-items-title">Seus itens</h2>
-        <p class="block__hint">Salvos neste aparelho.</p>
-        <ul class="rows" id="my-items-list"></ul>
+      <section class="block lib-block" aria-labelledby="lib-title">
+        <h2 class="block__title" id="lib-title"><button class="help" type="button" data-help="banco">Banco de dados</button></h2>
+        <div class="lib-tools">
+          <div class="field">
+            <label class="field__label" for="lib-q">Buscar pelo nome</label>
+            <input class="input" id="lib-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ex.: silenciador">
+          </div>
+          <div class="field">
+            <label class="field__label" for="lib-kind">Categoria</label>
+            <select class="input" id="lib-kind"></select>
+          </div>
+          <label class="check"><input type="checkbox" id="lib-fav"><span>Só favoritos</span></label>
+          <label class="check"><input type="checkbox" id="lib-mine"><span>Só os meus</span></label>
+        </div>
+        <p class="block__hint" id="lib-hint" role="status"></p>
+        <ul class="rows" id="lib-list"></ul>
+        <p class="empty" id="lib-empty">Nada encontrado. Crie algo acima ou mude a busca.</p>
       </section>
     </section>
 
@@ -242,13 +271,23 @@
           <h1 id="sheet-title" tabindex="-1"></h1>
           <p class="save-status" id="sheet-status" aria-live="polite"></p>
           <div class="sheet-actions">
+            <button class="btn btn--ghost btn--sm" type="button" id="setup-open">Distribuição inicial</button>
             <button class="btn btn--ghost btn--sm" type="button" id="export-open">Exportar ficha</button>
             <button class="btn btn--ghost btn--sm" type="button" id="pin-toggle">Fixar no acesso rápido</button>
           </div>
         </div>
       </header>
 
-      <div class="two-col">
+      <!-- Atributos: no topo, cada um com a sua cor -->
+      <section class="attr-band" id="attr-band" aria-label="Atributos"></section>
+
+      <!-- Recursos: calculados dos atributos, itens equipados, poderes e espécime -->
+      <section class="block" aria-labelledby="res-title">
+        <h2 class="block__title" id="res-title"><button class="help" type="button" data-help="recursos">Recursos</button></h2>
+        <div id="res-block"></div>
+      </section>
+
+      <div class="two-col sheet-cols">
         <section class="block" aria-labelledby="basic-title">
           <h2 class="block__title" id="basic-title"><button class="help" type="button" data-help="dados-basicos">Dados básicos</button></h2>
           <p class="block__hint">Todas as fichas são públicas: qualquer pessoa pode ver e editar.</p>
@@ -258,36 +297,88 @@
               <input class="input" id="f-name" type="text" maxlength="40" autocomplete="off" aria-describedby="f-name-error">
               <p class="field__error" id="f-name-error" role="alert"></p>
             </div>
-            <div class="field">
-              <label class="field__label" for="f-species">Espécie</label>
-              <input class="input" id="f-species" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: elfo">
+            <div class="field field--wide">
+              <label class="field__label" for="f-species">Espécime</label>
+              <div class="with-btn">
+                <input class="input" id="f-species" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: Humano">
+                <button class="btn btn--ghost" type="button" id="species-pick">Buscar no banco</button>
+              </div>
+              <p class="field__hint" id="species-link"></p>
             </div>
             <div class="field">
               <label class="field__label" for="f-age">Idade</label>
-              <input class="input" id="f-age" type="text" maxlength="20" autocomplete="off" placeholder="Ex.: 120 anos">
+              <input class="input" id="f-age" type="text" maxlength="20" autocomplete="off" placeholder="Ex.: 27 anos">
             </div>
-            <div class="field field--wide">
+            <div class="field">
+              <label class="field__label" for="f-height">Altura</label>
+              <input class="input" id="f-height" type="text" maxlength="20" autocomplete="off" placeholder="Ex.: 1,78 m">
+            </div>
+            <div class="field">
+              <label class="field__label" for="f-sex">Sexo</label>
+              <input class="input" id="f-sex" type="text" maxlength="20" autocomplete="off">
+            </div>
+            <div class="field">
               <label class="field__label" for="f-origin">Origem</label>
-              <input class="input" id="f-origin" type="text" maxlength="60" autocomplete="off" placeholder="Ex.: Ruínas do Norte">
+              <input class="input" id="f-origin" type="text" maxlength="60" autocomplete="off" list="origin-list" placeholder="Ex.: Exilado Urbano">
+              <datalist id="origin-list"></datalist>
             </div>
           </div>
+
+          <h3 class="sub-title"><button class="help" type="button" data-help="progressao">Progressão</button></h3>
+          <div id="prog-block"></div>
         </section>
 
-        <section class="block" aria-labelledby="attach-title">
-          <h2 class="block__title" id="attach-title"><button class="help" type="button" data-help="campanhas">Campanhas</button></h2>
-          <form class="inline-form" id="form-attach" novalidate>
-            <div class="field">
-              <label class="field__label" for="attach-code">ID de entrada da campanha</label>
-              <input class="input input--code" id="attach-code" type="text" maxlength="12" autocomplete="off"
-                     autocapitalize="characters" placeholder="Ex.: VX7K2Q" aria-describedby="attach-error">
-              <p class="field__error" id="attach-error" role="alert"></p>
-            </div>
-            <button class="btn btn--primary" type="submit">Vincular à campanha</button>
-          </form>
-          <ul class="rows" id="sheet-camp-list"></ul>
-          <p class="empty" id="sheet-camp-empty">Ainda não está em nenhuma campanha.</p>
+        <section class="block" aria-labelledby="skills-title">
+          <h2 class="block__title" id="skills-title"><button class="help" type="button" data-help="pericias">Perícias</button></h2>
+          <p class="block__hint" id="skills-hint"></p>
+          <div id="skills-block"></div>
         </section>
       </div>
+
+      <section class="block sheet-block" aria-labelledby="powers-title">
+        <div class="block__head">
+          <h2 class="block__title" id="powers-title"><button class="help" type="button" data-help="poderes">Poderes</button></h2>
+          <button class="btn btn--ghost btn--sm" type="button" id="power-add">Adicionar poder</button>
+        </div>
+        <ul class="rows" id="power-list"></ul>
+        <p class="empty" id="power-empty">Nenhum poder ainda.</p>
+      </section>
+
+      <section class="block sheet-block" aria-labelledby="inv-title">
+        <div class="block__head">
+          <h2 class="block__title" id="inv-title"><button class="help" type="button" data-help="inventario">Inventário</button></h2>
+          <button class="btn btn--primary btn--sm" type="button" id="inv-add">Adicionar do banco</button>
+        </div>
+        <div id="inv-summary"></div>
+        <ul class="rows" id="inv-list"></ul>
+        <p class="empty" id="inv-empty">Inventário vazio. Adicione itens do banco ou anote um item rápido abaixo.</p>
+        <form class="quick-item" id="form-quick-item" novalidate>
+          <div class="field">
+            <label class="field__label" for="quick-item-name">Item rápido (sem passar pela Oficina)</label>
+            <input class="input" id="quick-item-name" type="text" maxlength="60" autocomplete="off" placeholder="Ex.: Kit de primeiros socorros">
+          </div>
+          <div class="field">
+            <label class="field__label" for="quick-item-carga">Carga</label>
+            <input class="input" id="quick-item-carga" type="number" min="0" step="0.25" value="0" inputmode="decimal">
+          </div>
+          <button class="btn btn--ghost" type="submit">Anotar</button>
+        </form>
+      </section>
+
+      <section class="block sheet-block" aria-labelledby="attach-title">
+        <h2 class="block__title" id="attach-title"><button class="help" type="button" data-help="campanhas">Campanhas</button></h2>
+        <form class="inline-form inline-form--row" id="form-attach" novalidate>
+          <div class="field">
+            <label class="field__label" for="attach-code">ID de entrada da campanha</label>
+            <input class="input input--code" id="attach-code" type="text" maxlength="12" autocomplete="off"
+                   autocapitalize="characters" placeholder="Ex.: VX7K2Q" aria-describedby="attach-error">
+            <p class="field__error" id="attach-error" role="alert"></p>
+          </div>
+          <button class="btn btn--primary" type="submit">Vincular à campanha</button>
+        </form>
+        <ul class="rows" id="sheet-camp-list"></ul>
+        <p class="empty" id="sheet-camp-empty">Ainda não está em nenhuma campanha.</p>
+      </section>
 
       <div class="danger-zone" id="danger-zone">
         <button class="btn btn--danger" type="button" id="delete-character">Excluir personagem</button>
@@ -434,6 +525,43 @@
         <button class="btn btn--ghost" type="button" id="export-close">Fechar</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Sub-tela de pesquisa: mods, propriedades, acessórios, itens, espécimes e poderes -->
+  <dialog class="dialog dialog--wide" id="picker" aria-labelledby="picker-title">
+    <div class="picker">
+      <div class="picker__head">
+        <h2 id="picker-title"></h2>
+        <button class="btn btn--ghost btn--sm" type="button" id="picker-close">Fechar</button>
+      </div>
+      <p class="picker__filter" id="picker-chips"></p>
+      <div class="picker__tools">
+        <div class="field">
+          <label class="visually-hidden" for="picker-q">Buscar pelo nome</label>
+          <input class="input" id="picker-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar pelo nome">
+        </div>
+        <label class="check"><input type="checkbox" id="picker-fav"><span>Só favoritos</span></label>
+      </div>
+      <p class="block__hint" id="picker-hint" role="status"></p>
+      <ul class="rows picker__list" id="picker-list"></ul>
+      <p class="empty" id="picker-empty">Nada compatível encontrado. Crie na aba Itens e volte aqui.</p>
+    </div>
+  </dialog>
+
+  <!-- Distribuição inicial (abre na primeira vez que a ficha é feita) -->
+  <dialog class="dialog dialog--wide" id="setup-dialog" aria-labelledby="setup-title">
+    <div class="setup">
+      <p class="setup__step" id="setup-step"></p>
+      <h2 id="setup-title" tabindex="-1"></h2>
+      <p class="setup__lead" id="setup-lead"></p>
+      <div class="setup__body" id="setup-body"></div>
+      <p class="field__error" id="setup-error" role="alert"></p>
+      <div class="dialog__actions">
+        <button class="btn btn--ghost setup__skip" type="button" id="setup-skip">Pular por enquanto</button>
+        <button class="btn btn--ghost" type="button" id="setup-back">Voltar</button>
+        <button class="btn btn--primary" type="button" id="setup-next">Continuar</button>
+      </div>
+    </div>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

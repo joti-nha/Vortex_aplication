@@ -92,6 +92,14 @@ const FIREBASE_CONFIG = {
     const hay = haystack(c);
     return words(hay).some((w) => w.indexOf(qs[0]) === 0) && qs.slice(1).every((w) => hay.indexOf(w) >= 0);
   }
+  // Banco de itens: mesma lógica de busca (1ª palavra = começo de palavra; o resto em qualquer parte)
+  const deep = (o) => JSON.parse(JSON.stringify(o === undefined ? null : o));
+  const libHay = (e) => nameKey([e.name, e.typeTitle, e.kindTitle].join(' '));
+  function matchesText(hay, q) {
+    const qs = words(q || '');
+    if (!qs.length) return true;
+    return words(hay).some((w) => w.indexOf(qs[0]) === 0) && qs.slice(1).every((w) => hay.indexOf(w) >= 0);
+  }
   const fileSlug = (name) => nameKey(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'ficha';
 
   function errorMessage(err) {
@@ -239,6 +247,7 @@ const FIREBASE_CONFIG = {
       let d = null;
       try { d = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* começa do zero */ }
       if (!d || !d.characters || !d.campaigns) d = { characters: {}, campaigns: {} };
+      if (!d.library) d.library = {}; // banco de itens, mods, propriedades, acessórios, espécimes e poderes
       if (!d.v) { addDemo(d); d.v = 2; write(d, true); } // migração da versão anterior
       return d;
     }
@@ -252,8 +261,10 @@ const FIREBASE_CONFIG = {
     const toChar = (c) => ({
       id: c.id, name: c.name, type: c.type, image: c.image || '', thumb: c.thumb || '',
       species: c.species || '', age: c.age || '', origin: c.origin || '',
-      campaignIds: (c.campaignIds || []).slice(), mine: c.ownerUid === ME
+      campaignIds: (c.campaignIds || []).slice(), mine: c.ownerUid === ME,
+      sheet: c.sheet ? clone(c.sheet) : null
     });
+    const toLib = (e) => Object.assign(clone(e), { mine: e.ownerUid === ME });
     const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
 
     const listeners = {}; // campaignId -> Set de callbacks
@@ -313,6 +324,7 @@ const FIREBASE_CONFIG = {
         const c = d.characters[id];
         if (!c) throw new UserError('Personagem não encontrado.');
         ['species', 'age', 'origin', 'image', 'thumb'].forEach((k) => { if (k in patch) c[k] = String(patch[k]); });
+        if ('sheet' in patch) c.sheet = clone(patch.sheet);
         c.updatedAt = Date.now();
         write(d);
       },
@@ -408,6 +420,36 @@ const FIREBASE_CONFIG = {
           .map((m) => Object.assign(toChar(d.characters[m.characterId]), { characterId: m.characterId, mine: m.ownerUid === ME }));
       },
 
+      // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
+      async searchLibrary({ kinds, query }) {
+        return Object.values(read().library)
+          .filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), query))
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+          .slice(0, 200)
+          .map(toLib);
+      },
+
+      async saveLibrary(entry) {
+        const d = read();
+        const old = entry.id ? d.library[entry.id] : null;
+        if (old && old.ownerUid !== ME) throw new UserError('Só quem criou pode editar.');
+        const id = old ? old.id : uid();
+        const e = clone(entry);
+        delete e.mine;
+        d.library[id] = Object.assign(e, { id, ownerUid: ME, nameKey: nameKey(e.name), createdAt: old ? old.createdAt : Date.now(), updatedAt: Date.now() });
+        write(d);
+        return toLib(d.library[id]);
+      },
+
+      async deleteLibrary(id) {
+        const d = read();
+        const e = d.library[id];
+        if (!e) return;
+        if (e.ownerUid !== ME) throw new UserError('Só quem criou pode excluir.');
+        delete d.library[id];
+        write(d);
+      },
+
       async addRoll(campaignId, roll) {
         const list = rollsOf(campaignId);
         list.push(Object.assign({ id: uid(), createdAt: Date.now() }, roll));
@@ -436,6 +478,7 @@ const FIREBASE_CONFIG = {
     const chars = () => fs.collection('characters');
     const camps = () => fs.collection('campaigns');
     const names = () => fs.collection('names');
+    const lib = () => fs.collection('library');
     const nameDoc = (kind, name) => names().doc((kind === 'campaign' ? 'k_' : 'c_') + nameKey(name));
 
     const toChar = (snap) => {
@@ -443,7 +486,17 @@ const FIREBASE_CONFIG = {
       return {
         id: snap.id, name: d.name, type: d.type, image: d.image || '', thumb: d.thumb || '',
         species: d.species || '', age: d.age || '', origin: d.origin || '',
-        campaignIds: d.campaignIds || [], mine: d.ownerUid === me
+        campaignIds: d.campaignIds || [], mine: d.ownerUid === me,
+        sheet: d.sheet ? deep(d.sheet) : null
+      };
+    };
+    const toLib = (snap) => {
+      const d = snap.data({ serverTimestamps: 'estimate' });
+      return {
+        id: snap.id, kind: d.kind, typeId: d.typeId || '', typeTitle: d.typeTitle || '', kindTitle: d.kindTitle || '',
+        name: d.name, values: d.values || {}, bonus: d.bonus || {}, slots: d.slots || null,
+        image: d.image || '', thumb: d.thumb || '', mine: d.ownerUid === me,
+        updatedAt: d.updatedAt && d.updatedAt.toMillis ? d.updatedAt.toMillis() : 0
       };
     };
     const toCamp = (snap) => ({ id: snap.id, name: snap.data().name, isOwner: snap.data().ownerUid === me });
@@ -498,7 +551,7 @@ const FIREBASE_CONFIG = {
           if (await db.nameTaken('character', name)) throw new UserError(DUP_CHARACTER);
           throw e;
         }
-        return { id: ref.id, name, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], mine: true };
+        return { id: ref.id, name, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], mine: true, sheet: null };
       },
 
       // Grava só os campos enviados (assim não apaga o que outra pessoa editou nos outros campos)
@@ -506,6 +559,7 @@ const FIREBASE_CONFIG = {
         const ref = chars().doc(id);
         const upd = { updatedAt: FV.serverTimestamp() };
         ['species', 'age', 'origin', 'image', 'thumb'].forEach((k) => { if (k in patch) upd[k] = String(patch[k]); });
+        if ('sheet' in patch) upd.sheet = deep(patch.sheet); // atributos, perícias, recursos e inventário
         if ('species' in patch || 'origin' in patch) {
           const d = (await ref.get()).data();
           const next = Object.assign({}, d, upd);
@@ -666,6 +720,37 @@ const FIREBASE_CONFIG = {
           return Object.assign(toChar(cs), { characterId: d.id, mine: m.ownerUid === me, at });
         }));
         return rows.filter(Boolean).sort((x, y) => x.at - y.at);
+      },
+
+      // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
+      async searchLibrary({ kinds, query }) {
+        const qs = words(query || '');
+        let snap;
+        if (qs.length) snap = await lib().where('searchKeys', 'array-contains', qs[0].slice(0, 20)).limit(120).get();
+        else if (kinds && kinds.length) snap = await lib().where('kind', 'in', kinds.slice(0, 10)).limit(200).get();
+        else snap = await lib().orderBy('updatedAt', 'desc').limit(100).get();
+        return snap.docs.map(toLib)
+          .filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), query))
+          .sort((a, b) => b.updatedAt - a.updatedAt);
+      },
+
+      async saveLibrary(entry) {
+        const e = deep(entry);
+        const data = {
+          kind: e.kind, typeId: e.typeId || '', typeTitle: e.typeTitle || '', kindTitle: e.kindTitle || '',
+          name: e.name, nameKey: nameKey(e.name), values: e.values || {}, bonus: e.bonus || {}, slots: e.slots || {},
+          image: e.image || '', thumb: e.thumb || '',
+          searchKeys: buildSearchKeys(e.name, e.typeTitle || '', e.kindTitle || ''),
+          updatedAt: FV.serverTimestamp()
+        };
+        let ref;
+        if (e.id) { ref = lib().doc(e.id); await ref.update(data); }
+        else { ref = lib().doc(); await ref.set(Object.assign({ ownerUid: me, createdAt: FV.serverTimestamp() }, data)); }
+        return Object.assign({}, e, { id: ref.id, mine: true, updatedAt: Date.now() });
+      },
+
+      async deleteLibrary(id) {
+        await lib().doc(id).delete();
       },
 
       async addRoll(campaignId, roll) {
@@ -1129,12 +1214,12 @@ const FIREBASE_CONFIG = {
     ctx.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, size, size);
     return canvas.toDataURL('image/jpeg', quality);
   }
-  function fileToImages(file) {
+  function fileToImages(file, big, small) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
-        try { resolve({ image: cropSquare(img, 320, 0.82), thumb: cropSquare(img, 96, 0.75) }); }
+        try { resolve({ image: cropSquare(img, big || 320, 0.82), thumb: cropSquare(img, small || 96, 0.75) }); }
         catch (e) { reject(e); }
         finally { URL.revokeObjectURL(url); }
       };
@@ -1159,7 +1244,7 @@ const FIREBASE_CONFIG = {
     },
     'dados-basicos': {
       title: 'Dados básicos',
-      text: 'Nome, espécie, idade e origem. O nome é único. Qualquer pessoa pode editar a ficha, então o jogo depende da boa-fé de todos.',
+      text: 'Nome, espécime, idade, altura, sexo e origem. O nome é único. "Buscar no banco" vincula um espécime: a vida base, os UP iniciais e o núcleo dele entram sozinhos na ficha.',
       rule: 'ficha/modelo-de-ficha'
     },
     rolagens: {
@@ -1170,6 +1255,36 @@ const FIREBASE_CONFIG = {
     candidatos: {
       title: 'Candidatos',
       text: 'Personagens e criaturas vinculados à campanha. Toque num nome para ver a ficha resumida e abrir a ficha completa.',
+      rule: null
+    },
+    recursos: {
+      title: 'Recursos',
+      text: 'Nada aqui é digitado: PV = 5 + Corpo × 5, PE = 5 + Essência × 5, PA = Precisão. A barra de resistência é uma só e junta PV, Blindagem e Escudo, cada um com a sua cor; itens equipados, poderes e o espécime somam o tipo deles sozinhos. Você só marca o valor atual.',
+      rule: 'atributos-e-recursos/recursos'
+    },
+    pericias: {
+      title: 'Perícias',
+      text: 'Bônus de +1 a +3. O número ao lado já é o total do teste (atributo + perícia), com a penalidade da armadura equipada em Manha, Reflexos e Sentidos.',
+      rule: 'pericias'
+    },
+    progressao: {
+      title: 'Progressão',
+      text: '10 XP viram 1 UP. Cada UP compra +10 PV, +10 PE, +2 PA ou +2 pontos de perícia; poderes também custam UP.',
+      rule: 'progressao'
+    },
+    poderes: {
+      title: 'Poderes',
+      text: 'Poderes e habilidades vêm do banco (os das regras já estão lá; crie os seus na aba Itens). Os bônus de um poder entram sozinhos nos recursos.',
+      rule: 'habilidades'
+    },
+    inventario: {
+      title: 'Inventário',
+      text: 'A carga é somada sozinha. Limite: 5 + Corpo × 5. Armadura equipada e implantes instalados não contam. Só 4 itens equipados dão benefício ao mesmo tempo. Abra um item para encaixar mods, propriedade e acessórios nos slots.',
+      rule: 'carga'
+    },
+    banco: {
+      title: 'Banco de dados',
+      text: 'Tudo o que é salvo na Oficina, mais o catálogo oficial das regras. É aqui que a pesquisa dos slots e do inventário procura. A estrela favorita (fica neste aparelho); só quem criou edita ou exclui.',
       rule: null
     },
     busca: {
@@ -1316,7 +1431,8 @@ const FIREBASE_CONFIG = {
       h('dl', 'member__data',
         h('dt', '', 'Espécie'), h('dd', '', m.species || '—'),
         h('dt', '', 'Idade'), h('dd', '', m.age || '—'),
-        h('dt', '', 'Origem'), h('dd', '', m.origin || '—')),
+        h('dt', '', 'Origem'), h('dd', '', m.origin || '—'),
+        ...(m.sheet && m.sheet.attrs ? [h('dt', '', 'Atributos'), h('dd', '', 'Corpo ' + (m.sheet.attrs.corpo || 0) + ' · Precisão ' + (m.sheet.attrs.precisao || 0) + ' · Essência ' + (m.sheet.attrs.essencia || 0))] : [])),
       link));
     panel.id = panelId;
     panel.hidden = true;
@@ -1536,28 +1652,349 @@ const FIREBASE_CONFIG = {
   };
 
 
-  /* ---------- Itens: categoria → tipo → formulário ----------
-     Os dados vêm de items.js (window.VORTEX_ITEMS). Os itens montados ficam
-     só neste aparelho (localStorage) — ainda não há um lugar nas campanhas
-     ou fichas para guardá-los de verdade. */
-  const ITEMS_KEY = 'vortex.items.v1';
-  const ITEM_DATA = window.VORTEX_ITEMS || { categories: [], raridades: [], tiposDano: [] };
-  const itemState = { categoryId: null, typeId: null, step: 'categoria' };
-
-  function itemsLoad() {
-    try { const l = JSON.parse(localStorage.getItem(ITEMS_KEY)); return Array.isArray(l) ? l : []; }
-    catch (e) { return []; }
-  }
-  function itemsSave(list) {
-    try { localStorage.setItem(ITEMS_KEY, JSON.stringify(list)); }
-    catch (e) { toast('Não foi possível salvar: o armazenamento está cheio.'); }
-  }
-
+  /* ---------- Banco de itens: peças comuns ----------
+     Os dados de formulário vêm de items.js (window.VORTEX_ITEMS). Tudo o que é
+     salvo na Oficina vai para o banco (db.saveLibrary): itens, mods, propriedades,
+     acessórios, espécimes e poderes. A ficha guarda uma cópia do que usa. */
+  const ITEM_DATA = window.VORTEX_ITEMS || { categories: [], catalogo: [], raridades: [], raridadeCor: {} };
+  const SLOT_RULES = Object.assign({ modsPorRaridade: {}, custoMod: {}, propArma: {}, propArmadura: {}, acessoriosPorSlot: 3, posicoes: {} }, ITEM_DATA.slots);
   const findCategory = (id) => ITEM_DATA.categories.find((c) => c.id === id);
-  const findType = (cat, id) => (cat.types || []).find((t) => t.id === id);
-  const optionsFor = (key) => ITEM_DATA[key] || [];
+  const findType = (cat, id) => ((cat && cat.types) || []).find((t) => t.id === id);
+  const kindTitle = (k) => { const c = findCategory(k); return c ? c.title : k; };
+  const isWeapon = (k) => k === 'arma-fogo' || k === 'arma-melee';
+  const WEAPON_PARA = { 'arma-fogo': 'Arma de fogo', 'arma-melee': 'Arma corpo a corpo' };
+  const INVENTORY_KINDS = ITEM_DATA.categories.filter((c) => c.inventory).map((c) => c.id);
+  const IMPLANT_KINDS = ITEM_DATA.categories.filter((c) => c.implant).map((c) => c.id);
+  const rarColor = (r) => (ITEM_DATA.raridadeCor || {})[r] || '';
+  const BONUS_KEYS = [['pv', 'PV'], ['escudo', 'Escudo'], ['blindagem', 'Blindagem'], ['pe', 'PE'], ['pa', 'PA'], ['carga', 'Carga'], ['armadura', 'Armadura']];
 
-  function itemCard(title, hint, onClick, helpRule) {
+  // números escritos à mão: "1/4", "½", "0,5", "–1"
+  function num(v) {
+    const n = parseFloat(String(v === null || v === undefined ? '' : v).replace(',', '.').replace(/[–−]/g, '-'));
+    return isFinite(n) ? n : 0;
+  }
+  function parseCarga(v) {
+    const s = String(v === null || v === undefined ? '' : v).trim();
+    if (s === '¼') return 0.25;
+    if (s === '½') return 0.5;
+    if (s === '¾') return 0.75;
+    const m = s.match(/^(\d+)\s*\/\s*(\d+)/);
+    if (m && parseInt(m[2], 10)) return parseInt(m[1], 10) / parseInt(m[2], 10);
+    return Math.max(0, num(s));
+  }
+  const fmtNum = (n) => String(Math.round(n * 100) / 100).replace('.', ',');
+  const signed = (n) => (n > 0 ? '+' : '') + fmtNum(n);
+
+  /* Favoritos: ficam neste aparelho */
+  const FAV_KEY = 'vortex.fav.v1';
+  function favLoad() {
+    try { const l = JSON.parse(localStorage.getItem(FAV_KEY)); return new Set(Array.isArray(l) ? l : []); }
+    catch (e) { return new Set(); }
+  }
+  function favToggle(id) {
+    const set = favLoad();
+    if (set.has(id)) set.delete(id); else set.add(id);
+    try { localStorage.setItem(FAV_KEY, JSON.stringify(Array.from(set))); } catch (e) { /* sem espaço: segue sem favoritar */ }
+    return set.has(id);
+  }
+
+  /* Catálogo oficial (items.js) + o que as pessoas salvaram no banco */
+  function decorate(e) {
+    const cat = findCategory(e.kind);
+    const type = findType(cat, e.typeId);
+    return Object.assign({ image: '', thumb: '', bonus: {}, slots: null, values: {}, typeId: '' }, e, {
+      kindTitle: cat ? cat.title : (e.kindTitle || e.kind),
+      typeTitle: type ? type.title : (e.typeTitle || '')
+    });
+  }
+  const BUILTINS = (ITEM_DATA.catalogo || []).map((e) => Object.assign(decorate(e), { oficial: true, mine: false }));
+
+  async function libSearch(kinds, q) {
+    const off = BUILTINS.filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), q));
+    const own = await db.searchLibrary({ kinds, query: q });
+    return off.concat(own.map(decorate));
+  }
+
+  function entryIcon(e) {
+    const el = h('span', 'lib-icon' + (e.kind === 'mod-arma' ? ' lib-icon--mod' : ''));
+    const color = e.values && rarColor(e.values.raridade);
+    if (color) el.style.setProperty('--rar', color);
+    if (e.thumb) { const img = h('img'); img.src = e.thumb; img.alt = ''; el.append(img); }
+    else el.textContent = (e.name || '?').trim().charAt(0).toUpperCase();
+    return el;
+  }
+  function entryMeta(e) {
+    const v = e.values || {};
+    return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe].filter(Boolean).join(' · ');
+  }
+  const entryText = (e) => { const v = e.values || {}; return v.efeito || v.especial || v.descricao || v.tracos || ''; };
+
+  function starButton(e, onToggle) {
+    const b = h('button', 'star');
+    b.type = 'button';
+    const paint = (on) => {
+      b.textContent = on ? '★' : '☆';
+      b.setAttribute('aria-pressed', String(on));
+      b.setAttribute('aria-label', (on ? 'Tirar dos favoritos: ' : 'Favoritar: ') + e.name);
+      b.title = on ? 'Favorito' : 'Favoritar';
+    };
+    paint(favLoad().has(e.id));
+    b.addEventListener('click', () => { paint(favToggle(e.id)); if (onToggle) onToggle(); });
+    return b;
+  }
+
+  function libRow(e, actions, onFav) {
+    const title = h('span', 'row__title', e.name || 'Sem nome');
+    if (e.oficial) title.append(' ', h('span', 'tag', 'Oficial'));
+    const main = h('span', 'row__main', title, h('span', 'row__meta', entryMeta(e)));
+    const text = entryText(e);
+    if (text) main.append(h('span', 'row__text', text));
+    const row = h('li', 'row lib-row', h('span', 'row__open row__open--static', entryIcon(e), main), starButton(e, onFav));
+    (actions || []).forEach((a) => {
+      const b = h('button', 'btn btn--sm ' + (a.cls || 'btn--ghost'), a.label);
+      b.type = 'button';
+      b.setAttribute('aria-label', a.label + ': ' + e.name);
+      b.addEventListener('click', a.onClick);
+      row.append(b);
+    });
+    return row;
+  }
+
+  /* ---------- Slots: mods, propriedade e acessórios ----------
+     Cada slot só aceita a peça do seu tipo. A raridade do item define quantos
+     mods cabem e se cabe propriedade; 1 slot de mod livre vale 3 acessórios;
+     cada posição (Mira, Bocal...) só leva um acessório. */
+  const slotSnap = (e) => ({
+    id: e.id || '', kind: e.kind, typeId: e.typeId || '', typeTitle: e.typeTitle || '', name: e.name,
+    values: deep(e.values || {}), bonus: deep(e.bonus || {}),
+    slots: e.slots && e.slots.accs && e.slots.accs.length ? { accs: e.slots.accs.map(slotSnap) } : null
+  });
+  function normSlots(s) {
+    const pick = (k) => ((s && Array.isArray(s[k])) ? s[k] : []).map(slotSnap);
+    return { mods: pick('mods'), props: pick('props'), accs: pick('accs') };
+  }
+
+  function slotInfo(item) {
+    const r = (item.values && item.values.raridade) || 'Comum';
+    const pos = SLOT_RULES.posicoes;
+    if (isWeapon(item.kind)) return { rar: r, mods: SLOT_RULES.modsPorRaridade[r] || 0, props: SLOT_RULES.propArma[r] || 0, positions: pos[item.kind] || [] };
+    if (item.kind === 'armadura') return { rar: r, mods: 0, props: SLOT_RULES.propArmadura[r] || 0, positions: [] };
+    if (item.kind === 'mod-arma') {
+      const para = item.values && item.values.para;
+      const fogo = pos['arma-fogo'] || [], melee = pos['arma-melee'] || [];
+      return { rar: r, mods: 0, props: 0, embedded: true, positions: para === 'Arma de fogo' ? fogo : para === 'Arma corpo a corpo' ? melee : fogo.concat(melee) };
+    }
+    return null;
+  }
+  const modCost = (m) => SLOT_RULES.custoMod[m.values && m.values.raridade] || 1;
+  function slotUse(item) {
+    const mods = item.slots.mods.reduce((t, m) => t + modCost(m), 0);
+    const acc = Math.ceil(item.slots.accs.length / (SLOT_RULES.acessoriosPorSlot || 3));
+    return { mods, acc, total: mods + acc };
+  }
+  function takenPositions(item) {
+    const map = {};
+    item.slots.mods.forEach((m) => ((m.slots && m.slots.accs) || []).forEach((a) => { map[a.values.posicao] = { acc: a, mod: m }; }));
+    item.slots.accs.forEach((a) => { map[a.values.posicao] = { acc: a, mod: null }; });
+    return map;
+  }
+  // a raridade caiu (ou o tipo mudou): tira o que não cabe mais
+  function trimSlots(item) {
+    const info = slotInfo(item);
+    item.slots = normSlots(item.slots);
+    if (!info) return 0;
+    let removed = 0;
+    while (item.slots.props.length > info.props) { item.slots.props.pop(); removed++; }
+    item.slots.accs = item.slots.accs.filter((a) => { const ok = info.positions.indexOf(a.values.posicao) >= 0; if (!ok) removed++; return ok; });
+    if (!info.embedded) {
+      while (slotUse(item).total > info.mods) {
+        if (item.slots.accs.length) item.slots.accs.pop(); else item.slots.mods.pop();
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  function slotChip(e, onRemove) {
+    const chip = h('span', 'slot-chip', h('span', 'slot-chip__name', e.name));
+    const color = rarColor(e.values && e.values.raridade);
+    if (color) chip.style.setProperty('--rar', color);
+    const text = entryText(e);
+    if (text) chip.title = text;
+    if (onRemove) {
+      const x = h('button', 'slot-chip__x', '×');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'Tirar ' + e.name);
+      x.addEventListener('click', onRemove);
+      chip.append(x);
+    }
+    return chip;
+  }
+
+  function slotEditor(item, onChange) {
+    const box = h('div', 'slots');
+    const changed = () => { if (onChange) onChange(); fill(); };
+    const addBtn = (label, disabled, why, onClick) => {
+      const b = h('button', 'btn btn--ghost btn--sm', label);
+      b.type = 'button';
+      b.disabled = disabled;
+      if (disabled && why) b.title = why;
+      b.addEventListener('click', onClick);
+      return b;
+    };
+
+    function fill() {
+      const info = slotInfo(item);
+      box.replaceChildren();
+      if (!info) return;
+      item.slots = item.slots && item.slots.mods ? item.slots : normSlots(item.slots);
+      const s = item.slots;
+      const use = slotUse(item);
+      const per = SLOT_RULES.acessoriosPorSlot || 3;
+      box.append(h('h3', 'slots__title', info.embedded ? 'Acessórios embutidos no mod' : 'Slots'));
+
+      // ----- Mods (só em armas)
+      if (!info.embedded && isWeapon(item.kind)) {
+        const free = info.mods - use.total;
+        const g = h('div', 'slots__group');
+        g.append(h('p', 'slots__label', 'Mods', h('span', 'slots__count', use.total + ' de ' + info.mods + (info.mods === 1 ? ' slot usado' : ' slots usados') + (use.acc ? ' (' + use.acc + ' com acessórios)' : ''))));
+        const line = h('div', 'slots__line');
+        s.mods.forEach((m, i) => line.append(slotChip(m, () => { s.mods.splice(i, 1); changed(); })));
+        line.append(addBtn('Adicionar mod', free < 1, 'Sem slot de mod livre nesta raridade.', async () => {
+          const e = await openPicker({
+            title: 'Escolher mod', kinds: ['mod-arma'],
+            chips: ['Mod de arma', WEAPON_PARA[item.kind], 'cabe em ' + free + (free === 1 ? ' slot' : ' slots')],
+            filter: (x) => x.kind === 'mod-arma' && (!x.values.para || x.values.para === 'Qualquer arma' || x.values.para === WEAPON_PARA[item.kind]) && modCost(x) <= free
+          });
+          if (!e || e.kind !== 'mod-arma') return; // o slot só aceita mod
+          const taken = takenPositions(item);
+          const clash = ((e.slots && e.slots.accs) || []).find((a) => taken[a.values.posicao]);
+          if (clash) { toast('A posição ' + clash.values.posicao + ' já está ocupada; tire o acessório antes de pôr este mod.'); return; }
+          s.mods.push(slotSnap(e));
+          changed();
+        }));
+        g.append(line, h('p', 'field__hint', 'Raridade ' + info.rar + ': ' + info.mods + (info.mods === 1 ? ' slot' : ' slots') + ' de mod. Mod Comum usa 1, Rara usa 2, Lendária usa 3.'));
+        box.append(g);
+      }
+
+      // ----- Propriedade (a raridade decide se cabe)
+      if (!info.embedded) {
+        const g = h('div', 'slots__group');
+        g.append(h('p', 'slots__label', 'Propriedade', h('span', 'slots__count', info.props ? s.props.length + ' de ' + info.props : 'bloqueada')));
+        if (!info.props) g.append(h('p', 'field__hint', 'A raridade ' + info.rar + ' não comporta propriedade. Só Incomum, Épica e Lendária.'));
+        else {
+          const line = h('div', 'slots__line');
+          s.props.forEach((p, i) => line.append(slotChip(p, () => { s.props.splice(i, 1); changed(); })));
+          const target = isWeapon(item.kind) ? 'Arma' : 'Armadura';
+          line.append(addBtn('Adicionar propriedade', s.props.length >= info.props, 'Este item já tem todas as propriedades que a raridade permite.', async () => {
+            const e = await openPicker({
+              title: 'Escolher propriedade', kinds: ['propriedade'], chips: ['Propriedade', 'para ' + target.toLowerCase()],
+              filter: (x) => x.kind === 'propriedade' && (!x.values.para || x.values.para === 'Qualquer item' || x.values.para === target) && !s.props.some((p) => p.id && p.id === x.id)
+            });
+            if (!e || e.kind !== 'propriedade') return; // o slot só aceita propriedade
+            s.props.push(slotSnap(e));
+            changed();
+          }));
+          g.append(line);
+        }
+        box.append(g);
+      }
+
+      // ----- Acessórios: uma posição, um acessório
+      if (info.positions.length) {
+        const g = h('div', 'slots__group');
+        if (!info.embedded) g.append(h('p', 'slots__label', 'Acessórios', h('span', 'slots__count', s.accs.length + ' colocados · cada slot de mod livre leva ' + per)));
+        const taken = takenPositions(item);
+        const noRoom = !info.embedded && Math.ceil((s.accs.length + 1) / per) + use.mods > info.mods;
+        const grid = h('div', 'slots__grid');
+        info.positions.forEach((pos) => {
+          const cell = h('div', 'slots__pos', h('span', 'slots__pos-name', pos));
+          const t = taken[pos];
+          if (t && t.mod) cell.append(slotChip(t.acc), h('span', 'field__hint', 'vem no mod ' + t.mod.name));
+          else if (t) cell.append(slotChip(t.acc, () => { s.accs.splice(s.accs.indexOf(t.acc), 1); changed(); }));
+          else {
+            cell.append(addBtn('Escolher', noRoom, 'Sem slot de mod livre para mais acessórios.', async () => {
+              const e = await openPicker({
+                title: 'Escolher acessório: ' + pos, kinds: ['acessorio'],
+                chips: ['Acessório', pos].concat(WEAPON_PARA[item.kind] ? [WEAPON_PARA[item.kind]] : []),
+                filter: (x) => x.kind === 'acessorio' && x.values.posicao === pos && (info.embedded || x.typeId === item.kind)
+              });
+              if (!e || e.kind !== 'acessorio' || e.values.posicao !== pos) return; // o slot só aceita acessório desta posição
+              s.accs.push(slotSnap(e));
+              changed();
+            }));
+          }
+          grid.append(cell);
+        });
+        g.append(grid);
+        box.append(g);
+      }
+    }
+    fill();
+    return box;
+  }
+
+  /* ---------- Sub-tela de pesquisa ----------
+     Procura no banco inteiro, já filtrada pelo que o slot aceita.
+     Devolve a peça escolhida (ou null se a pessoa fechar). */
+  const pickerDlg = $('#picker');
+  const pk = { opts: null, resolve: null, seq: 0 };
+
+  function finishPicker(value) {
+    const r = pk.resolve;
+    pk.resolve = null;
+    pk.opts = null;
+    if (pickerDlg.open) closeDialog(pickerDlg);
+    if (r) r(value);
+  }
+
+  async function runPicker() {
+    const o = pk.opts;
+    if (!o) return;
+    const seq = ++pk.seq;
+    const q = $('#picker-q').value;
+    let list;
+    let warn = '';
+    try { list = await libSearch(o.kinds, q); }
+    catch (err) { warn = errorMessage(err); list = BUILTINS.filter((e) => o.kinds.indexOf(e.kind) >= 0 && matchesText(libHay(e), q)); }
+    if (seq !== pk.seq || pk.opts !== o) return;
+    const favs = favLoad();
+    const favOnly = $('#picker-fav').checked;
+    list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)));
+    list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
+    $('#picker-list').replaceChildren(...list.map((e) => libRow(e,
+      [{ label: 'Escolher', cls: 'btn--primary', onClick: () => finishPicker(deep(e)) }],
+      () => { if ($('#picker-fav').checked) runPicker(); })));
+    $('#picker-empty').hidden = list.length > 0;
+    $('#picker-hint').textContent = warn || plural(list.length, 'opção compatível', 'opções compatíveis') + (favOnly ? ' entre os favoritos' : '');
+  }
+
+  function openPicker(opts) {
+    if (pk.resolve) finishPicker(null);
+    return new Promise((resolve) => {
+      pk.opts = opts;
+      pk.resolve = resolve;
+      $('#picker-title').textContent = opts.title;
+      $('#picker-chips').replaceChildren(h('span', 'picker__filter-label', 'Filtro automático:'), ...(opts.chips || []).filter(Boolean).map((c) => h('span', 'chip', c)));
+      $('#picker-q').value = '';
+      $('#picker-fav').checked = false;
+      $('#picker-list').replaceChildren();
+      $('#picker-empty').hidden = true;
+      $('#picker-hint').textContent = 'Buscando...';
+      openDialog(pickerDlg);
+      runPicker();
+      if (window.matchMedia('(pointer: fine)').matches) $('#picker-q').focus();
+    });
+  }
+  $('#picker-q').addEventListener('input', debounce(runPicker, 250));
+  $('#picker-fav').addEventListener('change', runPicker);
+  $('#picker-close').addEventListener('click', () => finishPicker(null));
+  pickerDlg.addEventListener('close', () => finishPicker(null));
+
+  /* ---------- Oficina: categoria → tipo → formulário ---------- */
+  const itemState = { step: 'categoria', draft: null };
+
+  function itemCard(title, hint, onClick) {
     const btn = h('button', 'item-card', h('span', 'item-card__title', title), hint ? h('span', 'item-card__hint', hint) : null);
     btn.type = 'button';
     btn.addEventListener('click', onClick);
@@ -1566,16 +2003,12 @@ const FIREBASE_CONFIG = {
 
   function setItemStep(step) {
     itemState.step = step;
-    ['categoria', 'tipo', 'form', 'soon'].forEach((s) => { $('#item-panel-' + s).hidden = s !== step; });
-    $$('.item-steps__step').forEach((b) => {
-      const on = b.dataset.itemStep === step;
-      b.setAttribute('aria-current', on ? 'step' : 'false');
-    });
-    $('#step-tipo-btn').hidden = !itemState.categoryId || !findCategory(itemState.categoryId).types;
-    $('#step-form-btn').hidden = step === 'categoria' || (step === 'tipo');
-    if (step !== 'form') $('#step-form-btn').hidden = true;
-    const heading = $('.item-panel:not([hidden]) h2, .item-panel:not([hidden]) [tabindex]');
-    if (heading) heading.focus({ preventScroll: true });
+    ['categoria', 'tipo', 'form'].forEach((s) => { $('#item-panel-' + s).hidden = s !== step; });
+    $$('.item-steps__step').forEach((b) => b.setAttribute('aria-current', b.dataset.itemStep === step ? 'step' : 'false'));
+    const d = itemState.draft;
+    const cat = d ? findCategory(d.kind) : null;
+    $('#step-tipo-btn').hidden = !cat || !cat.types || step === 'categoria';
+    $('#step-form-btn').hidden = step !== 'form';
   }
 
   function renderCategoryGrid() {
@@ -1584,149 +2017,491 @@ const FIREBASE_CONFIG = {
     let lastGroup = null;
     ITEM_DATA.categories.forEach((c) => {
       if (c.group !== lastGroup) { grid.append(h('p', 'item-grid__group', c.group)); lastGroup = c.group; }
-      grid.append(itemCard(c.title, c.comingSoon ? 'Em breve' : c.hint, () => openCategory(c.id)));
+      grid.append(itemCard(c.title, c.hint, () => openCategory(c.id)));
     });
   }
 
   function openCategory(id) {
     const cat = findCategory(id);
     if (!cat) return;
-    itemState.categoryId = id;
-    itemState.typeId = null;
-    if (cat.comingSoon) {
-      $('#item-soon-title').textContent = cat.title;
-      setItemStep('soon');
-      return;
-    }
+    itemState.draft = { kind: id };
     if (cat.types) {
       $('#item-tipo-title').textContent = cat.title;
       $('#item-tipo-hint').textContent = cat.hint || '';
-      $('#item-type-grid').replaceChildren(...cat.types.map((t) => itemCard(t.title, null, () => openType(id, t.id))));
+      $('#item-type-grid').replaceChildren(...cat.types.map((t) => itemCard(t.title, t.sub || null, () => openForm(id, t.id, null))));
       setItemStep('tipo');
+      $('#item-tipo-title').focus({ preventScroll: true });
       return;
     }
-    openForm(id, null);
+    openForm(id, '', null);
   }
 
-  function openType(categoryId, typeId) {
-    itemState.categoryId = categoryId;
-    itemState.typeId = typeId;
-    openForm(categoryId, typeId);
+  // opções de um campo: as do tipo escolhido (média de criação) ou a lista geral
+  function fieldOptions(field, type) {
+    if (field.optKey && type && type.opts && type.opts[field.optKey]) return type.opts[field.optKey];
+    return Array.isArray(field.options) ? field.options : (ITEM_DATA[field.options] || []);
   }
 
-  function fieldControl(field, value) {
+  function newDraft(kind, typeId, from) {
+    const cat = findCategory(kind);
+    const type = findType(cat, typeId);
+    if (from) {
+      return {
+        id: from.id || null, kind, typeId: from.typeId || '', name: from.name || '', values: deep(from.values || {}),
+        image: from.image || '', thumb: from.thumb || '', slots: normSlots(from.slots), bonus: deep(from.bonus || {})
+      };
+    }
+    const values = Object.assign({}, cat.defaults || {}, (type && type.defaults) || {});
+    cat.fields.forEach((f) => {
+      if (f.key === 'nome' || values[f.key] !== undefined) return;
+      const opts = fieldOptions(f, type);
+      if (f.kind === 'multi') values[f.key] = (type && type.opts && type.opts[f.optKey]) ? opts.join(', ') : '';
+      else if (f.kind === 'rarity') values[f.key] = opts[0] || '';
+      else if (f.kind === 'select' && opts.length === 1) values[f.key] = opts[0];
+      else if (f.defaultFrom && type && type[f.defaultFrom] !== undefined) values[f.key] = String(type[f.defaultFrom]);
+      else values[f.key] = '';
+    });
+    return { id: null, kind, typeId: typeId || '', name: '', values, image: '', thumb: '', slots: normSlots(null), bonus: {} };
+  }
+
+  function fieldControl(field, type, value, onChange) {
+    const id = 'item-f-' + field.key;
+    const opts = fieldOptions(field, type);
     if (field.kind === 'select') {
       const sel = h('select', 'input');
-      sel.id = 'item-f-' + field.key;
-      h('option', '', '—'); // placeholder, não usado diretamente
-      sel.append(h('option', '', 'Escolha...'));
-      optionsFor(field.options).forEach((op) => {
-        const o = h('option', '', op);
-        if (op === value) o.selected = true;
-        sel.append(o);
-      });
+      sel.id = id;
+      const blank = h('option', '', 'Escolha...');
+      blank.value = '';
+      sel.append(blank);
+      const all = value && opts.indexOf(value) < 0 ? opts.concat([value]) : opts; // valor antigo, fora das opções: mantém
+      all.forEach((op) => { const o = h('option', '', op); o.value = op; sel.append(o); });
+      sel.value = value || '';
+      sel.addEventListener('change', () => onChange(sel.value));
       return sel;
+    }
+    if (field.kind === 'multi') {
+      const on = String(value || '').split(',').map((x) => x.trim()).filter(Boolean);
+      const box = h('div', 'checks');
+      box.setAttribute('role', 'group');
+      opts.forEach((op) => {
+        const inp = h('input');
+        inp.type = 'checkbox';
+        inp.value = op;
+        inp.checked = on.indexOf(op) >= 0;
+        inp.addEventListener('change', () => onChange($$('input:checked', box).map((x) => x.value).join(', ')));
+        box.append(h('label', 'check check--pill', inp, h('span', '', op)));
+      });
+      return box;
+    }
+    if (field.kind === 'rarity') {
+      const box = h('div', 'rarity');
+      box.setAttribute('role', 'radiogroup');
+      opts.forEach((op) => {
+        const inp = h('input');
+        inp.type = 'radio';
+        inp.name = id;
+        inp.value = op;
+        inp.checked = op === value;
+        inp.addEventListener('change', () => onChange(op));
+        const lab = h('label', 'rarity__opt', inp, h('span', '', op));
+        lab.style.setProperty('--rar', rarColor(op) || 'var(--linha-forte)');
+        box.append(lab);
+      });
+      return box;
     }
     if (field.kind === 'textarea') {
       const ta = h('textarea', 'input');
-      ta.id = 'item-f-' + field.key;
+      ta.id = id;
       ta.rows = 3;
+      ta.maxLength = 1200;
       ta.value = value || '';
+      if (field.placeholder) ta.placeholder = field.placeholder;
+      ta.addEventListener('input', () => onChange(ta.value));
       return ta;
     }
     const inp = h('input', 'input');
-    inp.type = 'text';
-    inp.id = 'item-f-' + field.key;
+    inp.id = id;
     inp.autocomplete = 'off';
-    inp.value = value || '';
+    if (field.kind === 'number') {
+      inp.type = 'number';
+      inp.inputMode = 'decimal';
+      if (field.min !== undefined) inp.min = field.min;
+      if (field.step) inp.step = field.step;
+      const max = field.maxFrom && type ? type[field.maxFrom] : undefined;
+      if (max !== undefined) inp.max = max;
+      inp.value = value === undefined || value === null ? '' : String(value).replace(',', '.');
+    } else {
+      inp.type = 'text';
+      inp.maxLength = field.key === 'nome' ? 60 : 80;
+      inp.value = value || '';
+    }
+    inp.addEventListener('input', () => onChange(inp.value));
     return inp;
   }
 
-  function openForm(categoryId, typeId) {
-    const cat = findCategory(categoryId);
-    const type = typeId ? findType(cat, typeId) : null;
-    $('#item-form-title').textContent = cat.title + (type ? ' · ' + type.title : '');
-    $('#item-form-hint').textContent = type && type.rule
-      ? 'Os valores de ' + type.title + ' vêm da média de criação das regras; edite como quiser.'
+  function renderItemImage() {
+    const d = itemState.draft;
+    const has = Boolean(d.image || d.thumb);
+    const img = $('#item-image-img');
+    img.hidden = !has;
+    if (has) img.src = d.image || d.thumb; else img.removeAttribute('src');
+    $('#item-image-empty').hidden = has;
+    $('#item-image-remove').hidden = !has;
+  }
+
+  function renderItemSlots() {
+    const d = itemState.draft;
+    const removed = trimSlots(d);
+    if (removed) toast(plural(removed, 'peça saiu', 'peças saíram') + ' dos slots: não cabe mais neste item.');
+    $('#item-slots').replaceChildren(slotEditor(d));
+  }
+
+  function openForm(kind, typeId, from) {
+    const cat = findCategory(kind);
+    if (!cat) return;
+    const d = itemState.draft = newDraft(kind, typeId, from);
+    const type = findType(cat, d.typeId);
+    $('#item-form-title').textContent = (d.id ? 'Editar: ' : '') + cat.title + (type ? ' · ' + type.title : '');
+    $('#item-form-hint').textContent = type && type.opts && cat.id === 'arma-fogo'
+      ? (type.cargaMax ? 'Opções limitadas à média de criação de ' + type.title + ' (carga máxima ' + type.cargaMax + ').' : 'As regras ainda não trazem a média de criação de ' + type.title + ': escolha entre todas as opções.')
       : (cat.hint || '');
 
     const grid = $('#item-fields');
     grid.replaceChildren();
     cat.fields.forEach((f) => {
-      const defVal = f.fromType && type ? (type.defaults[f.key] || '') : '';
-      const wrap = h('div', 'field' + (f.big ? ' field--wide' : ''), h('label', 'field__label', f.label), fieldControl(f, defVal));
+      const isName = f.key === 'nome';
+      const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
+        if (isName) d.name = v; else d.values[f.key] = v;
+        if (f.key === 'raridade' || f.key === 'para') renderItemSlots();
+      });
+      const grouped = f.kind === 'multi' || f.kind === 'rarity';
+      const label = h(grouped ? 'span' : 'label', 'field__label', f.label);
+      if (!grouped) label.htmlFor = 'item-f-' + f.key;
+      if (grouped) { const gid = 'item-l-' + f.key; label.id = gid; ctrl.setAttribute('aria-labelledby', gid); }
+      const wrap = h('div', 'field' + (f.big || f.kind === 'multi' ? ' field--wide' : ''), label, ctrl);
+      if (f.kind === 'number' && ctrl.max) wrap.append(h('p', 'field__hint', 'Máximo ' + ctrl.max + ' para este tipo.'));
       grid.append(wrap);
     });
+
+    $('#item-image-slot').hidden = !cat.image;
+    renderItemImage();
+    renderItemSlots();
+
+    const bonusWrap = $('#item-bonus-wrap');
+    bonusWrap.hidden = !cat.bonus;
+    bonusWrap.open = BONUS_KEYS.some((b) => num(d.bonus[b[0]]) !== 0);
+    $('#item-bonus').replaceChildren(...BONUS_KEYS.map((b) => {
+      const inp = h('input', 'input');
+      inp.type = 'number';
+      inp.step = '1';
+      inp.inputMode = 'numeric';
+      inp.id = 'item-b-' + b[0];
+      inp.value = num(d.bonus[b[0]]) || '';
+      inp.placeholder = '0';
+      inp.addEventListener('input', () => { d.bonus[b[0]] = num(inp.value); });
+      const lab = h('label', 'field__label bonus__label bonus__label--' + b[0], b[1]);
+      lab.htmlFor = inp.id;
+      return h('div', 'field', lab, inp);
+    }));
+
+    $('#item-save').textContent = d.id ? 'Salvar alterações' : 'Salvar no banco';
     setItemStep('form');
+    $('#item-form-title').focus({ preventScroll: true });
+    $('#item-panel-form').scrollIntoView({ block: 'start' });
   }
 
-  function itemRow(it) {
-    const cat = findCategory(it.categoryId);
-    const label = (cat ? cat.title : it.categoryId) + (it.typeTitle ? ' · ' + it.typeTitle : '');
-    const row = h('li', 'row',
-      h('span', 'row__open row__open--static',
-        h('span', 'row__main', h('span', 'row__title', it.name || 'Sem nome'), h('span', 'row__meta', label))));
-    const del = h('button', 'btn btn--danger btn--sm', 'Excluir');
-    del.type = 'button';
-    del.addEventListener('click', () => {
-      itemsSave(itemsLoad().filter((x) => x.id !== it.id));
-      renderMyItems();
-    });
-    row.append(del);
-    return row;
-  }
-
-  function renderMyItems() {
-    const list = itemsLoad();
-    $('#my-items-block').hidden = list.length === 0;
-    $('#my-items-list').replaceChildren(...list.map(itemRow));
-  }
+  $('#item-image-btn').addEventListener('click', () => $('#item-image-file').click());
+  $('#item-image-file').addEventListener('change', async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = '';
+    if (!file || !itemState.draft) return;
+    if (file.size > 20 * 1024 * 1024) { toast('Imagem grande demais. Use uma de até 20 MB.'); return; }
+    try { Object.assign(itemState.draft, await fileToImages(file, 256, 96)); renderItemImage(); }
+    catch (err) { toast(errorMessage(err)); }
+  });
+  $('#item-image-remove').addEventListener('click', () => { itemState.draft.image = itemState.draft.thumb = ''; renderItemImage(); });
 
   $('#item-back-categoria').addEventListener('click', (ev) => { ev.preventDefault(); setItemStep('categoria'); });
-  $('#item-back-soon').addEventListener('click', (ev) => { ev.preventDefault(); setItemStep('categoria'); });
   $('#item-back-tipo').addEventListener('click', (ev) => {
     ev.preventDefault();
-    const cat = findCategory(itemState.categoryId);
-    if (cat && cat.types) setItemStep('tipo'); else setItemStep('categoria');
+    const d = itemState.draft;
+    const cat = d ? findCategory(d.kind) : null;
+    if (cat && cat.types && !d.id) setItemStep('tipo'); else setItemStep('categoria');
   });
   $$('.item-steps__step').forEach((b) => b.addEventListener('click', () => {
-    if (b.dataset.itemStep === 'categoria') setItemStep('categoria');
-    else if (b.dataset.itemStep === 'tipo' && itemState.categoryId) setItemStep('tipo');
-    else if (b.dataset.itemStep === 'form' && itemState.categoryId) setItemStep('form');
-  }));
-
-  $('#item-reset').addEventListener('click', () => setItemStep('categoria'));
-  $('#form-item').addEventListener('submit', (ev) => {
-    ev.preventDefault();
-    const cat = findCategory(itemState.categoryId);
-    const type = itemState.typeId ? findType(cat, itemState.typeId) : null;
-    const values = {};
-    cat.fields.forEach((f) => { values[f.key] = $('#item-f-' + f.key).value.trim(); });
-    if (!values.nome) { toast('Dê um nome para o item.'); $('#item-f-nome').focus(); return; }
-    const item = {
-      id: uid(), categoryId: cat.id, typeId: type ? type.id : null, typeTitle: type ? type.title : '',
-      name: values.nome, values, createdAt: Date.now()
-    };
-    itemsSave([item].concat(itemsLoad()));
-    toast('Item salvo.');
-    renderMyItems();
+    if (b.dataset.itemStep === 'form') return;
+    if (b.dataset.itemStep === 'tipo' && itemState.draft && !itemState.draft.id) { openCategory(itemState.draft.kind); return; }
     setItemStep('categoria');
+  }));
+  $('#item-reset').addEventListener('click', () => { itemState.draft = null; setItemStep('categoria'); });
+
+  $('#form-item').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const d = itemState.draft;
+    if (!d) return;
+    const cat = findCategory(d.kind);
+    const type = findType(cat, d.typeId);
+    const name = cleanName(d.name || '');
+    if (!name) { toast('Dê um nome antes de salvar.'); $('#item-f-nome').focus(); return; }
+    const carga = cat.fields.find((f) => f.maxFrom);
+    if (carga && type && type[carga.maxFrom] !== undefined && num(d.values[carga.key]) > type[carga.maxFrom]) {
+      toast('A carga máxima de ' + type.title + ' é ' + type[carga.maxFrom] + '.');
+      $('#item-f-' + carga.key).focus();
+      return;
+    }
+    const values = {};
+    cat.fields.forEach((f) => { if (f.key !== 'nome') values[f.key] = String(d.values[f.key] === undefined || d.values[f.key] === null ? '' : d.values[f.key]).trim(); });
+    const bonus = {};
+    BONUS_KEYS.forEach((b) => { if (cat.bonus && num(d.bonus[b[0]])) bonus[b[0]] = num(d.bonus[b[0]]); });
+    const entry = {
+      kind: cat.id, typeId: d.typeId || '', typeTitle: type ? type.title : '', kindTitle: cat.title, name, values, bonus,
+      slots: cat.slots ? normSlots(d.slots) : {}, image: cat.image ? d.image : '', thumb: cat.image ? d.thumb : ''
+    };
+    if (d.id) entry.id = d.id;
+    const btn = $('#item-save');
+    btn.disabled = true;
+    try {
+      await db.saveLibrary(entry);
+      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.'));
+      itemState.draft = null;
+      setItemStep('categoria');
+      await runLib();
+      $('#lib-title').scrollIntoView({ block: 'start' });
+    } catch (err) { toast(errorMessage(err)); }
+    finally { btn.disabled = false; }
   });
+
+  /* Lista do banco na Oficina */
+  let libSeq = 0;
+  async function runLib() {
+    const seq = ++libSeq;
+    const q = $('#lib-q').value;
+    const kind = $('#lib-kind').value;
+    let list;
+    try { list = await libSearch(kind ? [kind] : null, q); }
+    catch (err) { if (seq === libSeq) $('#lib-hint').textContent = errorMessage(err); return; }
+    if (seq !== libSeq) return;
+    const favs = favLoad();
+    if ($('#lib-fav').checked) list = list.filter((e) => favs.has(e.id));
+    if ($('#lib-mine').checked) list = list.filter((e) => e.mine);
+    list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
+    $('#lib-list').replaceChildren(...list.map((e) => {
+      const actions = [{ label: 'Usar de base', onClick: () => openForm(e.kind, e.typeId, Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' })) }];
+      if (e.mine) {
+        actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) });
+        actions.push({
+          label: 'Excluir', cls: 'btn--danger', onClick: async () => {
+            const ok = await askConfirm({ title: 'Excluir ' + e.name + '?', text: 'Sai do banco para todos. O que já está em fichas e em outros itens continua lá.', ok: 'Excluir' });
+            if (!ok) return;
+            try { await db.deleteLibrary(e.id); toast(e.name + ' foi excluído.'); runLib(); }
+            catch (err) { toast(errorMessage(err)); }
+          }
+        });
+      }
+      return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
+    }));
+    $('#lib-empty').hidden = list.length > 0;
+    $('#lib-hint').textContent = plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
+  }
+  $('#lib-q').addEventListener('input', debounce(runLib, 300));
+  ['#lib-kind', '#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
+  (function fillLibKinds() {
+    const sel = $('#lib-kind');
+    const all = h('option', '', 'Todas');
+    all.value = '';
+    sel.append(all);
+    ITEM_DATA.categories.forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
+  })();
+
+  // Itens da versão anterior (salvos só neste aparelho): entram no banco uma única vez
+  async function migrateOldItems() {
+    const KEY = 'vortex.items.v1';
+    let old;
+    try { old = JSON.parse(localStorage.getItem(KEY)); } catch (e) { old = null; }
+    if (!Array.isArray(old) || !old.length) return;
+    try {
+      for (const it of old.slice().reverse()) {
+        const cat = findCategory(it.categoryId);
+        if (!cat) continue;
+        const type = findType(cat, it.typeId);
+        const v = Object.assign({}, it.values || {});
+        delete v.nome;
+        if (v.modificador) { v.especial = [v.especial, 'Modificador (versão antiga): ' + v.modificador].filter(Boolean).join('\n'); }
+        delete v.modificador;
+        await db.saveLibrary({
+          kind: cat.id, typeId: type ? type.id : '', typeTitle: type ? type.title : '', kindTitle: cat.title,
+          name: cleanName(it.name || 'Sem nome').slice(0, 60), values: v, bonus: {}, slots: cat.slots ? normSlots(null) : {}, image: '', thumb: ''
+        });
+      }
+      localStorage.removeItem(KEY);
+    } catch (e) { console.warn('Itens antigos ainda não migrados:', e); }
+  }
 
   views.itens = async function showItens() {
     renderCategoryGrid();
-    renderMyItems();
-    if (!itemState.categoryId) setItemStep('categoria');
-    else setItemStep(itemState.step);
+    setItemStep(itemState.draft && itemState.step === 'form' ? 'form' : 'categoria');
+    await runLib();
   };
 
-  /* ---------- Ficha ---------- */
+  /* ---------- Ficha ----------
+     Tudo o que é de regra (atributos, perícias, recursos, poderes, inventário)
+     fica em sheetChar.sheet e é salvo de uma vez. Os recursos nunca são digitados:
+     saem dos atributos + espécime + poderes + itens equipados (função compute). */
+  const ATTRS = [
+    { id: 'corpo', label: 'Corpo', hint: 'Força, vitalidade, combate físico e resistência física.' },
+    { id: 'precisao', label: 'Precisão', hint: 'Mira, controle de armas, tecnologia prática.' },
+    { id: 'essencia', label: 'Essência', hint: 'Energia interior, tecnomancia, vontade e presença.' }
+  ];
+  const SKILLS = {
+    corpo: [['luta', 'Luta'], ['resistencia', 'Resistência'], ['atletismo', 'Atletismo'], ['fortitude', 'Fortitude']],
+    precisao: [['mira', 'Mira'], ['tecnologia', 'Tecnologia'], ['manha', 'Manha'], ['pilotagem', 'Pilotagem'], ['intelecto', 'Intelecto'], ['reflexos', 'Reflexos'], ['oficio', 'Ofício']],
+    essencia: [['operacoes', 'Operações'], ['sentidos', 'Sentidos'], ['vontade', 'Vontade'], ['intimidacao', 'Intimidação'], ['diplomacia', 'Diplomacia'], ['enganacao', 'Enganação']]
+  };
+  const PENALTY_SKILLS = ['manha', 'reflexos', 'sentidos']; // sofrem a penalidade da armadura
+  const LIFE = [['pv', 'PV'], ['blindagem', 'Blindagem'], ['escudo', 'Escudo']]; // de dentro para fora
+  const MAX_EQUIPPED = 4;
+
+  function blankSheet() {
+    return {
+      v: 1, setup: false, attrs: { corpo: 0, precisao: 0, essencia: 0 }, skills: {}, oficio: '', height: '', sex: '',
+      xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0 },
+      cur: {}, specimen: null, powers: [], inventory: [], originItems: ''
+    };
+  }
+  function normSheet(raw) {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    const b = blankSheet();
+    const s = Object.assign({}, b, r);
+    ['attrs', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
+    s.powers = Array.isArray(r.powers) ? r.powers : [];
+    s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, equipped: false, values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
+    return s;
+  }
+
+  function originsFromRules() {
+    const ch = ((window.VORTEX_REGRAS && window.VORTEX_REGRAS.chapters) || []).find((c) => c.id === 'origens');
+    if (!ch) return [];
+    return ch.blocks.filter((b) => b[0] === 'card').map((b) => ({
+      name: b[1],
+      text: (b[2].find((x) => x[0] === 'p') || [])[1] || '',
+      items: (b[2].find((x) => x[0] === 'ul') || [])[1] || []
+    }));
+  }
+  const ORIGINS = originsFromRules();
+
+  function quickEntry2(name, carga, efeito) {
+    return {
+      uid: uid(), id: '', kind: 'item-geral', typeId: '', typeTitle: '', name: cleanName(name).slice(0, 60),
+      values: { carga: carga ? String(carga) : '', efeito: efeito || '' }, bonus: {}, slots: normSlots(null), thumb: '', qty: 1, equipped: false
+    };
+  }
+  function originItemEntry(text) {
+    const clean = String(text).replace(/[;.]\s*$/, '').replace(/^1\s+/, '');
+    const cut = clean.indexOf(' (');
+    const name = cut > 0 ? clean.slice(0, cut) : clean;
+    const m = clean.match(/(\d+\/\d+|\d+(?:[.,]\d+)?)\s*carga\)/i);
+    return quickEntry2(name.charAt(0).toUpperCase() + name.slice(1), m ? fmtNum(parseCarga(m[1])) : '', cut > 0 ? clean.slice(cut + 2).replace(/\)$/, '') : '');
+  }
+
+  // bônus de um item: o dele + os dos mods e propriedades encaixados
+  function entryBonus(e) {
+    const out = {};
+    const add = (b) => { if (b) BONUS_KEYS.forEach((k) => { if (num(b[k[0]])) out[k[0]] = (out[k[0]] || 0) + num(b[k[0]]); }); };
+    add(e.bonus);
+    if (e.slots) (e.slots.mods || []).concat(e.slots.props || []).forEach((x) => add(x.bonus));
+    return out;
+  }
+
+  function compute(c) {
+    const s = c.sheet;
+    const a = s.attrs;
+    const sp = s.specimen;
+    const spv = (sp && sp.values) || {};
+    const equipped = s.inventory.filter((i) => i.equipped);
+    const sources = [];
+    if (sp) sources.push({ name: sp.name, b: sp.bonus || {} });
+    s.powers.forEach((p) => sources.push({ name: p.name, b: p.bonus || {} }));
+    equipped.forEach((i) => sources.push({ name: i.name, b: entryBonus(i) }));
+    sources.push({ name: 'ajuste manual', b: s.extra });
+
+    const src = { pv: [], escudo: [], blindagem: [], pe: [], pa: [], carga: [], armadura: [] };
+    const total = (k) => src[k].reduce((t, x) => t + x.val, 0);
+    const fromSources = (k) => sources.forEach((x) => { if (num(x.b[k])) src[k].push({ name: x.name, val: num(x.b[k]) }); });
+
+    // vida: PV vem do Corpo; a espécie pode converter para Blindagem ou Escudo
+    src.pv.push({ name: 'base (5 + Corpo × 5)', val: Math.max(5, 5 + a.corpo * 5) });
+    if (s.up.pv) src.pv.push({ name: 'UP', val: 10 * s.up.pv });
+    ['pv', 'escudo', 'blindagem'].forEach(fromSources);
+    const base = spv.vidaBase === 'Blindagem' ? 'blindagem' : spv.vidaBase === 'Escudo' ? 'escudo' : 'pv';
+    if (base !== 'pv') {
+      src[base].unshift({ name: 'PV convertidos (' + sp.name + ')', val: total('pv') });
+      src.pv = [];
+    }
+
+    src.pe.push({ name: 'base (5 + Essência × 5)', val: Math.max(5, 5 + a.essencia * 5) });
+    if (s.up.pe) src.pe.push({ name: 'UP', val: 10 * s.up.pe });
+    fromSources('pe');
+    src.pa.push({ name: 'base (Precisão)', val: Math.max(0, a.precisao) });
+    if (s.up.pa) src.pa.push({ name: 'UP', val: 2 * s.up.pa });
+    fromSources('pa');
+
+    // carga: (–1 no atributo = 2 de carga)
+    src.carga.push({ name: 'base (5 + Corpo × 5)', val: a.corpo < 0 ? 2 : 5 + a.corpo * 5 });
+    fromSources('carga');
+
+    const armor = equipped.find((i) => i.kind === 'armadura');
+    if (armor) src.armadura.push({ name: armor.name, val: num(armor.values.armadura) });
+    fromSources('armadura');
+    const pen = armor ? Math.abs(num(armor.values.penalidade)) : 0;
+
+    // núcleo: o da espécie, o implantado ou o da armadura
+    const core = equipped.find((i) => i.kind === 'nucleo');
+    const nucleo = num(spv.nucleoBase) + (core ? num(core.values.capacidade) : 0) + (armor && armor.values.nucleo === 'Sim' ? num(armor.values.capacidade) : 0);
+    const implants = equipped.filter((i) => i.kind === 'protese-modulo');
+    const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc)) * (i.qty || 1);
+    const protUsed = implants.filter((i) => i.values.classe !== 'Módulo').reduce((t, i) => t + ccOf(i), 0);
+    const modUsed = implants.filter((i) => i.values.classe === 'Módulo').reduce((t, i) => t + ccOf(i), 0);
+
+    // carga usada: armadura equipada e implantes instalados não contam
+    const cargaUsed = s.inventory.reduce((t, i) => {
+      if (i.equipped && (i.kind === 'armadura' || IMPLANT_KINDS.indexOf(i.kind) >= 0)) return t;
+      return t + parseCarga(i.values.carga) * (i.qty || 1);
+    }, 0);
+
+    const max = {};
+    Object.keys(src).forEach((k) => { max[k] = Math.max(0, Math.round(total(k) * 100) / 100); });
+    const powerCost = s.powers.reduce((t, p) => t + num(p.values && p.values.custo), 0);
+    return {
+      max, src, base, pen, armor, nucleo,
+      cargaUsed: Math.round(cargaUsed * 100) / 100, cargaMax: max.carga, over: cargaUsed > max.carga,
+      defMin: max.armadura + a.corpo + num(s.skills.resistencia),
+      protMax: nucleo > 0 ? Math.max(0, nucleo + a.corpo) : 0, modMax: nucleo > 0 ? Math.max(0, nucleo + a.essencia) : 0, protUsed, modUsed,
+      equipCount: equipped.filter((i) => IMPLANT_KINDS.indexOf(i.kind) < 0).length,
+      upTotal: Math.floor(num(s.xp) / 10) + num(spv.upInicial) + num(s.upExtra),
+      upSpent: s.up.pv + s.up.pe + s.up.pa + s.up.per + powerCost,
+      skillBudget: 5 + 2 * s.up.per,
+      skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
+    };
+  }
+
+  // valor atual de um recurso: sem registro = cheio (assim acompanha o máximo quando ele muda)
+  const curMin = (key, max) => (key === 'pv' ? -max : 0);
+  function getCur(s, key, max) {
+    const v = s.cur[key];
+    return v === null || v === undefined ? max : clamp(num(v), curMin(key, max), max);
+  }
+  function setCur(s, key, v, max) {
+    const n = clamp(Math.round(num(v)), curMin(key, max), max);
+    s.cur[key] = n >= max ? null : n;
+  }
+
   let sheetChar = null;
   const statusEl = $('#sheet-status');
   const fName = $('#f-name'), errName = $('#f-name-error');
-  const fSpecies = $('#f-species'), fAge = $('#f-age'), fOrigin = $('#f-origin');
+  const fSpecies = $('#f-species'), fAge = $('#f-age'), fOrigin = $('#f-origin'), fHeight = $('#f-height'), fSex = $('#f-sex');
   const formAttach = $('#form-attach'), inAttach = $('#attach-code'), errAttach = $('#attach-error');
   const setStatus = (text) => { statusEl.textContent = text; };
+  const invOpen = new Set(); // itens do inventário com os detalhes abertos
 
   function renderSheetHeader() {
     $('#sheet-title').textContent = sheetChar.name;
@@ -1749,6 +2524,391 @@ const FIREBASE_CONFIG = {
     $('#portrait-empty').hidden = has;
     $('#portrait-remove').hidden = !has;
   }
+
+  /* Peças de interface da ficha */
+  function stepper(value, o) { // o: { min, max, label, fid, onChange, text }
+    const mk = (txt, d) => {
+      const b = h('button', 'stepper__btn', txt);
+      b.type = 'button';
+      b.dataset.fid = o.fid + (d < 0 ? '-' : '+');
+      b.setAttribute('aria-label', (d < 0 ? 'Diminuir ' : 'Aumentar ') + o.label);
+      b.disabled = d < 0 ? value <= o.min : value >= o.max;
+      b.addEventListener('click', () => o.onChange(clamp(value + d, o.min, o.max)));
+      return b;
+    };
+    return h('span', 'stepper', mk('−', -1), h('span', 'stepper__val', o.text === undefined ? String(value) : o.text), mk('+', 1));
+  }
+
+  function meter(segs, label) { // segs: [{ key, cur, max }]
+    const bar = h('div', 'meter');
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', label);
+    segs.filter((g) => g.max > 0).forEach((g) => {
+      const fill = h('span', 'meter__fill');
+      fill.style.width = clamp((Math.max(0, g.cur) / g.max) * 100, 0, 100) + '%';
+      const seg = h('span', 'meter__seg meter__seg--' + g.key, fill);
+      seg.style.flexGrow = String(g.max);
+      seg.title = g.title || '';
+      bar.append(seg);
+    });
+    return bar;
+  }
+
+  const srcText = (list) => list.filter((x) => x.val).map((x, i) => (i === 0 ? fmtNum(x.val) + ' ' + x.name : signed(x.val) + ' ' + x.name)).join(' · ');
+
+  function touchSheet() {
+    dirty.add('sheet');
+    setStatus('Salvando...');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushSave, 700);
+  }
+
+  // Redesenha a ficha inteira e devolve o foco ao controle que estava em uso
+  function rerender() {
+    const a = document.activeElement;
+    const fid = a && a.dataset ? a.dataset.fid : null;
+    const m = compute(sheetChar);
+    renderAttrs(m);
+    renderResources(m);
+    renderSkills(m);
+    renderProgress(m);
+    renderSpeciesLink();
+    renderPowers(m);
+    renderInventory(m);
+    $('#setup-open').textContent = sheetChar.sheet.setup ? 'Refazer distribuição inicial' : 'Distribuição inicial';
+    if (fid) { const el = $('[data-fid="' + fid + '"]'); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+  }
+  const changed = () => { touchSheet(); rerender(); };
+
+  function renderAttrs(m) {
+    const s = sheetChar.sheet;
+    const feeds = {
+      corpo: (m.base === 'pv' ? 'PV ' : m.base === 'blindagem' ? 'Blindagem ' : 'Escudo ') + m.max[m.base] + ' · Carga ' + fmtNum(m.cargaMax),
+      precisao: 'PA ' + m.max.pa,
+      essencia: 'PE ' + m.max.pe
+    };
+    $('#attr-band').replaceChildren(...ATTRS.map((at) => {
+      const v = s.attrs[at.id];
+      const tile = h('div', 'attr attr--' + at.id,
+        h('span', 'attr__name', at.label),
+        h('span', 'attr__value', signed(v)),
+        stepper(v, { min: -1, max: 6, label: at.label, fid: 'attr-' + at.id, text: '', onChange: (n) => { s.attrs[at.id] = n; changed(); } }),
+        h('span', 'attr__feeds', feeds[at.id]));
+      tile.title = at.hint;
+      return tile;
+    }));
+  }
+
+  function resRow(key, label, cur, max, src) {
+    const s = sheetChar.sheet;
+    const set = (v) => { setCur(s, key, v, max); changed(); };
+    const inp = h('input', 'input res__cur');
+    inp.type = 'number';
+    inp.inputMode = 'numeric';
+    inp.value = cur;
+    inp.min = curMin(key, max);
+    inp.max = max;
+    inp.dataset.fid = 'cur-' + key;
+    inp.setAttribute('aria-label', label + ' atual');
+    inp.addEventListener('change', () => set(inp.value));
+    const btn = (txt, d) => {
+      const b = h('button', 'stepper__btn', txt);
+      b.type = 'button';
+      b.dataset.fid = 'cur-' + key + (d < 0 ? '-' : '+');
+      b.setAttribute('aria-label', (d < 0 ? 'Perder 1 de ' : 'Recuperar 1 de ') + label);
+      b.disabled = d < 0 ? cur <= curMin(key, max) : cur >= max;
+      b.addEventListener('click', () => set(cur + d));
+      return b;
+    };
+    return h('div', 'res res--' + key,
+      h('span', 'res__name', h('span', 'res__dot'), label),
+      h('span', 'res__ctl', btn('−', -1), inp, btn('+', 1), h('span', 'res__max', '/ ' + max)),
+      h('span', 'res__src', srcText(src)));
+  }
+
+  function renderResources(m) {
+    const s = sheetChar.sheet;
+    const box = $('#res-block');
+    const life = LIFE.map((l) => ({ key: l[0], label: l[1], max: m.max[l[0]], cur: getCur(s, l[0], m.max[l[0]]) }))
+      .filter((l) => l.max > 0 || l.key === m.base);
+    const lifeCur = life.reduce((t, l) => t + Math.max(0, l.cur), 0);
+    const lifeMax = life.reduce((t, l) => t + l.max, 0);
+    const pvCur = getCur(s, 'pv', m.max.pv);
+    let state = '';
+    if (m.base === 'pv' && m.max.pv > 0 && pvCur <= -m.max.pv) state = 'Morto: chegou a –PV máximo.';
+    else if (lifeCur <= 0) state = m.base === 'pv' ? 'Agonizando: teste de sobrevivência (CD 6, +1 a cada tentativa no dia).' : 'Sem resistência.';
+
+    const head = h('div', 'res-head', h('span', 'res-head__label', 'Resistência'), h('span', 'res-head__num', lifeCur + ' / ' + lifeMax));
+    const legend = h('div', 'legend', ...life.map((l) => h('span', 'legend__item legend__item--' + l.key, h('span', 'res__dot'), l.label + ' ' + l.cur + '/' + l.max)));
+    const lifeBox = h('div', 'res-life', head,
+      meter(life.map((l) => ({ key: l.key, cur: l.cur, max: l.max, title: l.label + ' ' + l.cur + '/' + l.max })), 'Resistência ' + lifeCur + ' de ' + lifeMax + ': ' + life.map((l) => l.label + ' ' + l.cur + ' de ' + l.max).join(', ')),
+      legend);
+    if (state) lifeBox.append(h('p', 'res-state', state));
+    life.forEach((l) => lifeBox.append(resRow(l.key, l.label, l.cur, l.max, m.src[l.key])));
+
+    const peCur = getCur(s, 'pe', m.max.pe), paCur = getCur(s, 'pa', m.max.pa);
+    const other = h('div', 'res-other',
+      h('div', 'res-single', meter([{ key: 'pe', cur: peCur, max: m.max.pe }], 'PE ' + peCur + ' de ' + m.max.pe), resRow('pe', 'PE · Esforço', peCur, m.max.pe, m.src.pe)),
+      h('div', 'res-single', meter([{ key: 'pa', cur: paCur, max: Math.max(1, m.max.pa) }], 'PA ' + paCur + ' de ' + m.max.pa), resRow('pa', 'PA · Ação', paCur, m.max.pa, m.src.pa)));
+
+    const stat = (label, value, note) => h('div', 'stat', h('span', 'stat__label', label), h('span', 'stat__value', value), note ? h('span', 'stat__note', note) : null);
+    const stats = h('div', 'stats',
+      stat('Defesa mínima', String(m.defMin), 'Armadura ' + m.max.armadura + ' + Corpo + Resistência'),
+      stat('Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarga: metade' : 'padrão'),
+      stat('Penalidade de armadura', m.pen ? '–' + m.pen : '—', m.pen ? 'Manha, Reflexos e Sentidos' : (m.armor ? m.armor.name : 'sem armadura equipada')));
+
+    const rest = h('button', 'btn btn--ghost btn--sm', 'Descanso longo (recuperar tudo)');
+    rest.type = 'button';
+    rest.dataset.fid = 'rest';
+    rest.addEventListener('click', () => { s.cur = {}; changed(); toast('Todos os recursos recuperados.'); });
+
+    const wasOpen = Boolean($('#res-extra') && $('#res-extra').open);
+    const extra = h('details', 'bonus');
+    extra.id = 'res-extra';
+    extra.open = wasOpen;
+    extra.append(h('summary', '', 'Ajustes manuais (outras fontes)'),
+      h('p', 'field__hint', 'Para bônus que não vêm de item, poder ou espécime. Somam no máximo de cada recurso.'),
+      h('div', 'bonus__grid', ...BONUS_KEYS.filter((b) => b[0] in s.extra).map((b) => {
+        const inp = h('input', 'input');
+        inp.type = 'number';
+        inp.step = '1';
+        inp.id = 'extra-' + b[0];
+        inp.dataset.fid = 'extra-' + b[0];
+        inp.value = num(s.extra[b[0]]) || '';
+        inp.placeholder = '0';
+        inp.addEventListener('change', () => { s.extra[b[0]] = Math.round(num(inp.value)); changed(); });
+        const lab = h('label', 'field__label bonus__label bonus__label--' + b[0], b[1]);
+        lab.htmlFor = inp.id;
+        return h('div', 'field', lab, inp);
+      })));
+
+    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', rest), extra);
+  }
+
+  function renderSkills(m) {
+    const s = sheetChar.sheet;
+    $('#skills-hint').textContent = 'Teste = 2d6 + atributo + perícia. Pontos de perícia: ' + m.skillUsed + ' de ' + m.skillBudget + '.';
+    $('#skills-block').replaceChildren(...ATTRS.map((at) => {
+      const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(s.attrs[at.id]))));
+      SKILLS[at.id].forEach((sk) => {
+        const v = num(s.skills[sk[0]]);
+        const pen = PENALTY_SKILLS.indexOf(sk[0]) >= 0 ? m.pen : 0;
+        const total = h('span', 'skill__total', signed(s.attrs[at.id] + v - pen));
+        total.title = 'Atributo ' + signed(s.attrs[at.id]) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
+        const row = h('div', 'skill',
+          h('span', 'skill__name', sk[1], pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
+          total,
+          stepper(v, { min: 0, max: 3, label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
+        group.append(row);
+        if (sk[0] === 'oficio') {
+          const inp = h('input', 'input skill__job');
+          inp.type = 'text';
+          inp.maxLength = 40;
+          inp.value = s.oficio || '';
+          inp.placeholder = 'Qual ofício? Ex.: mecânica';
+          inp.setAttribute('aria-label', 'Profissão do Ofício');
+          inp.dataset.fid = 'oficio';
+          inp.addEventListener('input', () => { s.oficio = inp.value; touchSheet(); });
+          group.append(inp);
+        }
+      });
+      return group;
+    }));
+  }
+
+  function renderProgress(m) {
+    const s = sheetChar.sheet;
+    const numField = (id, label, value, onSet) => {
+      const inp = h('input', 'input');
+      inp.type = 'number';
+      inp.min = '0';
+      inp.step = '1';
+      inp.id = id;
+      inp.dataset.fid = id;
+      inp.value = value || '';
+      inp.placeholder = '0';
+      inp.addEventListener('change', () => { onSet(Math.max(0, Math.round(num(inp.value)))); changed(); });
+      const lab = h('label', 'field__label', label);
+      lab.htmlFor = id;
+      return h('div', 'field', lab, inp);
+    };
+    const free = m.upTotal - m.upSpent;
+    const buy = (key, label) => h('div', 'buy',
+      h('span', 'buy__label', label),
+      stepper(s.up[key], { min: 0, max: 99, label: 'UP em ' + label, fid: 'up-' + key, onChange: (n) => { s.up[key] = n; changed(); } }));
+    const sum = h('p', 'prog__sum' + (free < 0 ? ' prog__sum--over' : ''), 'UP: ' + m.upTotal + ' no total · ' + m.upSpent + ' gastos · ' + free + (free === 1 ? ' livre' : ' livres'));
+    $('#prog-block').replaceChildren(
+      h('div', 'fields-grid',
+        numField('f-xp', 'XP (10 XP = 1 UP)', s.xp, (v) => { s.xp = v; }),
+        numField('f-up-extra', 'UP extras (mestre, idade...)', s.upExtra, (v) => { s.upExtra = v; })),
+      sum,
+      h('div', 'buys', buy('pv', '+10 PV'), buy('pe', '+10 PE'), buy('pa', '+2 PA'), buy('per', '+2 em perícias')),
+      h('p', 'field__hint', 'Cada passo acima gasta 1 UP e já entra nos recursos. A cada 4 UP obtidos, +1 em um atributo (mude no topo).'));
+  }
+
+  function renderSpeciesLink() {
+    const s = sheetChar.sheet;
+    const box = $('#species-link');
+    if (!s.specimen) { box.textContent = 'Sem vínculo com o banco: escolha um espécime para aplicar vida base, UP iniciais e núcleo.'; return; }
+    const v = s.specimen.values || {};
+    const un = h('button', 'link-btn', 'Desvincular');
+    un.type = 'button';
+    un.addEventListener('click', () => { s.specimen = null; changed(); });
+    box.replaceChildren('Traços de ' + s.specimen.name + ': vida base ' + (v.vidaBase || 'PV') + ', ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ', núcleo +' + num(v.nucleoBase) : '') + '. ', un);
+    if (v.tracos) box.title = v.tracos;
+  }
+
+  function bonusLine(b) {
+    return BONUS_KEYS.filter((k) => num(b[k[0]])).map((k) => k[1] + ' ' + signed(num(b[k[0]]))).join(' · ');
+  }
+
+  function renderPowers() {
+    const s = sheetChar.sheet;
+    $('#power-list').replaceChildren(...s.powers.map((p, i) => {
+      const v = p.values || {};
+      const meta = [num(v.custo) ? 'Custo ' + num(v.custo) + ' UP' : '', v.custoUso ? 'Uso: ' + v.custoUso : '', bonusLine(p.bonus || {})].filter(Boolean).join(' · ');
+      const main = h('span', 'row__main', h('span', 'row__title', p.name), h('span', 'row__meta', meta));
+      if (v.efeito) main.append(h('span', 'row__text', v.efeito));
+      const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
+      del.type = 'button';
+      del.setAttribute('aria-label', 'Remover poder ' + p.name);
+      del.addEventListener('click', () => { s.powers.splice(i, 1); changed(); });
+      return h('li', 'row lib-row', h('span', 'row__open row__open--static', entryIcon(p), main), del);
+    }));
+    $('#power-empty').hidden = s.powers.length > 0;
+  }
+
+  function toggleEquip(i, m) {
+    const s = sheetChar.sheet;
+    const implant = IMPLANT_KINDS.indexOf(i.kind) >= 0;
+    if (i.equipped) { i.equipped = false; return true; }
+    if (i.kind === 'protese-modulo') {
+      const isMod = i.values.classe === 'Módulo';
+      const need = (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc)) * (i.qty || 1);
+      if (!m.nucleo) { toast('Sem núcleo não dá para implantar: implante um núcleo (ou use uma armadura com núcleo).'); return false; }
+      if ((isMod ? m.modUsed : m.protUsed) + need > (isMod ? m.modMax : m.protMax)) { toast('Capacidade cibernética insuficiente para ' + (isMod ? 'módulos' : 'próteses') + '.'); return false; }
+    }
+    if (i.kind === 'armadura' || i.kind === 'nucleo') s.inventory.forEach((x) => { if (x.kind === i.kind) x.equipped = false; }); // só um por vez
+    if (!implant && s.inventory.filter((x) => x.equipped && IMPLANT_KINDS.indexOf(x.kind) < 0).length >= MAX_EQUIPPED) {
+      toast('Só ' + MAX_EQUIPPED + ' itens equipados dão benefício ao mesmo tempo. Desequipe um antes.');
+      return false;
+    }
+    i.equipped = true;
+    return true;
+  }
+
+  function invRow(i, m) {
+    const s = sheetChar.sheet;
+    const cat = findCategory(i.kind);
+    const implant = IMPLANT_KINDS.indexOf(i.kind) >= 0;
+    const carga = parseCarga(i.values.carga) * (i.qty || 1);
+    const free = i.equipped && (i.kind === 'armadura' || implant);
+    const meta = [kindTitle(i.kind), i.typeTitle, i.values.raridade, 'carga ' + fmtNum(carga) + (free && carga ? ' (não conta)' : '')].filter(Boolean).join(' · ');
+    const open = invOpen.has(i.uid);
+    const panelId = 'inv-' + i.uid;
+
+    const toggle = h('button', 'row__open member__toggle',
+      entryIcon(i),
+      h('span', 'row__main', h('span', 'row__title', i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '')), h('span', 'row__meta', meta)),
+      i.equipped ? h('span', 'tag tag--on', implant ? 'Implantado' : 'Equipado') : null);
+    toggle.type = 'button';
+    toggle.dataset.fid = 'inv-t-' + i.uid;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-controls', panelId);
+    toggle.addEventListener('click', () => { if (invOpen.has(i.uid)) invOpen.delete(i.uid); else invOpen.add(i.uid); rerender(); });
+
+    const eq = h('button', 'btn btn--sm ' + (i.equipped ? 'btn--ghost' : 'btn--primary'), i.equipped ? (implant ? 'Remover implante' : 'Desequipar') : (implant ? 'Implantar' : 'Equipar'));
+    eq.type = 'button';
+    eq.dataset.fid = 'inv-e-' + i.uid;
+    eq.addEventListener('click', () => { if (toggleEquip(i, m)) changed(); });
+
+    const li = h('li', 'inv' + (i.equipped ? ' inv--on' : ''), h('div', 'row', toggle, eq));
+    if (!open) return li;
+
+    const panel = h('div', 'inv__panel');
+    panel.id = panelId;
+    const dl = h('dl', 'member__data');
+    ((cat && cat.fields) || []).forEach((f) => {
+      const v = i.values[f.key];
+      if (f.key === 'nome' || v === undefined || v === '') return;
+      dl.append(h('dt', '', f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', String(v)));
+    });
+    const b = bonusLine(entryBonus(i));
+    if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (i.equipped ? '' : ' (só quando equipado)')));
+    if (dl.children.length) panel.append(dl);
+    if (cat && cat.slots && cat.slots !== 'mod') panel.append(slotEditor(i, () => { touchSheet(); rerender(); }));
+
+    const qty = h('input', 'input');
+    qty.type = 'number';
+    qty.min = '1';
+    qty.step = '1';
+    qty.value = i.qty || 1;
+    qty.id = 'inv-q-' + i.uid;
+    qty.dataset.fid = qty.id;
+    qty.addEventListener('change', () => { i.qty = clamp(Math.round(num(qty.value)) || 1, 1, 999); changed(); });
+    const qLab = h('label', 'field__label', 'Quantidade');
+    qLab.htmlFor = qty.id;
+    const del = h('button', 'btn btn--danger btn--sm', 'Tirar do inventário');
+    del.type = 'button';
+    del.addEventListener('click', () => { s.inventory.splice(s.inventory.indexOf(i), 1); invOpen.delete(i.uid); changed(); });
+    panel.append(h('div', 'inv__foot', h('div', 'field inv__qty', qLab, qty), del));
+    li.append(panel);
+    return li;
+  }
+
+  function renderInventory(m) {
+    const s = sheetChar.sheet;
+    const sum = h('div', 'inv-sum' + (m.over ? ' inv-sum--over' : ''),
+      h('div', 'res-head', h('span', 'res-head__label', 'Carga'), h('span', 'res-head__num', fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax))),
+      meter([{ key: m.over ? 'over' : 'carga', cur: Math.min(m.cargaUsed, m.cargaMax || 1), max: m.cargaMax || 1 }], 'Carga ' + fmtNum(m.cargaUsed) + ' de ' + fmtNum(m.cargaMax)),
+      h('p', 'inv-sum__line',
+        'Limite: ' + srcText(m.src.carga) + '. Equipados: ' + m.equipCount + ' de ' + MAX_EQUIPPED + '.' +
+        (m.nucleo ? ' Núcleo +' + m.nucleo + ': próteses ' + m.protUsed + '/' + m.protMax + ', módulos ' + m.modUsed + '/' + m.modMax + '.' : '')));
+    if (m.over) sum.append(h('p', 'res-state', 'Sobrecarga: –3 em todos os testes e metade do deslocamento.'));
+    $('#inv-summary').replaceChildren(sum);
+    $('#inv-list').replaceChildren(...s.inventory.map((i) => invRow(i, m)));
+    $('#inv-empty').hidden = s.inventory.length > 0;
+  }
+
+  $('#inv-add').addEventListener('click', async () => {
+    const ch = sheetChar;
+    const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: ['Armas', 'Armaduras', 'Implantes', 'Itens gerais'], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    if (!e || sheetChar !== ch) return;
+    const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, equipped: false });
+    ch.sheet.inventory.push(entry);
+    invOpen.add(entry.uid);
+    changed();
+    toast(e.name + ' entrou no inventário.');
+  });
+
+  $('#form-quick-item').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const name = cleanName($('#quick-item-name').value);
+    if (!name) { $('#quick-item-name').focus(); return; }
+    sheetChar.sheet.inventory.push(quickEntry2(name, fmtNum(parseCarga($('#quick-item-carga').value)), ''));
+    ev.target.reset();
+    changed();
+  });
+
+  $('#power-add').addEventListener('click', async () => {
+    const ch = sheetChar;
+    const have = ch.sheet.powers.map((p) => p.id).filter(Boolean);
+    const e = await openPicker({ title: 'Adicionar poder', kinds: ['poder'], chips: ['Poder'], filter: (x) => x.kind === 'poder' && have.indexOf(x.id) < 0 });
+    if (!e || sheetChar !== ch) return;
+    ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '' }));
+    changed();
+  });
+
+  $('#species-pick').addEventListener('click', async () => {
+    const ch = sheetChar;
+    const e = await openPicker({ title: 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime' });
+    if (!e || sheetChar !== ch) return;
+    ch.sheet.specimen = Object.assign(slotSnap(e), { thumb: e.thumb || '' });
+    ch.species = e.name;
+    fSpecies.value = e.name;
+    dirty.add('species');
+    changed();
+  });
 
   async function renderSheetCampaigns() {
     const ch = sheetChar;
@@ -1798,8 +2958,8 @@ const FIREBASE_CONFIG = {
     } catch (err) { setError(errName, fName, errorMessage(err)); }
   });
 
-  // Espécie, idade e origem: salvam sozinhas, e só o que mudou
-  // (assim não apagam o que outra pessoa editou nos outros campos)
+  // Tudo o mais salva sozinho, e só o que mudou
+  // (assim não apaga o que outra pessoa editou nos outros campos)
   const dirty = new Set();
   let saveTimer = 0;
   async function flushSave() {
@@ -1826,6 +2986,9 @@ const FIREBASE_CONFIG = {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(flushSave, 600);
     });
+  });
+  [['height', fHeight], ['sex', fSex]].forEach((pair) => {
+    pair[1].addEventListener('input', () => { sheetChar.sheet[pair[0]] = pair[1].value; touchSheet(); });
   });
 
   // Imagem
@@ -1879,11 +3042,260 @@ const FIREBASE_CONFIG = {
 
   $('#delete-character').addEventListener('click', async () => { if (await deleteCharacterFlow(sheetChar)) go('personagens'); });
 
+  /* ---------- Distribuição inicial ----------
+     Abre na primeira vez que a ficha é feita: espécime e origem, atributos
+     (3 pontos; um pode ir a –1 por +1 ponto; máximo +3) e perícias (2 com +2, 1 com +1). */
+  const setupDlg = $('#setup-dialog');
+  const SETUP = [
+    { title: 'Quem é', lead: 'Espécime, origem e os dados de apresentação. Dá para mudar tudo depois na ficha.' },
+    { title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
+    { title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 perícia com +1. Toque para alternar entre nada, +1 e +2.' },
+    { title: 'Resumo', lead: 'Confira. Os recursos já saem calculados dos atributos.' }
+  ];
+  let wz = null;
+
+  const attrPool = (a) => {
+    const vals = ATTRS.map((x) => a[x.id]);
+    const neg = vals.filter((v) => v < 0).length;
+    return { neg, left: 3 + (neg ? 1 : 0) - vals.filter((v) => v > 0).reduce((t, v) => t + v, 0) };
+  };
+  const skillCount = (sk) => {
+    const vals = Object.keys(sk).map((k) => sk[k]);
+    return { two: vals.filter((v) => v === 2).length, one: vals.filter((v) => v === 1).length };
+  };
+  function setupProblem() {
+    if (wz.step === 1) {
+      const p = attrPool(wz.attrs);
+      if (p.left > 0) return 'Ainda ' + (p.left === 1 ? 'falta 1 ponto' : 'faltam ' + p.left + ' pontos') + ' para distribuir.';
+      if (p.left < 0) return 'Você passou do limite em ' + (-p.left) + (p.left === -1 ? ' ponto.' : ' pontos.');
+    }
+    if (wz.step === 2) {
+      const c = skillCount(wz.skills);
+      if (c.two !== 2 || c.one !== 1) return 'Marcadas: ' + c.two + ' de 2 perícias com +2 e ' + c.one + ' de 1 perícia com +1.';
+    }
+    return '';
+  }
+
+  function pickCard(title, lines, on, onClick) {
+    const b = h('button', 'pick-card', h('span', 'pick-card__title', title), ...lines.filter(Boolean).map((l) => h('span', 'pick-card__text', l)));
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(on));
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  const specimenLine = (e) => { const v = e.values || {}; return 'Vida base ' + (v.vidaBase || 'PV') + ' · ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ' · núcleo +' + num(v.nucleoBase) : ''); };
+
+  function previewSheet() { // a ficha como ficaria com as escolhas do assistente
+    const s = normSheet(deep(sheetChar.sheet));
+    s.attrs = wz.attrs; s.skills = wz.skills; s.specimen = wz.specimen; s.cur = {};
+    return compute({ sheet: s });
+  }
+
+  function setupField(id, label, value, placeholder, onInput, max) {
+    const inp = h('input', 'input');
+    inp.type = 'text';
+    inp.id = id;
+    inp.maxLength = max;
+    inp.autocomplete = 'off';
+    inp.value = value;
+    inp.placeholder = placeholder;
+    inp.addEventListener('input', () => onInput(inp.value));
+    const lab = h('label', 'field__label', label);
+    lab.htmlFor = id;
+    return h('div', 'field', lab, inp);
+  }
+
+  function renderSetup(focusId) {
+    const body = $('#setup-body');
+    const st = SETUP[wz.step];
+    $('#setup-step').textContent = 'Distribuição inicial · passo ' + (wz.step + 1) + ' de ' + SETUP.length;
+    $('#setup-title').textContent = st.title;
+    $('#setup-lead').textContent = st.lead;
+    body.replaceChildren();
+
+    if (wz.step === 0) {
+      const species = BUILTINS.filter((e) => e.kind === 'especime');
+      if (wz.specimen && !species.some((e) => e.id === wz.specimen.id)) species.push(wz.specimen);
+      const grid = h('div', 'pick-grid', ...species.map((e) => pickCard(e.name, [specimenLine(e), e.values.descricao],
+        Boolean(wz.specimen && wz.specimen.id === e.id), () => { wz.specimen = slotSnap(e); wz.specimen.thumb = e.thumb || ''; renderSetup(); })));
+      grid.append(pickCard('Buscar outro', ['Qualquer espécime do banco, inclusive os criados na Oficina.'], false, async () => {
+        const e = await openPicker({ title: 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime' });
+        if (!e || !wz) return;
+        wz.specimen = Object.assign(slotSnap(e), { thumb: e.thumb || '' });
+        renderSetup();
+      }));
+      body.append(h('h3', 'setup__sub', 'Espécime'), grid);
+
+      const og = h('div', 'pick-grid', ...ORIGINS.map((o) => pickCard(o.name, [o.text],
+        nameKey(wz.origin) === nameKey(o.name), () => { wz.origin = o.name; renderSetup(); })));
+      body.append(h('h3', 'setup__sub', 'Origem'), og,
+        h('div', 'fields-grid',
+          setupField('wz-origin', 'Origem (ou escreva outra)', wz.origin, 'Ex.: Exilado Urbano', (v) => { wz.origin = v; }, 60),
+          setupField('wz-age', 'Idade', wz.age, 'Ex.: 27 anos', (v) => { wz.age = v; }, 20),
+          setupField('wz-height', 'Altura', wz.height, 'Ex.: 1,78 m', (v) => { wz.height = v; }, 20),
+          setupField('wz-sex', 'Sexo', wz.sex, '', (v) => { wz.sex = v; }, 20)));
+    }
+
+    if (wz.step === 1) {
+      const p = attrPool(wz.attrs);
+      const m = previewSheet();
+      body.append(h('p', 'setup__pool' + (p.left < 0 ? ' setup__pool--over' : ''), 'Pontos para distribuir: ', h('strong', '', String(p.left))));
+      body.append(h('div', 'attr-band', ...ATTRS.map((at) => {
+        const v = wz.attrs[at.id];
+        const st2 = stepper(v, { min: -1, max: 3, label: at.label, fid: 'wz-' + at.id, text: '', onChange: (n) => { wz.attrs[at.id] = n; renderSetup('wz-' + at.id + (n > v ? '+' : '-')); } });
+        const btns = $$('button', st2);
+        if (v === 0 && p.neg && !btns[0].disabled) btns[0].disabled = true; // só um atributo pode ir a –1
+        if (p.left <= 0 && v >= 0) btns[1].disabled = true;
+        return h('div', 'attr attr--' + at.id, h('span', 'attr__name', at.label), h('span', 'attr__value', signed(v)), st2, h('span', 'attr__feeds', at.hint));
+      })));
+      body.append(h('p', 'setup__preview', 'Com isto: ' + LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + m.max[l[0]]).join(' · ') + ' · PE ' + m.max.pe + ' · PA ' + m.max.pa + ' · Carga ' + fmtNum(m.cargaMax) + '.'));
+    }
+
+    if (wz.step === 2) {
+      const c = skillCount(wz.skills);
+      body.append(h('p', 'setup__pool', 'Com +2: ', h('strong', '', c.two + ' de 2'), ' · Com +1: ', h('strong', '', c.one + ' de 1')));
+      ATTRS.forEach((at) => {
+        const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(wz.attrs[at.id]))));
+        const line = h('div', 'skill-picks');
+        SKILLS[at.id].forEach((sk) => {
+          const v = wz.skills[sk[0]] || 0;
+          const b = h('button', 'skill-pick' + (v ? ' skill-pick--' + v : ''), sk[1], h('span', 'skill-pick__v', v ? '+' + v : '—'));
+          b.type = 'button';
+          b.dataset.fid = 'wzs-' + sk[0];
+          b.setAttribute('aria-label', sk[1] + ': ' + (v ? '+' + v : 'sem bônus') + '. Toque para alternar.');
+          b.addEventListener('click', () => {
+            const next = (v + 1) % 3;
+            if (next) wz.skills[sk[0]] = next; else delete wz.skills[sk[0]];
+            renderSetup('wzs-' + sk[0]);
+          });
+          line.append(b);
+        });
+        group.append(line);
+        body.append(group);
+      });
+      if (wz.skills.oficio) body.append(setupField('wz-oficio', 'Ofício: qual profissão?', wz.oficio, 'Ex.: mecânica', (v) => { wz.oficio = v; }, 40));
+    }
+
+    if (wz.step === 3) {
+      const m = previewSheet();
+      const skills = [];
+      ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (wz.skills[sk[0]]) skills.push(sk[1] + ' +' + wz.skills[sk[0]]); }));
+      const row = (k, v) => [h('dt', '', k), h('dd', '', v || '—')];
+      body.append(h('dl', 'member__data setup__summary',
+        ...row('Espécime', wz.specimen ? wz.specimen.name + ' (' + specimenLine(wz.specimen) + ')' : ''),
+        ...row('Origem', wz.origin),
+        ...row('Atributos', ATTRS.map((at) => at.label + ' ' + signed(wz.attrs[at.id])).join(' · ')),
+        ...row('Perícias', skills.join(' · ')),
+        ...row('Recursos', LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + m.max[l[0]]).join(' · ') + ' · PE ' + m.max.pe + ' · PA ' + m.max.pa),
+        ...row('Carga', fmtNum(m.cargaMax)),
+        ...row('UP iniciais', String(m.upTotal))));
+      const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
+      if (origin && sheetChar.sheet.originItems !== origin.name) {
+        const cb = h('input');
+        cb.type = 'checkbox';
+        cb.checked = wz.addItems;
+        cb.addEventListener('change', () => { wz.addItems = cb.checked; });
+        body.append(h('label', 'check', cb, h('span', '', 'Colocar os itens iniciais de ' + origin.name + ' no inventário')),
+          h('ul', 'r-list setup__items', ...origin.items.map((t) => h('li', '', t))),
+          h('p', 'field__hint', 'Entram como itens rápidos (texto). Onde a origem dá uma escolha ("ou"), ajuste depois no inventário.'));
+      }
+    }
+
+    const problem = setupProblem();
+    $('#setup-error').textContent = problem;
+    $('#setup-back').hidden = wz.step === 0;
+    const next = $('#setup-next');
+    next.textContent = wz.step === SETUP.length - 1 ? 'Concluir' : 'Continuar';
+    next.disabled = Boolean(problem);
+    if (focusId) { const el = $('[data-fid="' + focusId + '"]', body) || $('[data-fid^="' + focusId.slice(0, -1) + '"]:not(:disabled)', body); if (el) el.focus({ preventScroll: true }); }
+  }
+
+  function openSetup() {
+    const c = sheetChar, s = c.sheet;
+    wz = {
+      step: 0, attrs: Object.assign({}, s.attrs), skills: {}, oficio: s.oficio || '',
+      specimen: s.specimen ? deep(s.specimen) : null, origin: c.origin || '', age: c.age || '', height: s.height || '', sex: s.sex || '', addItems: true
+    };
+    Object.keys(s.skills).forEach((k) => { if (s.skills[k] === 1 || s.skills[k] === 2) wz.skills[k] = s.skills[k]; });
+    if (attrPool(wz.attrs).left < 0 || ATTRS.some((at) => wz.attrs[at.id] > 3)) wz.attrs = { corpo: 0, precisao: 0, essencia: 0 }; // ficha já evoluída: recomeça do zero
+    renderSetup();
+    openDialog(setupDlg);
+    $('#setup-title').focus({ preventScroll: true });
+  }
+
+  function finishSetup() {
+    const c = sheetChar, s = c.sheet;
+    s.attrs = Object.assign({}, wz.attrs);
+    s.skills = Object.assign({}, wz.skills);
+    s.oficio = wz.skills.oficio ? cleanName(wz.oficio) : '';
+    s.specimen = wz.specimen;
+    s.height = wz.height;
+    s.sex = wz.sex;
+    s.cur = {};
+    s.setup = true;
+    if (wz.specimen) { c.species = wz.specimen.name; dirty.add('species'); }
+    c.origin = cleanName(wz.origin).slice(0, 60);
+    c.age = wz.age;
+    dirty.add('origin'); dirty.add('age');
+    const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
+    if (origin && wz.addItems && s.originItems !== origin.name) {
+      origin.items.forEach((t) => s.inventory.push(originItemEntry(t)));
+      s.originItems = origin.name;
+    }
+    wz = null;
+    closeDialog(setupDlg);
+    fillBasics();
+    changed();
+    flushSave();
+    toast('Distribuição inicial concluída.');
+  }
+
+  $('#setup-open').addEventListener('click', openSetup);
+  $('#setup-back').addEventListener('click', () => { wz.step = Math.max(0, wz.step - 1); renderSetup(); $('#setup-title').focus({ preventScroll: true }); });
+  $('#setup-next').addEventListener('click', () => {
+    if (setupProblem()) return;
+    if (wz.step === SETUP.length - 1) { finishSetup(); return; }
+    wz.step++;
+    renderSetup();
+    $('#setup-title').focus({ preventScroll: true });
+    $('.setup').scrollTop = 0;
+  });
+  $('#setup-skip').addEventListener('click', () => {
+    sheetChar.sheet.setup = true; // não abre sozinha de novo; o botão "Distribuição inicial" continua na ficha
+    wz = null;
+    closeDialog(setupDlg);
+    touchSheet();
+  });
+  setupDlg.addEventListener('close', () => { wz = null; });
+
   /* Exportar: PDF, Word, texto ou copiar */
   const exportDlg = $('#export-dialog');
   $('#export-open').addEventListener('click', async () => { await flushSave(); openDialog(exportDlg); });
   $('#export-close').addEventListener('click', () => closeDialog(exportDlg));
   $$('[data-export]').forEach((b) => b.addEventListener('click', () => doExport(b.dataset.export)));
+
+  function exportFields(c) {
+    const s = normSheet(c.sheet);
+    const m = compute({ sheet: s });
+    const skills = [];
+    ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (num(s.skills[sk[0]])) skills.push(sk[1] + (sk[0] === 'oficio' && s.oficio ? ' (' + s.oficio + ')' : '') + ' +' + num(s.skills[sk[0]])); }));
+    const life = LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + getCur(s, l[0], m.max[l[0]]) + '/' + m.max[l[0]]);
+    const inv = s.inventory.map((i) => {
+      const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);
+      return i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '') + (i.equipped ? ' [equipado]' : '') + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+    });
+    return [
+      ['Espécime', c.species], ['Idade', c.age], ['Altura', s.height], ['Sexo', s.sex], ['Origem', c.origin],
+      ['Atributos', ATTRS.map((at) => at.label + ' ' + signed(s.attrs[at.id])).join(' · ')],
+      ['Recursos', life.concat(['PE ' + getCur(s, 'pe', m.max.pe) + '/' + m.max.pe, 'PA ' + getCur(s, 'pa', m.max.pa) + '/' + m.max.pa]).join(' · ')],
+      ['Defesa mínima', String(m.defMin)],
+      ['Perícias', skills.join(' · ')],
+      ['XP e UP', 'XP ' + num(s.xp) + ' · UP ' + m.upTotal + ' (' + m.upSpent + ' gastos)'],
+      ['Poderes', s.powers.map((p) => p.name).join(' · ')],
+      ['Carga', fmtNum(m.cargaUsed) + ' de ' + fmtNum(m.cargaMax) + (m.over ? ' (sobrecarga)' : '')],
+      ['Inventário', inv.join(' · ')]
+    ];
+  }
 
   async function doExport(kind) {
     try {
@@ -1891,41 +3303,54 @@ const FIREBASE_CONFIG = {
       const camps = await db.listCharacterCampaigns(c.id).catch(() => []);
       const model = {
         title: c.name, kind: TYPE_LABEL[c.type],
-        fields: [['Espécie', c.species], ['Idade', c.age], ['Origem', c.origin]],
+        fields: exportFields(c),
         campaigns: camps.map((x) => x.name), image: c.image, date: new Date().toLocaleDateString('pt-BR')
       };
       const base = fileSlug(c.name) + '-ficha';
       if (kind === 'pdf') downloadFile(makePdf(model), 'application/pdf', base + '.pdf');
       else if (kind === 'docx') downloadFile(makeDocx(model), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', base + '.docx');
-      else if (kind === 'txt') downloadFile(enc.encode('\uFEFF' + sheetText(model)), 'text/plain;charset=utf-8', base + '.txt');
+      else if (kind === 'txt') downloadFile(enc.encode('﻿' + sheetText(model)), 'text/plain;charset=utf-8', base + '.txt');
       else if (!(await copyText(sheetText(model)))) { toast('Não foi possível copiar sozinho. Baixe o .txt.'); return; }
       closeDialog(exportDlg);
       toast(kind === 'copy' ? 'Texto da ficha copiado.' : 'Arquivo gerado.');
     } catch (err) { toast(errorMessage(err)); }
   }
 
-  views.character = async function showSheet(id) {
-    await flushSave(); // não perde edição pendente da ficha anterior
-    const c = await db.getCharacter(id);
-    if (!c) { toast('Não encontramos essa ficha.'); go('personagens'); return; }
-    sheetChar = c;
-    dirty.clear();
-    lastCharacterId = id;
-    quickUpdate(c, true);
-    onLeave = () => { flushSave(); };
-    renderSheetHeader();
+  function fillBasics() {
+    const c = sheetChar;
     fName.value = c.name;
     fSpecies.value = c.species;
     fAge.value = c.age;
     fOrigin.value = c.origin;
+    fHeight.value = c.sheet.height || '';
+    fSex.value = c.sheet.sex || '';
+  }
+  $('#origin-list').replaceChildren(...ORIGINS.map((o) => { const op = h('option'); op.value = o.name; return op; }));
+
+  views.character = async function showSheet(id) {
+    await flushSave(); // não perde edição pendente da ficha anterior
+    const c = await db.getCharacter(id);
+    if (!c) { toast('Não encontramos essa ficha.'); go('personagens'); return; }
+    c.sheet = normSheet(c.sheet);
+    sheetChar = c;
+    dirty.clear();
+    invOpen.clear();
+    lastCharacterId = id;
+    quickUpdate(c, true);
+    onLeave = () => { flushSave(); };
+    renderSheetHeader();
+    fillBasics();
     setError(errName, fName, '');
     setError(errAttach, inAttach, '');
     setStatus('');
     renderPortrait();
     renderPin();
+    rerender();
+    $('#setup-open').textContent = c.sheet.setup ? 'Refazer distribuição inicial' : 'Distribuição inicial';
     $('#danger-zone').hidden = !c.mine;
     $('#delete-character').textContent = 'Excluir ' + (c.type === 'criatura' ? 'criatura' : 'personagem');
     await renderSheetCampaigns();
+    if (!c.sheet.setup && c.mine && sheetChar === c) openSetup(); // primeira vez: abre a distribuição inicial
   };
 
   /* ---------- Campanha ---------- */
@@ -2440,6 +3865,7 @@ const FIREBASE_CONFIG = {
       }
     }
     quickKey = 'vortex.quick.v1.' + (db.mode === 'firebase' ? 'fb.' + FIREBASE_CONFIG.projectId : 'local');
+    await migrateOldItems();
     window.addEventListener('hashchange', render);
     render();
   }
