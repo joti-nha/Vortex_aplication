@@ -1899,8 +1899,13 @@ const FIREBASE_CONFIG = {
     const seq = ++searchSeq;
     const q = inSearch.value;
     const type = formSearch.elements.stype.value;
+    const origin = $('#search-origin').value;
     let list;
-    try { list = await db.searchCharacters(q, type); }
+    try {
+      // a origem entra na busca (os termos procuram nome, espécie e origem) e depois filtra exata
+      list = await db.searchCharacters((q + ' ' + origin).trim(), type);
+      if (origin) list = list.filter((c) => nameKey(c.origin) === nameKey(origin));
+    }
     catch (err) {
       if (seq === searchSeq) $('#search-hint').textContent = errorMessage(err);
       return;
@@ -1908,13 +1913,14 @@ const FIREBASE_CONFIG = {
     if (seq !== searchSeq) return; // uma busca mais nova já saiu
     $('#search-list').replaceChildren(...list.map(searchRow));
     $('#search-empty').hidden = list.length > 0;
-    $('#search-hint').textContent = words(q).length
-      ? plural(list.length, 'ficha encontrada', 'fichas encontradas')
+    $('#search-hint').textContent = words(q).length || origin
+      ? plural(list.length, 'ficha encontrada', 'fichas encontradas') + (origin ? ' com a origem ' + origin : '')
       : (db.mode === 'firebase' ? 'Sem busca: mostrando as fichas mais recentes.' : 'Sem busca: mostrando as fichas deste aparelho.');
   }
   const liveSearch = debounce(runSearch, 300);
   inSearch.addEventListener('input', liveSearch);
   $$('input[name="stype"]', formSearch).forEach((r) => r.addEventListener('change', runSearch));
+  $('#search-origin').addEventListener('change', runSearch);
   formSearch.addEventListener('submit', (ev) => { ev.preventDefault(); runSearch(); });
 
   views.personagens = async function showPersonagens() {
@@ -2959,7 +2965,13 @@ const FIREBASE_CONFIG = {
     const implants = equipped.filter((i) => i.kind === 'protese-modulo');
     const protUsed = implants.filter((i) => !isModule(i)).reduce((t, i) => t + ccOf(i), 0);
     const modUsed = implants.filter(isModule).reduce((t, i) => t + ccOf(i), 0);
-    const ccMax = nucleo > 0 ? Math.max(0, nucleo + a.corpo) : 0;
+    // Engenharia (ex.: Android): armas e armadura acopladas ocupam a Carga Cibernética, não a carga,
+    // e o núcleo dá +1 de CC a cada +2 de carga que concede
+    const acopla = spv.acopla === 'Sim';
+    const attached = acopla ? equipped.filter((i) => isWeapon(i.kind) || i.kind === 'armadura') : [];
+    const attachUsed = Math.round(attached.reduce((t, i) => t + parseCarga(i.values.carga), 0) * 100) / 100;
+    const coreCarga = acopla && core ? num(entryBonus(core).carga) : 0;
+    const ccMax = nucleo > 0 ? Math.max(0, nucleo + a.corpo) + (acopla ? Math.floor(Math.max(0, coreCarga) / 2) : 0) : 0;
     const modExtra = nucleo > 0 ? Math.max(0, a.essencia) : 0;
 
     const sources = [];
@@ -3014,8 +3026,8 @@ const FIREBASE_CONFIG = {
       max, src, base, pen, armor, armorProf, nucleo, core,
       cargaUsed: Math.round(cargaUsed * 100) / 100, cargaMax: max.carga, over: cargaUsed > max.carga,
       defMin: max.armadura + a.corpo + num(s.skills.resistencia),
-      ccMax, modExtra, protUsed, modUsed,
-      ccOver: nucleo > 0 && (protUsed > ccMax || protUsed + modUsed > ccMax + modExtra),
+      ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: spv.humanidade === 'Sim',
+      ccOver: (nucleo > 0 || attachUsed > 0) && (protUsed + attachUsed > ccMax || protUsed + attachUsed + modUsed > ccMax + modExtra),
       upEarned, upTotal: upEarned + num(spv.upInicial) + num(s.upExtra),
       upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
@@ -3280,9 +3292,11 @@ const FIREBASE_CONFIG = {
     shortRest.dataset.fid = 'rest-short';
     shortRest.title = 'De 1 a 4 horas: recupera metade dos recursos (PV, PE e PA). Em descansos curtos seguidos, a recuperação cai pela metade a cada vez.';
     shortRest.addEventListener('click', () => {
-      ['pv', 'pe', 'pa'].forEach((k) => { const mx = m.max[k]; if (mx) setCur(s, k, getCur(s, k, mx) + Math.ceil(mx / 2), mx); });
+      const keys = ['pv', 'pe', 'pa'];
+      if (m.humanidade && m.base !== 'pv') keys.push(m.base); // Humanidade: a vida convertida também regenera como orgânica
+      keys.forEach((k) => { const mx = m.max[k]; if (mx) setCur(s, k, getCur(s, k, mx) + Math.ceil(mx / 2), mx); });
       changed();
-      toast('Descanso curto: metade de PV, PE e PA recuperada.');
+      toast('Descanso curto: metade de ' + (m.humanidade && m.base !== 'pv' ? (m.base === 'blindagem' ? 'Blindagem' : 'Escudo') + ', ' : '') + 'PV, PE e PA recuperada.');
     });
 
     const rest = h('button', 'btn btn--ghost btn--sm', 'Descanso longo (tudo)');
@@ -3669,8 +3683,9 @@ const FIREBASE_CONFIG = {
       line('Defesa mínima', m.defMin + ' = ' + srcText(m.src.armadura) + ' · Corpo ' + signed(s.attrs.corpo) + ' · Resistência +' + num(s.skills.resistencia)),
       line('Armadura', m.armor ? m.armor.name + (m.armorProf ? ' · proficiente' : ' · sem proficiência') + (m.pen ? ' · penalidade –' + m.pen : '') : 'nenhuma (vale a básica, ' + ARMOR_BASE + ')'),
       line('Núcleo', m.nucleo ? '+' + m.nucleo + ' ativo' : 'sem núcleo: próteses só substituem o órgão; módulos inativos'),
-      line('Carga Cibernética', m.nucleo ? 'próteses ' + m.protUsed + ' / ' + m.ccMax + ' · módulos ' + m.modUsed + (m.modExtra ? ' (reserva +' + m.modExtra + ' da Essência)' : '') : '—', m.ccOver));
-    if (m.ccOver) $('#equip-info').append(h('p', 'res-state', 'CC acima do limite: guarde uma prótese ou um módulo.'));
+      line('Carga Cibernética', m.nucleo || m.acopla ? 'próteses ' + m.protUsed + (m.acopla ? ' · acoplados ' + fmtNum(m.attachUsed) : '') + ' / ' + m.ccMax + ' · módulos ' + m.modUsed + (m.modExtra ? ' (reserva +' + m.modExtra + ' da Essência)' : '') : '—', m.ccOver));
+    if (m.acopla) $('#equip-info').append(h('p', 'field__hint', 'Engenharia: armas e armadura em uso estão acopladas e ocupam a Carga Cibernética pela carga delas. Acoplar ou tirar leva ao menos 1 hora.'));
+    if (m.ccOver) $('#equip-info').append(h('p', 'res-state', m.acopla ? 'CC acima do limite: desacople uma arma, a armadura, uma prótese ou um módulo.' : 'CC acima do limite: guarde uma prótese ou um módulo.'));
 
     // mochila: um bloco por item e um espaço livre por ponto de carga que ainda sobra.
     // Passar do limite não é bloqueado: os itens que estouram a carga ficam marcados.
@@ -4195,7 +4210,7 @@ const FIREBASE_CONFIG = {
     b.addEventListener('click', onClick);
     return b;
   }
-  const specimenLine = (e) => { const v = e.values || {}; return 'Vida base ' + (v.vidaBase || 'PV') + ' · ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ' · núcleo +' + num(v.nucleoBase) : ''); };
+  const specimenLine = (e) => { const v = e.values || {}; return 'Vida base ' + (v.vidaBase || 'PV') + ' · ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ' · núcleo +' + num(v.nucleoBase) : '') + (v.acopla === 'Sim' ? ' · acopla armas e armaduras' : '') + (v.humanidade === 'Sim' ? ' · Humanidade' : ''); };
 
   function previewSheet() { // a ficha como ficaria com as escolhas do assistente
     const s = normSheet(deep(sheetChar.sheet));
@@ -4609,6 +4624,7 @@ const FIREBASE_CONFIG = {
     $('#f-lore').value = c.sheet.lore || '';
   }
   $('#origin-list').replaceChildren(...ORIGINS.map((o) => { const op = h('option'); op.value = o.name; return op; }));
+  $('#search-origin').append(...ORIGINS.map((o) => { const op = h('option', '', o.name); op.value = o.name; return op; }));
 
   views.character = async function showSheet(id) {
     await flushSave(); // não perde edição pendente da ficha anterior
