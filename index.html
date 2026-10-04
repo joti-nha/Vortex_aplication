@@ -36,6 +36,8 @@
     </nav>
     <!-- Mostra onde os dados estão sendo salvos: modo local ou Firebase -->
     <span class="mode-pill" id="mode-pill" role="status">Modo local</span>
+    <!-- Falso login: um código de até 6 dígitos abre o perfil -->
+    <button class="profile-btn" type="button" id="profile-btn">Entrar</button>
   </header>
 
   <main class="container" id="conteudo" tabindex="-1">
@@ -112,6 +114,12 @@
         <a class="btn btn--primary" href="#/novo">Criar personagem</a>
       </header>
 
+      <section class="block" id="fav-block" aria-labelledby="fav-title" hidden>
+        <h2 class="block__title" id="fav-title">Favoritos</h2>
+        <p class="block__hint">Marque a estrela de qualquer ficha. Com um perfil aberto, os favoritos vão junto para outros aparelhos.</p>
+        <ul class="rows" id="fav-list"></ul>
+      </section>
+
       <section class="block" aria-labelledby="quick-title">
         <h2 class="block__title" id="quick-title"><button class="help" type="button" data-help="fichas">Acesso rápido</button></h2>
         <p class="block__hint">Salvo neste aparelho.</p>
@@ -142,6 +150,54 @@
         <ul class="rows" id="search-list"></ul>
         <p class="empty" id="search-empty">Nenhuma ficha encontrada. Confira a grafia ou tente só o começo do nome.</p>
       </section>
+    </section>
+
+    <!-- ===================== TELA: PERFIL (falso login) ===================== -->
+    <section class="screen" data-screen="perfil" data-title="Perfil" aria-labelledby="perfil-title" hidden>
+      <header class="screen__head">
+        <div>
+          <h1 id="perfil-title" tabindex="-1">Perfil</h1>
+          <p class="screen__sub" id="perfil-sub"></p>
+        </div>
+        <button class="btn btn--ghost" type="button" id="perfil-logout" hidden>Sair do perfil</button>
+      </header>
+
+      <div class="block" id="perfil-out">
+        <p class="block__hint">Um perfil guarda seus personagens, suas campanhas e seus favoritos. Para abrir, basta um código de até 6 dígitos: com ele você entra direto, em qualquer aparelho. Não é senha, então quem souber o código abre o perfil.</p>
+        <button class="btn btn--primary" type="button" id="perfil-login">Entrar ou criar perfil</button>
+      </div>
+
+      <div id="perfil-body" hidden>
+        <form class="inline-form" id="form-profile-name" novalidate>
+          <div class="field">
+            <label class="field__label" for="profile-name">Nome do perfil</label>
+            <input class="input" id="profile-name" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: João">
+          </div>
+          <button class="btn btn--ghost" type="submit">Salvar nome</button>
+        </form>
+
+        <section class="block" aria-labelledby="prof-favs-title">
+          <h2 class="block__title" id="prof-favs-title">Favoritos</h2>
+          <ul class="rows" id="prof-favs"></ul>
+          <p class="empty" id="prof-favs-empty">Nenhum favorito ainda. Toque na estrela de um personagem.</p>
+        </section>
+
+        <div class="two-col">
+          <section class="block" aria-labelledby="prof-chars-title">
+            <h2 class="block__title" id="prof-chars-title">Personagens salvos</h2>
+            <p class="block__hint">Os que você cria com o perfil aberto entram aqui sozinhos. Na ficha, use "Salvar no perfil".</p>
+            <ul class="rows" id="prof-chars"></ul>
+            <p class="empty" id="prof-chars-empty">Nenhum personagem salvo.</p>
+          </section>
+
+          <section class="block" aria-labelledby="prof-camps-title">
+            <h2 class="block__title" id="prof-camps-title">Campanhas</h2>
+            <p class="block__hint">Toda campanha que você cria, entra ou abre com o perfil aberto fica aqui.</p>
+            <ul class="rows" id="prof-camps"></ul>
+            <p class="empty" id="prof-camps-empty">Nenhuma campanha ainda.</p>
+          </section>
+        </div>
+      </div>
     </section>
 
     <!-- ===================== TELA: CAMPANHAS ===================== -->
@@ -278,6 +334,8 @@
             <button class="btn btn--ghost btn--sm" type="button" id="setup-open">Distribuição inicial</button>
             <button class="btn btn--ghost btn--sm" type="button" id="export-open">Exportar ficha</button>
             <button class="btn btn--ghost btn--sm" type="button" id="pin-toggle">Fixar no acesso rápido</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="fav-toggle" aria-pressed="false">☆ Favoritar</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="profile-toggle" hidden>Salvar no perfil</button>
           </div>
         </div>
       </header>
@@ -549,6 +607,31 @@
       <div class="dialog__actions">
         <button class="btn btn--ghost" value="cancel">Cancelar</button>
         <button class="btn btn--danger" value="ok" id="confirm-ok">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Falso login: entra com um código ou cria um perfil novo com ele -->
+  <dialog class="dialog" id="login-dialog" aria-labelledby="login-title">
+    <form id="form-login" novalidate>
+      <h2 id="login-title">Entrar no perfil</h2>
+      <p class="block__hint">Digite um código de até 6 dígitos. Se ele já existe, o perfil abre direto; se não, você cria um perfil novo com ele. Não é senha: quem souber o código abre o perfil.</p>
+      <div class="field">
+        <label class="field__label" for="login-code">Código</label>
+        <input class="input input--lg" id="login-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+               autocomplete="off" placeholder="Ex.: 4821" aria-describedby="login-error">
+        <p class="field__error" id="login-error" role="alert"></p>
+      </div>
+      <div id="login-new" hidden>
+        <div class="field">
+          <label class="field__label" for="login-name">Nome do perfil (opcional)</label>
+          <input class="input" id="login-name" type="text" maxlength="40" autocomplete="off" placeholder="Ex.: João">
+        </div>
+        <label class="check"><input type="checkbox" id="login-bring" checked><span>Trazer os personagens, campanhas e favoritos deste aparelho</span></label>
+      </div>
+      <div class="dialog__actions">
+        <button class="btn btn--ghost" type="button" id="login-cancel">Cancelar</button>
+        <button class="btn btn--primary" type="submit" id="login-submit">Entrar</button>
       </div>
     </form>
   </dialog>

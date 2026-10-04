@@ -495,7 +495,22 @@ const FIREBASE_CONFIG = {
         (listeners[campaignId] = listeners[campaignId] || new Set()).add(callback);
         callback(rollsOf(campaignId).slice(-60));
         return () => listeners[campaignId].delete(callback);
-      }
+      },
+
+      // ---------- Perfis (falso login: o código abre o perfil, sem senha) ----------
+      async getProfile(code) {
+        const p = (read().profiles || {})[code];
+        return p ? clone(p) : null;
+      },
+
+      async saveProfile(code, p) {
+        const d = read();
+        d.profiles = d.profiles || {};
+        d.profiles[code] = Object.assign(clone(p), { code, updatedAt: Date.now() });
+        write(d);
+      },
+
+      async touchCampaign() { /* no modo local tudo já está neste aparelho */ }
     };
   })();
 
@@ -802,6 +817,27 @@ const FIREBASE_CONFIG = {
           },
           (err) => { if (onError) onError(err); }
         );
+      },
+
+      // ---------- Perfis (falso login: o código abre o perfil, sem senha) ----------
+      async getProfile(code) {
+        const s = await fs.collection('profiles').doc(code).get();
+        return s.exists ? Object.assign({}, s.data(), { code }) : null;
+      },
+
+      async saveProfile(code, p) {
+        await fs.collection('profiles').doc(code).set({
+          name: p.name || '', chars: p.chars || [], camps: p.camps || [], gm: p.gm || [], favs: p.favs || [],
+          updatedAt: FV.serverTimestamp()
+        });
+      },
+
+      // Abrir a campanha por outro aparelho: entra em memberUids para ler candidatos e rolar
+      async touchCampaign(id) {
+        const ref = camps().doc(id);
+        const s = await ref.get();
+        if (!s.exists || s.data().ownerUid === me || (s.data().memberUids || []).indexOf(me) >= 0) return;
+        await ref.update({ memberUids: FV.arrayUnion(me) });
       }
     };
     return db;
@@ -1190,6 +1226,103 @@ const FIREBASE_CONFIG = {
     return clean;
   }
 
+  /* ---------- Perfil (falso login) ----------
+     Um código de 1 a 6 dígitos abre o perfil vinculado a ele, em qualquer aparelho.
+     O perfil guarda personagens, campanhas (e quais você mestra) e favoritos.
+     Não é senha: quem souber o código abre o perfil. */
+  let profileKey = 'vortex.profile.v1.local';
+  let profile = null; // { code, name, chars, camps, gm, favs }
+  const CHAR_FAV_KEY = 'vortex.charfav.v1';
+  const PROFILE_LISTS = ['chars', 'camps', 'gm', 'favs'];
+  const idList = (l) => (Array.isArray(l) ? l.filter((x) => typeof x === 'string' && x).slice(0, 300) : []);
+  function normProfile(p, code) {
+    const out = { code, name: String((p && p.name) || '').slice(0, 40) };
+    PROFILE_LISTS.forEach((k) => { out[k] = idList(p && p[k]); });
+    return out;
+  }
+  const validCode = (code) => /^[0-9]{1,6}$/.test(code);
+
+  let profileQueue = Promise.resolve();
+  function profileSave() { // em fila: duas mudanças seguidas nunca se atropelam
+    if (!profile) return profileQueue;
+    const snap = JSON.parse(JSON.stringify(profile));
+    profileQueue = profileQueue.then(() => db.saveProfile(snap.code, snap))
+      .catch((e) => { console.warn(e); toast('Não foi possível salvar o perfil. ' + errorMessage(e)); });
+    return profileQueue;
+  }
+  const inProfile = (list, id) => Boolean(profile && profile[list].indexOf(id) >= 0);
+  const isMyChar = (id) => inProfile('chars', id);
+  const isGmOf = (id) => inProfile('gm', id);
+  function profileSet(list, id, on) { // devolve true se mudou algo
+    if (!profile || !id || inProfile(list, id) === on) return false;
+    profile[list] = on ? [id].concat(profile[list]).slice(0, 300) : profile[list].filter((x) => x !== id);
+    if (list === 'chars' && !on) profile.favs = profile.favs.filter((x) => x !== id);
+    if (list === 'camps' && !on) profile.gm = profile.gm.filter((x) => x !== id);
+    profileSave();
+    renderProfileBtn();
+    return true;
+  }
+
+  // Favoritos de personagem: ficam no perfil quando há login; senão, neste aparelho
+  function localCharFavs() {
+    try { const l = JSON.parse(localStorage.getItem(CHAR_FAV_KEY)); return idList(l); }
+    catch (e) { return []; }
+  }
+  const charFavs = () => new Set(profile ? profile.favs : localCharFavs());
+  function charFavToggle(id) {
+    const on = !charFavs().has(id);
+    if (profile) {
+      if (on) profile.chars = [id].concat(profile.chars.filter((x) => x !== id)).slice(0, 300); // favoritar também salva no perfil
+      profileSet('favs', id, on);
+    } else {
+      const l = localCharFavs().filter((x) => x !== id);
+      if (on) l.unshift(id);
+      try { localStorage.setItem(CHAR_FAV_KEY, JSON.stringify(l.slice(0, 300))); } catch (e) { toast('O armazenamento está cheio.'); }
+    }
+    return on;
+  }
+  function charStar(c, onToggle) {
+    const b = h('button', 'star');
+    b.type = 'button';
+    const paint = (on) => {
+      b.textContent = on ? '★' : '☆';
+      b.setAttribute('aria-pressed', String(on));
+      b.setAttribute('aria-label', (on ? 'Tirar dos favoritos: ' : 'Favoritar: ') + c.name);
+      b.title = on ? 'Favorito' : 'Favoritar';
+    };
+    paint(charFavs().has(c.id));
+    b.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); paint(charFavToggle(c.id)); if (onToggle) onToggle(); });
+    return b;
+  }
+
+  function renderProfileBtn() {
+    const b = $('#profile-btn');
+    if (!b) return;
+    b.textContent = profile ? (profile.name || 'Perfil ' + profile.code) : 'Entrar';
+    b.title = profile ? 'Abrir o perfil (código ' + profile.code + ')' : 'Entrar com um código de perfil';
+    b.classList.toggle('profile-btn--on', Boolean(profile));
+  }
+
+  function profileUse(p, code) {
+    profile = normProfile(p, code);
+    try { localStorage.setItem(profileKey, code); } catch (e) { /* segue só nesta visita */ }
+    renderProfileBtn();
+  }
+  function profileLogout() {
+    profile = null;
+    try { localStorage.removeItem(profileKey); } catch (e) { /* nada */ }
+    renderProfileBtn();
+  }
+  async function profileRestore() {
+    let code = '';
+    try { code = localStorage.getItem(profileKey) || ''; } catch (e) { /* sem armazenamento */ }
+    if (!validCode(code)) return;
+    try {
+      const p = await db.getProfile(code);
+      if (p) profileUse(p, code); else profileLogout();
+    } catch (e) { console.warn(e); }
+  }
+
   let toastTimer;
   function toast(message) {
     const el = $('#toast');
@@ -1416,7 +1549,7 @@ const FIREBASE_CONFIG = {
       if (c.mine) { if (await deleteCharacterFlow(c)) views.personagens(); }
       else { quickRemove(c.id); views.personagens(); }
     });
-    return h('li', 'row', open, act);
+    return h('li', 'row', open, charStar(c, () => renderFavBlock()), act);
   }
 
   function searchRow(c) {
@@ -1425,12 +1558,49 @@ const FIREBASE_CONFIG = {
       h('span', 'row__main', h('span', 'row__title', c.name), h('span', 'row__meta', [c.species, c.origin].filter(Boolean).join(' · '))),
       badge(c.type));
     a.href = '#/character/' + encodeURIComponent(c.id);
-    return h('li', 'row', a);
+    return h('li', 'row', a, charStar(c, () => renderFavBlock()));
+  }
+
+  // Linha de personagem do perfil: abre, favorita e sai do perfil
+  function profileCharRow(c, onChange) {
+    const a = h('a', 'row__open',
+      avatar(c.name, c.type, c.thumb),
+      h('span', 'row__main', h('span', 'row__title', c.name), h('span', 'row__meta', [c.species, c.origin].filter(Boolean).join(' · '))),
+      badge(c.type));
+    a.href = '#/character/' + encodeURIComponent(c.id);
+    const out = h('button', 'btn btn--ghost btn--sm', 'Tirar');
+    out.type = 'button';
+    out.setAttribute('aria-label', 'Tirar do perfil: ' + c.name);
+    out.addEventListener('click', () => { profileSet('chars', c.id, false); toast(c.name + ' saiu do perfil.'); onChange(); });
+    return h('li', 'row', a, charStar(c, onChange), out);
+  }
+
+  // Busca as fichas de uma lista de IDs; tira do perfil as que foram apagadas
+  async function loadChars(ids) {
+    const list = await Promise.all(ids.map((id) => db.getCharacter(id).then((c) => c || { gone: id }).catch(() => null)));
+    list.filter((c) => c && c.gone).forEach((c) => profileSet('chars', c.gone, false));
+    return list.filter((c) => c && !c.gone);
+  }
+
+  // Favoritos na tela de Personagens
+  async function renderFavBlock() {
+    const ids = Array.from(charFavs());
+    const list = ids.length ? await loadChars(ids) : [];
+    $('#fav-list').replaceChildren(...list.map(searchRowPlain));
+    $('#fav-block').hidden = list.length === 0;
+  }
+  function searchRowPlain(c) { // sem a estrela recarregar a própria lista no meio do clique
+    const a = h('a', 'row__open',
+      avatar(c.name, c.type, c.thumb),
+      h('span', 'row__main', h('span', 'row__title', c.name), h('span', 'row__meta', [c.species, c.origin].filter(Boolean).join(' · '))),
+      badge(c.type));
+    a.href = '#/character/' + encodeURIComponent(c.id);
+    return h('li', 'row', a, charStar(c, () => { renderFavBlock(); views.personagens(); }));
   }
 
   function campaignRow(c, action) {
     const open = h('a', 'row__open',
-      h('span', 'row__main', h('span', 'row__title', c.name), h('span', 'row__meta', c.isOwner ? 'Criada por você' : '')),
+      h('span', 'row__main', h('span', 'row__title', c.name), h('span', 'row__meta', c.isOwner ? 'Criada por você' : isGmOf(c.id) ? 'Você é o mestre' : '')),
       h('code', 'code-tag', c.id));
     open.href = '#/campaign/' + encodeURIComponent(c.id);
     const kids = [open];
@@ -1483,7 +1653,7 @@ const FIREBASE_CONFIG = {
         ...memberStats(m),
         h('dt', '', 'Dinheiro'), h('dd', 'member__money', fmtCronos(money) + ' Cronos (nesta campanha)')),
       link);
-    if (currentCamp && (m.mine || currentCamp.isOwner)) info.append(moneyEditor(m, panel));
+    if (currentCamp && (m.mine || currentCamp.gm)) info.append(moneyEditor(m, panel));
     if (m.mine && m.sheet) {
       const st = memberAtk[m.characterId] = memberAtk[m.characterId] || { uid: null, mode: '', shots: 1, mod: 0 };
       const acts = h('div', 'member__actions', h('h3', 'member__sub', 'Ações'));
@@ -1597,6 +1767,7 @@ const FIREBASE_CONFIG = {
     try {
       await db.deleteCharacter(c.id);
       quickRemove(c.id);
+      profileSet('chars', c.id, false);
       toast(c.name + ' foi excluído.');
       return true;
     } catch (err) { toast(errorMessage(err)); return false; }
@@ -1694,6 +1865,7 @@ const FIREBASE_CONFIG = {
     try {
       const c = await db.createCharacter({ name, type: kind });
       quickAdd(c);
+      profileSet('chars', c.id, true);
       inCreate.value = '';
       go('character', c.id);
     } catch (err) {
@@ -1714,7 +1886,7 @@ const FIREBASE_CONFIG = {
       ok: 'Excluir'
     });
     if (!ok) return false;
-    try { await db.deleteCampaign(c.id); toast('Campanha excluída.'); return true; }
+    try { await db.deleteCampaign(c.id); profileSet('camps', c.id, false); toast('Campanha excluída.'); return true; }
     catch (err) { toast(errorMessage(err)); return false; }
   }
 
@@ -1749,7 +1921,7 @@ const FIREBASE_CONFIG = {
     const quick = await refreshQuick();
     $('#quick-list').replaceChildren(...quick.map(characterRow));
     $('#quick-empty').hidden = quick.length > 0;
-    await runSearch();
+    await Promise.all([renderFavBlock(), runSearch()]);
   };
 
   /* ---------- Campanhas ---------- */
@@ -1764,6 +1936,7 @@ const FIREBASE_CONFIG = {
     if (name.length < 3) { setError(errCampName, inCampName, 'Dê um nome com pelo menos 3 letras.'); inCampName.focus(); return; }
     try {
       const camp = await db.createCampaign(name);
+      if (profile) { profileSet('camps', camp.id, true); profileSet('gm', camp.id, true); }
       formCreateCamp.reset();
       toast('Campanha criada. Vincule um personagem pela ficha dele para rolar dados.');
       go('campaign', camp.id);
@@ -1772,15 +1945,131 @@ const FIREBASE_CONFIG = {
     }
   });
 
+  // Campanhas salvas no perfil (as que este aparelho ainda não conhece entram aqui)
+  async function profileCamps(skip) {
+    if (!profile) return [];
+    const ids = profile.camps.filter((id) => skip.indexOf(id) < 0);
+    const list = await Promise.all(ids.map((id) => db.getCampaign(id).then((c) => c || { gone: id }).catch(() => null)));
+    list.filter((c) => c && c.gone).forEach((c) => profileSet('camps', c.gone, false));
+    return list.filter((c) => c && !c.gone);
+  }
+
   views.campanhas = async function showCampanhas() {
     setError(errCampName, inCampName, '');
     const camps = await db.listMyCampaigns().catch((e) => { toast(errorMessage(e)); return []; });
+    camps.push(...await profileCamps(camps.map((c) => c.id)));
     $('#camp-list').replaceChildren(...camps.map((c) => campaignRow(c, c.isOwner
       ? { label: 'Excluir', onClick: async () => { if (await deleteCampaignFlow(c)) views.campanhas(); } }
       : null)));
     $('#camp-empty').hidden = camps.length > 0;
   };
 
+
+  /* ---------- Perfil (falso login) ---------- */
+  const loginDlg = $('#login-dialog');
+  const formLogin = $('#form-login');
+  const inLoginCode = $('#login-code');
+  const inLoginName = $('#login-name');
+  const errLogin = $('#login-error');
+  let loginNew = false; // true: o código não existe e o formulário passa a criar
+
+  function setLoginNew(on) {
+    loginNew = on;
+    $('#login-new').hidden = !on;
+    $('#login-submit').textContent = on ? 'Criar perfil' : 'Entrar';
+  }
+  function openLogin() {
+    formLogin.reset();
+    setLoginNew(false);
+    setError(errLogin, inLoginCode, '');
+    openDialog(loginDlg);
+    inLoginCode.focus();
+  }
+  inLoginCode.addEventListener('input', () => {
+    const clean = inLoginCode.value.replace(/[^0-9]/g, '').slice(0, 6);
+    if (clean !== inLoginCode.value) inLoginCode.value = clean;
+    setError(errLogin, inLoginCode, '');
+    if (loginNew) setLoginNew(false);
+  });
+  $('#login-cancel').addEventListener('click', () => closeDialog(loginDlg));
+  formLogin.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const code = inLoginCode.value.trim();
+    if (!validCode(code)) { setError(errLogin, inLoginCode, 'Use de 1 a 6 dígitos, só números.'); inLoginCode.focus(); return; }
+    const btn = $('#login-submit');
+    btn.disabled = true;
+    try {
+      if (!loginNew) {
+        const p = await db.getProfile(code);
+        if (!p) { // código livre: oferece criar
+          setLoginNew(true);
+          setError(errLogin, inLoginCode, 'Ainda não existe um perfil com o código ' + code + '. Crie agora com ele.');
+          inLoginName.focus();
+          return;
+        }
+        profileUse(p, code);
+        toast('Perfil aberto' + (profile.name ? ': ' + profile.name : '') + '.');
+      } else {
+        const fresh = { name: cleanName(inLoginName.value).slice(0, 40), chars: [], camps: [], gm: [], favs: localCharFavs() };
+        if ($('#login-bring').checked) { // traz o que já está neste aparelho
+          fresh.chars = quickLoad().filter((q) => q.mine).map((q) => q.id).concat(fresh.favs);
+          const camps = await db.listMyCampaigns().catch(() => []);
+          fresh.camps = camps.map((c) => c.id);
+          fresh.gm = camps.filter((c) => c.isOwner).map((c) => c.id);
+        }
+        fresh.chars = Array.from(new Set(fresh.chars));
+        if (await db.getProfile(code)) throw new UserError('Alguém acabou de criar um perfil com esse código. Tente entrar de novo.');
+        await db.saveProfile(code, fresh);
+        profileUse(fresh, code);
+        toast('Perfil criado. Guarde o código ' + code + ' para entrar de outro aparelho.');
+      }
+      closeDialog(loginDlg);
+      go('perfil');
+    } catch (err) {
+      setError(errLogin, inLoginCode, errorMessage(err));
+    } finally { btn.disabled = false; }
+  });
+  $('#profile-btn').addEventListener('click', () => { if (profile) go('perfil'); else openLogin(); });
+  $('#perfil-login').addEventListener('click', openLogin);
+  $('#perfil-logout').addEventListener('click', () => {
+    const code = profile ? profile.code : '';
+    profileLogout();
+    toast('Você saiu do perfil. Para voltar, use o código ' + code + '.');
+    views.perfil();
+  });
+  $('#form-profile-name').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    if (!profile) return;
+    profile.name = cleanName($('#profile-name').value).slice(0, 40);
+    profileSave();
+    renderProfileBtn();
+    $('#perfil-title').textContent = profile.name || 'Perfil';
+    toast('Nome do perfil salvo.');
+  });
+
+  views.perfil = async function showPerfil() {
+    const on = Boolean(profile);
+    $('#perfil-out').hidden = on;
+    $('#perfil-body').hidden = !on;
+    $('#perfil-logout').hidden = !on;
+    $('#perfil-title').textContent = on ? (profile.name || 'Perfil') : 'Perfil';
+    $('#perfil-sub').textContent = on ? 'Código ' + profile.code + '. Quem souber o código abre este perfil, em qualquer aparelho.' : '';
+    if (!on) return;
+    $('#profile-name').value = profile.name;
+    const redraw = () => { if (location.hash.indexOf('#/perfil') === 0) views.perfil(); };
+    const [chars, camps] = await Promise.all([loadChars(profile.chars), profileCamps([])]);
+    const favs = charFavs();
+    const favList = chars.filter((c) => favs.has(c.id));
+    const rest = chars.filter((c) => !favs.has(c.id));
+    $('#prof-favs').replaceChildren(...favList.map((c) => profileCharRow(c, redraw)));
+    $('#prof-favs-empty').hidden = favList.length > 0;
+    $('#prof-chars').replaceChildren(...rest.map((c) => profileCharRow(c, redraw)));
+    $('#prof-chars-empty').hidden = rest.length > 0;
+    $('#prof-camps').replaceChildren(...camps.map((c) => campaignRow(c, {
+      label: 'Tirar', onClick: () => { profileSet('camps', c.id, false); toast(c.name + ' saiu do perfil.'); redraw(); }
+    })));
+    $('#prof-camps-empty').hidden = camps.length > 0;
+  };
 
   /* ---------- Banco de itens: peças comuns ----------
      Os dados de formulário vêm de items.js (window.VORTEX_ITEMS). Tudo o que é
@@ -2757,6 +3046,16 @@ const FIREBASE_CONFIG = {
     $('#sheet-title').textContent = sheetChar.name;
     setBadge($('#sheet-badge'), sheetChar.type);
     document.title = 'Ficha de ' + sheetChar.name + ' | Vortex';
+  }
+
+  function renderSheetFav() {
+    const on = charFavs().has(sheetChar.id);
+    const fav = $('#fav-toggle');
+    fav.textContent = on ? '★ Favorito' : '☆ Favoritar';
+    fav.setAttribute('aria-pressed', String(on));
+    const keep = $('#profile-toggle');
+    keep.hidden = !profile;
+    keep.textContent = isMyChar(sheetChar.id) ? 'Tirar do perfil' : 'Salvar no perfil';
   }
 
   function renderPin() {
@@ -3743,6 +4042,8 @@ const FIREBASE_CONFIG = {
     if (!code) { setError(errAttach, inAttach, 'Digite o ID de entrada da campanha.'); inAttach.focus(); return; }
     try {
       const camp = await db.joinCampaign(code, sheetChar.id);
+      profileSet('chars', sheetChar.id, true);
+      profileSet('camps', camp.id, true);
       formAttach.reset();
       toast(sheetChar.name + ' entrou em ' + camp.name + '.');
       await renderSheetCampaigns();
@@ -3756,6 +4057,17 @@ const FIREBASE_CONFIG = {
     if (quickHas(sheetChar.id)) { quickRemove(sheetChar.id); toast('Removido do acesso rápido.'); }
     else { quickAdd(sheetChar); toast('Fixado no acesso rápido.'); }
     renderPin();
+  });
+
+  $('#fav-toggle').addEventListener('click', () => {
+    toast(charFavToggle(sheetChar.id) ? sheetChar.name + ' está nos favoritos.' : 'Tirado dos favoritos.');
+    renderSheetFav();
+  });
+  $('#profile-toggle').addEventListener('click', () => {
+    const on = !isMyChar(sheetChar.id);
+    profileSet('chars', sheetChar.id, on);
+    toast(on ? 'Salvo no perfil.' : 'Tirado do perfil.');
+    renderSheetFav();
   });
 
   $('#delete-character').addEventListener('click', async () => { if (await deleteCharacterFlow(sheetChar)) go('personagens'); });
@@ -4161,12 +4473,13 @@ const FIREBASE_CONFIG = {
     setStatus('');
     renderPortrait();
     renderPin();
+    renderSheetFav();
     rerender();
     $('#setup-open').textContent = c.sheet.setup ? 'Refazer distribuição inicial' : 'Distribuição inicial';
     $('#danger-zone').hidden = !c.mine;
     $('#delete-character').textContent = 'Excluir ' + (c.type === 'criatura' ? 'criatura' : 'personagem');
     await renderSheetCampaigns();
-    if (!c.sheet.setup && c.mine && sheetChar === c) openSetup(); // primeira vez: abre a distribuição inicial
+    if (!c.sheet.setup && (c.mine || isMyChar(c.id)) && sheetChar === c) openSetup(); // primeira vez: abre a distribuição inicial
   };
 
   /* ---------- Campanha ---------- */
@@ -4234,7 +4547,7 @@ const FIREBASE_CONFIG = {
   const xpAll = $('#xp-all');
   function renderXpForm() {
     const form = $('#form-xp');
-    form.hidden = !(currentCamp && currentCamp.isOwner && members.length);
+    form.hidden = !(currentCamp && currentCamp.gm && members.length);
     xpAll.checked = true;
     $('#xp-list').replaceChildren(...members.map((m) => {
       const inp = h('input');
@@ -4282,6 +4595,12 @@ const FIREBASE_CONFIG = {
   views.campaign = async function showCampaign(id) {
     const camp = await db.getCampaign(id);
     if (!camp) { toast('Não encontramos essa campanha.'); go('campanhas'); return; }
+    if (profile) {
+      profileSet('camps', camp.id, true);
+      if (camp.isOwner) profileSet('gm', camp.id, true);
+      await db.touchCampaign(camp.id).catch((e) => console.warn(e)); // outro aparelho: passa a ler e rolar
+    }
+    camp.gm = camp.isOwner || isGmOf(camp.id); // o mestre também pelo perfil
     currentCamp = camp;
     firstRolls = true;
     $('#campaign-title').textContent = camp.name;
@@ -4292,6 +4611,7 @@ const FIREBASE_CONFIG = {
     let noAccess = false;
     try { members = await db.listMembers(id); }
     catch (err) { console.warn(err); members = []; noAccess = true; }
+    members.forEach((m) => { if (isMyChar(m.characterId)) m.mine = true; }); // personagens do perfil contam como seus
 
     $('#member-list').replaceChildren(...members.map(memberRow));
     renderXpForm();
@@ -4751,6 +5071,8 @@ const FIREBASE_CONFIG = {
       }
     }
     quickKey = 'vortex.quick.v1.' + (db.mode === 'firebase' ? 'fb.' + FIREBASE_CONFIG.projectId : 'local');
+    profileKey = 'vortex.profile.v1.' + (db.mode === 'firebase' ? 'fb.' + FIREBASE_CONFIG.projectId : 'local');
+    await profileRestore();
     await migrateOldItems();
     window.addEventListener('hashchange', render);
     render();
