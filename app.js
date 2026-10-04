@@ -2138,9 +2138,13 @@ const FIREBASE_CONFIG = {
   }
   const BUILTINS = (ITEM_DATA.catalogo || []).map((e) => Object.assign(decorate(e), { oficial: true, mine: false }));
 
+  // Catálogo oficial sempre aparece; se o banco compartilhado falhar, o aviso fica em libSearch.warn
   async function libSearch(kinds, q) {
     const off = BUILTINS.filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), q));
-    const own = await db.searchLibrary({ kinds, query: q });
+    libSearch.warn = '';
+    let own = [];
+    try { own = await db.searchLibrary({ kinds, query: q }); }
+    catch (err) { console.warn(err); libSearch.warn = errorMessage(err); }
     return off.concat(own.map(decorate));
   }
 
@@ -2154,7 +2158,7 @@ const FIREBASE_CONFIG = {
   }
   function entryMeta(e) {
     const v = e.values || {};
-    return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, priceText(v.preco)].filter(Boolean).join(' · ');
+    return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, v.tipoUso, num(v.usos) ? v.usos + ' usos' : '', v.bonusRec ? 'Bônus ' + v.bonusRec : '', priceText(v.preco)].filter(Boolean).join(' · ');
   }
   /* Lore: texto do mundo escondido atrás do ícone 📜 (itens, criadoras, espécimes, origens, personagens) */
   const loreDlg = $('#lore-dialog');
@@ -2817,7 +2821,9 @@ const FIREBASE_CONFIG = {
       return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
     }));
     $('#lib-empty').hidden = list.length > 0;
-    $('#lib-hint').textContent = plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
+    $('#lib-hint').textContent = libSearch.warn
+      ? plural(list.length, 'registro', 'registros') + ' do catálogo oficial. O banco compartilhado não abriu: ' + libSearch.warn
+      : plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
   }
   $('#lib-q').addEventListener('input', debounce(runLib, 300));
   ['#lib-kind', '#lib-maker', '#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
@@ -3539,6 +3545,7 @@ const FIREBASE_CONFIG = {
     }
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
+    add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
     add('Carga', fmtNum(parseCarga(v.carga)) + (i.slot ? ' (equipado: não conta)' : ''));
     add('Preço', priceText(v.preco));
     add('Criadora', v.fabricante);

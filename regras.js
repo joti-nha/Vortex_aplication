@@ -367,7 +367,17 @@ window.VORTEX_REGRAS = {
         ['formula', 'Teste', '2d6 + Essência + Operações'],
         ['h3', 'Blindagem (BL)'],
         ['p', 'São necessários **Componentes Mecânicos**.'],
-        ['formula', 'Teste', '2d6 + Precisão + Ofício (Engenharia)']
+        ['formula', 'Teste', '2d6 + Precisão + Ofício (Engenharia)'],
+
+        ['h2', 'Itens de recuperação (Live Service)'],
+        ['h3', 'Tipos'],
+        ['ul', [
+          '**Ferramenta**: não consome.',
+          '**Consumíveis**: é perdido após o uso, pode conter quantidade de usos e ações diferentes.',
+          '**Estação**: ação completa para instalar/tirar e para usar; é preciso ter a perícia atrelada para usar.'
+        ]],
+        ['h3', 'Bônus'],
+        ['p', 'O bônus cedido se refere à recuperação do recurso; essa recuperação se aplica mesmo na falha do teste.']
       ]
     },
 

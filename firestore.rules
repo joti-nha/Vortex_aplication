@@ -56,6 +56,24 @@ service cloud.firestore {
       allow create, update: if signedIn() && code.matches('[0-9]{1,6}') && validProfile();
     }
 
+    // ---------- Banco de itens (itens, mods, propriedades, acessórios, espécimes, poderes) ----------
+    // Público: qualquer pessoa logada vê tudo o que foi registrado; só quem criou edita ou exclui.
+    match /library/{entryId} {
+      function validEntry() {
+        let d = request.resource.data;
+        return d.name is string && d.name.size() >= 1 && d.name.size() <= 80
+            && d.kind is string && d.kind.size() <= 40
+            && (!('image' in d) || d.image.size() <= 150000)
+            && (!('thumb' in d) || d.thumb.size() <= 20000);
+      }
+      allow read: if signedIn();
+      allow create: if signedIn() && validEntry() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && validEntry()
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
     // ---------- Personagens e criaturas: públicos e editáveis ----------
     match /characters/{characterId} {
 

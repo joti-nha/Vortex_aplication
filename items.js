@@ -32,6 +32,7 @@ window.VORTEX_ITEMS = {
   pentes: ['Pente leve', 'Pente parcial', 'Pente médio', 'Pente pesado', 'Sobrecarga', 'Superaquecimento'],
   alcances: ['Curto', 'Médio', 'Longo', 'Muito longo', 'Extremo', 'Horizonte'],
   empunhaduras: ['Saque', 'Uma mão', 'Duas mãos'],
+  tiposUso: ['Ferramenta', 'Consumível', 'Estação'],
   simNao: ['Não', 'Sim'],
   // criadoras/companhias/corporações do mundo (tag opcional dos itens; só se escolhe na criação)
   fabricantes: ['Wathrever', 'Pinger', 'Live Service', 'Tnnaks'],
@@ -332,6 +333,9 @@ window.VORTEX_ITEMS = {
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
+        { key: 'tipoUso', label: 'Tipo de uso', kind: 'select', options: 'tiposUso', blank: '—' },
+        { key: 'usos', label: 'Usos (consumíveis)', kind: 'number', min: 0, step: 1 },
+        { key: 'bonusRec', label: 'Bônus de recuperação', kind: 'text', placeholder: 'Ex.: +5 PV' },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
         { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
@@ -454,6 +458,35 @@ window.VORTEX_ITEMS = {
         fabricante: 'Wathrever', modelo: a[2] + ' / Wathrever', raridade: a[3], preco: a[11], dano: a[4], cadencia: String(a[5]), municao: String(a[6]),
         pente: PENTE[a[7]], alcance: a[8], carga: String(a[9]), empunhadura: a[10], especial: a[12] || ''
       }
+    });
+  });
+
+  /* Live Service (itens gerais de recuperação): [nome, raridade, tipo, usos, carga, bônus, efeito, preço] */
+  [
+    ['Kit Médico LS-1', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar PV com medicina.', '200'],
+    ['Kit Técnico LS-2', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar Blindagem com engenharia/Tecnologia.', '200'],
+    ['Carregador de Campo LS-3', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar Escudos com operações.', '200'],
+    ['Estação Médica Portátil', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar PV com medicina.', '600'],
+    ['Estação Energética', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar Escudos usando operações.', '600'],
+    ['Oficina Compacta', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar Blindagem usando engenharia/tecnologia.', '600'],
+    ['Nano Purificador', 'Incomum', 'Consumível', '', 1, '', 'Remove 1 condição negativa.', '400'],
+    ['Antídoto Universal', 'Incomum', 'Consumível', '', 1, '', 'Remove todas as condições.', '500'],
+    ['Choque Neural', 'Incomum', 'Consumível', '', 1, '', 'Remove todas as condições mentais.', '550'],
+    ['Choque Sistêmico', 'Incomum', 'Consumível', '', 1, '', 'Remove todas as condições físicas.', '650'],
+    ['Estação Clínica', 'Incomum', 'Estação', '', 5, '', 'Concede +5 em todos os testes de recuperação.', '1.200'],
+    ['Nano Injector PV-I', 'Rara', 'Consumível', '3', 1, '+5 PV', 'Permite recuperar PV com medicina.', '900'],
+    ['Nano Injector Shield-I', 'Rara', 'Consumível', '3', 1, '+5 Escudo', 'Permite recuperar Escudo com operações.', '900'],
+    ['Nano Injector Tank-I', 'Rara', 'Consumível', '3', 1, '+5 Blindagem', 'Permite recuperar Blindagem com engenharia/tecnologia.', '900'],
+    ['Nano Injector PE-I', 'Rara', 'Consumível', '3', 1, '', 'Recupera 1d6 + 2 PE.', '1.100'],
+    ['Auto Reviver LS', 'Rara', 'Consumível', '', 2, '', 'Ao entrar em estado de morrendo, ativa automaticamente: você levanta com 5 do seu recurso vital na próxima rodada.\nVocê pode optar por ele estar ativado ou não.', '1.600'],
+    ['Nano Injector Total', 'Epica', 'Consumível', '5', 1, '+10', 'Remove todas as condições e recupera um recurso à sua escolha entre PV, E e BL, com suas respectivas perícias chaves.', '1.700'],
+    ['Nano Injector Dual', 'Epica', 'Consumível', '5', 1, '', 'Escolha dois recursos entre PV, Escudo e Blindagem. Você faz o teste de cura que preferir com a maior CD dentre os dois e recupera ambos.', '2.100'],
+    ['Auto Reviver de Campo', 'Epica', 'Consumível', '', 3, '', 'Pode ser utilizado em até 3 criaturas inconscientes ou morrendo em até alcance Curto.\nCada alvo retorna com metade de cada um de seus recursos recuperados.', '2.800'],
+    ['Live Service Genesis', 'Lendária', 'Consumível', '', 2, '', 'Recupera automaticamente todos os seus recursos.\nRemove todas as condições negativas.\nTambém pode ser utilizado em um personagem morto há no máximo um dia, restaurando-o imediatamente aos valores acima.', '5.000']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-ls-' + slug(a[0]), kind: 'item-geral', typeId: '', name: a[0],
+      values: { fabricante: 'Live Service', raridade: a[1], tipoUso: a[2], usos: a[3], carga: String(a[4]), bonusRec: a[5], efeito: a[6], preco: a[7] }
     });
   });
 })();
