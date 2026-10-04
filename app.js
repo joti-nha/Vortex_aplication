@@ -1899,8 +1899,13 @@ const FIREBASE_CONFIG = {
     const seq = ++searchSeq;
     const q = inSearch.value;
     const type = formSearch.elements.stype.value;
+    const origin = $('#search-origin').value;
     let list;
-    try { list = await db.searchCharacters(q, type); }
+    try {
+      // a origem entra na busca (os termos procuram nome, espécie e origem) e depois filtra exata
+      list = await db.searchCharacters((q + ' ' + origin).trim(), type);
+      if (origin) list = list.filter((c) => nameKey(c.origin) === nameKey(origin));
+    }
     catch (err) {
       if (seq === searchSeq) $('#search-hint').textContent = errorMessage(err);
       return;
@@ -1908,13 +1913,14 @@ const FIREBASE_CONFIG = {
     if (seq !== searchSeq) return; // uma busca mais nova já saiu
     $('#search-list').replaceChildren(...list.map(searchRow));
     $('#search-empty').hidden = list.length > 0;
-    $('#search-hint').textContent = words(q).length
-      ? plural(list.length, 'ficha encontrada', 'fichas encontradas')
+    $('#search-hint').textContent = words(q).length || origin
+      ? plural(list.length, 'ficha encontrada', 'fichas encontradas') + (origin ? ' com a origem ' + origin : '')
       : (db.mode === 'firebase' ? 'Sem busca: mostrando as fichas mais recentes.' : 'Sem busca: mostrando as fichas deste aparelho.');
   }
   const liveSearch = debounce(runSearch, 300);
   inSearch.addEventListener('input', liveSearch);
   $$('input[name="stype"]', formSearch).forEach((r) => r.addEventListener('change', runSearch));
+  $('#search-origin').addEventListener('change', runSearch);
   formSearch.addEventListener('submit', (ev) => { ev.preventDefault(); runSearch(); });
 
   views.personagens = async function showPersonagens() {
@@ -4618,6 +4624,7 @@ const FIREBASE_CONFIG = {
     $('#f-lore').value = c.sheet.lore || '';
   }
   $('#origin-list').replaceChildren(...ORIGINS.map((o) => { const op = h('option'); op.value = o.name; return op; }));
+  $('#search-origin').append(...ORIGINS.map((o) => { const op = h('option', '', o.name); op.value = o.name; return op; }));
 
   views.character = async function showSheet(id) {
     await flushSave(); // não perde edição pendente da ficha anterior
