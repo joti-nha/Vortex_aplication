@@ -1425,3 +1425,17 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 .gear__budget { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
 .gear__budget .field { max-width: 12rem; margin-bottom: 0; }
 .gear__price { flex: none; font-variant-numeric: tabular-nums; color: var(--ambar); }
+
+/* ---------- Combate na campanha ---------- */
+.combat { margin-top: 1.5rem; }
+.combat__gm { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.combatant { align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.combatant .row__main { flex: 1 1 14rem; min-width: 0; }
+.combatant__pick { display: flex; align-items: center; justify-content: center; width: 44px; min-height: 44px; flex: none; cursor: pointer; }
+.combatant__pick input { width: 1.25rem; height: 1.25rem; accent-color: var(--erro); cursor: pointer; }
+.combatant--target { background: rgba(229, 83, 75, 0.08); box-shadow: inset 3px 0 0 var(--erro); }
+.combatant--down .row__title { opacity: 0.7; }
+.tag--foe { border-color: var(--erro); color: var(--erro); }
+.tag--down { border-color: var(--erro); background: var(--erro); color: #fff; }
+.combat__attack { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--linha-forte); }
+.res__dmgtype { width: auto; min-width: 7.5rem; }

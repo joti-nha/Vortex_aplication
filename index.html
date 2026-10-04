@@ -570,6 +570,28 @@
         </section>
       </div>
 
+      <section class="block combat" id="combat-block" aria-labelledby="combat-title">
+        <div class="block__head">
+          <h2 class="block__title" id="combat-title"><button class="help" type="button" data-help="combate">Combate</button></h2>
+          <div class="combat__gm" id="combat-gm" hidden>
+            <button class="btn btn--primary btn--sm" type="button" id="foe-add">Adicionar inimigo</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="foe-def">Rolar defesa dos inimigos</button>
+          </div>
+        </div>
+        <p class="block__hint">Marque um ou mais alvos na cena, escolha quem ataca e role. O dano (ataque – defesa, mínimo 1) entra sozinho na ordem Escudo → Blindagem → Vida, com fraquezas e resistências de cada camada.</p>
+        <ul class="rows combatants" id="combatants" aria-label="Na cena"></ul>
+        <p class="empty" id="combat-empty">Ninguém na cena ainda. O mestre adiciona inimigos da lista aberta; os personagens da campanha entram sozinhos.</p>
+        <div class="combat__attack" id="combat-attack" hidden>
+          <h3 class="sub-title">Atacar</h3>
+          <div class="field">
+            <label class="field__label" for="atk-who">Atacante</label>
+            <select class="input" id="atk-who"></select>
+          </div>
+          <div id="atk-builder"></div>
+          <p class="field__hint" id="atk-targets"></p>
+        </div>
+      </section>
+
       <div class="danger-zone" id="camp-danger" hidden>
         <button class="btn btn--danger" type="button" id="delete-campaign">Excluir campanha</button>
       </div>

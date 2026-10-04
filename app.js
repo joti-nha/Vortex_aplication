@@ -205,11 +205,21 @@ const FIREBASE_CONFIG = {
      - Cada 6 soma o atributo de novo, mas só vale 1 crítico por teste.
      - Cada 1 é uma perda: anula o bônus da perícia; duas perdas = falha completa.
      - Um 1 anula um 6.
-     - Ganho: um 3º ou 4º dado entra na soma.
-     o: { label, attrName, attr, skillName, skill, mods: [[nome, valor]], dice } */
+     - Ganho: um 3º ou 4º dado entra na soma (limite 4d6). Perda: um dado a menos.
+     - Vantagem/desvantagem: rola um dado a mais e fica com os melhores/piores (não soma o extra).
+     o: { label, attrName, attr, skillName, skill, mods: [[nome, valor]], dice, adv: 'vantagem'|'desvantagem' } */
   function rollTest(o) {
-    const n = clamp(Math.round(o.dice || 2), 2, 4);
-    const rolls = Array.from({ length: n }, () => randInt(6));
+    const n = clamp(Math.round(o.dice || 2), 1, 4);
+    const adv = o.adv === 'vantagem' || o.adv === 'desvantagem' ? o.adv : '';
+    const all = Array.from({ length: n + (adv ? 1 : 0) }, () => randInt(6));
+    let rolls = all;
+    let dropped = null;
+    if (adv) {
+      const sorted = all.slice().sort((a, b) => (adv === 'vantagem' ? b - a : a - b));
+      dropped = sorted[n];
+      rolls = all.slice();
+      rolls.splice(rolls.lastIndexOf(dropped), 1);
+    }
     const ones = rolls.filter((v) => v === 1).length;
     const sixes = rolls.filter((v) => v === 6).length;
     const crit = sixes > ones;
@@ -219,14 +229,14 @@ const FIREBASE_CONFIG = {
     const skill = skillLost ? 0 : (o.skill || 0);
     const total = dice + (o.attr || 0) + skill + mods.reduce((t, x) => t + x[1], 0) + (crit ? (o.attr || 0) : 0);
     const sg = (v) => (v < 0 ? ' - ' + Math.abs(v) : ' + ' + v);
-    let detail = n + 'd6 [' + rolls.join(', ') + ']' + sg(o.attr || 0) + ' ' + o.attrName;
+    let detail = n + 'd6 [' + rolls.join(', ') + ']' + (adv ? ' (' + adv + ': descartou ' + dropped + ')' : '') + sg(o.attr || 0) + ' ' + o.attrName;
     if (o.skillName) detail += sg(o.skill || 0) + ' ' + o.skillName + (skillLost ? ' (anulada: perda)' : '');
     mods.forEach((x) => { detail += sg(x[1]) + ' ' + x[0]; });
     if (crit) detail += sg(o.attr || 0) + ' crítico (' + o.attrName + ')';
     if (ones >= 2) detail += ' · duas perdas: falha completa';
     const fixed = (o.attr || 0) + (o.skill || 0) + mods.reduce((t, x) => t + x[1], 0);
     return {
-      expr: n + 'd6' + (fixed ? (fixed > 0 ? '+' : '') + fixed : ''),
+      expr: n + 'd6' + (fixed ? (fixed > 0 ? '+' : '') + fixed : '') + (adv ? ' (' + adv + ')' : ''),
       label: String(o.label || '').slice(0, 60),
       detail: detail.slice(0, 1400),
       total,
@@ -301,6 +311,9 @@ const FIREBASE_CONFIG = {
     const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
 
     const listeners = {}; // campaignId -> Set de callbacks
+    const foeListeners = {};
+    const foesOf = (campaignId) => Object.values((read().foes || {})[campaignId] || {}).map(clone).sort((a, b) => a.createdAt - b.createdAt);
+    function notifyFoes(campaignId) { (foeListeners[campaignId] || new Set()).forEach((cb) => cb(foesOf(campaignId))); }
     function rollsOf(campaignId) {
       try { return JSON.parse(localStorage.getItem(ROLLS + campaignId)) || []; } catch (e) { return []; }
     }
@@ -509,7 +522,38 @@ const FIREBASE_CONFIG = {
         write(d);
       },
 
-      async touchCampaign() { /* no modo local tudo já está neste aparelho */ }
+      async touchCampaign() { /* no modo local tudo já está neste aparelho */ },
+
+      // ---------- Combate: inimigos que o mestre coloca na campanha ----------
+      async addFoe(campaignId, foe) {
+        const d = read();
+        d.foes = d.foes || {};
+        const box = d.foes[campaignId] = d.foes[campaignId] || {};
+        const id = uid();
+        box[id] = Object.assign(clone(foe), { id, createdAt: Date.now() });
+        write(d);
+        notifyFoes(campaignId);
+        return id;
+      },
+      async updateFoe(campaignId, id, patch) {
+        const d = read();
+        const box = (d.foes || {})[campaignId] || {};
+        if (!box[id]) throw new UserError('Esse inimigo não está mais na campanha.');
+        Object.assign(box[id], clone(patch));
+        write(d);
+        notifyFoes(campaignId);
+      },
+      async removeFoe(campaignId, id) {
+        const d = read();
+        if (d.foes && d.foes[campaignId]) delete d.foes[campaignId][id];
+        write(d);
+        notifyFoes(campaignId);
+      },
+      subscribeFoes(campaignId, callback) {
+        (foeListeners[campaignId] = foeListeners[campaignId] || new Set()).add(callback);
+        callback(foesOf(campaignId));
+        return () => foeListeners[campaignId].delete(callback);
+      }
     };
   })();
 
@@ -838,6 +882,25 @@ const FIREBASE_CONFIG = {
         const s = await ref.get();
         if (!s.exists || s.data().ownerUid === me || (s.data().memberUids || []).indexOf(me) >= 0) return;
         await ref.update({ memberUids: FV.arrayUnion(me) });
+      },
+
+      // ---------- Combate: inimigos que o mestre coloca na campanha ----------
+      async addFoe(campaignId, foe) {
+        const ref = camps().doc(campaignId).collection('foes').doc();
+        await ref.set(Object.assign(deep(foe), { createdAt: Date.now() }));
+        return ref.id;
+      },
+      async updateFoe(campaignId, id, patch) {
+        await camps().doc(campaignId).collection('foes').doc(id).update(deep(patch));
+      },
+      async removeFoe(campaignId, id) {
+        await camps().doc(campaignId).collection('foes').doc(id).delete();
+      },
+      subscribeFoes(campaignId, callback, onError) {
+        return camps().doc(campaignId).collection('foes').onSnapshot(
+          (snap) => callback(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))),
+          (err) => { if (onError) onError(err); }
+        );
       }
     };
     return db;
@@ -1417,6 +1480,11 @@ const FIREBASE_CONFIG = {
       title: 'Dados',
       text: 'Chat de rolagens da campanha. Comandos: d20, 2d6+3, 4d6kh3 (fica com os 3 maiores), 2d20kl1 (fica com o menor) e um comentário depois de #. A rolagem sai em nome do personagem escolhido em "Rolando como". Nas regras, todos os testes usam 2d6 + Atributo + Perícia.',
       rule: 'testes-e-dados/rolagens'
+    },
+    combate: {
+      title: 'Combate',
+      text: 'O mestre adiciona inimigos da lista aberta (NPCs criados na Oficina por qualquer pessoa). Cada um começa a cena com a defesa mínima; "Rolar defesa" faz 2d6 + Corpo + Resistência e fica com a mínima se o teste for menor. Para atacar, marque um ou mais alvos, escolha o atacante e role: um teste vale para todos os alvos, o dano é ataque – defesa (mínimo 1) vezes os disparos e entra na ordem Escudo → Blindagem → Vida. Fraqueza dobra o dano naquela camada; resistência corta pela metade; o dobro não passa para a camada seguinte.',
+      rule: 'ataque-e-defesa'
     },
     candidatos: {
       title: 'Candidatos',
@@ -2156,8 +2224,10 @@ const FIREBASE_CONFIG = {
     else el.textContent = (e.name || '?').trim().charAt(0).toUpperCase();
     return el;
   }
+  const layersSummary = (v) => [['escudo', 'Escudo'], ['blindagem', 'Blindagem'], ['pv', 'PV']].filter((x) => num(v[x[0]])).map((x) => x[1] + ' ' + num(v[x[0]])).join(' · ');
   function entryMeta(e) {
     const v = e.values || {};
+    if (e.kind === 'npc') return [e.kindTitle || kindTitle(e.kind), v.categoria, num(v.up) ? 'UP ' + v.up : '', layersSummary(v), 'Defesa mín. ' + (num(v.armadura || 6) + num(v.corpo) + num(v.resistencia)), v.dano].filter(Boolean).join(' · ');
     return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, v.tipoUso, num(v.usos) ? v.usos + ' usos' : '', v.bonusRec ? 'Bônus ' + v.bonusRec : '', priceText(v.preco)].filter(Boolean).join(' · ');
   }
   /* Lore: texto do mundo escondido atrás do ícone 📜 (itens, criadoras, espécimes, origens, personagens) */
@@ -2829,7 +2899,7 @@ const FIREBASE_CONFIG = {
   });
 
   /* Lista do banco na Oficina: só itens. Espécimes, poderes e origens ficam no catálogo da tela Personagens */
-  const NON_ITEM_KINDS = ['especime', 'poder', 'origem'];
+  const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'npc'];
   const ITEM_KINDS = ITEM_DATA.categories.map((c) => c.id).filter((k) => NON_ITEM_KINDS.indexOf(k) < 0);
   let libSeq = 0;
   async function runLib() {
@@ -2891,6 +2961,7 @@ const FIREBASE_CONFIG = {
     { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] },
     { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] },
     { label: 'Itens gerais', kinds: ['item-geral'] },
+    { label: 'NPCs e inimigos', kinds: ['npc'] },
     { label: 'Tudo', kinds: null }
   ];
   const catState = { group: null, seq: 0 };
@@ -3234,6 +3305,7 @@ const FIREBASE_CONFIG = {
 
   // o que a ficha já mostrou: avisos só aparecem quando algo muda depois de aberta
   const watch = { id: null, over: false, pending: 0, skills: 0 };
+  let lastDmgType = '';
 
   /* Pendências: pontos e recursos ainda por distribuir */
   function pendingList(m) {
@@ -3376,6 +3448,7 @@ const FIREBASE_CONFIG = {
       stat('Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarregado: metade' : 'padrão'),
       stat('Penalidade de armadura', m.pen ? '–' + m.pen : '—', m.pen ? 'Manha, Reflexos, Sentidos e Operações' + (m.armorProf ? '' : ' (dobrada: sem proficiência)') : (m.armor ? m.armor.name : 'sem armadura equipada')));
 
+    // (o tipo escolhido aplica fraquezas e resistências; a última escolha fica lembrada)
     // dano entra sempre na ordem Escudo → Blindagem → Vida
     const dmg = h('input', 'input res__dmg');
     dmg.type = 'number';
@@ -3384,21 +3457,23 @@ const FIREBASE_CONFIG = {
     dmg.inputMode = 'numeric';
     dmg.placeholder = 'Dano';
     dmg.setAttribute('aria-label', 'Dano sofrido');
-    const dmgForm = h('form', 'res-dmg', dmg, (() => { const b = h('button', 'btn btn--danger btn--sm', 'Sofrer dano'); b.type = 'submit'; return b; })());
+    const dmgType = h('select', 'input res__dmgtype');
+    dmgType.setAttribute('aria-label', 'Tipo de dano');
+    dmgType.dataset.fid = 'dmg-type';
+    [['', 'Sem tipo']].concat((ITEM_DATA.tiposDano || []).map((t) => [t, t])).forEach((p) => { const o = h('option', '', p[1]); o.value = p[0]; dmgType.append(o); });
+    dmgType.value = lastDmgType;
+    dmgType.addEventListener('change', () => { lastDmgType = dmgType.value; });
+    const dmgForm = h('form', 'res-dmg', dmg, dmgType, (() => { const b = h('button', 'btn btn--danger btn--sm', 'Sofrer dano'); b.type = 'submit'; return b; })());
     dmgForm.title = 'O dano é aplicado na ordem Escudo → Blindagem → Vida.';
     dmgForm.addEventListener('submit', (ev) => {
       ev.preventDefault();
-      let left = Math.round(num(dmg.value));
+      const left = Math.round(num(dmg.value));
       if (left < 1) { dmg.focus(); return; }
-      ['escudo', 'blindagem', 'pv'].forEach((k) => {
-        const mx = m.max[k];
-        if (!mx || left <= 0) return;
-        const cur = getCur(s, k, mx);
-        const take = Math.min(left, cur - curMin(k, mx));
-        left -= take;
-        setCur(s, k, cur - take, mx);
-      });
+      // fraquezas e resistências de cada camada (capítulo Ataque e Defesa)
+      const res = applyLayeredDamage(left, dmgType.value ? [dmgType.value] : [], charLayers(sheetChar), '');
+      res.layers.forEach((l) => { if (m.max[l.key]) setCur(s, l.key, l.cur, m.max[l.key]); });
       changed();
+      if (dmgType.value) toast(res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k)).join(', ') || 'Nenhum dano.');
     });
     const shortRest = h('button', 'btn btn--ghost btn--sm', 'Descanso curto (metade)');
     shortRest.type = 'button';
@@ -4057,6 +4132,35 @@ const FIREBASE_CONFIG = {
     return out;
   }
 
+  /* Penalidades de alcance (capítulo Penalidades): –3 por faixa fora da efetiva; alvo adjacente com arma à distância, –2 */
+  const DISTANCES = [
+    { id: '', label: 'Na distância efetiva da arma', mod: 0 },
+    { id: 'f1', label: '1 faixa acima ou abaixo da efetiva (–3)', short: 'fora do alcance efetivo', mod: -3 },
+    { id: 'f2', label: '2 faixas fora (–6)', short: 'fora do alcance efetivo', mod: -6 },
+    { id: 'f3', label: '3 faixas fora (–9)', short: 'fora do alcance efetivo', mod: -9 },
+    { id: 'adj', label: 'Alvo adjacente: muito perto (–2)', short: 'muito perto', mod: -2 }
+  ];
+  const NO_ADJ_PENALTY = ['pistola', 'revolver', 'espingarda-cano-curto']; // não recebem a penalidade de alvo adjacente
+  // Ganho, perda, vantagem e desvantagem (capítulo Testes e Dados)
+  const DICE_OPTS = [
+    { id: 'n2', label: 'Normal (2d6)', dice: 2 },
+    { id: 'n3', label: 'Ganho: 3º dado (3d6)', dice: 3 },
+    { id: 'n4', label: 'Ganho do mestre: 4º dado (4d6)', dice: 4 },
+    { id: 'n1', label: 'Perda: um dado a menos (1d6)', dice: 1 },
+    { id: 'adv', label: 'Vantagem (fica com os melhores)', dice: 2, adv: 'vantagem' },
+    { id: 'dis', label: 'Desvantagem (fica com os piores)', dice: 2, adv: 'desvantagem' }
+  ];
+  const diceOpt = (st) => DICE_OPTS.find((d) => d.id === st.dice) || DICE_OPTS[0];
+  const diceText = (st) => { const d = diceOpt(st); return d.dice + 'd6' + (d.adv ? ' ' + d.adv : ''); };
+  function applyDice(t, st) { const d = diceOpt(st); t.dice = d.dice; t.adv = d.adv || ''; return t; }
+  function diceSelect(st, draw) {
+    const sel = h('select', 'input');
+    DICE_OPTS.forEach((d) => { const o = h('option', '', d.label); o.value = d.id; sel.append(o); });
+    sel.value = diceOpt(st).id;
+    sel.addEventListener('change', () => { st.dice = sel.value; draw(); });
+    return sel;
+  }
+
   /* Ação de ataque (fica na campanha, no painel de cada personagem seu).
      st guarda as escolhas: { uid, mode, shots, mod }. onRoll recebe o teste pronto. */
   function attackBuilder(c, st, onRoll, idp) {
@@ -4100,13 +4204,25 @@ const FIREBASE_CONFIG = {
       modIn.placeholder = '0';
       modIn.value = st.mod || '';
       modIn.addEventListener('change', () => { st.mod = Math.round(num(modIn.value)); draw(); });
-      fields.push(field('mod', 'Modificador (distância, cobertura...)', modIn));
+      if (weapon && weapon.kind === 'arma-fogo') {
+        const dSel = h('select', 'input');
+        DISTANCES.filter((d) => d.id !== 'adj' || NO_ADJ_PENALTY.indexOf(weapon.typeId) < 0).forEach((d) => { const o = h('option', '', d.label); o.value = d.id; dSel.append(o); });
+        if (!$('option[value="' + (st.dist || '') + '"]', dSel)) st.dist = '';
+        dSel.value = st.dist || '';
+        dSel.addEventListener('change', () => { st.dist = dSel.value; draw(); });
+        fields.push(field('dist', 'Distância do alvo', dSel));
+      }
+      fields.push(field('dice', 'Dados', diceSelect(st, draw)));
+      fields.push(field('mod', 'Outro modificador (cobertura...)', modIn));
 
       const t = attackTest(s, m, weapon, st.mode, st.shots);
+      const dist = DISTANCES.find((d) => d.id === st.dist);
+      if (dist && dist.mod) t.mods.push([dist.short, dist.mod]);
       if (st.mod) t.mods.push(['modificador', st.mod]);
+      applyDice(t, st);
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
       const info = [weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
-      const go = h('button', 'btn btn--primary btn--sm', 'Atacar · 2d6 ' + (fixed ? signed(fixed) : '+0'));
+      const go = h('button', 'btn btn--primary btn--sm', (c.btnLabel || 'Atacar') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
       go.addEventListener('click', () => onRoll(t, go));
       box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, info ? h('span', 'attack__info', info) : null));
@@ -4956,6 +5072,306 @@ const FIREBASE_CONFIG = {
     if (await deleteCampaignFlow(currentCamp)) go('campanhas');
   });
 
+  /* ---------- Combate na campanha ----------
+     Regras de Ataque e Defesa: dano = ataque – defesa do alvo (mínimo 1), vezes os disparos.
+     O dano passa pelas camadas na ordem Escudo → Blindagem → Vida; cada camada tem fraquezas
+     (dano dobrado) e resistências (metade). O dobro da fraqueza não conta para o excedente. */
+  const LAYERS = [
+    { key: 'escudo', label: 'Escudo', weak: ['Elétrico', 'Contundente'], resist: ['Cortante', 'Perfurante'] },
+    { key: 'blindagem', label: 'Blindagem', weak: ['Ácido/químico', 'Explosivo'], resist: ['Fogo', 'Cortante', 'Balístico'] },
+    { key: 'pv', label: 'PV', weak: ['Radioativo', 'Cortante'], resist: [] }
+  ];
+  const splitTypes = (txt) => String(txt || '').split(/\s*[,/]\s*(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])|\s*,\s*/).map((x) => x.trim()).filter(Boolean)
+    .map((x) => (/^ácido|^acido|químico/i.test(x) ? 'Ácido/químico' : /^penetrante$/i.test(x) ? 'Perfurante' : x));
+  // fraqueza vence resistência; nada se acumula (regra das Observações)
+  function layerFactor(layer, types, effective) {
+    if (effective === layer.key || types.some((t) => layer.weak.indexOf(t) >= 0)) return 2;
+    if (types.some((t) => layer.resist.indexOf(t) >= 0)) return 0.5;
+    return 1;
+  }
+  /* layers: [{ key, cur, max }] na ordem; a última pode ficar negativa até –máximo se for PV.
+     Devolve as camadas atualizadas e o que cada uma sofreu. */
+  function applyLayeredDamage(base, types, layers, effective) {
+    let rest = base;
+    const out = layers.map((l) => Object.assign({}, l));
+    const steps = [];
+    const live = out.filter((l, i) => l.max > 0 && (l.cur > 0 || i === out.length - 1));
+    for (let i = 0; i < live.length && rest > 0; i++) {
+      const l = live[i];
+      const rule = LAYERS.find((x) => x.key === l.key);
+      const k = layerFactor(rule, types, effective);
+      const eff = k === 0.5 ? Math.max(1, Math.floor(rest / 2)) : rest * k;
+      const last = i === live.length - 1;
+      const floor = l.key === 'pv' ? -l.max : 0;
+      if (last || eff <= l.cur) {
+        const taken = Math.min(eff, l.cur - floor);
+        l.cur -= taken;
+        steps.push({ key: l.key, label: rule.label, taken, k });
+        rest = 0;
+      } else {
+        steps.push({ key: l.key, label: rule.label, taken: l.cur, k });
+        rest = Math.max(0, rest - (k === 0.5 ? l.cur * 2 : l.cur)); // a fraqueza não conta para o excedente
+        l.cur = 0;
+      }
+    }
+    return { layers: out, steps };
+  }
+  const factorText = (k) => (k === 2 ? ' (fraqueza ×2)' : k === 0.5 ? ' (resiste: metade)' : '');
+  function lifeState(layers) {
+    const pv = layers.find((l) => l.key === 'pv' && l.max > 0);
+    if (pv) return pv.cur <= -pv.max ? 'morto' : pv.cur <= 0 ? 'agonizando' : '';
+    return layers.every((l) => l.cur <= 0) ? 'derrubado' : '';
+  }
+
+  // Inimigo (instância na campanha) e personagem viram o mesmo formato de alvo
+  const foeVals = (f) => f.values || {};
+  function foeLayers(f) {
+    const v = foeVals(f);
+    const cur = f.cur || {};
+    return LAYERS.map((L) => { const max = Math.max(0, Math.round(num(v[L.key]))); return { key: L.key, max, cur: cur[L.key] === undefined || cur[L.key] === null ? max : num(cur[L.key]) }; });
+  }
+  const foeDefMin = (f) => { const v = foeVals(f); return num(v.armadura || ARMOR_BASE) + num(v.corpo) + num(v.resistencia); };
+  const foeDef = (f) => (f.def === undefined || f.def === null ? foeDefMin(f) : num(f.def));
+  function charLayers(c) {
+    const s = c.sheet;
+    const m = compute(c);
+    return LAYERS.map((L) => ({ key: L.key, max: m.max[L.key] || 0, cur: m.max[L.key] ? getCur(s, L.key, m.max[L.key]) : 0 }));
+  }
+  const charDef = (c, m) => { const d = c.sheet.def && currentCamp ? c.sheet.def[currentCamp.id] : null; return d === undefined || d === null ? m.defMin : num(d); };
+
+  let foes = [];
+  const combat = { targets: new Set(), who: '', st: {} };
+  const layersText = (ls) => ls.filter((l) => l.max > 0).map((l) => (LAYERS.find((x) => x.key === l.key).label) + ' ' + l.cur + '/' + l.max).join(' · ') || 'sem resistências';
+
+  function combatants() {
+    const out = foes.map((f) => {
+      const ls = foeLayers(f);
+      return { id: 'foe:' + f.id, foe: f, name: f.name, kind: 'Inimigo', layers: ls, def: foeDef(f), defRolled: f.def !== undefined && f.def !== null, defMin: foeDefMin(f) };
+    });
+    members.forEach((mb) => {
+      if (!mb.sheet || !mb.sheet.attrs) return;
+      try {
+        const c = sheetOf(mb);
+        const m = compute(c);
+        const d = c.sheet.def && currentCamp ? c.sheet.def[currentCamp.id] : null;
+        out.push({ id: 'chr:' + mb.characterId, member: mb, name: mb.name, kind: mb.type === 'criatura' ? 'Criatura' : 'Personagem', layers: charLayers(c), def: charDef(c, m), defRolled: d !== undefined && d !== null, defMin: m.defMin });
+      } catch (err) { console.warn(err); }
+    });
+    return out;
+  }
+
+  function renderCombat() {
+    const block = $('#combat-block');
+    if (!currentCamp) return;
+    const gm = Boolean(currentCamp.gm);
+    $('#combat-gm').hidden = !gm;
+    const list = combatants();
+    [...combat.targets].forEach((id) => { if (!list.some((x) => x.id === id)) combat.targets.delete(id); });
+    $('#combatants').replaceChildren(...list.map((x) => combatantRow(x, gm)));
+    $('#combat-empty').hidden = list.length > 0;
+    renderAttackPanel(list, gm);
+    block.hidden = false;
+  }
+
+  function combatantRow(x, gm) {
+    const chk = h('input');
+    chk.type = 'checkbox';
+    chk.checked = combat.targets.has(x.id);
+    chk.setAttribute('aria-label', 'Alvo: ' + x.name);
+    chk.addEventListener('change', () => { if (chk.checked) combat.targets.add(x.id); else combat.targets.delete(x.id); renderTargetsHint(); });
+    const state = lifeState(x.layers);
+    const meta = layersText(x.layers) + ' · Defesa ' + x.def + (x.defRolled ? ' (rolada)' : ' (mínima)');
+    const main = h('span', 'row__main',
+      h('span', 'row__title', x.name, ' ', h('span', 'tag' + (x.foe ? ' tag--foe' : ''), x.kind), state ? h('span', 'tag tag--down', ' ' + state) : null),
+      h('span', 'row__meta', meta));
+    if (x.foe) {
+      const v = foeVals(x.foe);
+      const extra = [v.categoria, v.arma ? v.arma + (v.dano ? ' (' + v.dano + ')' : '') : v.dano].filter(Boolean).join(' · ');
+      if (extra) main.append(h('span', 'row__text', extra));
+    }
+    const pick = h('label', 'combatant__pick', chk, h('span', 'visually-hidden', 'Marcar como alvo'));
+    const row = h('li', 'row combatant' + (state ? ' combatant--down' : '') + (combat.targets.has(x.id) ? ' combatant--target' : ''), pick, main);
+    chk.addEventListener('change', () => row.classList.toggle('combatant--target', chk.checked));
+    const btn = (label, cls, fn) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; b.setAttribute('aria-label', label + ': ' + x.name); b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } catch (err) { toast(errorMessage(err)); } b.disabled = false; }); return b; };
+    const canDef = x.foe ? gm : (x.member.mine || gm);
+    if (canDef) row.append(btn('Rolar defesa', 'btn--ghost', () => rollDefense(x)));
+    if (x.foe && gm) {
+      row.append(btn('Restaurar', 'btn--ghost', () => db.updateFoe(currentCamp.id, x.foe.id, { cur: {}, def: null })));
+      row.append(btn('Tirar', 'btn--danger', async () => { await db.removeFoe(currentCamp.id, x.foe.id); combat.targets.delete(x.id); }));
+    }
+    return row;
+  }
+
+  // Defesa da cena: 2d6 + Corpo + Resistência; abaixo da mínima, vale a mínima
+  async function rollDefense(x) {
+    let attr, res;
+    if (x.foe) { const v = foeVals(x.foe); attr = num(v.corpo); res = num(v.resistencia); }
+    else { const s = normSheet(x.member.sheet); attr = num(s.attrs.corpo); res = num(s.skills.resistencia); }
+    const r = rollTest({ label: 'Defesa da cena', attrName: 'Corpo', attr, skillName: 'Resistência', skill: res });
+    const val = r.flag === 'falha' ? x.defMin : Math.max(r.total, x.defMin);
+    r.detail += ' → defesa ' + val + (val > r.total || r.flag === 'falha' ? ' (vale a mínima ' + x.defMin + ')' : '');
+    if (x.foe) await db.updateFoe(currentCamp.id, x.foe.id, { def: val });
+    else await patchMemberSheet(x.member, (s) => { s.def = Object.assign({}, s.def); s.def[currentCamp.id] = val; });
+    await postCombatRoll(x.foe ? { foe: x.foe } : { member: x.member }, r);
+    renderCombat();
+    return val;
+  }
+
+  async function postCombatRoll(who, r) {
+    const base = who.foe
+      ? { characterId: 'foe:' + who.foe.id, characterName: who.foe.name, characterType: 'criatura' }
+      : { characterId: who.member.characterId, characterName: who.member.name, characterType: who.member.type };
+    try { await db.addRoll(currentCamp.id, Object.assign(base, { expr: r.expr.slice(0, 120), label: r.label.slice(0, 60), detail: r.detail.slice(0, 1450), total: r.total, flag: r.flag })); }
+    catch (err) { toast(errorMessage(err)); }
+  }
+
+  function renderTargetsHint() {
+    const list = combatants().filter((x) => combat.targets.has(x.id));
+    $('#atk-targets').textContent = list.length ? 'Alvos: ' + list.map((x) => x.name).join(', ') + '.' : 'Marque um ou mais alvos na lista acima.';
+  }
+
+  // Quem pode atacar: os seus personagens e, para o mestre, os inimigos
+  function renderAttackPanel(list, gm) {
+    const panel = $('#combat-attack');
+    const opts = [];
+    members.filter((mb) => mb.mine && mb.sheet).forEach((mb) => opts.push(['chr:' + mb.characterId, mb.name]));
+    if (gm) foes.forEach((f) => opts.push(['foe:' + f.id, f.name + ' (inimigo)']));
+    panel.hidden = !opts.length || !list.length;
+    if (panel.hidden) return;
+    const sel = $('#atk-who');
+    sel.replaceChildren(...opts.map((o) => { const op = h('option', '', o[1]); op.value = o[0]; return op; }));
+    if (!opts.some((o) => o[0] === combat.who)) combat.who = opts[0][0];
+    sel.value = combat.who;
+    const st = combat.st[combat.who] = combat.st[combat.who] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
+    const box = $('#atk-builder');
+    if (combat.who.indexOf('chr:') === 0) {
+      const mb = members.find((x) => 'chr:' + x.characterId === combat.who);
+      const c = Object.assign(sheetOf(mb), { btnLabel: 'Atacar os alvos' });
+      box.replaceChildren(attackBuilder(c, st, (t, b) => runAttack({ member: mb, c }, t, st, b), 'cbt-'));
+    } else {
+      const f = foes.find((x) => 'foe:' + x.id === combat.who);
+      box.replaceChildren(foeAttackBuilder(f, st));
+    }
+    renderTargetsHint();
+  }
+  $('#atk-who').addEventListener('change', () => { combat.who = $('#atk-who').value; renderCombat(); });
+
+  const FOE_MODES = { 'Corpo a corpo': ['corpo', 'luta', 'Corpo', 'Luta'], 'À distância': ['precisao', 'mira', 'Precisão', 'Mira'], 'Tecnológico': ['essencia', 'operacoes', 'Essência', 'Operações'] };
+  function foeAttackBuilder(f, st) {
+    const v = foeVals(f);
+    const box = h('div', 'attack');
+    const draw = () => {
+      if (!FOE_MODES[st.mode]) st.mode = FOE_MODES[v.ataque] ? v.ataque : 'Corpo a corpo';
+      const cad = clamp(Math.round(num(v.cadencia)) || 1, 1, 20);
+      st.shots = clamp(st.shots || 1, 1, cad);
+      const field = (id, label, control) => { control.id = 'cbf-' + id; const l = h('label', 'field__label', label); l.htmlFor = control.id; return h('div', 'field', l, control); };
+      const mSel = h('select', 'input');
+      Object.keys(FOE_MODES).forEach((k) => { const md = FOE_MODES[k]; const o = h('option', '', k + ' (' + md[2] + ' + ' + md[3] + ')'); o.value = k; mSel.append(o); });
+      mSel.value = st.mode;
+      mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
+      const fields = [field('mode', 'Forma de ataque', mSel)];
+      if (cad > 1) {
+        const nSel = h('select', 'input');
+        for (let k = 1; k <= cad; k++) { const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos · –' + shotPenalty(k, true) + ' · dano ×' + k)); o.value = String(k); nSel.append(o); }
+        nSel.value = String(st.shots);
+        nSel.addEventListener('change', () => { st.shots = Math.round(num(nSel.value)) || 1; draw(); });
+        fields.push(field('shots', 'Disparos (cadência ' + cad + ', perita)', nSel));
+      }
+      if (st.mode === 'À distância') {
+        const dSel = h('select', 'input');
+        DISTANCES.forEach((d) => { const o = h('option', '', d.label); o.value = d.id; dSel.append(o); });
+        dSel.value = st.dist || '';
+        dSel.addEventListener('change', () => { st.dist = dSel.value; draw(); });
+        fields.push(field('dist', 'Distância do alvo', dSel));
+      }
+      fields.push(field('dice', 'Dados', diceSelect(st, draw)));
+      const modIn = h('input', 'input');
+      modIn.type = 'number';
+      modIn.step = '1';
+      modIn.placeholder = '0';
+      modIn.value = st.mod || '';
+      modIn.addEventListener('change', () => { st.mod = Math.round(num(modIn.value)); draw(); });
+      fields.push(field('mod', 'Outro modificador', modIn));
+      const md = FOE_MODES[st.mode];
+      const mods = [];
+      if (st.shots > 1) mods.push(['cadência ' + st.shots + ' disparos', -shotPenalty(st.shots, true)]);
+      const dist = DISTANCES.find((d) => d.id === st.dist);
+      if (st.mode === 'À distância' && dist && dist.mod) mods.push([dist.short, dist.mod]);
+      if (st.mod) mods.push(['modificador', st.mod]);
+      const t = applyDice({ label: ('Ataque: ' + (v.arma || st.mode) + (st.shots > 1 ? ' · dano ×' + st.shots : '')).slice(0, 60), attrName: md[2], attr: num(v[md[0]]), skillName: md[3], skill: num(v[md[1]]), mods }, st);
+      const fixed = t.attr + t.skill + mods.reduce((a, b) => a + b[1], 0);
+      const go = h('button', 'btn btn--primary btn--sm', 'Atacar os alvos · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
+      go.type = 'button';
+      go.addEventListener('click', () => runAttack({ foe: f }, t, st, go));
+      const info = [v.dano ? 'dano ' + v.dano : '', v.efetivo ? 'efetivo contra ' + v.efetivo.toLowerCase() : ''].filter(Boolean).join(' · ');
+      box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, info ? h('span', 'attack__info', info) : null));
+    };
+    draw();
+    return box;
+  }
+
+  // Um teste de ataque, comparado com a defesa de cada alvo marcado
+  async function runAttack(who, t, st, btn) {
+    const list = combatants().filter((x) => combat.targets.has(x.id));
+    if (!list.length) { toast('Marque pelo menos um alvo na lista.'); return; }
+    let types, effective = '', shots = Math.max(1, st.shots || 1);
+    if (who.foe) {
+      const v = foeVals(who.foe);
+      types = splitTypes(v.dano);
+      effective = v.efetivo === 'Vida' ? 'pv' : v.efetivo === 'Escudo' ? 'escudo' : v.efetivo === 'Blindagem' ? 'blindagem' : '';
+    } else {
+      const weapon = weaponsOf(who.c.sheet).find((w) => w.uid === st.uid) || null;
+      types = weapon ? splitTypes(weapon.values.dano) : ['Contundente'];
+      if (weapon && weapon.typeId === 'marreta') effective = 'blindagem';
+      if (weapon && weapon.typeId === 'machado') effective = 'escudo';
+      if (!weapon || weapon.kind !== 'arma-fogo') shots = 1;
+    }
+    btn.disabled = true;
+    const r = rollTest(t);
+    const lines = [];
+    for (const x of list) {
+      if (r.flag === 'falha') { lines.push(x.name + ': errou (falha completa)'); continue; }
+      const base = Math.max(1, r.total - x.def) * shots;
+      const res = applyLayeredDamage(base, types, x.layers, effective);
+      const parts = res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k));
+      const state = lifeState(res.layers);
+      lines.push(x.name + ': ' + base + ' de dano' + (shots > 1 ? ' (×' + shots + ')' : '') + ' vs defesa ' + x.def + (parts.length ? ' → ' + parts.join(', ') : '') + (state ? ' · ' + state : ''));
+      try {
+        if (x.foe) {
+          const cur = {};
+          res.layers.forEach((l) => { if (l.max > 0) cur[l.key] = l.cur; });
+          await db.updateFoe(currentCamp.id, x.foe.id, { cur });
+        } else {
+          await patchMemberSheet(x.member, (s) => {
+            const m = compute(Object.assign({}, x.member, { sheet: s }));
+            res.layers.forEach((l) => { if (m.max[l.key]) setCur(s, l.key, l.cur, m.max[l.key]); });
+          });
+        }
+      } catch (err) { toast(errorMessage(err)); }
+    }
+    r.label = t.label;
+    r.detail += (types.length ? ' · ' + types.join(', ') : '') + ' · ' + lines.join(' | ');
+    await postCombatRoll(who, r);
+    toast(lines.join(' · ').slice(0, 300));
+    btn.disabled = false;
+    renderCombat();
+  }
+
+  $('#foe-add').addEventListener('click', async () => {
+    const e = await openPicker({ title: 'Adicionar inimigo da lista aberta', kinds: ['npc'], chips: ['NPC / Inimigo'] });
+    if (!e) return;
+    const same = foes.filter((f) => f.npcId === e.id).length;
+    try {
+      await db.addFoe(currentCamp.id, { npcId: e.id, name: (e.name + (same ? ' ' + (same + 1) : '')).slice(0, 60), values: deep(e.values || {}), cur: {}, def: null });
+      toast(e.name + ' entrou na cena.');
+    } catch (err) { toast(errorMessage(err)); }
+  });
+  $('#foe-def').addEventListener('click', async () => {
+    const list = combatants().filter((x) => x.foe);
+    if (!list.length) { toast('Nenhum inimigo na cena.'); return; }
+    for (const x of list) { try { await rollDefense(x); } catch (err) { toast(errorMessage(err)); } }
+  });
+
   views.campaign = async function showCampaign(id) {
     const camp = await db.getCampaign(id);
     if (!camp) { toast('Não encontramos essa campanha.'); go('campanhas'); return; }
@@ -5004,9 +5420,15 @@ const FIREBASE_CONFIG = {
     renderTestPick();
     setError(errRoll, inRoll, '');
 
-    if (noAccess) { renderRolls([]); return; }
+    foes = [];
+    combat.targets.clear();
+    $('#combat-block').hidden = noAccess && !camp.gm;
+    if (noAccess && !camp.gm) { renderRolls([]); return; }
+    renderCombat();
+    const stopFoes = db.subscribeFoes(id, (list) => { foes = list; renderCombat(); }, (err) => console.warn(err));
+    if (noAccess) { renderRolls([]); onLeave = () => { if (typeof stopFoes === 'function') stopFoes(); }; return; }
     const stop = db.subscribeRolls(id, renderRolls, (err) => toast(errorMessage(err)));
-    onLeave = () => { if (typeof stop === 'function') stop(); };
+    onLeave = () => { if (typeof stop === 'function') stop(); if (typeof stopFoes === 'function') stopFoes(); };
   };
 
   /* ---------- Regras: livro em abas, no estilo de tutorial ----------
