@@ -3228,8 +3228,24 @@ const FIREBASE_CONFIG = {
       else opts.forEach((id) => actions.append(act(slotDef(id).full, 'btn--primary', () => { if (equipItem(i, id)) changed(); })));
     }
     actions.append(act('Detalhes', 'btn--ghost', () => openInvDialog(i.uid)));
+    actions.append(act('Remover', 'btn--danger', () => removeInvItem(i)));
     card.append(actions);
     return card;
+  }
+
+  // tira um item do inventário (equipado ou na mochila); pilhas perguntam se tira uma ou todas
+  async function removeInvItem(i) {
+    const s = sheetChar.sheet;
+    const qty = i.qty || 1;
+    const ok = await askConfirm({
+      title: 'Remover ' + i.name + '?',
+      text: qty > 1 ? 'Sai uma unidade (restam ' + (qty - 1) + '). Para tirar todas, use Detalhes → Tirar do inventário.' : 'O item sai do inventário desta ficha. O original continua no banco de itens.',
+      ok: 'Remover'
+    });
+    if (!ok || s.inventory.indexOf(i) < 0) return;
+    if (qty > 1) i.qty = qty - 1; else s.inventory.splice(s.inventory.indexOf(i), 1);
+    changed();
+    toast(i.name + (qty > 1 ? ': uma unidade removida.' : ' saiu do inventário.'));
   }
 
   let dragUid = null;
