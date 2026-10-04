@@ -458,7 +458,6 @@ const FIREBASE_CONFIG = {
         return Object.values(read().library)
           .filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), query))
           .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          .slice(0, 200)
           .map(toLib);
       },
 
@@ -774,9 +773,10 @@ const FIREBASE_CONFIG = {
       async searchLibrary({ kinds, query }) {
         const qs = words(query || '');
         let snap;
-        if (qs.length) snap = await lib().where('searchKeys', 'array-contains', qs[0].slice(0, 20)).limit(120).get();
-        else if (kinds && kinds.length) snap = await lib().where('kind', 'in', kinds.slice(0, 10)).limit(200).get();
-        else snap = await lib().orderBy('updatedAt', 'desc').limit(100).get();
+        // sem busca, o banco aparece inteiro (os itens ficam visíveis desde o começo)
+        if (qs.length) snap = await lib().where('searchKeys', 'array-contains', qs[0].slice(0, 20)).limit(500).get();
+        else if (kinds && kinds.length) snap = await lib().where('kind', 'in', kinds.slice(0, 10)).get();
+        else snap = await lib().get();
         return snap.docs.map(toLib)
           .filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), query))
           .sort((a, b) => b.updatedAt - a.updatedAt);
@@ -1900,6 +1900,12 @@ const FIREBASE_CONFIG = {
     const q = inSearch.value;
     const type = formSearch.elements.stype.value;
     const origin = $('#search-origin').value;
+    if (!words(q).length && !origin) { // personagens só aparecem buscando
+      $('#search-list').replaceChildren();
+      $('#search-empty').hidden = true;
+      $('#search-hint').textContent = 'Digite um nome, espécie ou origem (ou escolha uma origem) para encontrar fichas.';
+      return;
+    }
     let list;
     try {
       // a origem entra na busca (os termos procuram nome, espécie e origem) e depois filtra exata
@@ -1913,9 +1919,7 @@ const FIREBASE_CONFIG = {
     if (seq !== searchSeq) return; // uma busca mais nova já saiu
     $('#search-list').replaceChildren(...list.map(searchRow));
     $('#search-empty').hidden = list.length > 0;
-    $('#search-hint').textContent = words(q).length || origin
-      ? plural(list.length, 'ficha encontrada', 'fichas encontradas') + (origin ? ' com a origem ' + origin : '')
-      : (db.mode === 'firebase' ? 'Sem busca: mostrando as fichas mais recentes.' : 'Sem busca: mostrando as fichas deste aparelho.');
+    $('#search-hint').textContent = plural(list.length, 'ficha encontrada', 'fichas encontradas') + (origin ? ' com a origem ' + origin : '');
   }
   const liveSearch = debounce(runSearch, 300);
   inSearch.addEventListener('input', liveSearch);
