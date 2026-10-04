@@ -154,6 +154,28 @@ code { font-family: var(--fonte-ui); }
   white-space: nowrap;
 }
 .mode-pill--firebase { border-color: var(--mare); color: var(--mare); }
+
+/* Falso login: botão do perfil na barra */
+.profile-btn {
+  min-height: 36px;
+  max-width: 12rem;
+  padding: 0.2rem 0.9rem;
+  border: 1px solid var(--linha-forte);
+  border-radius: 999px;
+  background: none;
+  color: var(--nevoa);
+  font: inherit;
+  font-size: var(--t-s);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.profile-btn:hover { border-color: var(--ambar); }
+.profile-btn--on { border-color: var(--ambar); color: var(--ambar); }
+#form-profile-name { margin-bottom: 1.5rem; }
+#form-login .check { margin-top: 0.5rem; }
 .mode-pill--error { border-color: var(--erro); color: var(--erro); }
 
 .container {
@@ -599,6 +621,9 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
   .portrait { justify-items: start; }
   .row > .btn { padding-inline: 0.7rem; }
   .mode-pill { font-size: 0.8rem; padding-inline: 0.6rem; }
+  .profile-btn { max-width: 8rem; padding-inline: 0.6rem; }
+  .row:has(> .star) .row__open > .badge { display: none; } /* a cor do avatar já diz o tipo */
+  .row:has(> .star) .row__open { gap: 0.6rem; }
 }
 @media (max-width: 640px) {
   .hero__spiral { opacity: 0.4; }

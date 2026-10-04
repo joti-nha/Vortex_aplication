@@ -39,6 +39,23 @@ service cloud.firestore {
       allow delete: if signedIn();
     }
 
+    // ---------- Perfis (falso login) ----------
+    // O ID do documento é o código de 1 a 6 dígitos. Quem sabe o código abre o perfil:
+    // não é senha. Listar é proibido, para ninguém varrer os códigos.
+    match /profiles/{code} {
+      function validProfile() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['name', 'chars', 'camps', 'gm', 'favs', 'updatedAt'])
+            && d.name is string && d.name.size() <= 40
+            && d.chars is list && d.chars.size() <= 300
+            && d.camps is list && d.camps.size() <= 300
+            && d.gm is list && d.gm.size() <= 300
+            && d.favs is list && d.favs.size() <= 300;
+      }
+      allow get: if signedIn() && code.matches('[0-9]{1,6}');
+      allow create, update: if signedIn() && code.matches('[0-9]{1,6}') && validProfile();
+    }
+
     // ---------- Personagens e criaturas: públicos e editáveis ----------
     match /characters/{characterId} {
 
