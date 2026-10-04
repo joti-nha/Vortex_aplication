@@ -1368,6 +1368,8 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 
 .chip--toggle { min-height: 32px; color: var(--nevoa-2); cursor: pointer; }
 .chip--toggle:hover { border-color: var(--nevoa); }
+.cat-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+.cat-chips .chip--toggle { min-height: 40px; padding-inline: 0.9rem; }
 .chip--toggle[aria-pressed="true"] { border-color: var(--ambar); background: rgba(240, 184, 90, 0.16); color: var(--nevoa); }
 
 .member__sub { margin: 1rem 0 0.5rem; font: 700 var(--t-m)/1.2 var(--fonte-titulo); }

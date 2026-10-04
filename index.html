@@ -154,6 +154,19 @@
         <ul class="rows" id="search-list"></ul>
         <p class="empty" id="search-empty">Nenhuma ficha encontrada. Confira a grafia ou tente só o começo do nome.</p>
       </section>
+
+      <section class="block" aria-labelledby="cat-title">
+        <h2 class="block__title" id="cat-title">Origens, espécimes, poderes e itens</h2>
+        <p class="block__hint">Toque numa categoria para ver tudo dela, ou busque pelo nome. Mostra o catálogo oficial e o que as pessoas salvaram no banco.</p>
+        <div class="cat-chips" id="cat-chips" role="group" aria-label="Categorias"></div>
+        <div class="field">
+          <label class="field__label" for="cat-q">Buscar no catálogo</label>
+          <input class="input" id="cat-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ex.: Android, Mercenário, kit médico">
+        </div>
+        <p class="block__hint" id="cat-hint" role="status"></p>
+        <ul class="rows" id="cat-list"></ul>
+        <p class="empty" id="cat-empty" hidden>Nada encontrado nessa categoria.</p>
+      </section>
     </section>
 
     <!-- ===================== TELA: PERFIL (falso login) ===================== -->

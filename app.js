@@ -1931,7 +1931,7 @@ const FIREBASE_CONFIG = {
     const quick = await refreshQuick();
     $('#quick-list').replaceChildren(...quick.map(characterRow));
     $('#quick-empty').hidden = quick.length > 0;
-    await Promise.all([renderFavBlock(), runSearch()]);
+    await Promise.all([renderFavBlock(), runSearch(), runCatalog()]);
   };
 
   /* ---------- Campanhas ---------- */
@@ -2839,6 +2839,53 @@ const FIREBASE_CONFIG = {
     mk.append(any);
     (ITEM_DATA.fabricantes || []).forEach((f) => { const o = h('option', '', f); o.value = f; mk.append(o); });
   })();
+
+  /* Catálogo na tela Personagens: ver todas as origens, espécimes, poderes e itens, só leitura */
+  const CAT_GROUPS = [
+    { label: 'Origens', kinds: ['origem'] },
+    { label: 'Espécimes', kinds: ['especime'] },
+    { label: 'Poderes', kinds: ['poder'] },
+    { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] },
+    { label: 'Proteção', kinds: ['armadura', 'vestivel'] },
+    { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] },
+    { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] },
+    { label: 'Itens gerais', kinds: ['item-geral'] },
+    { label: 'Tudo', kinds: null }
+  ];
+  const catState = { group: null, seq: 0 };
+  async function runCatalog() {
+    const seq = ++catState.seq;
+    const q = $('#cat-q').value.trim();
+    const g = catState.group;
+    if (!g && !q) {
+      $('#cat-list').replaceChildren();
+      $('#cat-empty').hidden = true;
+      $('#cat-hint').textContent = '';
+      return;
+    }
+    $('#cat-hint').textContent = 'Buscando...';
+    let list = await libSearch(g ? g.kinds : null, q);
+    if (seq !== catState.seq) return;
+    list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+    $('#cat-list').replaceChildren(...list.map((e) => libRow(e, [])));
+    $('#cat-empty').hidden = list.length > 0;
+    $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
+      + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');
+  }
+  (function fillCatChips() {
+    $('#cat-chips').replaceChildren(...CAT_GROUPS.map((g) => {
+      const b = h('button', 'chip chip--toggle', g.label);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => {
+        catState.group = catState.group === g ? null : g;
+        $$('#cat-chips .chip--toggle').forEach((x) => x.setAttribute('aria-pressed', String(x === b && catState.group === g)));
+        runCatalog();
+      });
+      return b;
+    }));
+  })();
+  $('#cat-q').addEventListener('input', debounce(runCatalog, 300));
 
   // Itens da versão anterior (salvos só neste aparelho): entram no banco uma única vez
   async function migrateOldItems() {
