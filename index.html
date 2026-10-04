@@ -541,19 +541,47 @@
         </div>
       </header>
 
-      <div class="two-col two-col--chat">
-        <section class="block chat" aria-labelledby="chat-title">
-          <h2 class="block__title" id="chat-title"><button class="help" type="button" data-help="rolagens">Dados</button></h2>
-
-          <div class="field" id="speaker-field">
-            <label class="field__label" for="speaker">Rolando como</label>
-            <select class="input" id="speaker"></select>
+      <!-- Painel do personagem: quem você joga nesta campanha, com barras e ações em abas -->
+      <section class="block dock" id="dock" aria-labelledby="dock-title" hidden>
+        <div class="dock__head">
+          <span class="dock__pic token" id="dock-pic" aria-hidden="true"></span>
+          <div class="dock__who">
+            <p class="eyebrow">Jogando como</p>
+            <h2 class="dock__name" id="dock-title"></h2>
+            <p class="dock__meta" id="dock-meta"></p>
           </div>
-          <p class="notice" id="chat-notice" hidden></p>
-
-          <ol class="roll-log" id="roll-log" role="log" aria-label="Rolagens da campanha" tabindex="0"></ol>
-          <p class="empty" id="roll-empty">Nenhuma rolagem ainda. Role o primeiro dado.</p>
-
+          <div class="dock__tools">
+            <div class="field" id="speaker-field">
+              <label class="field__label" for="speaker">Trocar personagem</label>
+              <select class="input" id="speaker"></select>
+            </div>
+            <div class="dock__btns">
+              <button class="btn btn--ghost btn--sm" type="button" id="dock-pin" aria-pressed="false">☆ Fixar como meu personagem</button>
+              <a class="btn btn--ghost btn--sm" id="dock-sheet" href="#">Abrir ficha</a>
+            </div>
+          </div>
+        </div>
+        <div class="dock__bars" id="dock-bars"></div>
+        <div class="dock__tabs" role="tablist" aria-label="Ações do personagem">
+          <button class="dock__tab" type="button" role="tab" id="dock-tab-acoes" data-tab="acoes" aria-controls="dock-acoes" aria-selected="true">Ações</button>
+          <button class="dock__tab" type="button" role="tab" id="dock-tab-testes" data-tab="testes" aria-controls="dock-testes" aria-selected="false" tabindex="-1">Testes</button>
+          <button class="dock__tab" type="button" role="tab" id="dock-tab-dados" data-tab="dados" aria-controls="dock-dados" aria-selected="false" tabindex="-1">Dados</button>
+        </div>
+        <div class="dock__panel" id="dock-acoes" role="tabpanel" aria-labelledby="dock-tab-acoes">
+          <div id="dock-attack"></div>
+          <p class="field__hint" id="dock-targets"></p>
+        </div>
+        <div class="dock__panel" id="dock-testes" role="tabpanel" aria-labelledby="dock-tab-testes" hidden>
+          <div class="dock__quick" id="dock-quick" role="group" aria-label="Testes rápidos"></div>
+          <div class="test-bar" id="test-bar">
+            <label class="field__label" for="test-pick">Teste da ficha (atributo ou perícia)</label>
+            <div class="test-bar__row">
+              <select class="input" id="test-pick"></select>
+              <button class="btn btn--primary btn--sm" type="button" id="test-roll">Rolar teste</button>
+            </div>
+          </div>
+        </div>
+        <div class="dock__panel" id="dock-dados" role="tabpanel" aria-labelledby="dock-tab-dados" hidden>
           <div class="dice-bar" role="group" aria-label="Rolagens rápidas">
             <button class="btn btn--ghost btn--sm" type="button" data-dice="2d6">2d6</button>
             <button class="btn btn--ghost btn--sm" type="button" data-dice="d4">d4</button>
@@ -564,16 +592,6 @@
             <button class="btn btn--ghost btn--sm" type="button" data-dice="d20">d20</button>
             <button class="btn btn--ghost btn--sm" type="button" data-dice="d100">d100</button>
           </div>
-
-          <div class="test-bar" id="test-bar">
-            <label class="field__label" for="test-pick">Teste da ficha (atributo ou perícia)</label>
-            <div class="test-bar__row">
-              <select class="input" id="test-pick"></select>
-              <button class="btn btn--primary btn--sm" type="button" id="test-roll">Rolar teste</button>
-            </div>
-            <p class="field__hint">Ataques ficam nas ações do personagem: toque nele em Candidatos.</p>
-          </div>
-
           <form class="roll-form" id="form-roll" novalidate>
             <div class="field">
               <label class="visually-hidden" for="roll-input">Comando de dados</label>
@@ -584,6 +602,17 @@
           </form>
           <p class="field__error" id="roll-error" role="alert"></p>
           <p class="field__hint" id="roll-help">Exemplos: d20, 2d6+3, 4d6kh3 (fica com os 3 maiores), 1d20+5 # ataque</p>
+        </div>
+      </section>
+
+      <div class="two-col two-col--chat">
+        <section class="block chat" aria-labelledby="chat-title">
+          <h2 class="block__title" id="chat-title"><button class="help" type="button" data-help="rolagens">Registro da mesa</button></h2>
+
+          <p class="notice" id="chat-notice" hidden></p>
+
+          <ol class="roll-log" id="roll-log" role="log" aria-label="Rolagens da campanha" tabindex="0"></ol>
+          <p class="empty" id="roll-empty">Nenhuma rolagem ainda. Role o primeiro dado.</p>
         </section>
 
         <section class="block" aria-labelledby="members-title">
@@ -617,11 +646,11 @@
             <button class="btn btn--ghost btn--sm" type="button" id="foe-def">Rolar defesa dos inimigos</button>
           </div>
         </div>
-        <p class="block__hint">Marque um ou mais alvos na cena, escolha quem ataca e role. O dano (ataque – defesa, mínimo 1) entra sozinho na ordem Escudo → Blindagem → Vida, com fraquezas e resistências de cada camada.</p>
+        <p class="block__hint">Marque um ou mais alvos na cena e ataque pelo painel do seu personagem (no topo) ou, se for o mestre, pelos inimigos aqui embaixo. O dano (ataque – defesa, mínimo 1) entra sozinho na ordem Escudo → Blindagem → Vida, com fraquezas e resistências de cada camada.</p>
         <ul class="rows combatants" id="combatants" aria-label="Na cena"></ul>
         <p class="empty" id="combat-empty">Ninguém na cena ainda. O mestre adiciona inimigos da lista aberta; os personagens da campanha entram sozinhos.</p>
         <div class="combat__attack" id="combat-attack" hidden>
-          <h3 class="sub-title">Atacar</h3>
+          <h3 class="sub-title">Ataque dos inimigos (mestre)</h3>
           <div class="field">
             <label class="field__label" for="atk-who">Atacante</label>
             <select class="input" id="atk-who"></select>

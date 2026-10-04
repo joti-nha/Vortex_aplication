@@ -1633,3 +1633,179 @@ body {
 .member__toggle > .badge { display: none; } /* a cor do avatar já diz o tipo; o nome ganha espaço */
 .member__toggle .row__title { overflow-wrap: break-word; }
 @media (max-width: 1023px) { .toc-fab { bottom: calc(5.75rem + env(safe-area-inset-bottom)); } }
+
+/* =====================================================================
+   11. PAINEL DO PERSONAGEM NA CAMPANHA ("Jogando como")
+   Inspirado na moldura de retrato + barras de recurso + barra de ações
+   dos RPGs de mesa digitais: quem está jogando fica sempre no topo.
+   ===================================================================== */
+.dock {
+  position: relative;
+  padding: 1rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--r-l);
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(240, 184, 90, 0.12), transparent 55%),
+    linear-gradient(180deg, var(--casco-3), var(--casco));
+  box-shadow: var(--sombra), inset 0 0 0 1px rgba(240, 184, 90, 0.08);
+}
+.dock::before {
+  /* filete dourado no topo, como a moldura de um quadro de jogo */
+  content: "";
+  position: absolute;
+  inset: 0 1.25rem auto;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--ambar), transparent);
+  opacity: 0.7;
+}
+.dock__head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.9rem 1rem;
+  align-items: center;
+}
+.dock__pic.token {
+  width: 4.5rem;
+  height: 4.5rem;
+  font-size: 2rem;
+  box-shadow:
+    inset 0 0 0 3px var(--c),
+    inset 0 0 0 7px var(--casco-2),
+    inset 0 0 0 8px var(--c-suave),
+    0 0 22px -6px var(--c);
+}
+.dock__who { min-width: 0; }
+.dock__who .eyebrow { margin: 0; }
+.dock__name {
+  margin: 0.1rem 0 0.2rem;
+  font-family: var(--fonte-titulo);
+  font-size: var(--t-xl);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.dock__meta { margin: 0; color: var(--nevoa-2); font-size: var(--t-s); overflow-wrap: anywhere; }
+.dock__tools {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.6rem 0.75rem;
+}
+.dock__tools .field { flex: 1 1 14rem; margin: 0; min-width: 0; }
+.dock__btns { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.dock__pin--on {
+  border-color: var(--ambar);
+  color: var(--ambar);
+  background: rgba(240, 184, 90, 0.12);
+}
+
+/* Barras de recurso */
+.dock__bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.6rem 0.9rem;
+  margin-top: 1rem;
+  align-items: center;
+}
+.dbar {
+  --c: var(--nevoa-2);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.5rem;
+  font-size: var(--t-s);
+}
+.dbar--pv { --c: var(--pv); }
+.dbar--escudo { --c: var(--escudo); }
+.dbar--blindagem { --c: var(--blindagem); }
+.dbar--pe { --c: var(--pe); }
+.dbar--pa { --c: var(--pa); }
+.dbar__label { color: var(--c); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.75rem; }
+.dbar__val { font-variant-numeric: tabular-nums; color: var(--nevoa); font-weight: 600; }
+.dbar__track {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.dbar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 100%, white 25%), var(--c));
+  box-shadow: 0 0 10px -2px var(--c);
+  transition: width 0.35s ease;
+}
+.dock__state { justify-self: start; }
+
+/* Abas como barra de ações */
+.dock__tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: 1.1rem 0 0;
+  padding: 0.3rem;
+  border-radius: var(--r-m);
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 0 1px var(--linha);
+}
+.dock__tab {
+  flex: 1;
+  min-height: 2.6rem;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--nevoa-2);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+.dock__tab:hover { color: var(--nevoa); background: rgba(255, 255, 255, 0.05); }
+.dock__tab[aria-selected="true"] {
+  color: var(--ambar-tinta);
+  background: linear-gradient(180deg, #f6c978, var(--ambar));
+  box-shadow: var(--brilho-ambar);
+}
+.dock__tab:focus-visible { outline: 2px solid var(--mare); outline-offset: 2px; }
+.dock__panel { padding-top: 1rem; }
+.dock__panel[hidden] { display: none; }
+
+/* Testes rápidos como botões de habilidade */
+.dock__quick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.qtest {
+  min-height: 2.75rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--r-s);
+  background: linear-gradient(180deg, var(--casco-2), var(--casco));
+  color: var(--nevoa);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.qtest:hover { border-color: var(--mare); transform: translateY(-1px); }
+.qtest:active { transform: translateY(1px); }
+.qtest:disabled { opacity: 0.6; cursor: progress; }
+.qtest--attr { border-color: rgba(240, 184, 90, 0.6); color: var(--ambar); }
+.qtest:focus-visible { outline: 2px solid var(--mare); outline-offset: 2px; }
+
+@media (min-width: 720px) {
+  .dock { padding: 1.25rem 1.5rem; }
+  .dock__head { grid-template-columns: auto 1fr auto; }
+  .dock__tools { grid-column: auto; justify-content: flex-end; max-width: 26rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dbar__fill, .qtest { transition: none; }
+}
