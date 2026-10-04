@@ -2216,7 +2216,13 @@ const FIREBASE_CONFIG = {
     const main = h('span', 'row__main', title, h('span', 'row__meta', entryMeta(e)));
     const text = entryText(e);
     if (text) main.append(h('span', 'row__text', text));
-    const row = h('li', 'row lib-row', h('span', 'row__open row__open--static', entryIcon(e), main), starButton(e, onFav));
+    const open = h('span', 'row__open lib-row__open', entryIcon(e), main);
+    open.tabIndex = 0;
+    open.setAttribute('role', 'button');
+    open.setAttribute('aria-label', 'Ver todos os dados de ' + (e.name || 'Sem nome'));
+    open.addEventListener('click', () => openEntry(e));
+    open.addEventListener('keydown', (ev) => { if (ev.target === open && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openEntry(e); } });
+    const row = h('li', 'row lib-row', open, starButton(e, onFav));
     (actions || []).forEach((a) => {
       const b = h('button', 'btn btn--sm ' + (a.cls || 'btn--ghost'), a.label);
       b.type = 'button';
@@ -2226,6 +2232,38 @@ const FIREBASE_CONFIG = {
     });
     return row;
   }
+
+  /* Todos os dados de um registro do banco (vale para itens, espécimes, poderes e origens) */
+  const entryDlg = $('#entry-dialog');
+  function openEntry(e) {
+    const cat = findCategory(e.kind);
+    const v = e.values || {};
+    $('#entry-title').replaceChildren(e.name || 'Sem nome', ...(e.oficial ? [' ', h('span', 'tag', 'Oficial')] : []));
+    $('#entry-meta').textContent = [e.kindTitle || kindTitle(e.kind), e.typeTitle, e.oficial ? 'Catálogo oficial' : (e.mine ? 'Criado por você' : 'Banco compartilhado')].filter(Boolean).join(' · ');
+    const body = $('#entry-body');
+    body.replaceChildren();
+    if (e.image || e.thumb) { const img = h('img', 'entry__img'); img.src = e.image || e.thumb; img.alt = ''; body.append(img); }
+    const dl = h('dl', 'member__data entry__data');
+    const seen = new Set(['nome', 'lore']);
+    ((cat && cat.fields) || []).forEach((f) => {
+      seen.add(f.key);
+      const val = v[f.key];
+      if (f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
+      dl.append(h('dt', '', f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(val)) : f.key === 'preco' ? priceText(val) : String(val)));
+    });
+    // campos que não estão no formulário atual (registros antigos) também aparecem
+    Object.keys(v).forEach((k) => { if (!seen.has(k) && String(v[k] || '').trim()) dl.append(h('dt', '', k), h('dd', '', String(v[k]))); });
+    const b = bonusLine(entryBonus(e));
+    if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (cat && cat.inventory ? ' (quando equipado)' : '')));
+    const parts = e.slots ? (e.slots.mods || []).concat(e.slots.props || [], e.slots.accs || []).map((x) => x.name) : [];
+    if (parts.length) dl.append(h('dt', '', 'Encaixes'), h('dd', '', parts.join(', ')));
+    if (dl.children.length) body.append(dl);
+    else body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
+    const lore = String(v.lore || '').trim();
+    if (lore) body.append(h('h3', 'entry__sub', 'Lore'), ...lore.split(/\n+/).map((t) => h('p', 'entry__lore', t)));
+    openDialog(entryDlg);
+  }
+  $('#entry-close').addEventListener('click', () => closeDialog(entryDlg));
 
   /* ---------- Slots: mods, propriedade e acessórios ----------
      Cada slot só aceita a peça do seu tipo. A raridade do item define quantos
@@ -2780,23 +2818,26 @@ const FIREBASE_CONFIG = {
     btn.disabled = true;
     try {
       await db.saveLibrary(entry);
-      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.'));
+      const notItem = NON_ITEM_KINDS.indexOf(cat.id) >= 0;
+      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.') + (notItem ? ' Aparece em Personagens, no catálogo.' : ''));
       itemState.draft = null;
       setItemStep('categoria');
       await runLib();
-      $('#lib-title').scrollIntoView({ block: 'start' });
+      if (!notItem) $('#lib-title').scrollIntoView({ block: 'start' });
     } catch (err) { toast(errorMessage(err)); }
     finally { btn.disabled = false; }
   });
 
-  /* Lista do banco na Oficina */
+  /* Lista do banco na Oficina: só itens. Espécimes, poderes e origens ficam no catálogo da tela Personagens */
+  const NON_ITEM_KINDS = ['especime', 'poder', 'origem'];
+  const ITEM_KINDS = ITEM_DATA.categories.map((c) => c.id).filter((k) => NON_ITEM_KINDS.indexOf(k) < 0);
   let libSeq = 0;
   async function runLib() {
     const seq = ++libSeq;
     const q = $('#lib-q').value;
     const kind = $('#lib-kind').value;
     let list;
-    try { list = await libSearch(kind ? [kind] : null, q); }
+    try { list = await libSearch(kind ? [kind] : ITEM_KINDS, q); }
     catch (err) { if (seq === libSeq) $('#lib-hint').textContent = errorMessage(err); return; }
     if (seq !== libSeq) return;
     const favs = favLoad();
@@ -2832,7 +2873,7 @@ const FIREBASE_CONFIG = {
     const all = h('option', '', 'Todas');
     all.value = '';
     sel.append(all);
-    ITEM_DATA.categories.forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
+    ITEM_DATA.categories.filter((c) => ITEM_KINDS.indexOf(c.id) >= 0).forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
     const mk = $('#lib-maker');
     const any = h('option', '', 'Todas');
     any.value = '';
@@ -2867,7 +2908,7 @@ const FIREBASE_CONFIG = {
     let list = await libSearch(g ? g.kinds : null, q);
     if (seq !== catState.seq) return;
     list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
-    $('#cat-list').replaceChildren(...list.map((e) => libRow(e, [])));
+    $('#cat-list').replaceChildren(...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
     $('#cat-empty').hidden = list.length > 0;
     $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
       + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');

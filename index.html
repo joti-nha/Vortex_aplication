@@ -157,7 +157,7 @@
 
       <section class="block" aria-labelledby="cat-title">
         <h2 class="block__title" id="cat-title">Origens, espécimes, poderes e itens</h2>
-        <p class="block__hint">Toque numa categoria para ver tudo dela, ou busque pelo nome. Mostra o catálogo oficial e o que as pessoas salvaram no banco.</p>
+        <p class="block__hint">Toque numa categoria para ver tudo dela, ou busque pelo nome. Toque num registro para ver todos os dados. Mostra o catálogo oficial e o que as pessoas salvaram no banco.</p>
         <div class="cat-chips" id="cat-chips" role="group" aria-label="Categorias"></div>
         <div class="field">
           <label class="field__label" for="cat-q">Buscar no catálogo</label>
@@ -733,6 +733,18 @@
         <button class="btn btn--ghost" type="button" id="setup-back">Voltar</button>
         <button class="btn btn--primary" type="button" id="setup-next">Continuar</button>
       </div>
+    </div>
+  </dialog>
+
+  <!-- Detalhes de um registro do banco (item, espécime, poder, origem): todos os dados -->
+  <dialog class="dialog dialog--wide" id="entry-dialog" aria-labelledby="entry-title">
+    <div class="picker">
+      <div class="picker__head">
+        <h2 id="entry-title"></h2>
+        <button class="btn btn--ghost btn--sm" type="button" id="entry-close">Fechar</button>
+      </div>
+      <p class="block__hint" id="entry-meta"></p>
+      <div class="entry" id="entry-body"></div>
     </div>
   </dialog>
 

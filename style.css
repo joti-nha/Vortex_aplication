@@ -1102,6 +1102,12 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 .lib-icon--mod { background: var(--rar); color: var(--abismo); border-radius: 50%; }
 .lib-row { flex-wrap: wrap; }
 .lib-row .row__open { align-items: flex-start; }
+.lib-row__open { cursor: pointer; }
+.lib-row__open:focus-visible { outline: 3px solid var(--mare); outline-offset: -3px; }
+.entry__img { display: block; max-width: 100%; max-height: 260px; margin: 0 auto 1rem; border-radius: 8px; object-fit: contain; }
+.entry__data dd { white-space: pre-line; overflow-wrap: anywhere; }
+.entry__sub { margin: 1.25rem 0 0.4rem; font-size: var(--t-m, 1.05rem); }
+.entry__lore { margin: 0 0 0.6rem; color: var(--nevoa-2); }
 .row__text { margin-top: 0.15rem; font-size: var(--t-s); color: var(--nevoa-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .star { flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--nevoa-2); font-size: 1.5rem; line-height: 1; }
 .star[aria-pressed="true"] { color: var(--ambar); }
