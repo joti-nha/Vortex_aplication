@@ -1396,6 +1396,24 @@ const FIREBASE_CONFIG = {
   }
 
   const openDialog = (dlg) => { if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); };
+
+  // Pergunta de uma escolha (ex.: a perícia do Doutor). Devolve o valor ou null.
+  function askChoice(title, label, hint, options) {
+    const dlg = document.getElementById('choice-dialog');
+    const sel = document.getElementById('choice-select');
+    document.getElementById('choice-title').textContent = title;
+    document.getElementById('choice-label').textContent = label;
+    document.getElementById('choice-hint').textContent = hint;
+    sel.replaceChildren(...options.map((o) => { const op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; return op; }));
+    return new Promise((resolve) => {
+      const done = (v) => { dlg.removeEventListener('close', onClose); if (dlg.open) dlg.close(); resolve(v); };
+      const onClose = () => done(dlg.returnValue === 'ok' ? sel.value : null);
+      dlg.returnValue = '';
+      dlg.addEventListener('close', onClose);
+      openDialog(dlg);
+      sel.focus();
+    });
+  }
   const closeDialog = (dlg) => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
 
   function askConfirm({ title, text, ok }) {
@@ -3063,11 +3081,19 @@ const FIREBASE_CONFIG = {
     const b = blankSheet();
     const s = Object.assign({}, b, r);
     ['attrs', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
-    s.powers = Array.isArray(r.powers) ? r.powers : [];
+    s.powers = Array.isArray(r.powers) ? r.powers.slice() : [];
     s.profs = Array.isArray(r.profs) ? r.profs.filter((x) => typeof x === 'string') : [];
     // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
     s.doutor = Array.isArray(r.doutor) ? r.doutor.filter((x) => typeof x === 'string') : [];
     s.upProfs = Array.isArray(r.upProfs) ? r.upProfs.filter((x) => typeof x === 'string') : [];
+    // Doutor e as proficiências compradas são poderes; fichas antigas guardavam em listas à parte
+    s.doutor.map((id) => ['of-pod-doutor', id]).concat(s.upProfs.map((id) => [id.indexOf('armadura-') === 0 ? 'of-pod-prof-armadura' : 'of-pod-prof-arma', id])).forEach((x) => {
+      if (s.powers.some((p) => p.id === x[0] && p.choice === x[1])) return;
+      const e = BUILTINS.find((b) => b.id === x[0]);
+      if (e) s.powers.push(choicePower(e, x[1]));
+    });
+    s.doutor = [];
+    s.upProfs = [];
     s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
     // fichas da versão anterior marcavam só "equipado": cada item vai para o primeiro espaço livre que o aceite
     s.inventory.forEach((i) => {
@@ -3127,9 +3153,33 @@ const FIREBASE_CONFIG = {
     if (isWeapon(i.kind)) { const t = findType(findCategory(i.kind), i.typeId); return t ? (t.prof || t.id) : ''; }
     return '';
   }
-  const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || (s.upProfs || []).indexOf(id) >= 0;
+  /* Poder-lista e melhorias. Um poder-lista (Defensivas, Ataques) tem opções que afetam a mesma
+     coisa de jeitos diferentes: cada opção comprada custa o custo do poder. Melhorias somam ao poder.
+     Os dois vêm em texto, uma por linha: "Nome | efeito | custo". */
+  const powerLines = (txt) => String(txt || '').split('\n').map((l) => l.split('|').map((x) => x.trim())).filter((x) => x[0])
+    .map((x) => ({ name: x[0].slice(0, 60), text: x[1] || '', cost: x[2] || '' }));
+  const powerOpts = (p) => powerLines(p.values && p.values.opcoes);
+  const powerUps = (p) => powerLines(p.values && p.values.melhorias);
+  const powerPicks = (p) => { const names = powerOpts(p).map((o) => o.name); return (p.picks || []).filter((n) => names.indexOf(n) >= 0); };
+  const peCost = (txt) => { const m = /(\d+)\s*pe\b/i.exec(String(txt || '')); return m ? Number(m[1]) : 0; };
+  const upCount = (p, name) => Math.max(0, Math.round(num((p.ups || {})[name])));
+  function powerUpCost(p) {
+    const custo = num(p.values && p.values.custo);
+    const base = powerOpts(p).length ? custo * powerPicks(p).length : custo;
+    return base + powerUps(p).reduce((t, u) => t + (u.cost === '' ? 1 : num(u.cost)) * upCount(p, u.name), 0);
+  }
+
+  /* Poderes com escolha: Doutor (uma perícia) e Proficiência em arma ou armadura (um tipo).
+     Cada compra é um poder na lista, com a escolha guardada em choice. */
+  const CHOICE_POWERS = { 'of-pod-doutor': 'pericia', 'of-pod-prof-arma': 'arma', 'of-pod-prof-armadura': 'armadura' };
+  const choicesOf = (s, pid) => (s.powers || []).filter((p) => p.id === pid && p.choice).map((p) => p.choice);
+  const doutorOf = (s) => choicesOf(s, 'of-pod-doutor');
+  const upProfsOf = (s) => choicesOf(s, 'of-pod-prof-arma').concat(choicesOf(s, 'of-pod-prof-armadura'));
+  const choiceLabel = (pid, id) => (CHOICE_POWERS[pid] === 'pericia' ? SKILL_LABEL[id] || id : profLabel(id));
+  const choicePower = (e, choice) => Object.assign(slotSnap(e), { thumb: e.thumb || '', choice, name: e.name + ': ' + choiceLabel(e.id, choice) });
+  const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
-  const skillCap = (s, id) => ((s.doutor || []).indexOf(id) >= 0 ? 4 : 3);
+  const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
   const isModule = (i) => i.kind === 'protese-modulo' && i.values.classe === 'Módulo';
   const twoHanded = (i) => /duas/i.test(String((i.values && i.values.empunhadura) || ''));
@@ -3204,7 +3254,7 @@ const FIREBASE_CONFIG = {
 
     const max = {};
     Object.keys(src).forEach((k) => { max[k] = Math.max(0, Math.round(total(k) * 100) / 100); });
-    const powerCost = s.powers.reduce((t, p) => t + num(p.values && p.values.custo), 0);
+    const powerCost = s.powers.reduce((t, p) => t + powerUpCost(p), 0);
     const upEarned = Math.floor(num(s.xp) / 10); // os de origem/espécie não contam para os benefícios
     return {
       max, src, base, pen, armor, armorProf, nucleo, core,
@@ -3213,9 +3263,9 @@ const FIREBASE_CONFIG = {
       ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: spv.humanidade === 'Sim',
       ccOver: (nucleo > 0 || attachUsed > 0) && (protUsed + attachUsed > ccMax || protUsed + attachUsed + modUsed > ccMax + modExtra),
       upEarned, upTotal: upEarned + num(spv.upInicial) + num(s.upExtra),
-      upSpent: s.up.per + powerCost + s.doutor.length + s.upProfs.length,
+      upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + s.upProfs.length,
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
   }
@@ -3586,62 +3636,7 @@ const FIREBASE_CONFIG = {
       h('div', 'buys', pick('pv', '+5 PV'), pick('pe', '+5 PE'), pick('pa', '+1 PA')),
       h('p', 'field__hint', 'A cada UP par alcançado (sem contar os de origem), escolha 2 benefícios. A cada UP ímpar, +1 ponto de perícia (já somado nos pontos de perícia).'),
       h('div', 'buys', buy('per', 'UP investidos em perícias', 99)),
-      h('p', 'field__hint', 'Cada UP investido em perícias dá +3 pontos livres. Poderes custam UP conforme o custo de cada um.'),
-      upBuys());
-  }
-
-  /* Compras de 1 UP: Doutor numa perícia e proficiências extras de arma ou armadura */
-  function upBuys() {
-    const s = sheetChar.sheet;
-    const allSkills = Object.keys(SKILLS).reduce((t, k) => t.concat(SKILLS[k]), []);
-    const weaponProfs = PROFS.filter((p) => p.id.indexOf('armadura-') !== 0);
-    const armorProfs = PROFS.filter((p) => p.id.indexOf('armadura-') === 0);
-    const owned = (list, label, onRemove) => list.map((id) => {
-      const x = h('button', 'slot-chip__x', '×');
-      x.type = 'button';
-      x.setAttribute('aria-label', 'Desfazer a compra: ' + label(id));
-      x.dataset.fid = 'upb-x-' + id;
-      x.addEventListener('click', () => onRemove(id));
-      return h('span', 'slot-chip', h('span', 'slot-chip__name', label(id)), x);
-    });
-    const buyRow = (id, title, text, options, list, label, onBuy, onRemove) => {
-      const sel = h('select', 'input');
-      sel.id = 'upb-' + id;
-      sel.dataset.fid = 'upb-' + id;
-      const first = h('option', '', options.length ? 'Escolha...' : 'Nada disponível');
-      first.value = '';
-      sel.append(first, ...options.map((o) => { const op = h('option', '', o[1]); op.value = o[0]; return op; }));
-      const btn = h('button', 'btn btn--ghost btn--sm', 'Comprar (1 UP)');
-      btn.type = 'button';
-      btn.dataset.fid = 'upb-' + id + '-buy';
-      btn.disabled = !options.length;
-      btn.addEventListener('click', () => {
-        if (!sel.value) { toast('Escolha antes de comprar.'); sel.focus(); return; }
-        onBuy(sel.value);
-      });
-      const lab = h('label', 'field__label', title);
-      lab.htmlFor = sel.id;
-      const chips = owned(list, label, onRemove);
-      return h('div', 'upbuy',
-        h('div', 'field', lab, h('div', 'upbuy__row', sel, btn)),
-        h('p', 'field__hint', text),
-        chips.length ? h('div', 'upbuy__owned', ...chips) : null);
-    };
-    const drop = (arr, id) => arr.filter((x) => x !== id);
-    return h('div', 'upbuys',
-      h('h4', 'upbuys__title', 'Compras com UP (1 UP cada)'),
-      buyRow('doutor', 'Doutor', 'O limite de modificador na perícia escolhida passa a ser +4.',
-        allSkills.filter((sk) => s.doutor.indexOf(sk[0]) < 0), s.doutor, (id) => 'Doutor: ' + (SKILL_LABEL[id] || id),
-        (id) => { s.doutor.push(id); changed(); },
-        (id) => { s.doutor = drop(s.doutor, id); if (num(s.skills[id]) > 3) s.skills[id] = 3; changed(); }),
-      buyRow('arma', 'Proficiência em arma', 'Escolha um tipo de arma para usar a regra de cadência proficiente. Ganha +1 ponto de perícia para distribuir.',
-        weaponProfs.filter((p) => !hasProf(s, p.id)).map((p) => [p.id, p.label]), s.upProfs.filter((id) => id.indexOf('armadura-') !== 0), profLabel,
-        (id) => { s.upProfs.push(id); changed(); },
-        (id) => { s.upProfs = drop(s.upProfs, id); changed(); }),
-      buyRow('armadura', 'Proficiência em armadura', 'Escolha um tipo de armadura: +1 de armadura com ela e a regra de proficiência (a penalidade não dobra). Ganha +1 ponto de perícia para distribuir.',
-        armorProfs.filter((p) => !hasProf(s, p.id)).map((p) => [p.id, p.label]), s.upProfs.filter((id) => id.indexOf('armadura-') === 0), profLabel,
-        (id) => { s.upProfs.push(id); changed(); },
-        (id) => { s.upProfs = drop(s.upProfs, id); changed(); }));
+      h('p', 'field__hint', 'Cada UP investido em perícias dá +3 pontos livres. Poderes custam UP conforme o custo de cada um; Doutor e as proficiências extras de arma e armadura ficam em Poderes.'));
   }
 
   function profPills(list, onToggle, limit, prefix) {
@@ -3662,9 +3657,9 @@ const FIREBASE_CONFIG = {
   function renderProfs() {
     const s = sheetChar.sheet;
     $('#profs-block').replaceChildren(
-      h('h3', 'sub-title', 'Proficiências ', h('span', 'count', '(' + s.profs.length + ' de 4 iniciais' + (s.upProfs.length ? ' + ' + s.upProfs.length + ' compradas com UP' : '') + ')')),
+      h('h3', 'sub-title', 'Proficiências ', h('span', 'count', '(' + s.profs.length + ' de 4 iniciais' + (upProfsOf(s).length ? ' + ' + upProfsOf(s).length + ' por poder' : '') + ')')),
       profPills(s.profs, (id, on) => { s.profs = s.profs.filter((x) => x !== id); if (on) s.profs.push(id); changed(); }, 0),
-      s.upProfs.length ? h('p', 'field__hint', 'Compradas com UP (em Progressão): ' + s.upProfs.map(profLabel).join(', ') + '.') : null,
+      upProfsOf(s).length ? h('p', 'field__hint', 'Vindas de poderes: ' + upProfsOf(s).map(profLabel).join(', ') + '.') : null,
       h('p', 'field__hint', 'Em armas: cadência perita e o aprimoramento do tipo. Em armaduras: a penalidade não dobra e a defesa ganha +1. Usar um item fora da empunhadura ideal conta como sem proficiência.'));
   }
 
@@ -3690,16 +3685,74 @@ const FIREBASE_CONFIG = {
     const s = sheetChar.sheet;
     $('#power-list').replaceChildren(...s.powers.map((p, i) => {
       const v = p.values || {};
-      const meta = [num(v.custo) ? 'Custo ' + num(v.custo) + ' UP' : '', v.custoUso ? 'Uso: ' + v.custoUso : '', bonusLine(p.bonus || {})].filter(Boolean).join(' · ');
+      const opts = powerOpts(p);
+      const ups = powerUps(p);
+      const total = powerUpCost(p);
+      const costTxt = opts.length ? num(v.custo) + ' UP por opção · ' + total + ' UP gastos' : total ? 'Custo ' + total + ' UP' : '';
+      const meta = [costTxt, v.custoUso ? 'Uso: ' + v.custoUso : '', bonusLine(p.bonus || {})].filter(Boolean).join(' · ');
       const main = h('span', 'row__main', h('span', 'row__title', p.name, ...(entryLore(p) ? [' ', entryLore(p)] : [])), h('span', 'row__meta', meta));
       if (v.efeito) main.append(h('span', 'row__text', v.efeito));
+      if (opts.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Opções (marque as compradas)'), ...opts.map((o, k) => powerOptRow(s, p, o, i + '-' + k))));
+      if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
       del.type = 'button';
       del.setAttribute('aria-label', 'Remover poder ' + p.name);
-      del.addEventListener('click', () => { s.powers.splice(i, 1); changed(); });
+      del.addEventListener('click', () => {
+        s.powers.splice(i, 1);
+        // sem o Doutor, a perícia volta ao limite normal
+        if (p.id === 'of-pod-doutor' && p.choice && num(s.skills[p.choice]) > skillCap(s, p.choice)) s.skills[p.choice] = skillCap(s, p.choice);
+        changed();
+      });
       return h('li', 'row lib-row', h('span', 'row__open row__open--static', entryIcon(p), main), del);
     }));
     $('#power-empty').hidden = s.powers.length > 0;
+  }
+
+  function powerOptRow(s, p, o, fid) {
+    const on = powerPicks(p).indexOf(o.name) >= 0;
+    const chk = h('input');
+    chk.type = 'checkbox';
+    chk.checked = on;
+    chk.dataset.fid = 'pw-opt-' + fid;
+    chk.addEventListener('change', () => {
+      const picks = powerPicks(p).filter((n) => n !== o.name);
+      if (chk.checked) picks.push(o.name);
+      p.picks = picks;
+      changed();
+    });
+    const row = h('span', 'pw-opt' + (on ? ' pw-opt--on' : ''),
+      h('label', 'pw-opt__head', chk, h('strong', '', o.name), o.cost ? h('span', 'tag', o.cost) : null),
+      o.text ? h('span', 'pw-opt__text', o.text) : null);
+    const pe = peCost(o.cost);
+    if (on && pe) {
+      const use = h('button', 'btn btn--ghost btn--sm', 'Usar (−' + pe + ' PE)');
+      use.type = 'button';
+      use.dataset.fid = 'pw-use-' + fid;
+      use.addEventListener('click', () => spendPower(sheetChar, p.name + ': ' + o.name, pe));
+      row.append(use);
+    }
+    return row;
+  }
+
+  function powerUpRow(p, u, fid) {
+    const n = upCount(p, u.name);
+    const cost = u.cost === '' ? 1 : num(u.cost);
+    return h('span', 'pw-opt' + (n ? ' pw-opt--on' : ''),
+      h('span', 'pw-opt__head', h('strong', '', u.name), h('span', 'tag', cost + ' UP cada'),
+        stepper(n, { min: 0, max: 9, label: 'Melhoria ' + u.name, fid: 'pw-up-' + fid, text: '×' + n, onChange: (k) => { p.ups = Object.assign({}, p.ups); p.ups[u.name] = k; changed(); } })),
+      u.text ? h('span', 'pw-opt__text', u.text) : null);
+  }
+
+  // Gasta o PE de uma opção de poder (na ficha aberta)
+  function spendPower(c, label, pe) {
+    const s = c.sheet;
+    const max = compute(c).max.pe;
+    const cur = getCur(s, 'pe', max);
+    if (cur < pe) { toast('PE insuficiente para ' + label + ' (' + cur + ' de ' + pe + ').'); return false; }
+    setCur(s, 'pe', cur - pe, max);
+    changed();
+    toast(label + ': −' + pe + ' PE (restam ' + (cur - pe) + ').');
+    return true;
   }
 
   /* ---------- Inventário em blocos ----------
@@ -4049,10 +4102,27 @@ const FIREBASE_CONFIG = {
 
   $('#power-add').addEventListener('click', async () => {
     const ch = sheetChar;
-    const have = ch.sheet.powers.map((p) => p.id).filter(Boolean);
+    const have = ch.sheet.powers.map((p) => p.id).filter((id) => id && !CHOICE_POWERS[id]);
     const e = await openPicker({ title: 'Adicionar poder', kinds: ['poder'], chips: ['Poder'], filter: (x) => x.kind === 'poder' && have.indexOf(x.id) < 0 });
     if (!e || sheetChar !== ch) return;
-    ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '' }));
+    const kind = CHOICE_POWERS[e.id];
+    if (kind) {
+      const s = ch.sheet;
+      const opts = kind === 'pericia'
+        ? Object.keys(SKILLS).reduce((all, k) => all.concat(SKILLS[k]), []).filter((sk) => doutorOf(s).indexOf(sk[0]) < 0).map((sk) => [sk[0], sk[1]])
+        : PROFS.filter((p) => (p.id.indexOf('armadura-') === 0) === (kind === 'armadura') && !hasProf(s, p.id)).map((p) => [p.id, p.label]);
+      if (!opts.length) { toast('Nada disponível para ' + e.name + ': o personagem já tem todas as opções.'); return; }
+      const choice = await askChoice(e.name, kind === 'pericia' ? 'Escolha a perícia' : kind === 'arma' ? 'Escolha o tipo de arma' : 'Escolha o tipo de armadura', (e.values && e.values.efeito) || '', opts);
+      if (!choice || sheetChar !== ch) return;
+      s.powers.push(choicePower(e, choice));
+    } else if (powerOpts(e).length) {
+      const opts = powerOpts(e);
+      const first = await askChoice(e.name, 'Escolha a primeira opção (' + num(e.values.custo) + ' UP cada)', 'As outras você marca depois, na lista de poderes.', opts.map((o) => [o.name, o.name + (o.cost ? ' · ' + o.cost : '')]));
+      if (!first || sheetChar !== ch) return;
+      ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', picks: [first] }));
+    } else {
+      ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '' }));
+    }
     changed();
   });
 
@@ -5079,6 +5149,29 @@ const FIREBASE_CONFIG = {
     }, 'dock-'));
     const names = combatants().filter((x) => combat.targets.has(x.id)).map((x) => x.name);
     $('#dock-targets').textContent = names.length ? 'Alvos marcados no Combate: ' + names.join(', ') + '. O dano entra sozinho.' : 'Sem alvo marcado: o ataque só rola. Marque alvos no Combate para aplicar o dano.';
+
+    // Poderes de uso: as opções compradas que gastam PE (Certeiro, Esquiva...)
+    const usable = [];
+    s.powers.forEach((p) => powerOpts(p).forEach((o) => { if (powerPicks(p).indexOf(o.name) >= 0 && peCost(o.cost)) usable.push({ p, o, pe: peCost(o.cost) }); }));
+    $('#dock-powers').replaceChildren(...(usable.length ? [h('span', 'dock__powers-label', 'Poderes'), ...usable.map((x) => {
+      const b = h('button', 'qtest qtest--power', x.o.name, h('span', 'qtest__cost', x.pe + ' PE'));
+      b.type = 'button';
+      b.title = x.p.name + ': ' + x.o.text;
+      b.addEventListener('click', async () => {
+        const cur = getCur(s, 'pe', m.max.pe);
+        if (cur < x.pe) { toast('PE insuficiente para ' + x.o.name + ' (' + cur + ' de ' + x.pe + ').'); return; }
+        b.disabled = true;
+        try {
+          await patchMemberSheet(mb, (ss) => { const mm = compute(Object.assign({}, mb, { sheet: ss })); setCur(ss, 'pe', getCur(ss, 'pe', mm.max.pe) - x.pe, mm.max.pe); });
+          await campaignRoll(mb, { expr: '−' + x.pe + ' PE', label: ('Poder: ' + x.o.name).slice(0, 60), detail: (x.p.name + ' · ' + x.o.text).slice(0, 1450), total: x.pe, flag: '' });
+          renderDock();
+          toast(x.o.name + ': −' + x.pe + ' PE.');
+        } catch (err) { toast(errorMessage(err)); }
+        b.disabled = false;
+      });
+      return b;
+    })] : []));
+    $('#dock-powers').hidden = !usable.length;
 
     // Testes rápidos: atributos e as perícias que o personagem tem
     const quick = testCatalog(c).filter((t) => t.group === 'Atributos' || num(s.skills[t.id.slice(2)]) > 0);

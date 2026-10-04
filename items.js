@@ -318,9 +318,11 @@ window.VORTEX_ITEMS = {
       hint: 'Poderes e habilidades. Os bônus automáticos (PV, Escudo, Blindagem...) entram sozinhos na ficha de quem tiver o poder.',
       fields: [
         { key: 'nome', label: 'Nome do poder', kind: 'text', big: true },
-        { key: 'custo', label: 'Custo (UP)', kind: 'number', min: 0, step: 1 },
+        { key: 'custo', label: 'Custo (UP; num poder-lista, por opção)', kind: 'number', min: 0, step: 1 },
         { key: 'custoUso', label: 'Custo de uso (PE, PA...)', kind: 'text' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
+        { key: 'opcoes', label: 'Poder-lista: opções (uma por linha: Nome | efeito | custo de uso)', kind: 'textarea', big: true, placeholder: 'Esquiva | Use precisão como atributo básico na defesa. | 1 PE' },
+        { key: 'melhorias', label: 'Melhorias (uma por linha: Nome | efeito | custo em UP)', kind: 'textarea', big: true, placeholder: 'Regeneração maior | +1 PV recuperado por turno. | 1' },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
@@ -428,8 +430,15 @@ window.VORTEX_ITEMS = {
     { id: 'of-npc-mecha', kind: 'npc', name: 'Mecha de Contenção', values: { categoria: 'Chefão', up: '10', corpo: '4', precisao: '2', essencia: '1', luta: '2', mira: '3', operacoes: '1', resistencia: '3', armadura: '9', pv: '20', escudo: '15', blindagem: '30', ataque: 'À distância', arma: 'Metralhadora rotativa', dano: 'Balístico, Explosivo', cadencia: '5', efetivo: 'Blindagem', descricao: 'Camadas de escudo e blindagem antes do piloto.' } },
 
     // Poderes (capítulo Habilidades)
-    { id: 'of-pod-esquiva', kind: 'poder', name: 'Esquiva', values: { custo: '1', efeito: 'Use precisão como atributo básico, e reflexo como perícia para os testes de defesa. Pode gastar +1 Up point para contar na defesa básica também.' } },
-    { id: 'of-pod-regeneracao', kind: 'poder', name: 'Regeneração', values: { custo: '2', efeito: 'Se for uma criatura biológica, recupere 3 PVs por turno. Se caído, pode recobrar a consciência quando recuperar todos os PV. A cada Up point acima do primeiro, +1 na recuperação de PVs.' } },
+    { id: 'of-pod-defensivas', kind: 'poder', name: 'Defensivas', values: { custo: '1', efeito: 'Ativado durante a rolagem de defesa, pode ser ativado em apenas uma defesa, mas pode ser estendido por vários turnos ao critério e gasto proporcional do usuário.',
+      opcoes: 'Esquiva | Use precisão como atributo básico, e reflexo como perícia para os testes de defesa (incluindo defesa básica). | 1 PE\nExplosiva | Use sua reação: some sua armadura na defesa contra o ataque recebido. | 3 PE' } },
+    { id: 'of-pod-ataques', kind: 'poder', name: 'Ataques', values: { custo: '1', efeito: 'Ao realizar um ataque, você pode ativar essas vantagens ao custo citado.',
+      opcoes: 'Avante | Você também se move 3 m na mesma ação (não usa um movimento); o ataque acontece após o movimento. | 1 PE\nCerteiro | Seu ataque causa acerto crítico com 5 e 6. | 1 PE' } },
+    { id: 'of-pod-regeneracao', kind: 'poder', name: 'Regeneração', values: { custo: '2', efeito: 'Se for uma criatura biológica, recupere 3 PVs por turno. Se caído, pode recobrar a consciência quando recuperar todos os PV.',
+      melhorias: 'Regeneração maior | +1 PV recuperado por turno (cada compra). | 1' } },
+    { id: 'of-pod-doutor', kind: 'poder', name: 'Doutor', values: { custo: '1', efeito: 'Seu limite de modificador na perícia escolhida se torna 4. Pode ser comprado mais de uma vez, uma perícia por compra.' } },
+    { id: 'of-pod-prof-arma', kind: 'poder', name: 'Proficiência em arma', values: { custo: '1', efeito: 'Escolha um tipo de arma o qual é proficiente, para usar a regra de cadência proficiente. Ganha +1 de perícia para distribuir.' } },
+    { id: 'of-pod-prof-armadura', kind: 'poder', name: 'Proficiência em armadura', values: { custo: '1', efeito: 'Escolha um tipo de armadura o qual é proficiente: ganha +1 de armadura com ela e usa a regra de proficiência com a armadura. Ganha +1 de perícia para distribuir.' } },
     { id: 'of-pod-transformacao', kind: 'poder', name: 'Transformação', values: { efeito: 'Com uma ação completa você se transforma; cria uma transformação trocando seus Up points e os realocando como quiser. Seus itens caem ao chão no processo. Cada Up point equivale a uma transformação.' } },
     { id: 'of-pod-akimbo', kind: 'poder', name: 'Akimbo', values: { efeito: 'Empunhe pistolas ou submetralhadoras uma em cada mão. O tempo de recarga aumenta em uma categoria. Pode mirar em um único alvo com ambas ou escolher até dois alvos; faz um teste de ataque com cada arma, que aplicam dano separadamente.' } },
     { id: 'of-pod-gatilho', kind: 'poder', name: 'Gatilho do velho mundo', values: { efeito: 'Com um revólver de disparo único, obtém cadência igual a 1 + metade da precisão (para cima). O primeiro disparo não conta na penalidade de cadência. Precisa da outra mão livre.' } }

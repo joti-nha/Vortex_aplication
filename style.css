@@ -1809,3 +1809,25 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .dbar__fill, .qtest { transition: none; }
 }
+
+/* Poder-lista e melhorias na ficha; poderes de uso no painel da campanha */
+.pw-sub { display: grid; gap: 0.5rem; margin-top: 0.75rem; }
+.pw-sub__title { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nevoa-2); }
+.pw-opt {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--r-s);
+  background: rgba(0, 0, 0, 0.18);
+}
+.pw-opt--on { border-color: rgba(183, 155, 255, 0.6); background: rgba(183, 155, 255, 0.08); }
+.pw-opt__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; cursor: pointer; }
+.pw-opt__head input { width: 1.1rem; height: 1.1rem; accent-color: var(--essencia); }
+.pw-opt__text { color: var(--nevoa-2); font-size: var(--t-s); overflow-wrap: anywhere; }
+.pw-opt .btn { justify-self: start; }
+.dock__powers { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.9rem; }
+.dock__powers[hidden] { display: none; }
+.dock__powers-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--essencia); margin-right: 0.25rem; }
+.qtest--power { border-color: rgba(183, 155, 255, 0.6); color: var(--nevoa); display: inline-flex; align-items: center; gap: 0.5rem; }
+.qtest__cost { font-size: 0.75rem; font-weight: 700; color: var(--essencia); }
