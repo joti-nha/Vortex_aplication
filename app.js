@@ -1465,6 +1465,91 @@ const FIREBASE_CONFIG = {
     return out;
   }
 
+  // Painel do candidato: dados, resumo de combate, dinheiro nesta campanha e ações
+  function fillMemberPanel(m, panel) {
+    const pic = h('span', 'member__pic token token--' + m.type);
+    if (m.image) { const img = h('img'); img.src = m.image; img.alt = ''; pic.append(img); pic.classList.add('token--img'); }
+    else pic.textContent = m.name.trim().charAt(0).toUpperCase();
+    const link = h('a', 'btn btn--ghost btn--sm', 'Abrir ficha completa');
+    link.href = '#/character/' + encodeURIComponent(m.characterId);
+    const money = num(m.sheet && m.sheet.money && currentCamp ? m.sheet.money[currentCamp.id] : 0);
+    const info = h('div', 'member__info',
+      h('dl', 'member__data',
+        h('dt', '', 'Espécie'), h('dd', '', m.species || '—'),
+        h('dt', '', 'Idade'), h('dd', '', m.age || '—'),
+        h('dt', '', 'Origem'), h('dd', '', m.origin || '—'),
+        ...(m.sheet && m.sheet.attrs ? [h('dt', '', 'Atributos'), h('dd', '', 'Corpo ' + (m.sheet.attrs.corpo || 0) + ' · Precisão ' + (m.sheet.attrs.precisao || 0) + ' · Essência ' + (m.sheet.attrs.essencia || 0))] : []),
+        ...memberStats(m),
+        h('dt', '', 'Dinheiro'), h('dd', 'member__money', fmtCronos(money) + ' Cronos (nesta campanha)')),
+      link);
+    if (currentCamp && (m.mine || currentCamp.isOwner)) info.append(moneyEditor(m, panel));
+    if (m.mine && m.sheet) {
+      const st = memberAtk[m.characterId] = memberAtk[m.characterId] || { uid: null, mode: '', shots: 1, mod: 0 };
+      const acts = h('div', 'member__actions', h('h3', 'member__sub', 'Ações'));
+      acts.append(attackBuilder(Object.assign({}, m, { sheet: normSheet(m.sheet) }), st, async (t, btn) => {
+        btn.disabled = true;
+        await campaignRoll(m, rollTest(t));
+        btn.disabled = false;
+      }, 'atk-' + m.characterId + '-'));
+      info.append(acts);
+    }
+    panel.replaceChildren(pic, info);
+  }
+
+  const memberAtk = {}; // escolhas de ataque de cada personagem, enquanto a página estiver aberta
+  const fmtCronos = (n) => Math.round(n).toLocaleString('pt-BR');
+
+  // Altera a ficha de um candidato a partir da campanha: lê a versão atual antes de salvar
+  async function patchMemberSheet(m, fn) {
+    const fresh = await db.getCharacter(m.characterId);
+    if (!fresh) throw new UserError('Essa ficha não existe mais.');
+    const sheet = normSheet(fresh.sheet);
+    fn(sheet);
+    await db.saveCharacter(m.characterId, { sheet });
+    m.sheet = sheet;
+    return sheet;
+  }
+
+  function moneyEditor(m, panel) {
+    const inp = h('input', 'input');
+    inp.type = 'number';
+    inp.min = '0';
+    inp.step = '1';
+    inp.inputMode = 'numeric';
+    inp.placeholder = 'Valor em Cronos';
+    inp.id = 'money-' + m.characterId;
+    inp.setAttribute('aria-label', 'Valor em Cronos para ' + m.name);
+    const act = (label, sign) => {
+      const b = h('button', 'btn btn--ghost btn--sm', label);
+      b.type = 'button';
+      b.addEventListener('click', async () => {
+        const v = Math.round(num(inp.value));
+        if (v <= 0) { inp.focus(); return; }
+        b.disabled = true;
+        try {
+          await patchMemberSheet(m, (s) => {
+            s.money = Object.assign({}, s.money);
+            s.money[currentCamp.id] = Math.max(0, num(s.money[currentCamp.id]) + sign * v);
+          });
+          toast((sign > 0 ? '+' : '–') + fmtCronos(v) + ' Cronos para ' + m.name + '.');
+          fillMemberPanel(m, panel);
+        } catch (err) { toast(errorMessage(err)); b.disabled = false; }
+      });
+      return b;
+    };
+    return h('div', 'money-edit', inp, act('Adicionar', 1), act('Retirar', -1));
+  }
+
+  // Rolagem feita a partir da campanha, em nome de um personagem seu
+  async function campaignRoll(m, r) {
+    try {
+      await db.addRoll(currentCamp.id, {
+        characterId: m.characterId, characterName: m.name, characterType: m.type,
+        expr: r.expr, label: r.label, detail: r.detail, total: r.total, flag: r.flag
+      });
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
   // Candidato: toque no nome abre a ficha resumida, sem sair da campanha
   function memberRow(m) {
     const panelId = 'member-' + m.characterId;
@@ -1476,19 +1561,8 @@ const FIREBASE_CONFIG = {
     toggle.setAttribute('aria-expanded', 'false');
     toggle.setAttribute('aria-controls', panelId);
 
-    const pic = h('span', 'member__pic token token--' + m.type);
-    if (m.image) { const img = h('img'); img.src = m.image; img.alt = ''; pic.append(img); pic.classList.add('token--img'); }
-    else pic.textContent = m.name.trim().charAt(0).toUpperCase();
-    const link = h('a', 'btn btn--ghost btn--sm', 'Abrir ficha completa');
-    link.href = '#/character/' + encodeURIComponent(m.characterId);
-    const panel = h('div', 'member__panel', pic, h('div', 'member__info',
-      h('dl', 'member__data',
-        h('dt', '', 'Espécie'), h('dd', '', m.species || '—'),
-        h('dt', '', 'Idade'), h('dd', '', m.age || '—'),
-        h('dt', '', 'Origem'), h('dd', '', m.origin || '—'),
-        ...(m.sheet && m.sheet.attrs ? [h('dt', '', 'Atributos'), h('dd', '', 'Corpo ' + (m.sheet.attrs.corpo || 0) + ' · Precisão ' + (m.sheet.attrs.precisao || 0) + ' · Essência ' + (m.sheet.attrs.essencia || 0))] : []),
-        ...memberStats(m)),
-      link));
+    const panel = h('div', 'member__panel');
+    fillMemberPanel(m, panel);
     panel.id = panelId;
     panel.hidden = true;
 
@@ -1994,7 +2068,7 @@ const FIREBASE_CONFIG = {
      Procura no banco inteiro, já filtrada pelo que o slot aceita.
      Devolve a peça escolhida (ou null se a pessoa fechar). */
   const pickerDlg = $('#picker');
-  const pk = { opts: null, resolve: null, seq: 0 };
+  const pk = { opts: null, resolve: null, seq: 0, on: new Set() };
 
   function finishPicker(value) {
     const r = pk.resolve;
@@ -2016,7 +2090,10 @@ const FIREBASE_CONFIG = {
     if (seq !== pk.seq || pk.opts !== o) return;
     const favs = favLoad();
     const favOnly = $('#picker-fav').checked;
-    list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)));
+    // chips escolhidos pela pessoa: mostra só essas categorias (nenhum escolhido = todas)
+    const picked = (o.chips || []).filter((c) => c && c.kinds && pk.on.has(c.label));
+    const allowed = picked.length ? picked.reduce((t, c) => t.concat(c.kinds), []) : null;
+    list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)) && (!allowed || allowed.indexOf(e.kind) >= 0));
     list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
     $('#picker-list').replaceChildren(...list.map((e) => libRow(e,
       [{ label: 'Escolher', cls: 'btn--primary', onClick: () => finishPicker(deep(e)) }],
@@ -2031,7 +2108,21 @@ const FIREBASE_CONFIG = {
       pk.opts = opts;
       pk.resolve = resolve;
       $('#picker-title').textContent = opts.title;
-      $('#picker-chips').replaceChildren(h('span', 'picker__filter-label', 'Filtro automático:'), ...(opts.chips || []).filter(Boolean).map((c) => h('span', 'chip', c)));
+      pk.on = new Set();
+      const chips = (opts.chips || []).filter(Boolean);
+      const toggles = chips.some((c) => c.kinds);
+      $('#picker-chips').replaceChildren(h('span', 'picker__filter-label', toggles ? 'Filtro (toque para mostrar só as escolhidas):' : 'Filtro automático:'), ...chips.map((c) => {
+        if (!c.kinds) return h('span', 'chip', c.label || c);
+        const b = h('button', 'chip chip--toggle', c.label);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('click', () => {
+          if (pk.on.has(c.label)) pk.on.delete(c.label); else pk.on.add(c.label);
+          b.setAttribute('aria-pressed', String(pk.on.has(c.label)));
+          runPicker();
+        });
+        return b;
+      }));
       $('#picker-q').value = '';
       $('#picker-fav').checked = false;
       $('#picker-list').replaceChildren();
@@ -2734,7 +2825,7 @@ const FIREBASE_CONFIG = {
     renderPowers(m);
     renderInventory(m);
     renderAlerts(m);
-    renderSheetRolls(m);
+    renderSheetRolls();
     // avisa quando a carga passa do limite (colocar ou tirar itens nunca é bloqueado)
     if (watch.id === sheetChar.id && m.over && !watch.over) toast('Carga ' + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '. ' + OVERLOAD_TEXT);
     watch.over = m.over;
@@ -3314,7 +3405,9 @@ const FIREBASE_CONFIG = {
 
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
-    const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: ['Armas', 'Armaduras', 'Vestíveis', 'Implantes', 'Itens gerais'], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
+      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!e || sheetChar !== ch) return;
     const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
     const wasOver = compute(ch).over;
@@ -3421,14 +3514,12 @@ const FIREBASE_CONFIG = {
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
       out.push({ group: 'Perícias', id: 's:' + sk[0], label: t.skillName + ' ' + signed(fixed), make: () => skillTest(s, m, sk[0]) });
     }));
-    weaponsOf(s).forEach((i) => out.push({ group: 'Ataques', id: 'w:' + i.uid, label: i.name + (i.slot ? ' (em mãos)' : ''), make: () => attackTest(s, m, i, '', 1) }));
-    out.push({ group: 'Ataques', id: 'w:', label: 'Desarmado', make: () => attackTest(s, m, null, '', 1) });
     return out;
   }
 
   /* Rolagens na ficha: o resultado aparece aqui e, se escolhido, vai para a campanha */
   const sheetRollLog = new Map(); // id da ficha -> últimas rolagens desta sessão
-  const atk = { uid: null, mode: '', shots: 1 };
+  const atk = { char: null };
   let sheetCamps = [];
   const rollDest = $('#roll-dest'), rollGain = $('#roll-gain'), rollMod = $('#roll-mod');
 
@@ -3466,7 +3557,7 @@ const FIREBASE_CONFIG = {
     rollDest.value = sheetCamps.some((c) => c.id === keep) ? keep : (sheetCamps[0] ? sheetCamps[0].id : '');
   }
 
-  function renderSheetRolls(m) {
+  function renderSheetRolls() {
     const s = sheetChar.sheet;
     const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; if (fid) b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
     $('#attr-tests').replaceChildren(...ATTRS.map((at) => {
@@ -3474,45 +3565,65 @@ const FIREBASE_CONFIG = {
       b.append(h('span', 'quick-test__name', at.label), h('span', 'quick-test__val', '2d6 ' + (signed(s.attrs[at.id]) || '+0').replace(/^0$/, '+0')));
       return b;
     }));
-
-    // ataque: arma do inventário (as que estão em mãos primeiro) ou desarmado
-    const weapons = weaponsOf(s);
-    if (atk.uid && !weapons.some((w) => w.uid === atk.uid)) atk.uid = null;
-    if (atk.uid === null) atk.uid = weapons[0] ? weapons[0].uid : '';
-    const weapon = weapons.find((w) => w.uid === atk.uid) || null;
-    const modes = attackModes(s, weapon);
-    if (!modes.some((x) => x.id === atk.mode)) atk.mode = modes[0].id;
-    atk.shots = clamp(atk.shots, 1, maxShots(weapon));
-
-    const field = (id, label, control) => { control.id = id; control.dataset.fid = id; const l = h('label', 'field__label', label); l.htmlFor = id; return h('div', 'field', l, control); };
-    const wSel = h('select', 'input');
-    [['', 'Desarmado']].concat(weapons.map((w) => [w.uid, w.name + (w.slot ? ' (em mãos)' : ' (na mochila)')])).forEach((p) => { const o = h('option', '', p[1]); o.value = p[0]; wSel.append(o); });
-    wSel.value = atk.uid;
-    wSel.addEventListener('change', () => { atk.uid = wSel.value; atk.mode = ''; atk.shots = 1; renderSheetRolls(compute(sheetChar)); });
-    const mSel = h('select', 'input');
-    modes.forEach((x) => { const o = h('option', '', x.label); o.value = x.id; mSel.append(o); });
-    mSel.value = atk.mode;
-    mSel.addEventListener('change', () => { atk.mode = mSel.value; renderSheetRolls(compute(sheetChar)); });
-    const fields = [field('atk-weapon', 'Arma', wSel), field('atk-mode', 'Forma de ataque', mSel)];
-    if (maxShots(weapon) > 1) {
-      const nSel = h('select', 'input');
-      for (let k = 1; k <= maxShots(weapon); k++) {
-        const p = shotPenalty(k, isProficient(s, weapon));
-        const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos · –' + p + ' · dano ×' + k));
-        o.value = String(k);
-        nSel.append(o);
-      }
-      nSel.value = String(atk.shots);
-      nSel.addEventListener('change', () => { atk.shots = Math.round(num(nSel.value)) || 1; renderSheetRolls(compute(sheetChar)); });
-      fields.push(field('atk-shots', 'Disparos (cadência ' + maxShots(weapon) + ')', nSel));
-    }
-    const t = attackTest(s, m, weapon, atk.mode, atk.shots);
-    const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
-    const info = [weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
-    $('#attack-form').replaceChildren(h('div', 'attack__fields', ...fields),
-      h('div', 'attack__go', btn('Atacar · 2d6 ' + (fixed ? signed(fixed) : '+0'), 'btn--primary', () => sheetRoll(attackTest(s, compute(sheetChar), weapon, atk.mode, atk.shots)), 'atk-go'),
-        info ? h('span', 'attack__info', info) : null));
     renderRollLog();
+  }
+
+  /* Ação de ataque (fica na campanha, no painel de cada personagem seu).
+     st guarda as escolhas: { uid, mode, shots, mod }. onRoll recebe o teste pronto. */
+  function attackBuilder(c, st, onRoll, idp) {
+    const s = c.sheet;
+    const m = compute(c);
+    const box = h('div', 'attack');
+    const draw = () => {
+      const weapons = weaponsOf(s);
+      if (st.uid && !weapons.some((w) => w.uid === st.uid)) st.uid = null;
+      if (st.uid === null || st.uid === undefined) st.uid = weapons[0] ? weapons[0].uid : '';
+      const weapon = weapons.find((w) => w.uid === st.uid) || null;
+      const modes = attackModes(s, weapon);
+      if (!modes.some((x) => x.id === st.mode)) st.mode = modes[0].id;
+      st.shots = clamp(st.shots || 1, 1, maxShots(weapon));
+
+      const field = (id, label, control) => { control.id = idp + id; const l = h('label', 'field__label', label); l.htmlFor = control.id; return h('div', 'field', l, control); };
+      const wSel = h('select', 'input');
+      [['', 'Desarmado']].concat(weapons.map((w) => [w.uid, w.name + (w.slot ? ' (em mãos)' : ' (na mochila)')])).forEach((p) => { const o = h('option', '', p[1]); o.value = p[0]; wSel.append(o); });
+      wSel.value = st.uid;
+      wSel.addEventListener('change', () => { st.uid = wSel.value; st.mode = ''; st.shots = 1; draw(); });
+      const mSel = h('select', 'input');
+      modes.forEach((x) => { const o = h('option', '', x.label); o.value = x.id; mSel.append(o); });
+      mSel.value = st.mode;
+      mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
+      const fields = [field('weapon', 'Arma', wSel), field('mode', 'Forma de ataque', mSel)];
+      if (maxShots(weapon) > 1) {
+        const nSel = h('select', 'input');
+        for (let k = 1; k <= maxShots(weapon); k++) {
+          const p = shotPenalty(k, isProficient(s, weapon));
+          const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos · –' + p + ' · dano ×' + k));
+          o.value = String(k);
+          nSel.append(o);
+        }
+        nSel.value = String(st.shots);
+        nSel.addEventListener('change', () => { st.shots = Math.round(num(nSel.value)) || 1; draw(); });
+        fields.push(field('shots', 'Disparos (cadência ' + maxShots(weapon) + ')', nSel));
+      }
+      const modIn = h('input', 'input');
+      modIn.type = 'number';
+      modIn.step = '1';
+      modIn.placeholder = '0';
+      modIn.value = st.mod || '';
+      modIn.addEventListener('change', () => { st.mod = Math.round(num(modIn.value)); draw(); });
+      fields.push(field('mod', 'Modificador (distância, cobertura...)', modIn));
+
+      const t = attackTest(s, m, weapon, st.mode, st.shots);
+      if (st.mod) t.mods.push(['modificador', st.mod]);
+      const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
+      const info = [weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
+      const go = h('button', 'btn btn--primary btn--sm', 'Atacar · 2d6 ' + (fixed ? signed(fixed) : '+0'));
+      go.type = 'button';
+      go.addEventListener('click', () => onRoll(t, go));
+      box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, info ? h('span', 'attack__info', info) : null));
+    };
+    draw();
+    return box;
   }
 
   rollMod.addEventListener('change', () => { rollMod.value = Math.round(num(rollMod.value)) || ''; });
@@ -3965,7 +4076,7 @@ const FIREBASE_CONFIG = {
     setStatus('');
     renderPortrait();
     renderPin();
-    if (atk.char !== id) { Object.assign(atk, { char: id, uid: null, mode: '', shots: 1 }); rollMod.value = ''; rollGain.value = '2'; }
+    if (atk.char !== id) { atk.char = id; rollMod.value = ''; rollGain.value = '2'; }
     sheetCamps = [];
     renderRollDest();
     rerender();
@@ -4033,14 +4144,44 @@ const FIREBASE_CONFIG = {
     catch (err) { /* sem conexão: usa a ficha já carregada */ }
     const t = testCatalog(sheetOf(c)).find((x) => x.id === id);
     if (!t) { toast('Esse teste não existe mais na ficha.'); renderTestPick(); return; }
-    const r = rollTest(t.make());
-    try {
-      await db.addRoll(currentCamp.id, {
-        characterId: speaker.characterId, characterName: speaker.name, characterType: speaker.type,
-        expr: r.expr, label: r.label, detail: r.detail, total: r.total, flag: r.flag
-      });
-    } catch (err) { toast(errorMessage(err)); }
+    await campaignRoll(speaker, rollTest(t.make()));
     renderTestPick();
+  });
+
+  /* Mestre: dar XP a todos ou aos personagens escolhidos */
+  const xpAll = $('#xp-all');
+  function renderXpForm() {
+    const form = $('#form-xp');
+    form.hidden = !(currentCamp && currentCamp.isOwner && members.length);
+    xpAll.checked = true;
+    $('#xp-list').replaceChildren(...members.map((m) => {
+      const inp = h('input');
+      inp.type = 'checkbox';
+      inp.value = m.characterId;
+      inp.checked = true;
+      inp.addEventListener('change', () => { xpAll.checked = $$('input', $('#xp-list')).every((x) => x.checked); });
+      return h('label', 'check check--pill', inp, h('span', '', m.name));
+    }));
+  }
+  xpAll.addEventListener('change', () => { $$('input', $('#xp-list')).forEach((x) => { x.checked = xpAll.checked; }); });
+  $('#form-xp').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const amount = Math.round(num($('#xp-amount').value));
+    if (amount < 1) { toast('Digite quanto XP dar (1 ou mais).'); $('#xp-amount').focus(); return; }
+    const ids = $$('input:checked', $('#xp-list')).map((x) => x.value);
+    const chosen = members.filter((m) => ids.indexOf(m.characterId) >= 0);
+    if (!chosen.length) { toast('Escolha pelo menos um personagem.'); return; }
+    const btn = $('#xp-give');
+    btn.disabled = true;
+    const ok = [], failed = [];
+    for (const m of chosen) {
+      try { await patchMemberSheet(m, (s) => { s.xp = Math.max(0, num(s.xp) + amount); }); ok.push(m.name); }
+      catch (err) { console.warn(err); failed.push(m.name); }
+    }
+    btn.disabled = false;
+    $('#xp-amount').value = '';
+    toast((ok.length ? '+' + amount + ' XP para ' + ok.join(', ') + '.' : '') + (failed.length ? ' Não foi possível dar XP para ' + failed.join(', ') + '.' : ''));
+    $('#member-list').replaceChildren(...members.map(memberRow));
   });
 
   $('#form-roll').addEventListener('submit', (ev) => { ev.preventDefault(); doRoll(inRoll.value); });
@@ -4071,6 +4212,7 @@ const FIREBASE_CONFIG = {
     catch (err) { console.warn(err); members = []; noAccess = true; }
 
     $('#member-list').replaceChildren(...members.map(memberRow));
+    renderXpForm();
     $('#member-empty').hidden = members.length > 0;
     $('#members-count').textContent = members.length ? '(' + plural(members.length, 'ficha', 'fichas') + ')' : '';
 
