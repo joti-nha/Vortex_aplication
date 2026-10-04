@@ -1931,7 +1931,7 @@ const FIREBASE_CONFIG = {
     const quick = await refreshQuick();
     $('#quick-list').replaceChildren(...quick.map(characterRow));
     $('#quick-empty').hidden = quick.length > 0;
-    await Promise.all([renderFavBlock(), runSearch()]);
+    await Promise.all([renderFavBlock(), runSearch(), runCatalog()]);
   };
 
   /* ---------- Campanhas ---------- */
@@ -2138,9 +2138,13 @@ const FIREBASE_CONFIG = {
   }
   const BUILTINS = (ITEM_DATA.catalogo || []).map((e) => Object.assign(decorate(e), { oficial: true, mine: false }));
 
+  // Catálogo oficial sempre aparece; se o banco compartilhado falhar, o aviso fica em libSearch.warn
   async function libSearch(kinds, q) {
     const off = BUILTINS.filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), q));
-    const own = await db.searchLibrary({ kinds, query: q });
+    libSearch.warn = '';
+    let own = [];
+    try { own = await db.searchLibrary({ kinds, query: q }); }
+    catch (err) { console.warn(err); libSearch.warn = errorMessage(err); }
     return off.concat(own.map(decorate));
   }
 
@@ -2154,7 +2158,7 @@ const FIREBASE_CONFIG = {
   }
   function entryMeta(e) {
     const v = e.values || {};
-    return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, priceText(v.preco)].filter(Boolean).join(' · ');
+    return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, v.tipoUso, num(v.usos) ? v.usos + ' usos' : '', v.bonusRec ? 'Bônus ' + v.bonusRec : '', priceText(v.preco)].filter(Boolean).join(' · ');
   }
   /* Lore: texto do mundo escondido atrás do ícone 📜 (itens, criadoras, espécimes, origens, personagens) */
   const loreDlg = $('#lore-dialog');
@@ -2817,7 +2821,9 @@ const FIREBASE_CONFIG = {
       return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
     }));
     $('#lib-empty').hidden = list.length > 0;
-    $('#lib-hint').textContent = plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
+    $('#lib-hint').textContent = libSearch.warn
+      ? plural(list.length, 'registro', 'registros') + ' do catálogo oficial. O banco compartilhado não abriu: ' + libSearch.warn
+      : plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
   }
   $('#lib-q').addEventListener('input', debounce(runLib, 300));
   ['#lib-kind', '#lib-maker', '#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
@@ -2833,6 +2839,53 @@ const FIREBASE_CONFIG = {
     mk.append(any);
     (ITEM_DATA.fabricantes || []).forEach((f) => { const o = h('option', '', f); o.value = f; mk.append(o); });
   })();
+
+  /* Catálogo na tela Personagens: ver todas as origens, espécimes, poderes e itens, só leitura */
+  const CAT_GROUPS = [
+    { label: 'Origens', kinds: ['origem'] },
+    { label: 'Espécimes', kinds: ['especime'] },
+    { label: 'Poderes', kinds: ['poder'] },
+    { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] },
+    { label: 'Proteção', kinds: ['armadura', 'vestivel'] },
+    { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] },
+    { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] },
+    { label: 'Itens gerais', kinds: ['item-geral'] },
+    { label: 'Tudo', kinds: null }
+  ];
+  const catState = { group: null, seq: 0 };
+  async function runCatalog() {
+    const seq = ++catState.seq;
+    const q = $('#cat-q').value.trim();
+    const g = catState.group;
+    if (!g && !q) {
+      $('#cat-list').replaceChildren();
+      $('#cat-empty').hidden = true;
+      $('#cat-hint').textContent = '';
+      return;
+    }
+    $('#cat-hint').textContent = 'Buscando...';
+    let list = await libSearch(g ? g.kinds : null, q);
+    if (seq !== catState.seq) return;
+    list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+    $('#cat-list').replaceChildren(...list.map((e) => libRow(e, [])));
+    $('#cat-empty').hidden = list.length > 0;
+    $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
+      + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');
+  }
+  (function fillCatChips() {
+    $('#cat-chips').replaceChildren(...CAT_GROUPS.map((g) => {
+      const b = h('button', 'chip chip--toggle', g.label);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => {
+        catState.group = catState.group === g ? null : g;
+        $$('#cat-chips .chip--toggle').forEach((x) => x.setAttribute('aria-pressed', String(x === b && catState.group === g)));
+        runCatalog();
+      });
+      return b;
+    }));
+  })();
+  $('#cat-q').addEventListener('input', debounce(runCatalog, 300));
 
   // Itens da versão anterior (salvos só neste aparelho): entram no banco uma única vez
   async function migrateOldItems() {
@@ -2919,6 +2972,10 @@ const FIREBASE_CONFIG = {
     }));
   }
   const ORIGINS = originsFromRules();
+  // origem vinda do banco (inclusive as criadas na Oficina): itens iniciais, um por linha
+  const bankOrigin = (e) => ({ name: e.name, text: (e.values || {}).descricao || '', items: String((e.values || {}).itens || '').split('\n').map((t) => t.trim()).filter(Boolean) });
+  const originOf = (name) => ORIGINS.find((o) => nameKey(o.name) === nameKey(name))
+    || (wz && wz.originEntry && nameKey(wz.originEntry.name) === nameKey(name) ? wz.originEntry : null);
 
   function quickEntry2(name, carga, efeito) {
     return {
@@ -3539,6 +3596,7 @@ const FIREBASE_CONFIG = {
     }
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
+    add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
     add('Carga', fmtNum(parseCarga(v.carga)) + (i.slot ? ' (equipado: não conta)' : ''));
     add('Preço', priceText(v.preco));
     add('Criadora', v.fabricante);
@@ -4238,7 +4296,7 @@ const FIREBASE_CONFIG = {
   }
 
   function renderGear(body) {
-    const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
+    const origin = originOf(wz.origin);
     const g = gearFor(origin);
     const modes = [['kit', 'Kit da origem'], ['preco', 'Por preço'], ['nenhum', 'Nenhum']];
     const seg = h('div', 'segmented gear__modes', ...modes.map((m) => {
@@ -4308,6 +4366,17 @@ const FIREBASE_CONFIG = {
         box.append(acts);
         body.append(box);
       });
+      const more = h('button', 'btn btn--ghost btn--sm', 'Adicionar item do banco');
+      more.type = 'button';
+      more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
+        const e = await openPicker({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
+          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+        if (!e || !wz) return;
+        g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e });
+        renderSetup();
+      });
+      body.append(h('div', 'gear-line__acts', more));
       return;
     }
 
@@ -4411,8 +4480,17 @@ const FIREBASE_CONFIG = {
     }
 
     if (wz.step === STEP.origem) {
-      const og = h('div', 'pick-grid', ...ORIGINS.filter((o) => wzMatch(o.name, o.text, o.items.join(' '))).map((o) => pickCard(o.name, [o.text],
+      const list = ORIGINS.slice();
+      if (wz.originEntry && !list.some((o) => nameKey(o.name) === nameKey(wz.originEntry.name))) list.push(wz.originEntry);
+      const og = h('div', 'pick-grid', ...list.filter((o) => wzMatch(o.name, o.text, o.items.join(' '))).map((o) => pickCard(o.name, [o.text],
         nameKey(wz.origin) === nameKey(o.name), () => { wz.origin = o.name; renderSetup(); })));
+      og.append(pickCard('Buscar outra', ['Qualquer origem do banco, inclusive as criadas na Oficina.'], false, async () => {
+        const e = await openPicker({ title: 'Escolher origem', kinds: ['origem'], chips: ['Origem'], filter: (x) => x.kind === 'origem' });
+        if (!e || !wz) return;
+        wz.originEntry = bankOrigin(e);
+        wz.origin = e.name;
+        renderSetup();
+      }));
       body.append(og,
         h('div', 'fields-grid',
           setupField('wz-origin', 'Origem (ou escreva outra)', wz.origin, 'Ex.: Exilado Urbano', (v) => { wz.origin = v; }, 60),
@@ -4490,7 +4568,7 @@ const FIREBASE_CONFIG = {
         ...row('Build', wz.build || 'do seu jeito'),
         ...row('Espécime', wz.specimen ? wz.specimen.name + ' (' + specimenLine(wz.specimen) + ')' : ''),
         ...row('Origem', wz.origin),
-        ...row('Itens iniciais', gearSummary(gearFor(ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin))))),
+        ...row('Itens iniciais', gearSummary(gearFor(originOf(wz.origin)))),
         ...row('Atributos', ATTRS.map((at) => at.label + ' ' + signed(wz.attrs[at.id])).join(' · ')),
         ...row('Perícias', skills.join(' · ')),
         ...row('Proficiências', PROFS.filter((p) => wz.profs.indexOf(p.id) >= 0).map((p) => p.label).join(' · ')),
@@ -4540,7 +4618,7 @@ const FIREBASE_CONFIG = {
     c.origin = cleanName(wz.origin).slice(0, 60);
     c.age = wz.age;
     dirty.add('origin'); dirty.add('age');
-    const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
+    const origin = originOf(wz.origin);
     const g = gearFor(origin);
     const got = gearEntries(g);
     got.forEach((e) => s.inventory.push(e));
