@@ -1411,6 +1411,16 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 .setup__tab--bad::after { content: " •"; color: var(--erro); }
 .setup__search { margin-bottom: 0.9rem; }
 .setup__builds-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; }
+/* Criar na hora: discreto, só um link até ser aberto */
+.wz-create { margin-top: 1.25rem; border-top: 1px dashed var(--linha); padding-top: 0.5rem; }
+.wz-create__toggle { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--nevoa-2); font-size: var(--t-s); text-decoration: underline; text-underline-offset: 3px; list-style: none; }
+.wz-create__toggle::-webkit-details-marker { display: none; }
+.wz-create__toggle::before { content: "+"; display: inline-block; width: 1.1em; text-decoration: none; }
+.wz-create[open] .wz-create__toggle { color: var(--mare); font-weight: 600; }
+.wz-create[open] .wz-create__toggle::before { content: "–"; }
+.wz-create__body { display: grid; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--linha); border-radius: var(--r-s); background: var(--casco); }
+.wz-create__foot { display: flex; justify-content: flex-end; }
+.picker__create { margin: 0.75rem 0 0; font-size: var(--t-s); color: var(--nevoa-2); }
 .setup__probs { margin-bottom: 1rem; padding: 0.75rem 1rem; border-left: 3px solid var(--erro); border-radius: var(--r-s); background: rgba(255, 155, 136, 0.08); }
 
 /* Itens iniciais: kit da origem ou compra por preço */

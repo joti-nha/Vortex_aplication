@@ -2192,6 +2192,7 @@ const FIREBASE_CONFIG = {
   const layersSummary = (v) => [['escudo', 'Escudo'], ['blindagem', 'Blindagem'], ['pv', 'PV']].filter((x) => num(v[x[0]])).map((x) => x[1] + ' ' + num(v[x[0]])).join(' · ');
   function entryMeta(e) {
     const v = e.values || {};
+    if (e.kind === 'build') return [e.kindTitle || kindTitle(e.kind), v.papel, ['corpo', 'precisao', 'essencia'].map((k) => k.charAt(0).toUpperCase() + ' ' + (num(v[k]) > 0 ? '+' : '') + num(v[k])).join(' '), [v.pericia2a, v.pericia2b].filter(Boolean).map((x) => x + ' +2').concat(v.pericia1 ? [v.pericia1 + ' +1'] : []).join(', ')].filter(Boolean).join(' · ');
     if (e.kind === 'npc') return [e.kindTitle || kindTitle(e.kind), v.categoria, num(v.up) ? 'UP ' + v.up : '', layersSummary(v), 'Defesa mín. ' + (num(v.armadura || 6) + num(v.corpo) + num(v.resistencia)), v.dano].filter(Boolean).join(' · ');
     return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, v.tipoUso, num(v.usos) ? v.usos + ' usos' : '', v.bonusRec ? 'Bônus ' + v.bonusRec : '', priceText(v.preco)].filter(Boolean).join(' · ');
   }
@@ -2537,6 +2538,8 @@ const FIREBASE_CONFIG = {
       $('#picker-fav').checked = false;
       $('#picker-list').replaceChildren();
       $('#picker-empty').hidden = true;
+      $('#picker-create').hidden = !opts.create;
+      if (opts.create) $('#picker-create-btn').textContent = opts.create.label;
       $('#picker-hint').textContent = 'Buscando...';
       openDialog(pickerDlg);
       runPicker();
@@ -2546,6 +2549,11 @@ const FIREBASE_CONFIG = {
   $('#picker-q').addEventListener('input', debounce(runPicker, 250));
   $('#picker-fav').addEventListener('change', runPicker);
   $('#picker-close').addEventListener('click', () => finishPicker(null));
+  $('#picker-create-btn').addEventListener('click', () => {
+    const c = pk.opts && pk.opts.create;
+    finishPicker(null);
+    if (c) c.onClick();
+  });
   pickerDlg.addEventListener('close', () => finishPicker(null));
 
   /* ---------- Oficina: categoria → tipo → formulário ---------- */
@@ -2863,8 +2871,8 @@ const FIREBASE_CONFIG = {
     finally { btn.disabled = false; }
   });
 
-  /* Lista do banco na Oficina: só itens. Espécimes, poderes e origens ficam no catálogo da tela Personagens */
-  const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'npc'];
+  /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
+  const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'build', 'npc'];
   const ITEM_KINDS = ITEM_DATA.categories.map((c) => c.id).filter((k) => NON_ITEM_KINDS.indexOf(k) < 0);
   let libSeq = 0;
   async function runLib() {
@@ -2920,6 +2928,7 @@ const FIREBASE_CONFIG = {
   const CAT_GROUPS = [
     { label: 'Origens', kinds: ['origem'] },
     { label: 'Espécimes', kinds: ['especime'] },
+    { label: 'Builds', kinds: ['build'] },
     { label: 'Poderes', kinds: ['poder'] },
     { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] },
     { label: 'Proteção', kinds: ['armadura', 'vestivel'] },
@@ -4516,16 +4525,28 @@ const FIREBASE_CONFIG = {
   const STEP = {};
   SETUP.forEach((x, i) => { STEP[x.id] = i; });
 
-  /* Builds comuns, montadas com as regras de criação: 3 pontos de atributo (um pode ir a –1 por +1),
-     2 perícias com +2 e 1 com +1, e 4 proficiências. */
-  const BUILDS = [
-    { name: 'Atirador', role: 'Dano à distância', text: 'Precisão alta para fuzis e rifles; age cedo e reage rápido.', attrs: { corpo: 0, precisao: 3, essencia: 0 }, skills: { mira: 2, reflexos: 2, iniciativa: 1 }, profs: ['fuzil', 'rifle', 'pistola', 'armadura-leve'] },
-    { name: 'Combatente', role: 'Corpo a corpo', text: 'Golpes fortes e defesa sólida na linha de frente.', attrs: { corpo: 2, precisao: 1, essencia: 0 }, skills: { luta: 2, resistencia: 2, atletismo: 1 }, profs: ['espada', 'machado', 'armadura-media', 'armadura-pesada'] },
-    { name: 'Tanque', role: 'Aguentar dano', text: 'Muita vida e carga; segura a pressão para o grupo. Troca Essência por mais Corpo.', attrs: { corpo: 3, precisao: 1, essencia: -1 }, skills: { resistencia: 2, fortitude: 2, luta: 1 }, profs: ['marreta', 'metralhadora', 'armadura-media', 'armadura-pesada'] },
-    { name: 'Tecnomante', role: 'Energia e módulos', text: 'Essência alta: muitos PE, ataques tecnológicos e mente firme.', attrs: { corpo: 0, precisao: 0, essencia: 3 }, skills: { operacoes: 2, vontade: 2, sentidos: 1 }, profs: ['laser', 'pistola', 'submetralhadora', 'armadura-leve'] },
-    { name: 'Infiltrador', role: 'Tecnologia e furtividade', text: 'Hackeia sistemas, abre fechaduras e evita ser visto.', attrs: { corpo: 0, precisao: 2, essencia: 1 }, skills: { tecnologia: 2, manha: 2, reflexos: 1 }, profs: ['pistola', 'submetralhadora', 'espada', 'armadura-leve'] },
-    { name: 'Negociador', role: 'Social', text: 'Convence, engana e impõe respeito; resolve sem tiros quando dá.', attrs: { corpo: 0, precisao: 1, essencia: 2 }, skills: { diplomacia: 2, enganacao: 2, intimidacao: 1 }, profs: ['pistola', 'espingarda', 'espada', 'armadura-leve'] }
-  ];
+  /* Builds: entradas do catálogo (kind 'build'), as oficiais e as criadas pelas pessoas. Seguem as regras de criação:
+     3 pontos de atributo (um pode ir a –1 por +1), 2 perícias com +2 e 1 com +1, e 4 proficiências. */
+  const skillIdOf = (label) => { const k = nameKey(label || ''); let out = ''; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (nameKey(sk[1]) === k) out = sk[0]; })); return out; };
+  const profByLabel = (label) => (PROFS.find((p) => nameKey(p.label) === nameKey(label)) || {}).id || '';
+  function buildOf(e) {
+    const v = e.values || {};
+    const skills = {};
+    [['pericia2a', 2], ['pericia2b', 2], ['pericia1', 1]].forEach((x) => { const id = skillIdOf(v[x[0]]); if (id && !skills[id]) skills[id] = x[1]; });
+    return {
+      id: e.id, name: e.name, role: v.papel || '', text: v.descricao || '', mine: Boolean(e.mine),
+      attrs: { corpo: clamp(num(v.corpo), -1, 3), precisao: clamp(num(v.precisao), -1, 3), essencia: clamp(num(v.essencia), -1, 3) },
+      skills, profs: String(v.profs || '').split(',').map(profByLabel).filter(Boolean).slice(0, 4)
+    };
+  }
+  async function loadWzBuilds() {
+    const mine = wz;
+    let list;
+    try { list = await libSearch(['build'], ''); } catch (err) { return; }
+    if (wz !== mine) return;
+    wz.builds = list.map(buildOf);
+    if (wz.step === STEP.builds) renderSetup();
+  }
   const SKIP_BUILDS = 'vortex.skipBuilds.v1';
   const skipBuilds = () => { try { return localStorage.getItem(SKIP_BUILDS) === '1'; } catch (e) { return false; } };
   const setSkipBuilds = (on) => { try { if (on) localStorage.setItem(SKIP_BUILDS, '1'); else localStorage.removeItem(SKIP_BUILDS); } catch (e) { /* sem armazenamento: vale só agora */ } };
@@ -4772,6 +4793,55 @@ const FIREBASE_CONFIG = {
     else if (g.shop.some((e) => priceOf(e) > left)) body.append(h('p', 'field__hint', 'Itens acima da sobra ficam desativados.'));
   }
 
+  /* Criar na hora (fica escondido): espécime, origem ou build nova, sem sair da distribuição inicial.
+     Vai para o banco como se fosse criada na Oficina e já fica escolhida. */
+  const WZ_CREATE = { especime: ['Criar espécime', 'o'], origem: ['Criar origem', 'a'], build: ['Criar build', 'a'] };
+  function wzCreate(kind, onSaved) {
+    const cat = findCategory(kind);
+    if (!wz.create || wz.create.kind !== kind) wz.create = { kind, open: false, d: newDraft(kind, '', null) };
+    const c = wz.create, d = c.d;
+    const box = h('details', 'wz-create');
+    box.open = c.open;
+    box.addEventListener('toggle', () => { c.open = box.open; });
+    const grid = h('div', 'fields-grid');
+    cat.fields.filter((f) => f.key !== 'lore').forEach((f) => {
+      const isName = f.key === 'nome';
+      const ctrl = fieldControl(f, null, isName ? d.name : d.values[f.key], (v) => { if (isName) d.name = v; else d.values[f.key] = v; });
+      const fid = 'wzc-' + kind + '-' + f.key;
+      const grouped = f.kind === 'multi';
+      const label = h(grouped ? 'span' : 'label', 'field__label', f.label);
+      if (grouped) { label.id = fid; ctrl.setAttribute('aria-labelledby', fid); }
+      else { ctrl.id = fid; label.htmlFor = fid; }
+      grid.append(h('div', 'field' + (f.big || grouped ? ' field--wide' : ''), label, ctrl));
+    });
+    const save = h('button', 'btn btn--primary btn--sm', 'Salvar e usar');
+    save.type = 'button';
+    save.addEventListener('click', async () => {
+      const name = cleanName(d.name).slice(0, 60);
+      if (!name) { toast('Dê um nome antes de salvar.'); $('#wzc-' + kind + '-nome').focus(); return; }
+      const values = {};
+      cat.fields.forEach((f) => { if (f.key !== 'nome') values[f.key] = String(d.values[f.key] === undefined || d.values[f.key] === null ? '' : d.values[f.key]).trim(); });
+      save.disabled = true;
+      try {
+        const saved = await db.saveLibrary({ kind, typeId: '', typeTitle: '', kindTitle: cat.title, name, values, bonus: {}, slots: {}, image: '', thumb: '' });
+        if (!wz) return;
+        wz.create = null;
+        onSaved(decorate(Object.assign({}, saved, { mine: true })));
+        toast(name + ' entrou no banco e já está escolhid' + WZ_CREATE[kind][1] + '. Para editar depois, use a Oficina.');
+      } catch (err) { toast(errorMessage(err)); save.disabled = false; }
+    });
+    box.append(h('summary', 'wz-create__toggle', WZ_CREATE[kind][0]),
+      h('div', 'wz-create__body', cat.hint ? h('p', 'field__hint', cat.hint) : null, grid, h('div', 'wz-create__foot', save)));
+    return box;
+  }
+  function openWzCreate(kind) { // vindo do "Não achou?" da busca
+    if (!wz) return;
+    wz.create = { kind, open: true, d: newDraft(kind, '', null) };
+    renderSetup();
+    const box = $('#setup-body .wz-create');
+    if (box) { box.scrollIntoView({ block: 'start' }); const n = $('#wzc-' + kind + '-nome'); if (n) n.focus({ preventScroll: true }); }
+  }
+
   function renderSetup(focusId) {
     const body = $('#setup-body');
     const st = SETUP[wz.step];
@@ -4791,7 +4861,8 @@ const FIREBASE_CONFIG = {
     body.replaceChildren();
 
     if (wz.step === STEP.builds) {
-      const list = BUILDS.filter((b) => wzMatch(b.name, b.role, b.text, Object.keys(b.skills).map(skillLabel).join(' '), b.profs.map(profLabel).join(' ')));
+      const all = wz.builds || BUILTINS.filter((e) => e.kind === 'build').map(buildOf);
+      const list = all.filter((b) => wzMatch(b.name, b.role, b.text, Object.keys(b.skills).map(skillLabel).join(' '), b.profs.map(profLabel).join(' ')));
       body.append(h('div', 'pick-grid', ...list.map((b) => pickCard(b.name, [
         b.role + ' · ' + b.text,
         ATTRS.map((at) => at.label + ' ' + (signed(b.attrs[at.id]) === '0' ? '0' : signed(b.attrs[at.id]))).join(' · '),
@@ -4811,6 +4882,12 @@ const FIREBASE_CONFIG = {
       own.type = 'button';
       own.addEventListener('click', () => goStep(STEP.especime));
       body.append(h('div', 'setup__builds-foot', own, skip));
+      body.append(wzCreate('build', (e) => {
+        const b = buildOf(e);
+        wz.builds = (wz.builds || all).concat([b]);
+        applyBuild(b);
+        renderSetup();
+      }));
     }
 
     if (wz.step === STEP.especime) {
@@ -4819,12 +4896,12 @@ const FIREBASE_CONFIG = {
       const grid = h('div', 'pick-grid', ...species.filter((e) => wzMatch(e.name, e.values.descricao, e.values.tracos)).map((e) => pickCard(e.name, [specimenLine(e), e.values.descricao],
         Boolean(wz.specimen && wz.specimen.id === e.id), () => { wz.specimen = slotSnap(e); wz.specimen.thumb = e.thumb || ''; renderSetup(); })));
       grid.append(pickCard('Buscar outro', ['Qualquer espécime do banco, inclusive os criados na Oficina.'], false, async () => {
-        const e = await openPicker({ title: 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime' });
+        const e = await openPicker({ title: 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime', create: { label: 'Criar espécime', onClick: () => openWzCreate('especime') } });
         if (!e || !wz) return;
         wz.specimen = Object.assign(slotSnap(e), { thumb: e.thumb || '' });
         renderSetup();
       }));
-      body.append(grid);
+      body.append(grid, wzCreate('especime', (e) => { wz.specimen = Object.assign(slotSnap(e), { thumb: e.thumb || '' }); renderSetup(); }));
     }
 
     if (wz.step === STEP.origem) {
@@ -4833,13 +4910,14 @@ const FIREBASE_CONFIG = {
       const og = h('div', 'pick-grid', ...list.filter((o) => wzMatch(o.name, o.text, o.items.join(' '))).map((o) => pickCard(o.name, [o.text],
         nameKey(wz.origin) === nameKey(o.name), () => { wz.origin = o.name; renderSetup(); })));
       og.append(pickCard('Buscar outra', ['Qualquer origem do banco, inclusive as criadas na Oficina.'], false, async () => {
-        const e = await openPicker({ title: 'Escolher origem', kinds: ['origem'], chips: ['Origem'], filter: (x) => x.kind === 'origem' });
+        const e = await openPicker({ title: 'Escolher origem', kinds: ['origem'], chips: ['Origem'], filter: (x) => x.kind === 'origem', create: { label: 'Criar origem', onClick: () => openWzCreate('origem') } });
         if (!e || !wz) return;
         wz.originEntry = bankOrigin(e);
         wz.origin = e.name;
         renderSetup();
       }));
       body.append(og,
+        wzCreate('origem', (e) => { wz.originEntry = bankOrigin(e); wz.origin = e.name; renderSetup(); }),
         h('div', 'fields-grid',
           setupField('wz-origin', 'Origem (ou escreva outra)', wz.origin, 'Ex.: Exilado Urbano', (v) => { wz.origin = v; }, 60),
           setupField('wz-age', 'Idade', wz.age, 'Ex.: 27 anos', (v) => { wz.age = v; }, 20),
@@ -4949,6 +5027,7 @@ const FIREBASE_CONFIG = {
     renderSetup();
     openDialog(setupDlg);
     $('#setup-title').focus({ preventScroll: true });
+    loadWzBuilds();
   }
 
   function finishSetup() {
