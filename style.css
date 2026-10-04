@@ -1353,3 +1353,16 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 @media (max-width: 640px) {
   .roll-opts { grid-template-columns: 1fr; }
 }
+
+.chip--toggle { min-height: 32px; color: var(--nevoa-2); cursor: pointer; }
+.chip--toggle:hover { border-color: var(--nevoa); }
+.chip--toggle[aria-pressed="true"] { border-color: var(--ambar); background: rgba(240, 184, 90, 0.16); color: var(--nevoa); }
+
+.member__sub { margin: 1rem 0 0.5rem; font: 700 var(--t-m)/1.2 var(--fonte-titulo); }
+.member__actions { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--linha); }
+.member__actions .attack__fields { grid-template-columns: 1fr; }
+.money-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.6rem; }
+.xp-give { margin-top: 1.25rem; padding-top: 0.75rem; border-top: 1px solid var(--linha); }
+.xp-give__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0.75rem; }
+.xp-give__who { display: grid; gap: 0.5rem; margin: 0.75rem 0 0.25rem; }
+.money-edit .input { grid-column: 1 \/ -1; }

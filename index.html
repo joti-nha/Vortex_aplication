@@ -346,7 +346,7 @@
       <!-- Pré-jogadas: testes de atributo, ataque e (pelo botão de cada perícia) perícias -->
       <section class="block sheet-block" aria-labelledby="sheet-rolls-title">
         <h2 class="block__title" id="sheet-rolls-title">Rolagens</h2>
-        <p class="block__hint">Testes prontos de 2d6 + atributo + perícia, com críticos (6), perdas (1) e penalidades já contados. As perícias rolam pelo botão 🎲 de cada uma.</p>
+        <p class="block__hint">Testes prontos de 2d6 + atributo + perícia, com críticos (6), perdas (1) e penalidades já contados. As perícias rolam pelo botão 🎲 de cada uma; os ataques ficam nas ações do personagem dentro de cada campanha.</p>
         <div class="roll-opts">
           <div class="field">
             <label class="field__label" for="roll-dest">Mostrar o resultado</label>
@@ -367,8 +367,6 @@
         </div>
         <h3 class="sub-title">Teste de atributo</h3>
         <div class="quick-tests" id="attr-tests"></div>
-        <h3 class="sub-title">Ataque</h3>
-        <div class="attack" id="attack-form"></div>
         <ol class="roll-log roll-log--sheet" id="sheet-roll-log" role="log" aria-label="Rolagens desta ficha" tabindex="0"></ol>
         <p class="empty" id="sheet-roll-empty">Nenhuma rolagem nesta sessão.</p>
       </section>
@@ -474,11 +472,12 @@
           </div>
 
           <div class="test-bar" id="test-bar">
-            <label class="field__label" for="test-pick">Teste da ficha (atributo, perícia ou ataque)</label>
+            <label class="field__label" for="test-pick">Teste da ficha (atributo ou perícia)</label>
             <div class="test-bar__row">
               <select class="input" id="test-pick"></select>
               <button class="btn btn--primary btn--sm" type="button" id="test-roll">Rolar teste</button>
             </div>
+            <p class="field__hint">Ataques ficam nas ações do personagem: toque nele em Candidatos.</p>
           </div>
 
           <form class="roll-form" id="form-roll" novalidate>
@@ -497,6 +496,22 @@
           <h2 class="block__title" id="members-title"><button class="help" type="button" data-help="candidatos">Candidatos</button><span class="count" id="members-count"></span></h2>
           <ul class="rows" id="member-list"></ul>
           <p class="empty" id="member-empty">Ninguém entrou ainda. Compartilhe o ID de entrada.</p>
+
+          <form class="xp-give" id="form-xp" novalidate hidden>
+            <h3 class="sub-title">Dar XP (mestre)</h3>
+            <div class="xp-give__row">
+              <div class="field">
+                <label class="field__label" for="xp-amount">Quantidade de XP</label>
+                <input class="input" id="xp-amount" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex.: 10">
+              </div>
+              <button class="btn btn--primary" type="submit" id="xp-give">Dar XP</button>
+            </div>
+            <div class="xp-give__who">
+              <label class="check"><input type="checkbox" id="xp-all" checked><span>Todos</span></label>
+              <div class="checks" id="xp-list" role="group" aria-label="Personagens que recebem XP"></div>
+            </div>
+            <p class="field__hint">10 XP = 1 UP. Os jogadores veem os novos pontos para distribuir na ficha.</p>
+          </form>
         </section>
       </div>
 

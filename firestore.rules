@@ -46,7 +46,7 @@ service cloud.firestore {
       function validChar() {
         let d = request.resource.data;
         return d.keys().hasOnly(['ownerUid', 'name', 'nameKey', 'type', 'image', 'thumb', 'species', 'age',
-                                 'origin', 'campaignIds', 'searchKeys', 'createdAt', 'updatedAt'])
+                                 'origin', 'campaignIds', 'searchKeys', 'createdAt', 'updatedAt', 'sheet'])
             && d.type in ['personagem', 'criatura']
             && d.name is string && d.name.size() >= 2 && d.name.size() <= 40
             && d.species.size() <= 40 && d.age.size() <= 20 && d.origin.size() <= 60
