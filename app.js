@@ -3153,6 +3153,22 @@ const FIREBASE_CONFIG = {
     if (isWeapon(i.kind)) { const t = findType(findCategory(i.kind), i.typeId); return t ? (t.prof || t.id) : ''; }
     return '';
   }
+  /* Poder-lista e melhorias. Um poder-lista (Defensivas, Ataques) tem opções que afetam a mesma
+     coisa de jeitos diferentes: cada opção comprada custa o custo do poder. Melhorias somam ao poder.
+     Os dois vêm em texto, uma por linha: "Nome | efeito | custo". */
+  const powerLines = (txt) => String(txt || '').split('\n').map((l) => l.split('|').map((x) => x.trim())).filter((x) => x[0])
+    .map((x) => ({ name: x[0].slice(0, 60), text: x[1] || '', cost: x[2] || '' }));
+  const powerOpts = (p) => powerLines(p.values && p.values.opcoes);
+  const powerUps = (p) => powerLines(p.values && p.values.melhorias);
+  const powerPicks = (p) => { const names = powerOpts(p).map((o) => o.name); return (p.picks || []).filter((n) => names.indexOf(n) >= 0); };
+  const peCost = (txt) => { const m = /(\d+)\s*pe\b/i.exec(String(txt || '')); return m ? Number(m[1]) : 0; };
+  const upCount = (p, name) => Math.max(0, Math.round(num((p.ups || {})[name])));
+  function powerUpCost(p) {
+    const custo = num(p.values && p.values.custo);
+    const base = powerOpts(p).length ? custo * powerPicks(p).length : custo;
+    return base + powerUps(p).reduce((t, u) => t + (u.cost === '' ? 1 : num(u.cost)) * upCount(p, u.name), 0);
+  }
+
   /* Poderes com escolha: Doutor (uma perícia) e Proficiência em arma ou armadura (um tipo).
      Cada compra é um poder na lista, com a escolha guardada em choice. */
   const CHOICE_POWERS = { 'of-pod-doutor': 'pericia', 'of-pod-prof-arma': 'arma', 'of-pod-prof-armadura': 'armadura' };
@@ -3238,7 +3254,7 @@ const FIREBASE_CONFIG = {
 
     const max = {};
     Object.keys(src).forEach((k) => { max[k] = Math.max(0, Math.round(total(k) * 100) / 100); });
-    const powerCost = s.powers.reduce((t, p) => t + num(p.values && p.values.custo), 0);
+    const powerCost = s.powers.reduce((t, p) => t + powerUpCost(p), 0);
     const upEarned = Math.floor(num(s.xp) / 10); // os de origem/espécie não contam para os benefícios
     return {
       max, src, base, pen, armor, armorProf, nucleo, core,
@@ -3669,9 +3685,15 @@ const FIREBASE_CONFIG = {
     const s = sheetChar.sheet;
     $('#power-list').replaceChildren(...s.powers.map((p, i) => {
       const v = p.values || {};
-      const meta = [num(v.custo) ? 'Custo ' + num(v.custo) + ' UP' : '', v.custoUso ? 'Uso: ' + v.custoUso : '', bonusLine(p.bonus || {})].filter(Boolean).join(' · ');
+      const opts = powerOpts(p);
+      const ups = powerUps(p);
+      const total = powerUpCost(p);
+      const costTxt = opts.length ? num(v.custo) + ' UP por opção · ' + total + ' UP gastos' : total ? 'Custo ' + total + ' UP' : '';
+      const meta = [costTxt, v.custoUso ? 'Uso: ' + v.custoUso : '', bonusLine(p.bonus || {})].filter(Boolean).join(' · ');
       const main = h('span', 'row__main', h('span', 'row__title', p.name, ...(entryLore(p) ? [' ', entryLore(p)] : [])), h('span', 'row__meta', meta));
       if (v.efeito) main.append(h('span', 'row__text', v.efeito));
+      if (opts.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Opções (marque as compradas)'), ...opts.map((o, k) => powerOptRow(s, p, o, i + '-' + k))));
+      if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
       del.type = 'button';
       del.setAttribute('aria-label', 'Remover poder ' + p.name);
@@ -3684,6 +3706,53 @@ const FIREBASE_CONFIG = {
       return h('li', 'row lib-row', h('span', 'row__open row__open--static', entryIcon(p), main), del);
     }));
     $('#power-empty').hidden = s.powers.length > 0;
+  }
+
+  function powerOptRow(s, p, o, fid) {
+    const on = powerPicks(p).indexOf(o.name) >= 0;
+    const chk = h('input');
+    chk.type = 'checkbox';
+    chk.checked = on;
+    chk.dataset.fid = 'pw-opt-' + fid;
+    chk.addEventListener('change', () => {
+      const picks = powerPicks(p).filter((n) => n !== o.name);
+      if (chk.checked) picks.push(o.name);
+      p.picks = picks;
+      changed();
+    });
+    const row = h('span', 'pw-opt' + (on ? ' pw-opt--on' : ''),
+      h('label', 'pw-opt__head', chk, h('strong', '', o.name), o.cost ? h('span', 'tag', o.cost) : null),
+      o.text ? h('span', 'pw-opt__text', o.text) : null);
+    const pe = peCost(o.cost);
+    if (on && pe) {
+      const use = h('button', 'btn btn--ghost btn--sm', 'Usar (−' + pe + ' PE)');
+      use.type = 'button';
+      use.dataset.fid = 'pw-use-' + fid;
+      use.addEventListener('click', () => spendPower(sheetChar, p.name + ': ' + o.name, pe));
+      row.append(use);
+    }
+    return row;
+  }
+
+  function powerUpRow(p, u, fid) {
+    const n = upCount(p, u.name);
+    const cost = u.cost === '' ? 1 : num(u.cost);
+    return h('span', 'pw-opt' + (n ? ' pw-opt--on' : ''),
+      h('span', 'pw-opt__head', h('strong', '', u.name), h('span', 'tag', cost + ' UP cada'),
+        stepper(n, { min: 0, max: 9, label: 'Melhoria ' + u.name, fid: 'pw-up-' + fid, text: '×' + n, onChange: (k) => { p.ups = Object.assign({}, p.ups); p.ups[u.name] = k; changed(); } })),
+      u.text ? h('span', 'pw-opt__text', u.text) : null);
+  }
+
+  // Gasta o PE de uma opção de poder (na ficha aberta)
+  function spendPower(c, label, pe) {
+    const s = c.sheet;
+    const max = compute(c).max.pe;
+    const cur = getCur(s, 'pe', max);
+    if (cur < pe) { toast('PE insuficiente para ' + label + ' (' + cur + ' de ' + pe + ').'); return false; }
+    setCur(s, 'pe', cur - pe, max);
+    changed();
+    toast(label + ': −' + pe + ' PE (restam ' + (cur - pe) + ').');
+    return true;
   }
 
   /* ---------- Inventário em blocos ----------
@@ -4046,6 +4115,11 @@ const FIREBASE_CONFIG = {
       const choice = await askChoice(e.name, kind === 'pericia' ? 'Escolha a perícia' : kind === 'arma' ? 'Escolha o tipo de arma' : 'Escolha o tipo de armadura', (e.values && e.values.efeito) || '', opts);
       if (!choice || sheetChar !== ch) return;
       s.powers.push(choicePower(e, choice));
+    } else if (powerOpts(e).length) {
+      const opts = powerOpts(e);
+      const first = await askChoice(e.name, 'Escolha a primeira opção (' + num(e.values.custo) + ' UP cada)', 'As outras você marca depois, na lista de poderes.', opts.map((o) => [o.name, o.name + (o.cost ? ' · ' + o.cost : '')]));
+      if (!first || sheetChar !== ch) return;
+      ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', picks: [first] }));
     } else {
       ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '' }));
     }
@@ -5075,6 +5149,29 @@ const FIREBASE_CONFIG = {
     }, 'dock-'));
     const names = combatants().filter((x) => combat.targets.has(x.id)).map((x) => x.name);
     $('#dock-targets').textContent = names.length ? 'Alvos marcados no Combate: ' + names.join(', ') + '. O dano entra sozinho.' : 'Sem alvo marcado: o ataque só rola. Marque alvos no Combate para aplicar o dano.';
+
+    // Poderes de uso: as opções compradas que gastam PE (Certeiro, Esquiva...)
+    const usable = [];
+    s.powers.forEach((p) => powerOpts(p).forEach((o) => { if (powerPicks(p).indexOf(o.name) >= 0 && peCost(o.cost)) usable.push({ p, o, pe: peCost(o.cost) }); }));
+    $('#dock-powers').replaceChildren(...(usable.length ? [h('span', 'dock__powers-label', 'Poderes'), ...usable.map((x) => {
+      const b = h('button', 'qtest qtest--power', x.o.name, h('span', 'qtest__cost', x.pe + ' PE'));
+      b.type = 'button';
+      b.title = x.p.name + ': ' + x.o.text;
+      b.addEventListener('click', async () => {
+        const cur = getCur(s, 'pe', m.max.pe);
+        if (cur < x.pe) { toast('PE insuficiente para ' + x.o.name + ' (' + cur + ' de ' + x.pe + ').'); return; }
+        b.disabled = true;
+        try {
+          await patchMemberSheet(mb, (ss) => { const mm = compute(Object.assign({}, mb, { sheet: ss })); setCur(ss, 'pe', getCur(ss, 'pe', mm.max.pe) - x.pe, mm.max.pe); });
+          await campaignRoll(mb, { expr: '−' + x.pe + ' PE', label: ('Poder: ' + x.o.name).slice(0, 60), detail: (x.p.name + ' · ' + x.o.text).slice(0, 1450), total: x.pe, flag: '' });
+          renderDock();
+          toast(x.o.name + ': −' + x.pe + ' PE.');
+        } catch (err) { toast(errorMessage(err)); }
+        b.disabled = false;
+      });
+      return b;
+    })] : []));
+    $('#dock-powers').hidden = !usable.length;
 
     // Testes rápidos: atributos e as perícias que o personagem tem
     const quick = testCatalog(c).filter((t) => t.group === 'Atributos' || num(s.skills[t.id.slice(2)]) > 0);
