@@ -33,6 +33,8 @@ window.VORTEX_ITEMS = {
   alcances: ['Curto', 'Médio', 'Longo', 'Muito longo', 'Extremo', 'Horizonte'],
   empunhaduras: ['Saque', 'Uma mão', 'Duas mãos'],
   simNao: ['Não', 'Sim'],
+  // criadoras/companhias/corporações do mundo (tag opcional dos itens; só se escolhe na criação)
+  fabricantes: ['Wathrever', 'Pinger', 'Live Service', 'Tnnaks'],
   classesImplante: ['Prótese', 'Módulo'],
   // os 3 tipos de prótese/módulo: definem o custo em Carga Cibernética (CC)
   tiposImplante: [
@@ -80,6 +82,7 @@ window.VORTEX_ITEMS = {
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
@@ -137,6 +140,7 @@ window.VORTEX_ITEMS = {
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
@@ -164,6 +168,7 @@ window.VORTEX_ITEMS = {
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
@@ -187,6 +192,7 @@ window.VORTEX_ITEMS = {
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
@@ -201,6 +207,7 @@ window.VORTEX_ITEMS = {
       defaults: { carga: '1' },
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
@@ -222,6 +229,7 @@ window.VORTEX_ITEMS = {
       ],
       fields: [
         { key: 'nome', label: 'Nome (Prótese ou Módulo)', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'classe', label: 'É prótese ou módulo?', kind: 'select', options: 'classesImplante' },
         { key: 'tipo', label: 'Tipo (define o custo em CC)', kind: 'cards', options: 'tiposImplante', big: true },
         { key: 'cc', label: 'CC (Carga Cibernética)', kind: 'number', min: 0, step: 1, auto: { from: 'tipo', table: 'custoCC' }, hint: 'Suporte 1, Operacional 2, Mecânico 3.' },
@@ -235,6 +243,7 @@ window.VORTEX_ITEMS = {
       hint: 'Mod é uma peça à parte: depois de salvo, é encaixado em cada arma pelos slots. A cor vem da raridade.',
       fields: [
         { key: 'nome', label: 'Nome do mod', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'raridade', label: 'Raridade (define a cor e quantos slots usa)', kind: 'rarity', options: 'raridadesMod', big: true },
         { key: 'para', label: 'Serve em', kind: 'select', options: 'paraMod' },
         { key: 'tipo', label: 'Mod (tipo)', kind: 'text' },
@@ -246,6 +255,7 @@ window.VORTEX_ITEMS = {
       hint: 'Propriedades só entram em itens cuja raridade comporta (Incomum, Épica e Lendária).',
       fields: [
         { key: 'nome', label: 'Nome da propriedade', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'para', label: 'Serve em', kind: 'select', options: 'paraPropriedade' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true }
       ]
@@ -259,6 +269,7 @@ window.VORTEX_ITEMS = {
       ],
       fields: [
         { key: 'nome', label: 'Nome do acessório', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'posicao', label: 'Posição (slot)', kind: 'select', optKey: 'posicao', options: [] },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true }
       ]
@@ -295,6 +306,7 @@ window.VORTEX_ITEMS = {
       hint: 'Kits, consumíveis, ferramentas, munição e qualquer coisa que ocupe carga. Com empunhadura, pode ir para as mãos.',
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
@@ -377,7 +389,7 @@ window.VORTEX_ITEMS = {
   ].forEach(function (a) {
     cat.push({
       id: 'of-arm-' + slug(a[0]), kind: 'armadura', typeId: TIPO_ARMADURA[a[1]], name: a[0],
-      values: { modelo: 'Tnnak', raridade: a[2], preco: a[6], armadura: String(a[3]), penalidade: String(a[4]), carga: String(a[5]), nucleo: 'Não', especial: a[7] || '' }
+      values: { fabricante: 'Tnnaks', modelo: 'Tnnak', raridade: a[2], preco: a[6], armadura: String(a[3]), penalidade: String(a[4]), carga: String(a[5]), nucleo: 'Não', especial: a[7] || '' }
     });
   });
 
@@ -413,7 +425,7 @@ window.VORTEX_ITEMS = {
     cat.push({
       id: 'of-wat-' + slug(a[0]), kind: 'arma-fogo', typeId: TIPO_ARMA[a[1]], name: a[0],
       values: {
-        modelo: a[2] + ' / Wathrever', raridade: a[3], preco: a[11], dano: a[4], cadencia: String(a[5]), municao: String(a[6]),
+        fabricante: 'Wathrever', modelo: a[2] + ' / Wathrever', raridade: a[3], preco: a[11], dano: a[4], cadencia: String(a[5]), municao: String(a[6]),
         pente: PENTE[a[7]], alcance: a[8], carga: String(a[9]), empunhadura: a[10], especial: a[12] || ''
       }
     });
