@@ -63,6 +63,11 @@ window.VORTEX_ITEMS = {
     { id: 'metralhadora', label: 'Metralhadora leve' }, { id: 'submetralhadora', label: 'Submetralhadora' }, { id: 'laser', label: 'Laser' },
     { id: 'armadura-leve', label: 'Armadura leve' }, { id: 'armadura-media', label: 'Armadura média' }, { id: 'armadura-pesada', label: 'Armadura pesada' }
   ],
+  /* Nomes para os campos de build (perícias e proficiências) */
+  pericias: ['Luta', 'Resistência', 'Atletismo', 'Fortitude', 'Mira', 'Tecnologia', 'Iniciativa', 'Manha', 'Pilotagem', 'Intelecto', 'Reflexos', 'Ofício',
+    'Operações', 'Sentidos', 'Vontade', 'Intimidação', 'Diplomacia', 'Enganação'],
+  profNomes: ['Espada', 'Lança', 'Marreta', 'Machado', 'Pistola', 'Espingarda', 'Rifle de precisão', 'Fuzil', 'Metralhadora leve', 'Submetralhadora', 'Laser',
+    'Armadura leve', 'Armadura média', 'Armadura pesada'],
   paraMod: ['Qualquer arma', 'Arma de fogo', 'Arma corpo a corpo'],
   paraPropriedade: ['Qualquer item', 'Arma', 'Armadura'],
   vidaBase: ['PV', 'Blindagem', 'Escudo'],
@@ -337,6 +342,23 @@ window.VORTEX_ITEMS = {
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
+    {
+      id: 'build', title: 'Build', group: 'Personagem',
+      hint: 'Um ponto de partida pronto para a distribuição inicial: 3 pontos de atributo (um pode ir a –1 por +1), 2 perícias com +2, 1 com +1 e 4 proficiências.',
+      defaults: { corpo: '0', precisao: '0', essencia: '0' },
+      fields: [
+        { key: 'nome', label: 'Nome da build', kind: 'text', big: true },
+        { key: 'papel', label: 'Papel no grupo', kind: 'text', placeholder: 'Ex.: Dano à distância' },
+        { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
+        { key: 'corpo', label: 'Corpo', kind: 'number', min: -1, step: 1 },
+        { key: 'precisao', label: 'Precisão', kind: 'number', min: -1, step: 1 },
+        { key: 'essencia', label: 'Essência', kind: 'number', min: -1, step: 1 },
+        { key: 'pericia2a', label: 'Perícia com +2', kind: 'select', options: 'pericias' },
+        { key: 'pericia2b', label: 'Outra perícia com +2', kind: 'select', options: 'pericias' },
+        { key: 'pericia1', label: 'Perícia com +1', kind: 'select', options: 'pericias' },
+        { key: 'profs', label: 'Proficiências (4)', kind: 'multi', options: 'profNomes' }
+      ]
+    },
 
     /* ------------------------------ Ameaças ------------------------------ */
     {
@@ -422,6 +444,14 @@ window.VORTEX_ITEMS = {
       id: 'of-esp-android', kind: 'especime', name: 'Android',
       values: { vidaBase: 'Blindagem', upInicial: '0', nucleoBase: '2', acopla: 'Sim', humanidade: 'Sim', eletronico: 'Sim', descricao: 'Você é um robô, só que humanoide...', tracos: 'Engenharia: não equipa, acopla (ao menos 1 hora). Armas e armaduras acopladas ocupam a Carga Cibernética em vez da carga; +1 de Carga Cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças, e módulos não precisam de prótese. Núcleo: núcleo +2 comum desde o início; os PV viram blindagem e os negativos contam como Shield. Humanidade: resiste a efeitos de PE (não é atordoado automaticamente como outros seres eletrônicos) e se regenera como um ser orgânico, e também por engenharia e bateria.' }
     },
+
+    // Builds (recomendações da distribuição inicial)
+    { id: 'of-build-atirador', kind: 'build', name: 'Atirador', values: { papel: 'Dano à distância', descricao: 'Precisão alta para fuzis e rifles; age cedo e reage rápido.', corpo: '0', precisao: '3', essencia: '0', pericia2a: 'Mira', pericia2b: 'Reflexos', pericia1: 'Iniciativa', profs: 'Fuzil, Rifle de precisão, Pistola, Armadura leve' } },
+    { id: 'of-build-combatente', kind: 'build', name: 'Combatente', values: { papel: 'Corpo a corpo', descricao: 'Golpes fortes e defesa sólida na linha de frente.', corpo: '2', precisao: '1', essencia: '0', pericia2a: 'Luta', pericia2b: 'Resistência', pericia1: 'Atletismo', profs: 'Espada, Machado, Armadura média, Armadura pesada' } },
+    { id: 'of-build-tanque', kind: 'build', name: 'Tanque', values: { papel: 'Aguentar dano', descricao: 'Muita vida e carga; segura a pressão para o grupo. Troca Essência por mais Corpo.', corpo: '3', precisao: '1', essencia: '-1', pericia2a: 'Resistência', pericia2b: 'Fortitude', pericia1: 'Luta', profs: 'Marreta, Metralhadora leve, Armadura média, Armadura pesada' } },
+    { id: 'of-build-tecnomante', kind: 'build', name: 'Tecnomante', values: { papel: 'Energia e módulos', descricao: 'Essência alta: muitos PE, ataques tecnológicos e mente firme.', corpo: '0', precisao: '0', essencia: '3', pericia2a: 'Operações', pericia2b: 'Vontade', pericia1: 'Sentidos', profs: 'Laser, Pistola, Submetralhadora, Armadura leve' } },
+    { id: 'of-build-infiltrador', kind: 'build', name: 'Infiltrador', values: { papel: 'Tecnologia e furtividade', descricao: 'Hackeia sistemas, abre fechaduras e evita ser visto.', corpo: '0', precisao: '2', essencia: '1', pericia2a: 'Tecnologia', pericia2b: 'Manha', pericia1: 'Reflexos', profs: 'Pistola, Submetralhadora, Espada, Armadura leve' } },
+    { id: 'of-build-negociador', kind: 'build', name: 'Negociador', values: { papel: 'Social', descricao: 'Convence, engana e impõe respeito; resolve sem tiros quando dá.', corpo: '0', precisao: '1', essencia: '2', pericia2a: 'Diplomacia', pericia2b: 'Enganação', pericia1: 'Intimidação', profs: 'Pistola, Espingarda, Espada, Armadura leve' } },
 
     // NPCs e inimigos de exemplo (lista aberta da campanha)
     { id: 'of-npc-saqueador', kind: 'npc', name: 'Saqueador de Ferro-Velho', values: { categoria: 'Comum', up: '1', corpo: '1', precisao: '1', essencia: '0', luta: '1', mira: '1', operacoes: '0', resistencia: '1', armadura: '6', pv: '10', escudo: '0', blindagem: '0', ataque: 'À distância', arma: 'Pistola improvisada', dano: 'Balístico', cadencia: '2', descricao: 'Ataca em grupo e foge quando metade do bando cai.' } },
