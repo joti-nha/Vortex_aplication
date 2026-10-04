@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -840,6 +840,24 @@
     </div>
   </dialog>
 
+  <!-- Escolha de um poder: a perícia do Doutor ou o tipo de arma/armadura da proficiência -->
+  <dialog class="dialog" id="choice-dialog" aria-labelledby="choice-title">
+    <form class="picker" method="dialog">
+      <div class="picker__head">
+        <h2 id="choice-title"></h2>
+      </div>
+      <p class="block__hint" id="choice-hint"></p>
+      <div class="field">
+        <label class="field__label" id="choice-label" for="choice-select"></label>
+        <select class="input" id="choice-select"></select>
+      </div>
+      <div class="dialog__actions">
+        <button class="btn btn--ghost" type="submit" value="cancel">Cancelar</button>
+        <button class="btn btn--primary" type="submit" value="ok">Adicionar poder</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Lore: o texto do mundo sobre um item, criadora, espécime, origem ou personagem -->
   <dialog class="dialog" id="lore-dialog" aria-labelledby="lore-title">
     <div class="picker">
@@ -854,8 +872,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=14"></script>
-  <script src="items.js?v=14"></script>
-  <script src="app.js?v=14"></script>
+  <script src="regras.js?v=15"></script>
+  <script src="items.js?v=15"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
