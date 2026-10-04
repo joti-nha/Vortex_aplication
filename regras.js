@@ -148,7 +148,7 @@ window.VORTEX_REGRAS = {
 
         ['h2', 'Progressão'],
         ['ul', [
-          'Limite de +3 por perícia.',
+          'Limite de +3 por perícia (+4 com Doutor).',
           'Cada ponto investido concede +3 pontos livres para distribuir entre as perícias.'
         ]],
 
@@ -187,7 +187,15 @@ window.VORTEX_REGRAS = {
           ['Em armas', 'Concede a regra de cadência perita e concede um aprimoramento às regras de tipo.'],
           ['Em armaduras', 'Diminui a penalidade (sem, a penalidade básica é dobrada) e concede +1 de defesa.']
         ]],
-        ['p', 'Você escolhe 4 tipos de armas ou armaduras as quais são proficientes desde o início.']
+        ['p', 'Você escolhe 4 tipos de armas ou armaduras as quais são proficientes desde o início.'],
+
+        ['h2', 'Compras com UP'],
+        ['p', 'Cada compra custa 1 UP e pode ser feita mais de uma vez, escolhendo outra perícia ou outro tipo.'],
+        ['dl', [
+          ['Doutor', 'Seu limite de modificador na perícia escolhida se torna 4.'],
+          ['Proficiência em arma', 'Escolha um tipo de arma o qual é proficiente, para usar a regra de cadência proficiente. E ganha +1 de perícia para distribuir.'],
+          ['Proficiência em armadura', 'Escolha um tipo de armadura o qual é proficiente, ganhe +1 de armadura com a mesma e use a regra de proficiência com a armadura. E ganhe +1 de perícia para distribuir.']
+        ]]
       ]
     },
 

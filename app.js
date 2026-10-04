@@ -1435,7 +1435,7 @@ const FIREBASE_CONFIG = {
     },
     progressao: {
       title: 'Progressão',
-      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia. UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos.',
+      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia. UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
       rule: 'progressao'
     },
     poderes: {
@@ -2979,7 +2979,7 @@ const FIREBASE_CONFIG = {
     return {
       v: 2, setup: false, attrs: { corpo: 0, precisao: 0, essencia: 0 }, skills: {}, profs: [], oficio: '', height: '', weight: '', sex: '',
       xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0 },
-      cur: {}, specimen: null, powers: [], inventory: [], originItems: ''
+      cur: {}, specimen: null, powers: [], inventory: [], originItems: '', doutor: [], upProfs: []
     };
   }
   function normSheet(raw) {
@@ -2989,6 +2989,9 @@ const FIREBASE_CONFIG = {
     ['attrs', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
     s.powers = Array.isArray(r.powers) ? r.powers : [];
     s.profs = Array.isArray(r.profs) ? r.profs.filter((x) => typeof x === 'string') : [];
+    // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
+    s.doutor = Array.isArray(r.doutor) ? r.doutor.filter((x) => typeof x === 'string') : [];
+    s.upProfs = Array.isArray(r.upProfs) ? r.upProfs.filter((x) => typeof x === 'string') : [];
     s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
     // fichas da versão anterior marcavam só "equipado": cada item vai para o primeiro espaço livre que o aceite
     s.inventory.forEach((i) => {
@@ -3048,7 +3051,9 @@ const FIREBASE_CONFIG = {
     if (isWeapon(i.kind)) { const t = findType(findCategory(i.kind), i.typeId); return t ? (t.prof || t.id) : ''; }
     return '';
   }
-  const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && s.profs.indexOf(id) >= 0; };
+  const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || (s.upProfs || []).indexOf(id) >= 0;
+  const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
+  const skillCap = (s, id) => ((s.doutor || []).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
   const isModule = (i) => i.kind === 'protese-modulo' && i.values.classe === 'Módulo';
   const twoHanded = (i) => /duas/i.test(String((i.values && i.values.empunhadura) || ''));
@@ -3132,9 +3137,9 @@ const FIREBASE_CONFIG = {
       ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: spv.humanidade === 'Sim',
       ccOver: (nucleo > 0 || attachUsed > 0) && (protUsed + attachUsed > ccMax || protUsed + attachUsed + modUsed > ccMax + modExtra),
       upEarned, upTotal: upEarned + num(spv.upInicial) + num(s.upExtra),
-      upSpent: s.up.per + powerCost,
+      upSpent: s.up.per + powerCost + s.doutor.length + s.upProfs.length,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per,
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + s.upProfs.length,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
   }
@@ -3228,7 +3233,7 @@ const FIREBASE_CONFIG = {
   }
 
   // o que a ficha já mostrou: avisos só aparecem quando algo muda depois de aberta
-  const watch = { id: null, over: false, pending: 0 };
+  const watch = { id: null, over: false, pending: 0, skills: 0 };
 
   /* Pendências: pontos e recursos ainda por distribuir */
   function pendingList(m) {
@@ -3259,11 +3264,16 @@ const FIREBASE_CONFIG = {
       return h('p', 'alerts__item', p.text + ' ', b);
     }));
     const count = list.reduce((t, p) => t + p.n, 0);
+    const skillsLeft = Math.max(0, m.skillBudget - m.skillUsed);
     if (watch.id === sheetChar.id && count > watch.pending) {
       const fresh = list.filter((p) => p.n).map((p) => p.text.replace(/[.:].*$/, '')).join(' · ');
       if (fresh) toast('Novos pontos para distribuir: ' + fresh + '.');
+    } else if (watch.id === sheetChar.id && skillsLeft > watch.skills) {
+      // ex.: comprar uma proficiência gasta 1 UP e dá 1 ponto de perícia (o total não muda, mas a perícia fica pendente)
+      toast('Perícia pendente: ' + plural(skillsLeft, 'ponto', 'pontos') + ' para distribuir.');
     }
     watch.pending = count;
+    watch.skills = skillsLeft;
   }
 
   // Redesenha a ficha inteira e devolve o foco ao controle que estava em uso
@@ -3432,7 +3442,10 @@ const FIREBASE_CONFIG = {
 
   function renderSkills(m) {
     const s = sheetChar.sheet;
-    $('#skills-hint').textContent = 'Teste = 2d6 + atributo + perícia (as rolagens ficam na campanha). Pontos de perícia: ' + m.skillUsed + ' de ' + m.skillBudget + '.';
+    const left = m.skillBudget - m.skillUsed;
+    $('#skills-hint').replaceChildren('Teste = 2d6 + atributo + perícia (as rolagens ficam na campanha). Pontos de perícia: ' + m.skillUsed + ' de ' + m.skillBudget + '. ',
+      ...(left > 0 ? [h('strong', 'skills__pending', plural(left, 'ponto pendente', 'pontos pendentes') + ' para distribuir.')] : []),
+      ...(left < 0 ? [h('strong', 'skills__pending', 'Passou ' + plural(-left, 'ponto', 'pontos') + ' do limite.')] : []));
     $('#skills-block').replaceChildren(...ATTRS.map((at) => {
       const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(s.attrs[at.id]))));
       SKILLS[at.id].forEach((sk) => {
@@ -3443,7 +3456,8 @@ const FIREBASE_CONFIG = {
         const row = h('div', 'skill',
           h('span', 'skill__name', sk[1], pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
           total,
-          stepper(v, { min: 0, max: 3, label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
+          stepper(v, { min: 0, max: Math.max(v, skillCap(s, sk[0])), label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
+        if (skillCap(s, sk[0]) > 3) row.querySelector('.skill__name').append(h('span', 'skill__doc', ' Doutor'));
         group.append(row);
         if (sk[0] === 'oficio') {
           const inp = h('input', 'input skill__job');
@@ -3492,7 +3506,62 @@ const FIREBASE_CONFIG = {
       h('div', 'buys', pick('pv', '+5 PV'), pick('pe', '+5 PE'), pick('pa', '+1 PA')),
       h('p', 'field__hint', 'A cada UP par alcançado (sem contar os de origem), escolha 2 benefícios. A cada UP ímpar, +1 ponto de perícia (já somado nos pontos de perícia).'),
       h('div', 'buys', buy('per', 'UP investidos em perícias', 99)),
-      h('p', 'field__hint', 'Cada UP investido em perícias dá +3 pontos livres. Poderes custam UP conforme o custo de cada um.'));
+      h('p', 'field__hint', 'Cada UP investido em perícias dá +3 pontos livres. Poderes custam UP conforme o custo de cada um.'),
+      upBuys());
+  }
+
+  /* Compras de 1 UP: Doutor numa perícia e proficiências extras de arma ou armadura */
+  function upBuys() {
+    const s = sheetChar.sheet;
+    const allSkills = Object.keys(SKILLS).reduce((t, k) => t.concat(SKILLS[k]), []);
+    const weaponProfs = PROFS.filter((p) => p.id.indexOf('armadura-') !== 0);
+    const armorProfs = PROFS.filter((p) => p.id.indexOf('armadura-') === 0);
+    const owned = (list, label, onRemove) => list.map((id) => {
+      const x = h('button', 'slot-chip__x', '×');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'Desfazer a compra: ' + label(id));
+      x.dataset.fid = 'upb-x-' + id;
+      x.addEventListener('click', () => onRemove(id));
+      return h('span', 'slot-chip', h('span', 'slot-chip__name', label(id)), x);
+    });
+    const buyRow = (id, title, text, options, list, label, onBuy, onRemove) => {
+      const sel = h('select', 'input');
+      sel.id = 'upb-' + id;
+      sel.dataset.fid = 'upb-' + id;
+      const first = h('option', '', options.length ? 'Escolha...' : 'Nada disponível');
+      first.value = '';
+      sel.append(first, ...options.map((o) => { const op = h('option', '', o[1]); op.value = o[0]; return op; }));
+      const btn = h('button', 'btn btn--ghost btn--sm', 'Comprar (1 UP)');
+      btn.type = 'button';
+      btn.dataset.fid = 'upb-' + id + '-buy';
+      btn.disabled = !options.length;
+      btn.addEventListener('click', () => {
+        if (!sel.value) { toast('Escolha antes de comprar.'); sel.focus(); return; }
+        onBuy(sel.value);
+      });
+      const lab = h('label', 'field__label', title);
+      lab.htmlFor = sel.id;
+      const chips = owned(list, label, onRemove);
+      return h('div', 'upbuy',
+        h('div', 'field', lab, h('div', 'upbuy__row', sel, btn)),
+        h('p', 'field__hint', text),
+        chips.length ? h('div', 'upbuy__owned', ...chips) : null);
+    };
+    const drop = (arr, id) => arr.filter((x) => x !== id);
+    return h('div', 'upbuys',
+      h('h4', 'upbuys__title', 'Compras com UP (1 UP cada)'),
+      buyRow('doutor', 'Doutor', 'O limite de modificador na perícia escolhida passa a ser +4.',
+        allSkills.filter((sk) => s.doutor.indexOf(sk[0]) < 0), s.doutor, (id) => 'Doutor: ' + (SKILL_LABEL[id] || id),
+        (id) => { s.doutor.push(id); changed(); },
+        (id) => { s.doutor = drop(s.doutor, id); if (num(s.skills[id]) > 3) s.skills[id] = 3; changed(); }),
+      buyRow('arma', 'Proficiência em arma', 'Escolha um tipo de arma para usar a regra de cadência proficiente. Ganha +1 ponto de perícia para distribuir.',
+        weaponProfs.filter((p) => !hasProf(s, p.id)).map((p) => [p.id, p.label]), s.upProfs.filter((id) => id.indexOf('armadura-') !== 0), profLabel,
+        (id) => { s.upProfs.push(id); changed(); },
+        (id) => { s.upProfs = drop(s.upProfs, id); changed(); }),
+      buyRow('armadura', 'Proficiência em armadura', 'Escolha um tipo de armadura: +1 de armadura com ela e a regra de proficiência (a penalidade não dobra). Ganha +1 ponto de perícia para distribuir.',
+        armorProfs.filter((p) => !hasProf(s, p.id)).map((p) => [p.id, p.label]), s.upProfs.filter((id) => id.indexOf('armadura-') === 0), profLabel,
+        (id) => { s.upProfs.push(id); changed(); },
+        (id) => { s.upProfs = drop(s.upProfs, id); changed(); }));
   }
 
   function profPills(list, onToggle, limit, prefix) {
@@ -3513,8 +3582,9 @@ const FIREBASE_CONFIG = {
   function renderProfs() {
     const s = sheetChar.sheet;
     $('#profs-block').replaceChildren(
-      h('h3', 'sub-title', 'Proficiências ', h('span', 'count', '(' + s.profs.length + ' de 4 iniciais)')),
+      h('h3', 'sub-title', 'Proficiências ', h('span', 'count', '(' + s.profs.length + ' de 4 iniciais' + (s.upProfs.length ? ' + ' + s.upProfs.length + ' compradas com UP' : '') + ')')),
       profPills(s.profs, (id, on) => { s.profs = s.profs.filter((x) => x !== id); if (on) s.profs.push(id); changed(); }, 0),
+      s.upProfs.length ? h('p', 'field__hint', 'Compradas com UP (em Progressão): ' + s.upProfs.map(profLabel).join(', ') + '.') : null,
       h('p', 'field__hint', 'Em armas: cadência perita e o aprimoramento do tipo. Em armaduras: a penalidade não dobra e a defesa ganha +1. Usar um item fora da empunhadura ideal conta como sem proficiência.'));
   }
 

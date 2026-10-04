@@ -1078,6 +1078,14 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 
 .prog__sum { margin: 0.9rem 0 0.6rem; font-weight: 700; }
 .prog__sum--over { color: var(--erro); }
+.upbuys { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--linha-forte); }
+.upbuys__title { margin: 0 0 0.5rem; font: 700 var(--t-s) var(--fonte-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--nevoa-2); }
+.upbuy { margin-bottom: 0.9rem; }
+.upbuy__row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.upbuy__row .input { flex: 1 1 12rem; min-width: 0; }
+.upbuy__owned { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+.skills__pending { color: var(--ambar); }
+.skill__doc { font-size: var(--t-s); color: var(--ambar); font-weight: 600; }
 .buys { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.4rem 1.25rem; margin-bottom: 0.6rem; }
 .buy { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.2rem 0; border-top: 1px solid var(--linha); }
 .buy__label { font-weight: 600; }
