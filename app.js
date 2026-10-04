@@ -1888,7 +1888,16 @@ const FIREBASE_CONFIG = {
   }
 
   /* ---------- Início (vitrine) ---------- */
-  views.home = async function showHome() { /* só a etiqueta de modo, tratada por setMode() */ };
+  // Painel: o que a pessoa estava jogando (fichas recentes e campanhas) e atalhos
+  views.home = async function showHome() {
+    $('#home-hello').textContent = profile && profile.name ? 'Bem-vindo de volta, ' + profile.name : 'Painel do jogador';
+    const quick = await refreshQuick().catch(() => []);
+    $('#dash-chars').replaceChildren(...quick.slice(0, 5).map(characterRow));
+    $('#dash-chars-empty').hidden = quick.length > 0;
+    const camps = await db.listMyCampaigns().catch(() => []);
+    $('#dash-camps').replaceChildren(...camps.slice(0, 5).map((c) => campaignRow(c)));
+    $('#dash-camps-empty').hidden = camps.length > 0;
+  };
 
   /* ---------- Criar personagem ---------- */
   const formCreate = $('#form-create');
@@ -5649,7 +5658,7 @@ const FIREBASE_CONFIG = {
   /* Alturas fixas no topo (barra do site e abas), para o índice e as âncoras não ficarem escondidos */
   function updateOffsets() {
     const wrap = $('.rules-tabs-wrap');
-    const barH = $('.app-bar').offsetHeight;
+    const barH = window.matchMedia('(min-width: 1024px)').matches ? 0 : $('.app-bar').offsetHeight; // no computador a barra vira a lateral
     const sticky = getComputedStyle(wrap).position === 'sticky';
     const root = document.documentElement.style;
     root.setProperty('--bar-h', barH + 'px');
