@@ -147,12 +147,22 @@ service cloud.firestore {
         allow delete: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
       }
 
+      // ---------- Combate: inimigos do mestre (PV, escudo, blindagem e defesa da cena) ----------
+      // Só o mestre coloca ou tira; quem participa pode atualizar (aplicar dano e rolar defesa).
+      match /foes/{foeId} {
+        allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
+        allow create, delete: if signedIn() && isCampaignOwner(campaignId);
+        allow update: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId))
+                      && request.resource.data.name == resource.data.name;
+      }
+
       // ---------- Chat de dados (rolagens não podem ser editadas) ----------
+      // O mestre também rola (pelos inimigos), mesmo sem personagem na campanha.
       match /rolls/{rollId} {
         allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
 
         allow create: if signedIn()
-                      && isCampaignMember(campaignId)
+                      && (isCampaignMember(campaignId) || isCampaignOwner(campaignId))
                       && request.resource.data.authorUid == request.auth.uid
                       && request.resource.data.createdAt == request.time
                       && request.resource.data.total is int

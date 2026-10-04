@@ -34,6 +34,9 @@ window.VORTEX_ITEMS = {
   empunhaduras: ['Saque', 'Uma mão', 'Duas mãos'],
   tiposUso: ['Ferramenta', 'Consumível', 'Estação'],
   simNao: ['Não', 'Sim'],
+  categoriasNpc: ['Comum', 'Maior', 'Chefão'],
+  formasAtaque: ['Corpo a corpo', 'À distância', 'Tecnológico'],
+  efetivoContra: ['Escudo', 'Blindagem', 'Vida'],
   // criadoras/companhias/corporações do mundo (tag opcional dos itens; só se escolhe na criação)
   fabricantes: ['Wathrever', 'Pinger', 'Live Service', 'Tnnaks'],
   // lore de cada criadora: aparece ao tocar no selo dela (escreva aqui o texto do mundo)
@@ -333,6 +336,36 @@ window.VORTEX_ITEMS = {
       ]
     },
 
+    /* ------------------------------ Ameaças ------------------------------ */
+    {
+      id: 'npc', title: 'NPC / Inimigo', group: 'Ameaças', image: true,
+      hint: 'Monstros, inimigos e NPCs da lista aberta: qualquer mestre pode colocar na campanha. Defesa mínima = armadura + Corpo + Resistência.',
+      defaults: { categoria: 'Comum', up: '0', corpo: '1', precisao: '1', essencia: '0', luta: '1', mira: '1', operacoes: '0', resistencia: '1', armadura: '6', pv: '10', escudo: '0', blindagem: '0', cadencia: '1', ataque: 'Corpo a corpo' },
+      fields: [
+        { key: 'nome', label: 'Nome', kind: 'text', big: true },
+        { key: 'categoria', label: 'Categoria (XP)', kind: 'select', options: 'categoriasNpc' },
+        { key: 'up', label: 'UP (para a dificuldade do encontro)', kind: 'number', min: 0, step: 1 },
+        { key: 'corpo', label: 'Corpo', kind: 'number', min: -1, step: 1 },
+        { key: 'precisao', label: 'Precisão', kind: 'number', min: -1, step: 1 },
+        { key: 'essencia', label: 'Essência', kind: 'number', min: -1, step: 1 },
+        { key: 'luta', label: 'Luta', kind: 'number', min: 0, step: 1 },
+        { key: 'mira', label: 'Mira', kind: 'number', min: 0, step: 1 },
+        { key: 'operacoes', label: 'Operações', kind: 'number', min: 0, step: 1 },
+        { key: 'resistencia', label: 'Resistência', kind: 'number', min: 0, step: 1 },
+        { key: 'armadura', label: 'Armadura', kind: 'number', min: 0, step: 1 },
+        { key: 'pv', label: 'PV máximo', kind: 'number', min: 0, step: 1 },
+        { key: 'escudo', label: 'Escudo', kind: 'number', min: 0, step: 1 },
+        { key: 'blindagem', label: 'Blindagem', kind: 'number', min: 0, step: 1 },
+        { key: 'ataque', label: 'Ataque principal', kind: 'select', options: 'formasAtaque' },
+        { key: 'arma', label: 'Arma ou ataque (nome)', kind: 'text', placeholder: 'Ex.: Garras, Fuzil de assalto' },
+        { key: 'dano', label: 'Tipos de dano do ataque', kind: 'multi', options: 'tiposDano' },
+        { key: 'cadencia', label: 'Cadência (disparos por ação)', kind: 'number', min: 1, step: 1 },
+        { key: 'efetivo', label: 'Efetivo contra (como arma de tipo)', kind: 'select', options: 'efetivoContra', blank: 'Nada' },
+        { key: 'descricao', label: 'Descrição e habilidades', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História e lugar desta ameaça no mundo. Aparece no ícone 📜.' }
+      ]
+    },
+
     /* ------------------------------ Geral ------------------------------ */
     {
       id: 'item-geral', title: 'Item geral', group: 'Geral', inventory: true, image: true, bonus: true,
@@ -387,6 +420,12 @@ window.VORTEX_ITEMS = {
       id: 'of-esp-android', kind: 'especime', name: 'Android',
       values: { vidaBase: 'Blindagem', upInicial: '0', nucleoBase: '2', acopla: 'Sim', humanidade: 'Sim', eletronico: 'Sim', descricao: 'Você é um robô, só que humanoide...', tracos: 'Engenharia: não equipa, acopla (ao menos 1 hora). Armas e armaduras acopladas ocupam a Carga Cibernética em vez da carga; +1 de Carga Cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças, e módulos não precisam de prótese. Núcleo: núcleo +2 comum desde o início; os PV viram blindagem e os negativos contam como Shield. Humanidade: resiste a efeitos de PE (não é atordoado automaticamente como outros seres eletrônicos) e se regenera como um ser orgânico, e também por engenharia e bateria.' }
     },
+
+    // NPCs e inimigos de exemplo (lista aberta da campanha)
+    { id: 'of-npc-saqueador', kind: 'npc', name: 'Saqueador de Ferro-Velho', values: { categoria: 'Comum', up: '1', corpo: '1', precisao: '1', essencia: '0', luta: '1', mira: '1', operacoes: '0', resistencia: '1', armadura: '6', pv: '10', escudo: '0', blindagem: '0', ataque: 'À distância', arma: 'Pistola improvisada', dano: 'Balístico', cadencia: '2', descricao: 'Ataca em grupo e foge quando metade do bando cai.' } },
+    { id: 'of-npc-drone', kind: 'npc', name: 'Drone de Segurança', values: { categoria: 'Comum', up: '2', corpo: '0', precisao: '2', essencia: '0', luta: '0', mira: '2', operacoes: '0', resistencia: '1', armadura: '6', pv: '0', escudo: '6', blindagem: '8', ataque: 'À distância', arma: 'Laser de patrulha', dano: 'Fogo', cadencia: '1', descricao: 'Ser eletrônico: efeitos de PE o atordoam.' } },
+    { id: 'of-npc-mutante', kind: 'npc', name: 'Mutante Radioativo', values: { categoria: 'Maior', up: '4', corpo: '3', precisao: '0', essencia: '1', luta: '2', mira: '0', operacoes: '0', resistencia: '2', armadura: '7', pv: '25', escudo: '0', blindagem: '0', ataque: 'Corpo a corpo', arma: 'Garras', dano: 'Cortante, Radioativo', cadencia: '1', descricao: 'Avança sobre o alvo mais próximo.' } },
+    { id: 'of-npc-mecha', kind: 'npc', name: 'Mecha de Contenção', values: { categoria: 'Chefão', up: '10', corpo: '4', precisao: '2', essencia: '1', luta: '2', mira: '3', operacoes: '1', resistencia: '3', armadura: '9', pv: '20', escudo: '15', blindagem: '30', ataque: 'À distância', arma: 'Metralhadora rotativa', dano: 'Balístico, Explosivo', cadencia: '5', efetivo: 'Blindagem', descricao: 'Camadas de escudo e blindagem antes do piloto.' } },
 
     // Poderes (capítulo Habilidades)
     { id: 'of-pod-esquiva', kind: 'poder', name: 'Esquiva', values: { custo: '1', efeito: 'Use precisão como atributo básico, e reflexo como perícia para os testes de defesa. Pode gastar +1 Up point para contar na defesa básica também.' } },

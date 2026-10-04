@@ -1078,6 +1078,14 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 
 .prog__sum { margin: 0.9rem 0 0.6rem; font-weight: 700; }
 .prog__sum--over { color: var(--erro); }
+.upbuys { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--linha-forte); }
+.upbuys__title { margin: 0 0 0.5rem; font: 700 var(--t-s) var(--fonte-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--nevoa-2); }
+.upbuy { margin-bottom: 0.9rem; }
+.upbuy__row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.upbuy__row .input { flex: 1 1 12rem; min-width: 0; }
+.upbuy__owned { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+.skills__pending { color: var(--ambar); }
+.skill__doc { font-size: var(--t-s); color: var(--ambar); font-weight: 600; }
 .buys { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.4rem 1.25rem; margin-bottom: 0.6rem; }
 .buy { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.2rem 0; border-top: 1px solid var(--linha); }
 .buy__label { font-weight: 600; }
@@ -1102,6 +1110,12 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 .lib-icon--mod { background: var(--rar); color: var(--abismo); border-radius: 50%; }
 .lib-row { flex-wrap: wrap; }
 .lib-row .row__open { align-items: flex-start; }
+.lib-row__open { cursor: pointer; }
+.lib-row__open:focus-visible { outline: 3px solid var(--mare); outline-offset: -3px; }
+.entry__img { display: block; max-width: 100%; max-height: 260px; margin: 0 auto 1rem; border-radius: 8px; object-fit: contain; }
+.entry__data dd { white-space: pre-line; overflow-wrap: anywhere; }
+.entry__sub { margin: 1.25rem 0 0.4rem; font-size: var(--t-m, 1.05rem); }
+.entry__lore { margin: 0 0 0.6rem; color: var(--nevoa-2); }
 .row__text { margin-top: 0.15rem; font-size: var(--t-s); color: var(--nevoa-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .star { flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--nevoa-2); font-size: 1.5rem; line-height: 1; }
 .star[aria-pressed="true"] { color: var(--ambar); }
@@ -1411,3 +1425,17 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 .gear__budget { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
 .gear__budget .field { max-width: 12rem; margin-bottom: 0; }
 .gear__price { flex: none; font-variant-numeric: tabular-nums; color: var(--ambar); }
+
+/* ---------- Combate na campanha ---------- */
+.combat { margin-top: 1.5rem; }
+.combat__gm { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.combatant { align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.combatant .row__main { flex: 1 1 14rem; min-width: 0; }
+.combatant__pick { display: flex; align-items: center; justify-content: center; width: 44px; min-height: 44px; flex: none; cursor: pointer; }
+.combatant__pick input { width: 1.25rem; height: 1.25rem; accent-color: var(--erro); cursor: pointer; }
+.combatant--target { background: rgba(229, 83, 75, 0.08); box-shadow: inset 3px 0 0 var(--erro); }
+.combatant--down .row__title { opacity: 0.7; }
+.tag--foe { border-color: var(--erro); color: var(--erro); }
+.tag--down { border-color: var(--erro); background: var(--erro); color: #fff; }
+.combat__attack { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--linha-forte); }
+.res__dmgtype { width: auto; min-width: 7.5rem; }
