@@ -4081,6 +4081,7 @@ const FIREBASE_CONFIG = {
     { id: 'builds', tab: 'Builds', title: 'Builds recomendadas', lead: 'Escolha uma build comum para preencher atributos, perícias e proficiências de uma vez, ou monte do seu jeito nas outras partes. Tudo pode ser ajustado depois.', search: true },
     { id: 'especime', tab: 'Espécime', title: 'Espécime', lead: 'A espécie define a vida base, os UP iniciais e se já nasce com núcleo.', search: true },
     { id: 'origem', tab: 'Origem', title: 'Origem e apresentação', lead: 'A origem traz itens iniciais. Idade, altura e sexo podem ser mudados depois na ficha.', search: true },
+    { id: 'equip', tab: 'Itens iniciais', title: 'Itens iniciais', lead: 'Pegue o kit da origem, escolhendo o que levar e trocando por itens do banco, ou monte o seu com um orçamento em Cronos.', search: true },
     { id: 'atributos', tab: 'Atributos', title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
     { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 perícia com +1. Toque para alternar entre nada, +1 e +2.', search: true },
     { id: 'profs', tab: 'Proficiências', title: 'Proficiências', lead: 'Escolha 4 tipos de arma ou armadura em que o personagem é proficiente desde o início.', search: true },
@@ -4126,6 +4127,7 @@ const FIREBASE_CONFIG = {
       if (c.two !== 2 || c.one !== 1) return 'Marcadas: ' + c.two + ' de 2 perícias com +2 e ' + c.one + ' de 1 perícia com +1.';
     }
     if (step === STEP.profs && wz.profs.length !== 4) return 'Escolhidas: ' + wz.profs.length + ' de 4 proficiências.';
+    if (step === STEP.equip && wz.gear.mode === 'preco' && cartTotal(wz.gear) > wz.gear.budget) return 'A compra passou do orçamento em ' + fmtCronos(cartTotal(wz.gear) - wz.gear.budget) + ' Cronos.';
     return '';
   }
   const setupProblem = () => stepProblem(wz.step);
@@ -4144,6 +4146,46 @@ const FIREBASE_CONFIG = {
     wz.skills = Object.assign({}, b.skills);
     wz.profs = b.profs.slice();
     wz.build = b.name;
+  }
+
+  /* ---------- Itens iniciais: kit da origem ou compra por preço ----------
+     O livro não dá dinheiro inicial; o orçamento padrão (1.500 Cronos) é o de uma
+     arma comum mais uma armadura leve comum do catálogo. Pode ser mudado. */
+  const START_BUDGET = 1500;
+  const priceOf = (e) => parseInt(String((e && e.values && e.values.preco) || '').replace(/[^0-9]/g, ''), 10) || 0;
+  const invEntryFrom = (e) => Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
+  function parseOriginLine(text) {
+    const clean = String(text).replace(/[;.]\s*$/, '').replace(/^1\s+/, '');
+    const cut = clean.indexOf(' (');
+    const head = cut > 0 ? clean.slice(0, cut) : clean;
+    const detail = cut > 0 ? clean.slice(cut + 2).replace(/\)$/, '') : '';
+    const opts = head.split(/\s+ou\s+/).map((o) => o.charAt(0).toUpperCase() + o.slice(1));
+    const t = nameKey(clean);
+    const kinds = /arma de fogo|pistola|rifle|fuzil|espingarda|escopeta|metralhadora|revolver/.test(t) ? ['arma-fogo'].concat(/lamina|espada|faca/.test(t) ? ['arma-melee'] : [])
+      : /lamina|espada|faca|machado|marreta/.test(t) ? ['arma-melee']
+      : /armadura|vestimenta|protecao/.test(t) ? ['armadura'] : INVENTORY_KINDS;
+    return { text, opts, detail, kinds, comum: /comum|basic|simples|improvisad/.test(t), free: /a escolha/.test(t) };
+  }
+  function gearFor(origin) { // estado da tela, refeito quando a origem muda
+    const g = wz.gear;
+    const name = origin ? origin.name : '';
+    if (g.origin !== name) {
+      g.origin = name;
+      g.lines = origin ? origin.items.map((t) => Object.assign(parseOriginLine(t), { take: true, opt: 0, bank: null })) : [];
+    }
+    return g;
+  }
+  const cartTotal = (g) => g.cart.reduce((t, e) => t + priceOf(e), 0);
+  function gearEntries(g) { // o que entra no inventário ao concluir
+    if (g.mode === 'preco') return g.cart.map(invEntryFrom);
+    if (g.mode !== 'kit') return [];
+    return g.lines.filter((l) => l.take).map((l) => (l.bank ? invEntryFrom(l.bank)
+      : originItemEntry(l.opts[l.opt] + (l.detail ? ' (' + l.detail + ')' : ''))));
+  }
+  function gearSummary(g) {
+    if (g.mode === 'preco') return g.cart.length ? g.cart.map((e) => e.name).join(' · ') + ' (' + fmtCronos(cartTotal(g)) + ' de ' + fmtCronos(g.budget) + ' Cronos)' : 'nada comprado';
+    if (g.mode === 'kit') { const n = gearEntries(g).map((e) => e.name); return n.length ? n.join(' · ') : 'nenhum item marcado'; }
+    return 'nenhum';
   }
 
   function pickCard(title, lines, on, onClick) {
@@ -4173,6 +4215,124 @@ const FIREBASE_CONFIG = {
     const lab = h('label', 'field__label', label);
     lab.htmlFor = id;
     return h('div', 'field', lab, inp);
+  }
+
+  function renderGear(body) {
+    const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
+    const g = gearFor(origin);
+    const modes = [['kit', 'Kit da origem'], ['preco', 'Por preço'], ['nenhum', 'Nenhum']];
+    const seg = h('div', 'segmented gear__modes', ...modes.map((m) => {
+      const inp = h('input');
+      inp.type = 'radio';
+      inp.name = 'gear-mode';
+      inp.value = m[0];
+      inp.checked = g.mode === m[0];
+      inp.dataset.fid = 'gear-' + m[0];
+      inp.addEventListener('change', () => { g.mode = m[0]; renderSetup('gear-' + m[0]); });
+      return h('label', 'segmented__opt', inp, h('span', '', m[1]));
+    }));
+    body.append(seg);
+    if (sheetChar.sheet.originItems) body.append(h('p', 'field__hint', 'Esta ficha já recebeu itens iniciais (' + sheetChar.sheet.originItems + '). O que você escolher aqui entra a mais no inventário.'));
+
+    if (g.mode === 'nenhum') { body.append(h('p', 'empty', 'Nenhum item inicial. Dá para pôr tudo depois pelo inventário.')); return; }
+
+    if (g.mode === 'kit') {
+      if (!origin) {
+        const b = h('button', 'btn btn--ghost btn--sm', 'Escolher origem');
+        b.type = 'button';
+        b.addEventListener('click', () => goStep(STEP.origem));
+        body.append(h('p', 'empty', 'Escolha uma das origens do livro para ver o kit dela, ou use a compra por preço. ', b));
+        return;
+      }
+      body.append(h('p', 'field__hint', 'Kit de ' + origin.name + '. Desmarque o que não quiser levar. Onde há "ou", escolha uma opção; qualquer linha pode virar um item de verdade do banco.'));
+      g.lines.forEach((l, i) => {
+        if (!wzMatch(l.text, l.bank && l.bank.name)) return;
+        const take = h('input');
+        take.type = 'checkbox';
+        take.checked = l.take;
+        take.dataset.fid = 'gear-take-' + i;
+        take.addEventListener('change', () => { l.take = take.checked; renderSetup('gear-take-' + i); });
+        const box = h('div', 'gear-line' + (l.take ? '' : ' gear-line--off'),
+          h('label', 'check gear-line__take', take, h('span', '', l.bank ? l.bank.name : l.opts[l.opt])));
+        if (!l.bank && l.opts.length > 1) {
+          box.append(h('div', 'segmented gear-line__opts', ...l.opts.map((o, j) => {
+            const r = h('input');
+            r.type = 'radio';
+            r.name = 'gear-opt-' + i;
+            r.checked = l.opt === j;
+            r.dataset.fid = 'gear-opt-' + i + '-' + j;
+            r.addEventListener('change', () => { l.opt = j; renderSetup('gear-opt-' + i + '-' + j); });
+            return h('label', 'segmented__opt', r, h('span', '', o));
+          })));
+        }
+        const meta = l.bank ? [kindTitle(l.bank.kind), l.bank.values.raridade, priceText(l.bank.values.preco)].filter(Boolean).join(' · ') : l.detail;
+        if (meta) box.append(h('p', 'field__hint', meta));
+        const swap = h('button', 'btn btn--ghost btn--sm', l.bank ? 'Trocar' : (l.free ? 'Escolher do banco' : 'Trocar por item do banco'));
+        swap.type = 'button';
+        swap.addEventListener('click', async () => {
+          const e = await openPicker({ title: 'Item do kit: ' + l.opts.join(' ou '), kinds: l.kinds,
+            chips: (l.kinds === INVENTORY_KINDS ? [] : l.kinds.map(kindTitle)).concat(l.comum ? ['Comum'] : []),
+            filter: (x) => l.kinds.indexOf(x.kind) >= 0 && (!l.comum || !x.values || !x.values.raridade || x.values.raridade === 'Comum') });
+          if (!e || !wz) return;
+          l.bank = e;
+          l.take = true;
+          renderSetup();
+        });
+        const acts = h('div', 'gear-line__acts', swap);
+        if (l.bank) {
+          const back = h('button', 'btn btn--ghost btn--sm', 'Voltar ao texto da origem');
+          back.type = 'button';
+          back.addEventListener('click', () => { l.bank = null; renderSetup(); });
+          acts.append(back);
+        }
+        box.append(acts);
+        body.append(box);
+      });
+      return;
+    }
+
+    // Por preço: orçamento, carrinho e a loja (catálogo + banco, só o que tem preço)
+    const inp = h('input', 'input');
+    inp.type = 'text';
+    inp.inputMode = 'numeric';
+    inp.id = 'gear-budget';
+    inp.value = String(g.budget);
+    inp.addEventListener('change', () => { g.budget = Math.max(0, parseInt(inp.value.replace(/[^0-9]/g, ''), 10) || 0); renderSetup(); });
+    const lab = h('label', 'field__label', 'Orçamento (Cronos)');
+    lab.htmlFor = 'gear-budget';
+    const left = g.budget - cartTotal(g);
+    body.append(h('div', 'gear__budget', h('div', 'field', lab, inp),
+      h('p', 'setup__pool' + (left < 0 ? ' setup__pool--over' : ''), 'Sobra: ', h('strong', '', fmtCronos(left)), ' Cronos')),
+      h('p', 'field__hint', 'O livro não define dinheiro inicial. O padrão de ' + fmtCronos(START_BUDGET) + ' Cronos compra uma arma comum e uma armadura leve comum; combine o valor com o mestre.' + (origin ? ' O kit de ' + origin.name + ' continua na aba "Kit da origem" para comparar.' : '')));
+    if (g.cart.length) {
+      body.append(h('h3', 'setup__sub', 'Comprados'), h('ul', 'rows', ...g.cart.map((e, i) => {
+        const rm = h('button', 'btn btn--ghost btn--sm', 'Tirar');
+        rm.type = 'button';
+        rm.setAttribute('aria-label', 'Tirar ' + e.name);
+        rm.addEventListener('click', () => { g.cart.splice(i, 1); renderSetup(); });
+        return h('li', 'row', h('span', 'row__open row__open--static', h('span', 'row__main', h('span', 'row__title', e.name), h('span', 'row__meta', kindTitle(e.kind) + ' · ' + priceText(e.values.preco)))), rm);
+      })));
+    }
+    body.append(h('h3', 'setup__sub', 'Loja'));
+    if (!g.shop) {
+      body.append(h('p', 'empty', 'Carregando os itens com preço...'));
+      libSearch(INVENTORY_KINDS, '').catch(() => BUILTINS.filter((e) => INVENTORY_KINDS.indexOf(e.kind) >= 0))
+        .then((list) => { if (!wz || wz.gear !== g) return; g.shop = list.filter((e) => priceOf(e) > 0).sort((a, b) => priceOf(a) - priceOf(b)); renderSetup(); });
+      return;
+    }
+    const shown = g.shop.filter((e) => wzMatch(e.name, e.kindTitle, e.typeTitle, e.values.raridade, e.values.fabricante));
+    body.append(h('ul', 'rows gear__shop', ...shown.slice(0, 80).map((e) => {
+      const add = h('button', 'btn btn--ghost btn--sm', 'Comprar');
+      add.type = 'button';
+      add.disabled = priceOf(e) > left;
+      add.setAttribute('aria-label', 'Comprar ' + e.name + ' por ' + priceText(e.values.preco));
+      add.addEventListener('click', () => { g.cart.push(e); renderSetup(); });
+      return h('li', 'row', h('span', 'row__open row__open--static', entryIcon(e),
+        h('span', 'row__main', h('span', 'row__title', e.name), h('span', 'row__meta', [e.kindTitle, e.typeTitle, e.values.raridade].filter(Boolean).join(' · ')))),
+        h('strong', 'gear__price', fmtCronos(priceOf(e))), add);
+    })));
+    if (!shown.length) body.append(h('p', 'empty', 'Nada com esse termo na loja.'));
+    else if (g.shop.some((e) => priceOf(e) > left)) body.append(h('p', 'field__hint', 'Itens acima da sobra ficam desativados.'));
   }
 
   function renderSetup(focusId) {
@@ -4241,6 +4401,8 @@ const FIREBASE_CONFIG = {
           setupField('wz-sex', 'Sexo', wz.sex, '', (v) => { wz.sex = v; }, 20)));
     }
 
+    if (wz.step === STEP.equip) renderGear(body);
+
     if (wz.step === STEP.atributos) {
       const p = attrPool(wz.attrs);
       const m = previewSheet();
@@ -4308,6 +4470,7 @@ const FIREBASE_CONFIG = {
         ...row('Build', wz.build || 'do seu jeito'),
         ...row('Espécime', wz.specimen ? wz.specimen.name + ' (' + specimenLine(wz.specimen) + ')' : ''),
         ...row('Origem', wz.origin),
+        ...row('Itens iniciais', gearSummary(gearFor(ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin))))),
         ...row('Atributos', ATTRS.map((at) => at.label + ' ' + signed(wz.attrs[at.id])).join(' · ')),
         ...row('Perícias', skills.join(' · ')),
         ...row('Proficiências', PROFS.filter((p) => wz.profs.indexOf(p.id) >= 0).map((p) => p.label).join(' · ')),
@@ -4315,16 +4478,6 @@ const FIREBASE_CONFIG = {
         ...row('Defesa mínima', String(m.defMin)),
         ...row('Carga', fmtNum(m.cargaMax)),
         ...row('UP iniciais', String(m.upTotal))));
-      const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
-      if (origin && sheetChar.sheet.originItems !== origin.name) {
-        const cb = h('input');
-        cb.type = 'checkbox';
-        cb.checked = wz.addItems;
-        cb.addEventListener('change', () => { wz.addItems = cb.checked; });
-        body.append(h('label', 'check', cb, h('span', '', 'Colocar os itens iniciais de ' + origin.name + ' no inventário')),
-          h('ul', 'r-list setup__items', ...origin.items.map((t) => h('li', '', t))),
-          h('p', 'field__hint', 'Entram como itens rápidos (texto). Onde a origem dá uma escolha ("ou"), ajuste depois no inventário.'));
-      }
     }
 
     // pode seguir mesmo com algo pendente: só o Concluir exige tudo certo
@@ -4342,7 +4495,8 @@ const FIREBASE_CONFIG = {
     const c = sheetChar, s = c.sheet;
     wz = {
       step: skipBuilds() ? STEP.especime : STEP.builds, q: '', build: '', attrs: Object.assign({}, s.attrs), skills: {}, profs: s.profs.slice(0, 4), oficio: s.oficio || '',
-      specimen: s.specimen ? deep(s.specimen) : null, origin: c.origin || '', age: c.age || '', height: s.height || '', sex: s.sex || '', addItems: true
+      specimen: s.specimen ? deep(s.specimen) : null, origin: c.origin || '', age: c.age || '', height: s.height || '', sex: s.sex || '',
+      gear: { mode: s.originItems ? 'nenhum' : 'kit', origin: null, lines: [], budget: START_BUDGET, cart: [], shop: null }
     };
     Object.keys(s.skills).forEach((k) => { if (s.skills[k] === 1 || s.skills[k] === 2) wz.skills[k] = s.skills[k]; });
     if (attrPool(wz.attrs).left < 0 || ATTRS.some((at) => wz.attrs[at.id] > 3)) wz.attrs = { corpo: 0, precisao: 0, essencia: 0 }; // ficha já evoluída: recomeça do zero
@@ -4367,10 +4521,10 @@ const FIREBASE_CONFIG = {
     c.age = wz.age;
     dirty.add('origin'); dirty.add('age');
     const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
-    if (origin && wz.addItems && s.originItems !== origin.name) {
-      origin.items.forEach((t) => s.inventory.push(originItemEntry(t)));
-      s.originItems = origin.name;
-    }
+    const g = gearFor(origin);
+    const got = gearEntries(g);
+    got.forEach((e) => s.inventory.push(e));
+    if (got.length) s.originItems = g.mode === 'preco' ? 'Compra inicial' : origin.name;
     wz = null;
     closeDialog(setupDlg);
     fillBasics();

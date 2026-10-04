@@ -1398,3 +1398,14 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 .setup__search { margin-bottom: 0.9rem; }
 .setup__builds-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; }
 .setup__probs { margin-bottom: 1rem; padding: 0.75rem 1rem; border-left: 3px solid var(--erro); border-radius: var(--r-s); background: rgba(255, 155, 136, 0.08); }
+
+/* Itens iniciais: kit da origem ou compra por preço */
+.gear__modes { margin-bottom: 1rem; }
+.gear-line { display: grid; gap: 0.45rem; padding: 0.75rem 0.9rem; margin-bottom: 0.6rem; border: 1px solid var(--linha-forte); border-radius: var(--r-s); background: var(--casco-2); }
+.gear-line--off { opacity: 0.55; }
+.gear-line__take span { font-weight: 700; }
+.gear-line__opts { flex-wrap: wrap; }
+.gear-line__acts { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.gear__budget { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
+.gear__budget .field { max-width: 12rem; margin-bottom: 0; }
+.gear__price { flex: none; font-variant-numeric: tabular-nums; color: var(--ambar); }
