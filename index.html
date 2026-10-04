@@ -28,47 +28,79 @@
       <span>Vortex</span>
     </a>
     <nav class="app-nav" aria-label="Principal">
-      <a class="app-nav__link" data-nav="home" href="#/home">Início</a>
-      <a class="app-nav__link" data-nav="personagens" href="#/personagens">Personagens</a>
-      <a class="app-nav__link" data-nav="campanhas" href="#/campanhas">Campanhas</a>
-      <a class="app-nav__link" data-nav="itens" href="#/itens">Itens</a>
-      <a class="app-nav__link" data-nav="rules" href="#/rules">Regras</a>
+      <span class="app-nav__group" aria-hidden="true">Jogar</span>
+      <a class="app-nav__link" data-nav="home" aria-label="Painel" data-short="Painel" href="#/home"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="app-nav__label">Painel</span><span class="app-nav__sub">Visão geral</span></a>
+      <a class="app-nav__link" data-nav="personagens" aria-label="Personagens" data-short="Fichas" href="#/personagens"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span class="app-nav__label">Personagens</span><span class="app-nav__sub">Fichas e catálogo</span></a>
+      <a class="app-nav__link" data-nav="campanhas" aria-label="Campanhas" data-short="Mesa" href="#/campanhas"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 21V4h11l-1.5 3.5L15 11H4"/><path d="M4 21h4"/></svg><span class="app-nav__label">Campanhas</span><span class="app-nav__sub">Mesa, dados e combate</span></a>
+      <span class="app-nav__group" aria-hidden="true">Criar e consultar</span>
+      <a class="app-nav__link" data-nav="itens" aria-label="Oficina" data-short="Oficina" href="#/itens"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m14.5 6.5 3 3"/><path d="M3 21l8.5-8.5"/><path d="M12.5 4.5a4.2 4.2 0 0 1 5.9 5.9l-2.1 2.1-5.9-5.9z"/></svg><span class="app-nav__label">Oficina</span><span class="app-nav__sub">Itens, NPCs e poderes</span></a>
+      <a class="app-nav__link" data-nav="rules" aria-label="Compêndio" data-short="Regras" href="#/rules"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19"/><path d="M9 7h6"/></svg><span class="app-nav__label">Compêndio</span><span class="app-nav__sub">Livro de regras</span></a>
     </nav>
+    <div class="app-bar__tools">
     <!-- Mostra onde os dados estão sendo salvos: modo local ou Firebase -->
     <span class="mode-pill" id="mode-pill" role="status">Modo local</span>
     <!-- Falso login: um código de até 6 dígitos abre o perfil -->
     <button class="profile-btn" type="button" id="profile-btn">Entrar</button>
+    </div>
   </header>
 
   <main class="container" id="conteudo" tabindex="-1">
 
     <!-- ===================== TELA: INÍCIO (vitrine) ===================== -->
-    <section class="screen" data-screen="home" data-title="Início" aria-labelledby="home-title" hidden>
+    <section class="screen" data-screen="home" data-title="Painel" aria-labelledby="home-title" hidden>
       <p class="notice" id="mode-notice" role="status" hidden></p>
 
       <div class="hero hero--landing">
         <div class="hero__spiral" aria-hidden="true"><svg viewBox="-100 -100 200 200" focusable="false"><use href="#vx-hero"/></svg></div>
+        <p class="eyebrow" id="home-hello">Painel do jogador</p>
         <h1 id="home-title" tabindex="-1">Vortex</h1>
-        <p class="hero__lead">Fichas, campanhas e o equipamento de um RPG de ruínas e tecnologia. Comece por onde quiser.</p>
-        <a class="btn btn--primary btn--lg" href="#/novo">Criar personagem</a>
+        <p class="hero__lead">Fichas, campanhas e o arsenal de um RPG de ruínas e tecnologia. Monte o personagem, reúna o grupo e role na mesa.</p>
+        <div class="hero__actions">
+          <a class="btn btn--primary btn--lg" href="#/novo">Criar personagem</a>
+          <a class="btn btn--ghost btn--lg" href="#/campanhas">Abrir campanha</a>
+        </div>
       </div>
 
+      <div class="dash">
+        <section class="dash-panel" aria-labelledby="dash-chars-title">
+          <div class="dash-panel__head">
+            <h2 class="dash-panel__title" id="dash-chars-title">Continuar jogando</h2>
+            <a class="link-more" href="#/personagens">Ver todos</a>
+          </div>
+          <ul class="rows" id="dash-chars"></ul>
+          <p class="empty" id="dash-chars-empty">Nenhuma ficha recente. Crie um personagem ou abra um pela busca.</p>
+        </section>
+        <section class="dash-panel" aria-labelledby="dash-camps-title">
+          <div class="dash-panel__head">
+            <h2 class="dash-panel__title" id="dash-camps-title">Suas campanhas</h2>
+            <a class="link-more" href="#/campanhas">Gerenciar</a>
+          </div>
+          <ul class="rows" id="dash-camps"></ul>
+          <p class="empty" id="dash-camps-empty">Você ainda não está em nenhuma campanha.</p>
+        </section>
+      </div>
+
+      <h2 class="section-label">Explorar</h2>
       <div class="landing-grid">
         <a class="landing-card" href="#/personagens">
+          <svg class="landing-card__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
           <span class="landing-card__title">Personagens</span>
-          <span class="landing-card__text">Acesso rápido e busca entre todas as fichas públicas.</span>
+          <span class="landing-card__text">Fichas públicas, favoritos e o catálogo de origens, espécimes e poderes.</span>
         </a>
         <a class="landing-card" href="#/campanhas">
+          <svg class="landing-card__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 21V4h11l-1.5 3.5L15 11H4"/><path d="M4 21h4"/></svg>
           <span class="landing-card__title">Campanhas</span>
-          <span class="landing-card__text">Crie uma campanha ou veja as suas.</span>
+          <span class="landing-card__text">Mesa de dados, grupo, XP e combate com inimigos da lista aberta.</span>
         </a>
         <a class="landing-card" href="#/itens">
-          <span class="landing-card__title">Itens</span>
-          <span class="landing-card__text">Oficina e banco de itens, mods, propriedades, acessórios, espécimes e poderes.</span>
+          <svg class="landing-card__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m14.5 6.5 3 3"/><path d="M3 21l8.5-8.5"/><path d="M12.5 4.5a4.2 4.2 0 0 1 5.9 5.9l-2.1 2.1-5.9-5.9z"/></svg>
+          <span class="landing-card__title">Oficina</span>
+          <span class="landing-card__text">Crie armas, armaduras, implantes, NPCs e poderes para o banco compartilhado.</span>
         </a>
         <a class="landing-card" href="#/rules">
-          <span class="landing-card__title">Regras</span>
-          <span class="landing-card__text">O livro completo, em abas, com índice.</span>
+          <svg class="landing-card__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19"/><path d="M9 7h6"/></svg>
+          <span class="landing-card__title">Compêndio</span>
+          <span class="landing-card__text">O livro de regras completo, por capítulos, com índice e busca.</span>
         </a>
       </div>
     </section>
@@ -78,6 +110,7 @@
       <a class="back-link" href="#/personagens">Voltar a Personagens</a>
       <div class="hero">
         <div class="hero__spiral" aria-hidden="true"><svg viewBox="-100 -100 200 200" focusable="false"><use href="#vx-hero"/></svg></div>
+        <p class="eyebrow">Novo personagem</p>
         <h1 id="novo-title" tabindex="-1">Quem vamos criar?</h1>
         <p class="hero__lead">O nome precisa ser único; o resto você completa na ficha.</p>
 
@@ -108,6 +141,7 @@
     <section class="screen" data-screen="personagens" data-title="Personagens" aria-labelledby="personagens-title" hidden>
       <header class="screen__head">
         <div>
+          <p class="eyebrow">Biblioteca</p>
           <h1 id="personagens-title" tabindex="-1">Personagens</h1>
           <p class="screen__sub">Todas as fichas são públicas: qualquer pessoa pode ver e editar.</p>
         </div>
@@ -121,7 +155,7 @@
       </section>
 
       <section class="block" aria-labelledby="quick-title">
-        <h2 class="block__title" id="quick-title"><button class="help" type="button" data-help="fichas">Acesso rápido</button></h2>
+        <h2 class="block__title" id="quick-title"><button class="help" type="button" data-help="fichas">Recentes</button></h2>
         <p class="block__hint">Salvo neste aparelho.</p>
         <ul class="rows" id="quick-list"></ul>
         <p class="empty" id="quick-empty">Nada por aqui ainda. Crie um personagem ou encontre um pela busca abaixo.</p>
@@ -173,6 +207,7 @@
     <section class="screen" data-screen="perfil" data-title="Perfil" aria-labelledby="perfil-title" hidden>
       <header class="screen__head">
         <div>
+          <p class="eyebrow">Conta</p>
           <h1 id="perfil-title" tabindex="-1">Perfil</h1>
           <p class="screen__sub" id="perfil-sub"></p>
         </div>
@@ -220,7 +255,10 @@
     <!-- ===================== TELA: CAMPANHAS ===================== -->
     <section class="screen" data-screen="campanhas" data-title="Campanhas" aria-labelledby="campanhas-title" hidden>
       <header class="screen__head">
-        <h1 id="campanhas-title" tabindex="-1"><button class="help" type="button" data-help="campanhas">Campanhas</button></h1>
+        <div>
+          <p class="eyebrow">Mesa de jogo</p>
+          <h1 id="campanhas-title" tabindex="-1"><button class="help" type="button" data-help="campanhas">Campanhas</button></h1>
+        </div>
       </header>
 
       <div class="two-col">
@@ -248,11 +286,12 @@
     </section>
 
     <!-- ===================== TELA: ITENS (Oficina + banco de dados) ===================== -->
-    <section class="screen" data-screen="itens" data-title="Itens" aria-labelledby="itens-title" hidden>
+    <section class="screen" data-screen="itens" data-title="Oficina" aria-labelledby="itens-title" hidden>
       <header class="screen__head">
         <div>
+          <p class="eyebrow">Criação</p>
           <h1 id="itens-title" tabindex="-1">Oficina</h1>
-          <p class="screen__sub">Crie armas, armaduras, vestíveis, implantes, mods, propriedades, acessórios, espécimes e poderes. Tudo o que for salvo entra no banco de dados e aparece na pesquisa das fichas.</p>
+          <p class="screen__sub">Crie armas, armaduras, vestíveis, implantes, mods, propriedades, acessórios, espécimes, poderes, origens e NPCs. Tudo o que for salvo entra no banco compartilhado e aparece na pesquisa das fichas e da campanha.</p>
         </div>
       </header>
 
@@ -598,10 +637,11 @@
     </section>
 
     <!-- ===================== TELA: REGRAS (livro em abas) ===================== -->
-    <section class="screen" data-screen="rules" data-title="Regras" aria-labelledby="rules-title" hidden>
+    <section class="screen" data-screen="rules" data-title="Compêndio" aria-labelledby="rules-title" hidden>
       <a class="back-link" id="rules-back" href="#/home" hidden>Voltar</a>
 
       <header class="rules-head">
+        <p class="eyebrow">Compêndio</p>
         <h1 id="rules-title" tabindex="-1">Regras do Vortex</h1>
         <p>Um capítulo por aba. Use o índice ao lado da rolagem para pular direto para qualquer regra.</p>
       </header>
