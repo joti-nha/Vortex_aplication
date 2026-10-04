@@ -244,6 +244,10 @@
             <label class="field__label" for="lib-kind">Categoria</label>
             <select class="input" id="lib-kind"></select>
           </div>
+          <div class="field">
+            <label class="field__label" for="lib-maker">Criadora</label>
+            <select class="input" id="lib-maker"></select>
+          </div>
           <label class="check"><input type="checkbox" id="lib-fav"><span>Só favoritos</span></label>
           <label class="check"><input type="checkbox" id="lib-mine"><span>Só os meus</span></label>
         </div>
@@ -342,34 +346,6 @@
           <div id="profs-block"></div>
         </section>
       </div>
-
-      <!-- Pré-jogadas: testes de atributo, ataque e (pelo botão de cada perícia) perícias -->
-      <section class="block sheet-block" aria-labelledby="sheet-rolls-title">
-        <h2 class="block__title" id="sheet-rolls-title">Rolagens</h2>
-        <p class="block__hint">Testes prontos de 2d6 + atributo + perícia, com críticos (6), perdas (1) e penalidades já contados. As perícias rolam pelo botão 🎲 de cada uma; os ataques ficam nas ações do personagem dentro de cada campanha.</p>
-        <div class="roll-opts">
-          <div class="field">
-            <label class="field__label" for="roll-dest">Mostrar o resultado</label>
-            <select class="input" id="roll-dest"></select>
-          </div>
-          <div class="field">
-            <label class="field__label" for="roll-gain">Dados</label>
-            <select class="input" id="roll-gain">
-              <option value="2">2d6 (normal)</option>
-              <option value="3">3d6 (ganho)</option>
-              <option value="4">4d6 (ganho do mestre)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="field__label" for="roll-mod">Modificador extra</label>
-            <input class="input" id="roll-mod" type="number" step="1" inputmode="numeric" placeholder="0">
-          </div>
-        </div>
-        <h3 class="sub-title">Teste de atributo</h3>
-        <div class="quick-tests" id="attr-tests"></div>
-        <ol class="roll-log roll-log--sheet" id="sheet-roll-log" role="log" aria-label="Rolagens desta ficha" tabindex="0"></ol>
-        <p class="empty" id="sheet-roll-empty">Nenhuma rolagem nesta sessão.</p>
-      </section>
 
       <section class="block sheet-block" aria-labelledby="powers-title">
         <div class="block__head">

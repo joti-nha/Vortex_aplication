@@ -1876,6 +1876,7 @@ const FIREBASE_CONFIG = {
   function libRow(e, actions, onFav) {
     const title = h('span', 'row__title', e.name || 'Sem nome');
     if (e.oficial) title.append(' ', h('span', 'tag', 'Oficial'));
+    if (e.values && e.values.fabricante) title.append(' ', h('span', 'tag tag--maker', e.values.fabricante));
     const main = h('span', 'row__main', title, h('span', 'row__meta', entryMeta(e)));
     const text = entryText(e);
     if (text) main.append(h('span', 'row__text', text));
@@ -2226,7 +2227,7 @@ const FIREBASE_CONFIG = {
     if (field.kind === 'select') {
       const sel = h('select', 'input');
       sel.id = id;
-      const blank = h('option', '', 'Escolha...');
+      const blank = h('option', '', field.blank || 'Escolha...');
       blank.value = '';
       sel.append(blank);
       const all = value && opts.indexOf(value) < 0 ? opts.concat([value]) : opts; // valor antigo, fora das opções: mantém
@@ -2465,6 +2466,8 @@ const FIREBASE_CONFIG = {
     const favs = favLoad();
     if ($('#lib-fav').checked) list = list.filter((e) => favs.has(e.id));
     if ($('#lib-mine').checked) list = list.filter((e) => e.mine);
+    const maker = $('#lib-maker').value;
+    if (maker) list = list.filter((e) => (e.values || {}).fabricante === maker);
     list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
     $('#lib-list').replaceChildren(...list.map((e) => {
       const actions = [{ label: 'Usar de base', onClick: () => openForm(e.kind, e.typeId, Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' })) }];
@@ -2485,13 +2488,18 @@ const FIREBASE_CONFIG = {
     $('#lib-hint').textContent = plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
   }
   $('#lib-q').addEventListener('input', debounce(runLib, 300));
-  ['#lib-kind', '#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
+  ['#lib-kind', '#lib-maker', '#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
   (function fillLibKinds() {
     const sel = $('#lib-kind');
     const all = h('option', '', 'Todas');
     all.value = '';
     sel.append(all);
     ITEM_DATA.categories.forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
+    const mk = $('#lib-maker');
+    const any = h('option', '', 'Todas');
+    any.value = '';
+    mk.append(any);
+    (ITEM_DATA.fabricantes || []).forEach((f) => { const o = h('option', '', f); o.value = f; mk.append(o); });
   })();
 
   // Itens da versão anterior (salvos só neste aparelho): entram no banco uma única vez
@@ -2825,7 +2833,6 @@ const FIREBASE_CONFIG = {
     renderPowers(m);
     renderInventory(m);
     renderAlerts(m);
-    renderSheetRolls();
     // avisa quando a carga passa do limite (colocar ou tirar itens nunca é bloqueado)
     if (watch.id === sheetChar.id && m.over && !watch.over) toast('Carga ' + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '. ' + OVERLOAD_TEXT);
     watch.over = m.over;
@@ -2976,7 +2983,7 @@ const FIREBASE_CONFIG = {
 
   function renderSkills(m) {
     const s = sheetChar.sheet;
-    $('#skills-hint').textContent = 'Teste = 2d6 + atributo + perícia (🎲 rola o teste). Pontos de perícia: ' + m.skillUsed + ' de ' + m.skillBudget + '.';
+    $('#skills-hint').textContent = 'Teste = 2d6 + atributo + perícia (as rolagens ficam na campanha). Pontos de perícia: ' + m.skillUsed + ' de ' + m.skillBudget + '.';
     $('#skills-block').replaceChildren(...ATTRS.map((at) => {
       const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(s.attrs[at.id]))));
       SKILLS[at.id].forEach((sk) => {
@@ -2984,17 +2991,10 @@ const FIREBASE_CONFIG = {
         const pen = PENALTY_SKILLS.indexOf(sk[0]) >= 0 ? m.pen : 0;
         const total = h('span', 'skill__total', signed(s.attrs[at.id] + v - pen));
         total.title = 'Atributo ' + signed(s.attrs[at.id]) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
-        const roll = h('button', 'skill__roll', '🎲');
-        roll.type = 'button';
-        roll.dataset.fid = 'roll-' + sk[0];
-        roll.title = 'Rolar ' + sk[1] + ' (2d6 ' + signed(s.attrs[at.id] + v - pen) + ')';
-        roll.setAttribute('aria-label', roll.title);
-        roll.addEventListener('click', () => sheetRoll(skillTest(s, m, sk[0])));
         const row = h('div', 'skill',
           h('span', 'skill__name', sk[1], pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
           total,
-          stepper(v, { min: 0, max: 3, label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }),
-          roll);
+          stepper(v, { min: 0, max: 3, label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
         group.append(row);
         if (sk[0] === 'oficio') {
           const inp = h('input', 'input skill__job');
@@ -3188,6 +3188,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     add('Carga', fmtNum(parseCarga(v.carga)) + (i.slot ? ' (equipado: não conta)' : ''));
     add('Preço', priceText(v.preco));
+    add('Criadora', v.fabricante);
     return out;
   }
 
@@ -3533,57 +3534,6 @@ const FIREBASE_CONFIG = {
     return out;
   }
 
-  /* Rolagens na ficha: o resultado aparece aqui e, se escolhido, vai para a campanha */
-  const sheetRollLog = new Map(); // id da ficha -> últimas rolagens desta sessão
-  const atk = { char: null };
-  let sheetCamps = [];
-  const rollDest = $('#roll-dest'), rollGain = $('#roll-gain'), rollMod = $('#roll-mod');
-
-  async function sheetRoll(o) {
-    const ch = sheetChar;
-    if (!ch) return;
-    const extra = Math.round(num(rollMod.value));
-    if (extra) o.mods = (o.mods || []).concat([['modificador', extra]]);
-    o.dice = num(rollGain.value) || 2;
-    const r = rollTest(o);
-    const list = sheetRollLog.get(ch.id) || [];
-    list.push(Object.assign({ id: uid(), createdAt: Date.now(), characterId: ch.id, characterName: ch.name, characterType: ch.type }, r));
-    sheetRollLog.set(ch.id, list.slice(-12));
-    renderRollLog();
-    const dest = rollDest.value;
-    if (!dest) return;
-    try {
-      await db.addRoll(dest, { characterId: ch.id, characterName: ch.name, characterType: ch.type, expr: r.expr, label: r.label, detail: r.detail, total: r.total, flag: r.flag });
-    } catch (err) { toast('A rolagem ficou só na ficha: ' + errorMessage(err)); }
-  }
-
-  function renderRollLog() {
-    const list = (sheetChar && sheetRollLog.get(sheetChar.id)) || [];
-    const log = $('#sheet-roll-log');
-    log.replaceChildren(...list.map(rollRow));
-    log.scrollTop = log.scrollHeight;
-    $('#sheet-roll-empty').hidden = list.length > 0;
-  }
-
-  function renderRollDest() {
-    const keep = rollDest.value;
-    const off = h('option', '', 'Só nesta ficha');
-    off.value = '';
-    rollDest.replaceChildren(off, ...sheetCamps.map((c) => { const o = h('option', '', 'Campanha: ' + c.name); o.value = c.id; return o; }));
-    rollDest.value = sheetCamps.some((c) => c.id === keep) ? keep : (sheetCamps[0] ? sheetCamps[0].id : '');
-  }
-
-  function renderSheetRolls() {
-    const s = sheetChar.sheet;
-    const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; if (fid) b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
-    $('#attr-tests').replaceChildren(...ATTRS.map((at) => {
-      const b = btn('', 'btn--ghost quick-test quick-test--' + at.id, () => sheetRoll(attrTest(s, at.id)), 'test-' + at.id);
-      b.append(h('span', 'quick-test__name', at.label), h('span', 'quick-test__val', '2d6 ' + (signed(s.attrs[at.id]) || '+0').replace(/^0$/, '+0')));
-      return b;
-    }));
-    renderRollLog();
-  }
-
   /* Ação de ataque (fica na campanha, no painel de cada personagem seu).
      st guarda as escolhas: { uid, mode, shots, mod }. onRoll recebe o teste pronto. */
   function attackBuilder(c, st, onRoll, idp) {
@@ -3642,12 +3592,10 @@ const FIREBASE_CONFIG = {
     return box;
   }
 
-  rollMod.addEventListener('change', () => { rollMod.value = Math.round(num(rollMod.value)) || ''; });
 
   async function renderSheetCampaigns() {
     const ch = sheetChar;
     const list = await db.listCharacterCampaigns(ch.id);
-    if (sheetChar === ch) { sheetCamps = list; renderRollDest(); }
     $('#sheet-camp-list').replaceChildren(...list.map((c) => campaignRow(c, {
       label: 'Sair',
       onClick: async () => {
@@ -4092,9 +4040,6 @@ const FIREBASE_CONFIG = {
     setStatus('');
     renderPortrait();
     renderPin();
-    if (atk.char !== id) { atk.char = id; rollMod.value = ''; rollGain.value = '2'; }
-    sheetCamps = [];
-    renderRollDest();
     rerender();
     $('#setup-open').textContent = c.sheet.setup ? 'Refazer distribuição inicial' : 'Distribuição inicial';
     $('#danger-zone').hidden = !c.mine;
