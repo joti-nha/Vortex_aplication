@@ -201,6 +201,39 @@ const FIREBASE_CONFIG = {
     return { expr: exprParts.join(''), label, detail: detailParts.join(''), total, flag };
   }
 
+  /* Teste do sistema: 2d6 + Atributo + Perícia (regras "Testes e Dados").
+     - Cada 6 soma o atributo de novo, mas só vale 1 crítico por teste.
+     - Cada 1 é uma perda: anula o bônus da perícia; duas perdas = falha completa.
+     - Um 1 anula um 6.
+     - Ganho: um 3º ou 4º dado entra na soma.
+     o: { label, attrName, attr, skillName, skill, mods: [[nome, valor]], dice } */
+  function rollTest(o) {
+    const n = clamp(Math.round(o.dice || 2), 2, 4);
+    const rolls = Array.from({ length: n }, () => randInt(6));
+    const ones = rolls.filter((v) => v === 1).length;
+    const sixes = rolls.filter((v) => v === 6).length;
+    const crit = sixes > ones;
+    const skillLost = ones > 0 && Boolean(o.skill);
+    const mods = (o.mods || []).filter((x) => x && x[1]);
+    const dice = rolls.reduce((t, v) => t + v, 0);
+    const skill = skillLost ? 0 : (o.skill || 0);
+    const total = dice + (o.attr || 0) + skill + mods.reduce((t, x) => t + x[1], 0) + (crit ? (o.attr || 0) : 0);
+    const sg = (v) => (v < 0 ? ' - ' + Math.abs(v) : ' + ' + v);
+    let detail = n + 'd6 [' + rolls.join(', ') + ']' + sg(o.attr || 0) + ' ' + o.attrName;
+    if (o.skillName) detail += sg(o.skill || 0) + ' ' + o.skillName + (skillLost ? ' (anulada: perda)' : '');
+    mods.forEach((x) => { detail += sg(x[1]) + ' ' + x[0]; });
+    if (crit) detail += sg(o.attr || 0) + ' crítico (' + o.attrName + ')';
+    if (ones >= 2) detail += ' · duas perdas: falha completa';
+    const fixed = (o.attr || 0) + (o.skill || 0) + mods.reduce((t, x) => t + x[1], 0);
+    return {
+      expr: n + 'd6' + (fixed ? (fixed > 0 ? '+' : '') + fixed : ''),
+      label: String(o.label || '').slice(0, 60),
+      detail: detail.slice(0, 1400),
+      total,
+      flag: ones >= 2 ? 'falha' : crit ? 'crit' : ''
+    };
+  }
+
   /* =====================================================================
      4. BANCO LOCAL (localStorage): funciona sem Firebase
      Os dois bancos (local e Firebase) têm os mesmos métodos.
@@ -1411,6 +1444,27 @@ const FIREBASE_CONFIG = {
     return h('li', 'row', ...kids);
   }
 
+  // Resumo de combate de um candidato: recursos atuais, defesa, carga e pendências
+  function memberStats(c) {
+    if (!c.sheet || !c.sheet.attrs) return [];
+    let out = [];
+    try {
+      const cc = Object.assign({}, c, { sheet: normSheet(c.sheet) });
+      const s = cc.sheet;
+      const m = compute(cc);
+      const res = [[m.base, m.base === 'pv' ? 'PV' : m.base === 'blindagem' ? 'Blindagem' : 'Escudo'], ['pe', 'PE'], ['pa', 'PA']]
+        .filter((r) => m.max[r[0]] > 0).map((r) => r[1] + ' ' + getCur(s, r[0], m.max[r[0]]) + '/' + m.max[r[0]]);
+      out = [h('dt', '', 'Recursos'), h('dd', '', res.join(' · ')),
+        h('dt', '', 'Defesa'), h('dd', '', 'mínima ' + m.defMin + (m.pen ? ' · penalidade –' + m.pen : '')),
+        h('dt', '', 'Carga'), h('dd', m.over ? 'member__warn' : '', fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + (m.over ? ' · sobrecarregado' : ''))];
+      const weapons = s.inventory.filter((i) => i.slot && isWeapon(i.kind)).map((i) => i.name);
+      if (weapons.length) out.push(h('dt', '', 'Em mãos'), h('dd', '', weapons.join(', ')));
+      const pend = Math.max(0, m.picksAllowed - m.picksUsed) + Math.max(0, m.upTotal - m.upSpent) + Math.max(0, m.skillBudget - m.skillUsed);
+      if (pend > 0) out.push(h('dt', '', 'Pendências'), h('dd', 'member__warn', 'tem pontos para distribuir'));
+    } catch (err) { console.warn(err); }
+    return out;
+  }
+
   // Candidato: toque no nome abre a ficha resumida, sem sair da campanha
   function memberRow(m) {
     const panelId = 'member-' + m.characterId;
@@ -1432,7 +1486,8 @@ const FIREBASE_CONFIG = {
         h('dt', '', 'Espécie'), h('dd', '', m.species || '—'),
         h('dt', '', 'Idade'), h('dd', '', m.age || '—'),
         h('dt', '', 'Origem'), h('dd', '', m.origin || '—'),
-        ...(m.sheet && m.sheet.attrs ? [h('dt', '', 'Atributos'), h('dd', '', 'Corpo ' + (m.sheet.attrs.corpo || 0) + ' · Precisão ' + (m.sheet.attrs.precisao || 0) + ' · Essência ' + (m.sheet.attrs.essencia || 0))] : [])),
+        ...(m.sheet && m.sheet.attrs ? [h('dt', '', 'Atributos'), h('dd', '', 'Corpo ' + (m.sheet.attrs.corpo || 0) + ' · Precisão ' + (m.sheet.attrs.precisao || 0) + ' · Essência ' + (m.sheet.attrs.essencia || 0))] : []),
+        ...memberStats(m)),
       link));
     panel.id = panelId;
     panel.hidden = true;
@@ -1446,8 +1501,8 @@ const FIREBASE_CONFIG = {
   }
 
   function rollRow(r) {
-    const flagText = r.flag === 'crit' ? 'Sucesso crítico!' : r.flag === 'fail' ? 'Falha crítica' : '';
-    return h('li', 'roll' + (r.flag ? ' roll--' + r.flag : ''),
+    const flagText = r.flag === 'crit' ? 'Sucesso crítico!' : r.flag === 'fail' ? 'Falha crítica' : r.flag === 'falha' ? 'Falha completa' : '';
+    return h('li', 'roll' + (r.flag ? ' roll--' + (r.flag === 'falha' ? 'fail' : r.flag) : ''),
       avatar(r.characterName, r.characterType, ''),
       h('div', 'roll__body',
         h('div', 'roll__head', h('strong', '', r.characterName), h('span', 'roll__time', formatTime(r.createdAt)), flagText ? h('span', 'roll__flag', flagText) : null),
@@ -1725,8 +1780,9 @@ const FIREBASE_CONFIG = {
   }
   function entryMeta(e) {
     const v = e.values || {};
-    return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe].filter(Boolean).join(' · ');
+    return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, priceText(v.preco)].filter(Boolean).join(' · ');
   }
+  const priceText = (p) => (String(p || '').trim() ? String(p).trim() + ' Cronos' : '');
   const entryText = (e) => { const v = e.values || {}; return v.efeito || v.especial || v.descricao || v.tracos || ''; };
 
   function starButton(e, onToggle) {
@@ -2157,6 +2213,7 @@ const FIREBASE_CONFIG = {
       inp.type = 'text';
       inp.maxLength = field.key === 'nome' ? 60 : 80;
       inp.value = value || '';
+      if (field.placeholder) inp.placeholder = field.placeholder;
     }
     inp.addEventListener('input', () => onChange(inp.value));
     return inp;
@@ -2624,6 +2681,45 @@ const FIREBASE_CONFIG = {
     saveTimer = setTimeout(flushSave, 700);
   }
 
+  // o que a ficha já mostrou: avisos só aparecem quando algo muda depois de aberta
+  const watch = { id: null, over: false, pending: 0 };
+
+  /* Pendências: pontos e recursos ainda por distribuir */
+  function pendingList(m) {
+    const s = sheetChar.sheet;
+    const out = [];
+    const picks = m.picksAllowed - m.picksUsed;
+    const up = m.upTotal - m.upSpent;
+    const skills = m.skillBudget - m.skillUsed;
+    if (!s.setup) out.push({ n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', label: 'Fazer agora', go: () => openSetup() });
+    if (picks > 0) out.push({ n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' para escolher: +5 PV, +5 PE ou +1 PA.', label: 'Escolher', go: '#prog-block' });
+    if (up > 0) out.push({ n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias.', label: 'Ver progressão', go: '#prog-block' });
+    if (skills > 0) out.push({ n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', label: 'Ver perícias', go: '#skills-block' });
+    return out;
+  }
+
+  function renderAlerts(m) {
+    const list = pendingList(m);
+    const box = $('#sheet-alerts');
+    box.hidden = !list.length;
+    box.replaceChildren(...(list.length ? [h('p', 'alerts__title', 'Há o que distribuir')] : []), ...list.map((p) => {
+      const b = h('button', 'link-btn', p.label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        if (typeof p.go === 'function') { p.go(); return; }
+        const el = $(p.go);
+        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = $('button:not(:disabled), input', el); if (f) f.focus({ preventScroll: true }); }
+      });
+      return h('p', 'alerts__item', p.text + ' ', b);
+    }));
+    const count = list.reduce((t, p) => t + p.n, 0);
+    if (watch.id === sheetChar.id && count > watch.pending) {
+      const fresh = list.filter((p) => p.n).map((p) => p.text.replace(/[.:].*$/, '')).join(' · ');
+      if (fresh) toast('Novos pontos para distribuir: ' + fresh + '.');
+    }
+    watch.pending = count;
+  }
+
   // Redesenha a ficha inteira e devolve o foco ao controle que estava em uso
   function rerender() {
     const a = document.activeElement;
@@ -2637,6 +2733,12 @@ const FIREBASE_CONFIG = {
     renderSpeciesLink();
     renderPowers(m);
     renderInventory(m);
+    renderAlerts(m);
+    renderSheetRolls(m);
+    // avisa quando a carga passa do limite (colocar ou tirar itens nunca é bloqueado)
+    if (watch.id === sheetChar.id && m.over && !watch.over) toast('Carga ' + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '. ' + OVERLOAD_TEXT);
+    watch.over = m.over;
+    watch.id = sheetChar.id;
     $('#setup-open').textContent = sheetChar.sheet.setup ? 'Refazer distribuição inicial' : 'Distribuição inicial';
     if (fid) { const el = $('[data-fid="' + fid + '"]'); if (el && !el.disabled) el.focus({ preventScroll: true }); }
   }
@@ -2783,7 +2885,7 @@ const FIREBASE_CONFIG = {
 
   function renderSkills(m) {
     const s = sheetChar.sheet;
-    $('#skills-hint').textContent = 'Teste = 2d6 + atributo + perícia. Pontos de perícia: ' + m.skillUsed + ' de ' + m.skillBudget + '.';
+    $('#skills-hint').textContent = 'Teste = 2d6 + atributo + perícia (🎲 rola o teste). Pontos de perícia: ' + m.skillUsed + ' de ' + m.skillBudget + '.';
     $('#skills-block').replaceChildren(...ATTRS.map((at) => {
       const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(s.attrs[at.id]))));
       SKILLS[at.id].forEach((sk) => {
@@ -2791,10 +2893,17 @@ const FIREBASE_CONFIG = {
         const pen = PENALTY_SKILLS.indexOf(sk[0]) >= 0 ? m.pen : 0;
         const total = h('span', 'skill__total', signed(s.attrs[at.id] + v - pen));
         total.title = 'Atributo ' + signed(s.attrs[at.id]) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
+        const roll = h('button', 'skill__roll', '🎲');
+        roll.type = 'button';
+        roll.dataset.fid = 'roll-' + sk[0];
+        roll.title = 'Rolar ' + sk[1] + ' (2d6 ' + signed(s.attrs[at.id] + v - pen) + ')';
+        roll.setAttribute('aria-label', roll.title);
+        roll.addEventListener('click', () => sheetRoll(skillTest(s, m, sk[0])));
         const row = h('div', 'skill',
           h('span', 'skill__name', sk[1], pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
           total,
-          stepper(v, { min: 0, max: 3, label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
+          stepper(v, { min: 0, max: 3, label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }),
+          roll);
         group.append(row);
         if (sk[0] === 'oficio') {
           const inp = h('input', 'input skill__job');
@@ -2978,7 +3087,7 @@ const FIREBASE_CONFIG = {
     const v = i.values || {};
     const out = [];
     const add = (l, val) => { if (val !== undefined && val !== null && val !== '') out.push([l, String(val)]); };
-    add('Dano', v.dano); add('Propriedade', v.subtipo); add('Modo', v.modo); add('Cadência', v.cadencia); add('Pente', v.pente); add('Alcance', v.alcance); add('Empunhadura', v.empunhadura);
+    add('Dano', v.dano); add('Propriedade', v.subtipo); add('Modo', v.modo); add('Cadência', v.cadencia); add('Pente', v.pente); add('Munição', v.municao); add('Alcance', v.alcance); add('Empunhadura', v.empunhadura);
     if (i.kind === 'armadura') {
       add('Defesa', v.armadura);
       add('Penalidade', num(v.penalidade) ? '–' + Math.abs(num(v.penalidade)) + ' (sem proficiência –' + Math.abs(num(v.penalidade)) * 2 + ')' : 'nenhuma');
@@ -2987,6 +3096,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     add('Carga', fmtNum(parseCarga(v.carga)) + (i.slot ? ' (equipado: não conta)' : ''));
+    add('Preço', priceText(v.preco));
     return out;
   }
 
@@ -3086,6 +3196,9 @@ const FIREBASE_CONFIG = {
   }
   document.addEventListener('click', (ev) => { if (!ev.target.closest('.cell')) $$('.cell.is-open').forEach((c) => c.classList.remove('is-open')); });
 
+  const OVERLOAD_TEXT = 'Sobrecarregado: deslocamento pela metade (4,5 m) e todas as ações físicas sobem uma categoria (Bônus → Movimento → Padrão) enquanto estiver acima do limite.';
+  const BAG_MAX_FREE = 64; // espaços livres desenhados no máximo
+
   function renderInventory(m) {
     const s = sheetChar.sheet;
     const inv = s.inventory;
@@ -3093,7 +3206,7 @@ const FIREBASE_CONFIG = {
       h('div', 'res-head', h('span', 'res-head__label', 'Carga da mochila'), h('span', 'res-head__num', fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax))),
       meter([{ key: m.over ? 'over' : 'carga', cur: Math.min(m.cargaUsed, m.cargaMax || 1), max: m.cargaMax || 1 }], 'Carga ' + fmtNum(m.cargaUsed) + ' de ' + fmtNum(m.cargaMax)),
       h('p', 'inv-sum__line', 'Limite: ' + srcText(m.src.carga) + '. Itens equipados não ocupam carga.'));
-    if (m.over) sum.append(h('p', 'res-state', 'Sobrecarregado: deslocamento pela metade e ações físicas sobem uma categoria (Bônus → Movimento → Padrão).'));
+    if (m.over) sum.append(h('p', 'res-state', OVERLOAD_TEXT + ' Excesso: ' + fmtNum(m.cargaUsed - m.cargaMax) + ' de carga.'));
     $('#inv-summary').replaceChildren(sum);
 
     // equipado: boneco + fileira de módulos
@@ -3117,13 +3230,27 @@ const FIREBASE_CONFIG = {
       line('Carga Cibernética', m.nucleo ? 'próteses ' + m.protUsed + ' / ' + m.ccMax + ' · módulos ' + m.modUsed + (m.modExtra ? ' (reserva +' + m.modExtra + ' da Essência)' : '') : '—', m.ccOver));
     if (m.ccOver) $('#equip-info').append(h('p', 'res-state', 'CC acima do limite: guarde uma prótese ou um módulo.'));
 
-    // mochila: um bloco por item, e blocos vazios para completar a grade
+    // mochila: um bloco por item e um espaço livre por ponto de carga que ainda sobra.
+    // Passar do limite não é bloqueado: os itens que estouram a carga ficam marcados.
     const bag = inv.filter((x) => !x.slot);
-    const cells = bag.map((x) => makeCell(x, m, null, false));
-    const want = Math.max(24, Math.ceil((bag.length + 4) / 8) * 8);
-    for (let k = bag.length; k < want; k++) cells.push(h('div', 'cell cell--empty'));
+    let acc = 0;
+    const cells = bag.map((x) => {
+      acc += parseCarga(x.values.carga) * (x.qty || 1);
+      const cell = makeCell(x, m, null, false);
+      if (acc > m.cargaMax + 1e-9 && parseCarga(x.values.carga) > 0) { cell.classList.add('cell--over'); cell.title = 'Acima da capacidade de carga'; }
+      return cell;
+    });
+    const free = clamp(Math.floor(m.cargaMax - m.cargaUsed + 1e-9), 0, BAG_MAX_FREE);
+    for (let k = 0; k < free; k++) cells.push(h('div', 'cell cell--empty'));
+    const row = 8;
+    const locked = (row - (cells.length % row)) % row || (cells.length ? 0 : row);
+    for (let k = 0; k < locked; k++) {
+      const c = h('div', 'cell cell--locked');
+      c.title = 'Sem carga livre para este espaço';
+      cells.push(c);
+    }
     $('#bag').replaceChildren(...cells);
-    $('#bag-count').textContent = bag.length ? '(' + plural(bag.length, 'item', 'itens') + ')' : '(vazia)';
+    $('#bag-count').textContent = (bag.length ? '(' + plural(bag.length, 'item', 'itens') : '(vazia') + ' · ' + plural(free, 'espaço livre', 'espaços livres') + ')';
     if (invDlg.open) fillInvDialog();
   }
 
@@ -3190,9 +3317,12 @@ const FIREBASE_CONFIG = {
     const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: ['Armas', 'Armaduras', 'Vestíveis', 'Implantes', 'Itens gerais'], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!e || sheetChar !== ch) return;
     const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
+    const wasOver = compute(ch).over;
     ch.sheet.inventory.push(entry);
     changed();
-    toast(e.name + ' entrou no inventário.');
+    const m = compute(ch);
+    // não impede: só avisa das desvantagens quando a carga passa do limite
+    toast(e.name + ' entrou no inventário.' + (m.over ? (wasOver ? ' Continua sobrecarregado (' : ' Agora está sobrecarregado (') + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '): deslocamento pela metade e ações físicas sobem uma categoria.' : ''));
   });
 
   $('#form-quick-item').addEventListener('submit', (ev) => {
@@ -3224,9 +3354,173 @@ const FIREBASE_CONFIG = {
     changed();
   });
 
+  /* ---------- Pré-jogadas ----------
+     Testes prontos montados a partir da ficha: atributo, perícia e ataque com a arma escolhida.
+     Usados na ficha (bloco Rolagens e botão de cada perícia) e na tela da campanha. */
+  const ATTR_LABEL = { corpo: 'Corpo', precisao: 'Precisão', essencia: 'Essência' };
+  const SKILL_ATTR = {};
+  const SKILL_LABEL = {};
+  Object.keys(SKILLS).forEach((a) => SKILLS[a].forEach((sk) => { SKILL_ATTR[sk[0]] = a; SKILL_LABEL[sk[0]] = sk[1]; }));
+
+  function attrTest(s, attr) {
+    return { label: 'Teste de ' + ATTR_LABEL[attr], attrName: ATTR_LABEL[attr], attr: num(s.attrs[attr]) };
+  }
+  function skillTest(s, m, sk) {
+    const attr = SKILL_ATTR[sk];
+    const name = sk === 'oficio' && s.oficio ? 'Ofício (' + String(s.oficio).slice(0, 30) + ')' : SKILL_LABEL[sk];
+    const pen = PENALTY_SKILLS.indexOf(sk) >= 0 ? m.pen : 0;
+    return { label: name, attrName: ATTR_LABEL[attr], attr: num(s.attrs[attr]), skillName: name, skill: num(s.skills[sk]), mods: pen ? [['armadura', -pen]] : [] };
+  }
+
+  // formas de atacar com um item (ou desarmado), conforme as regras de Ataque e de cada tipo de arma
+  function attackModes(s, i) {
+    const out = [];
+    const prof = i ? isProficient(s, i) : false;
+    if (!i || i.kind !== 'arma-fogo') {
+      out.push({ id: 'corpo', label: 'Corpo a corpo (Corpo + Luta)', attr: 'corpo', skill: 'luta' });
+      if (i && i.typeId === 'espada') out.push({ id: 'precisao', label: 'Espada com Precisão (Precisão + Luta)', attr: 'precisao', skill: 'luta' });
+    } else {
+      out.push({ id: 'precisao', label: 'À distância (Precisão + Mira)', attr: 'precisao', skill: 'mira' });
+      if (i.typeId === 'submetralhadora') out.push({ id: 'essencia', label: 'Submetralhadora com Essência (Essência + Mira)', attr: 'essencia', skill: 'mira', mod: prof ? 0 : -1 });
+    }
+    out.push({ id: 'tec', label: 'Tecnológico (Essência + Operações)', attr: 'essencia', skill: 'operacoes' });
+    return out;
+  }
+  const maxShots = (i) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || 1, 1, 20) : 1);
+  // cadência: com proficiência, –N para N disparos; sem, –(1 + 2 + ... + N). Um disparo não tem penalidade.
+  const shotPenalty = (n, prof) => (n <= 1 ? 0 : prof ? n : (n * (n + 1)) / 2);
+
+  function attackTest(s, m, i, modeId, shots) {
+    const modes = attackModes(s, i);
+    const mode = modes.find((x) => x.id === modeId) || modes[0];
+    const prof = i ? isProficient(s, i) : false;
+    const n = clamp(Math.round(shots) || 1, 1, maxShots(i));
+    const mods = [];
+    if (mode.mod) mods.push(['Essência sem proficiência', mode.mod]);
+    if (PENALTY_SKILLS.indexOf(mode.skill) >= 0 && m.pen) mods.push(['armadura', -m.pen]);
+    const pen = shotPenalty(n, prof);
+    if (pen) mods.push(['cadência ' + n + ' disparos' + (prof ? ' (perita)' : ''), -pen]);
+    const name = i ? i.name : 'Desarmado';
+    return {
+      label: ('Ataque: ' + name + (n > 1 ? ' · dano ×' + n : '')).slice(0, 60),
+      attrName: ATTR_LABEL[mode.attr], attr: num(s.attrs[mode.attr]),
+      skillName: SKILL_LABEL[mode.skill], skill: num(s.skills[mode.skill]), mods
+    };
+  }
+  const weaponsOf = (s) => s.inventory.filter((i) => isWeapon(i.kind))
+    .sort((a, b) => Number(Boolean(b.slot)) - Number(Boolean(a.slot)));
+
+  // lista de testes de uma ficha (usada no seletor da campanha)
+  function testCatalog(c) {
+    const s = c.sheet;
+    const m = compute(c);
+    const out = [];
+    ATTRS.forEach((at) => out.push({ group: 'Atributos', id: 'a:' + at.id, label: at.label + ' ' + signed(s.attrs[at.id]), make: () => attrTest(s, at.id) }));
+    ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => {
+      const t = skillTest(s, m, sk[0]);
+      const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
+      out.push({ group: 'Perícias', id: 's:' + sk[0], label: t.skillName + ' ' + signed(fixed), make: () => skillTest(s, m, sk[0]) });
+    }));
+    weaponsOf(s).forEach((i) => out.push({ group: 'Ataques', id: 'w:' + i.uid, label: i.name + (i.slot ? ' (em mãos)' : ''), make: () => attackTest(s, m, i, '', 1) }));
+    out.push({ group: 'Ataques', id: 'w:', label: 'Desarmado', make: () => attackTest(s, m, null, '', 1) });
+    return out;
+  }
+
+  /* Rolagens na ficha: o resultado aparece aqui e, se escolhido, vai para a campanha */
+  const sheetRollLog = new Map(); // id da ficha -> últimas rolagens desta sessão
+  const atk = { uid: null, mode: '', shots: 1 };
+  let sheetCamps = [];
+  const rollDest = $('#roll-dest'), rollGain = $('#roll-gain'), rollMod = $('#roll-mod');
+
+  async function sheetRoll(o) {
+    const ch = sheetChar;
+    if (!ch) return;
+    const extra = Math.round(num(rollMod.value));
+    if (extra) o.mods = (o.mods || []).concat([['modificador', extra]]);
+    o.dice = num(rollGain.value) || 2;
+    const r = rollTest(o);
+    const list = sheetRollLog.get(ch.id) || [];
+    list.push(Object.assign({ id: uid(), createdAt: Date.now(), characterId: ch.id, characterName: ch.name, characterType: ch.type }, r));
+    sheetRollLog.set(ch.id, list.slice(-12));
+    renderRollLog();
+    const dest = rollDest.value;
+    if (!dest) return;
+    try {
+      await db.addRoll(dest, { characterId: ch.id, characterName: ch.name, characterType: ch.type, expr: r.expr, label: r.label, detail: r.detail, total: r.total, flag: r.flag });
+    } catch (err) { toast('A rolagem ficou só na ficha: ' + errorMessage(err)); }
+  }
+
+  function renderRollLog() {
+    const list = (sheetChar && sheetRollLog.get(sheetChar.id)) || [];
+    const log = $('#sheet-roll-log');
+    log.replaceChildren(...list.map(rollRow));
+    log.scrollTop = log.scrollHeight;
+    $('#sheet-roll-empty').hidden = list.length > 0;
+  }
+
+  function renderRollDest() {
+    const keep = rollDest.value;
+    const off = h('option', '', 'Só nesta ficha');
+    off.value = '';
+    rollDest.replaceChildren(off, ...sheetCamps.map((c) => { const o = h('option', '', 'Campanha: ' + c.name); o.value = c.id; return o; }));
+    rollDest.value = sheetCamps.some((c) => c.id === keep) ? keep : (sheetCamps[0] ? sheetCamps[0].id : '');
+  }
+
+  function renderSheetRolls(m) {
+    const s = sheetChar.sheet;
+    const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; if (fid) b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
+    $('#attr-tests').replaceChildren(...ATTRS.map((at) => {
+      const b = btn('', 'btn--ghost quick-test quick-test--' + at.id, () => sheetRoll(attrTest(s, at.id)), 'test-' + at.id);
+      b.append(h('span', 'quick-test__name', at.label), h('span', 'quick-test__val', '2d6 ' + (signed(s.attrs[at.id]) || '+0').replace(/^0$/, '+0')));
+      return b;
+    }));
+
+    // ataque: arma do inventário (as que estão em mãos primeiro) ou desarmado
+    const weapons = weaponsOf(s);
+    if (atk.uid && !weapons.some((w) => w.uid === atk.uid)) atk.uid = null;
+    if (atk.uid === null) atk.uid = weapons[0] ? weapons[0].uid : '';
+    const weapon = weapons.find((w) => w.uid === atk.uid) || null;
+    const modes = attackModes(s, weapon);
+    if (!modes.some((x) => x.id === atk.mode)) atk.mode = modes[0].id;
+    atk.shots = clamp(atk.shots, 1, maxShots(weapon));
+
+    const field = (id, label, control) => { control.id = id; control.dataset.fid = id; const l = h('label', 'field__label', label); l.htmlFor = id; return h('div', 'field', l, control); };
+    const wSel = h('select', 'input');
+    [['', 'Desarmado']].concat(weapons.map((w) => [w.uid, w.name + (w.slot ? ' (em mãos)' : ' (na mochila)')])).forEach((p) => { const o = h('option', '', p[1]); o.value = p[0]; wSel.append(o); });
+    wSel.value = atk.uid;
+    wSel.addEventListener('change', () => { atk.uid = wSel.value; atk.mode = ''; atk.shots = 1; renderSheetRolls(compute(sheetChar)); });
+    const mSel = h('select', 'input');
+    modes.forEach((x) => { const o = h('option', '', x.label); o.value = x.id; mSel.append(o); });
+    mSel.value = atk.mode;
+    mSel.addEventListener('change', () => { atk.mode = mSel.value; renderSheetRolls(compute(sheetChar)); });
+    const fields = [field('atk-weapon', 'Arma', wSel), field('atk-mode', 'Forma de ataque', mSel)];
+    if (maxShots(weapon) > 1) {
+      const nSel = h('select', 'input');
+      for (let k = 1; k <= maxShots(weapon); k++) {
+        const p = shotPenalty(k, isProficient(s, weapon));
+        const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos · –' + p + ' · dano ×' + k));
+        o.value = String(k);
+        nSel.append(o);
+      }
+      nSel.value = String(atk.shots);
+      nSel.addEventListener('change', () => { atk.shots = Math.round(num(nSel.value)) || 1; renderSheetRolls(compute(sheetChar)); });
+      fields.push(field('atk-shots', 'Disparos (cadência ' + maxShots(weapon) + ')', nSel));
+    }
+    const t = attackTest(s, m, weapon, atk.mode, atk.shots);
+    const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
+    const info = [weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
+    $('#attack-form').replaceChildren(h('div', 'attack__fields', ...fields),
+      h('div', 'attack__go', btn('Atacar · 2d6 ' + (fixed ? signed(fixed) : '+0'), 'btn--primary', () => sheetRoll(attackTest(s, compute(sheetChar), weapon, atk.mode, atk.shots)), 'atk-go'),
+        info ? h('span', 'attack__info', info) : null));
+    renderRollLog();
+  }
+
+  rollMod.addEventListener('change', () => { rollMod.value = Math.round(num(rollMod.value)) || ''; });
+
   async function renderSheetCampaigns() {
     const ch = sheetChar;
     const list = await db.listCharacterCampaigns(ch.id);
+    if (sheetChar === ch) { sheetCamps = list; renderRollDest(); }
     $('#sheet-camp-list').replaceChildren(...list.map((c) => campaignRow(c, {
       label: 'Sair',
       onClick: async () => {
@@ -3671,6 +3965,9 @@ const FIREBASE_CONFIG = {
     setStatus('');
     renderPortrait();
     renderPin();
+    if (atk.char !== id) { Object.assign(atk, { char: id, uid: null, mode: '', shots: 1 }); rollMod.value = ''; rollGain.value = '2'; }
+    sheetCamps = [];
+    renderRollDest();
     rerender();
     $('#setup-open').textContent = c.sheet.setup ? 'Refazer distribuição inicial' : 'Distribuição inicial';
     $('#danger-zone').hidden = !c.mine;
@@ -3708,6 +4005,43 @@ const FIREBASE_CONFIG = {
       });
     } catch (err) { toast(errorMessage(err)); }
   }
+
+  // Testes prontos com a ficha de quem está rolando
+  const testPick = $('#test-pick');
+  const sheetOf = (c) => Object.assign({}, c, { sheet: normSheet(c.sheet) });
+  function renderTestPick() {
+    const speaker = members.find((m) => m.mine && m.characterId === speakerEl.value);
+    const keep = testPick.value;
+    testPick.replaceChildren();
+    if (!speaker) return;
+    const groups = {};
+    testCatalog(sheetOf(speaker)).forEach((t) => {
+      if (!groups[t.group]) { groups[t.group] = h('optgroup'); groups[t.group].label = t.group; testPick.append(groups[t.group]); }
+      const o = h('option', '', t.label);
+      o.value = t.id;
+      groups[t.group].append(o);
+    });
+    if (keep && $('option[value="' + CSS.escape(keep) + '"]', testPick)) testPick.value = keep;
+  }
+  speakerEl.addEventListener('change', renderTestPick);
+  $('#test-roll').addEventListener('click', async () => {
+    const speaker = members.find((m) => m.mine && m.characterId === speakerEl.value);
+    if (!speaker || !testPick.value) return;
+    const id = testPick.value;
+    let c = speaker;
+    try { const fresh = await db.getCharacter(speaker.characterId); if (fresh) { c = Object.assign({}, speaker, fresh); Object.assign(speaker, fresh); } }
+    catch (err) { /* sem conexão: usa a ficha já carregada */ }
+    const t = testCatalog(sheetOf(c)).find((x) => x.id === id);
+    if (!t) { toast('Esse teste não existe mais na ficha.'); renderTestPick(); return; }
+    const r = rollTest(t.make());
+    try {
+      await db.addRoll(currentCamp.id, {
+        characterId: speaker.characterId, characterName: speaker.name, characterType: speaker.type,
+        expr: r.expr, label: r.label, detail: r.detail, total: r.total, flag: r.flag
+      });
+    } catch (err) { toast(errorMessage(err)); }
+    renderTestPick();
+  });
 
   $('#form-roll').addEventListener('submit', (ev) => { ev.preventDefault(); doRoll(inRoll.value); });
   inRoll.addEventListener('input', () => setError(errRoll, inRoll, ''));
@@ -3758,6 +4092,8 @@ const FIREBASE_CONFIG = {
       : 'Para rolar dados, vincule um personagem seu a esta campanha (pela ficha dele).';
     inRoll.disabled = $('#roll-button').disabled = !canRoll;
     $$('[data-dice]').forEach((b) => { b.disabled = !canRoll; });
+    $('#test-bar').hidden = !canRoll;
+    renderTestPick();
     setError(errRoll, inRoll, '');
 
     if (noAccess) { renderRolls([]); return; }

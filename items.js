@@ -25,12 +25,12 @@ window.VORTEX_ITEMS = {
   raridades: ['Comum', 'Incomum', 'Rara', 'Epica', 'Lendária'],
   raridadesMod: ['Comum', 'Rara', 'Lendária'],
   raridadeCor: { 'Comum': '#9db2c1', 'Incomum': '#7fd68a', 'Rara': '#6aa8ff', 'Epica': '#c08bff', 'Lendária': '#f0b85a' },
-  tiposDano: ['Cortante', 'Contundente', 'Perfurante', 'Balístico', 'Fogo', 'Ácido/químico', 'Elétrico', 'Explosivo', 'Radioativo', 'Necrótico'],
+  tiposDano: ['Cortante', 'Contundente', 'Perfurante', 'Balístico', 'Fogo', 'Ácido/químico', 'Elétrico', 'Explosivo', 'Radioativo', 'Necrótico', 'Energia', 'Impacto'],
 
   // listas gerais (usadas quando o tipo não limita)
   modos: ['Único', 'Semi', 'Automático', 'Contínuo'],
-  pentes: ['Pente leve', 'Pente parcial', 'Pente médio', 'Pente pesado', 'Sobrecarga'],
-  alcances: ['Curto', 'Médio', 'Longo', 'Muito longo', 'Horizonte'],
+  pentes: ['Pente leve', 'Pente parcial', 'Pente médio', 'Pente pesado', 'Sobrecarga', 'Superaquecimento'],
+  alcances: ['Curto', 'Médio', 'Longo', 'Muito longo', 'Extremo', 'Horizonte'],
   empunhaduras: ['Saque', 'Uma mão', 'Duas mãos'],
   simNao: ['Não', 'Sim'],
   classesImplante: ['Prótese', 'Módulo'],
@@ -82,6 +82,7 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'dano', label: 'Tipo de dano', kind: 'select', optKey: 'dano', options: 'tiposDano' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25, maxFrom: 'cargaMax', defaultFrom: 'cargaMax' },
@@ -127,17 +128,24 @@ window.VORTEX_ITEMS = {
         {
           id: 'laser', title: 'Laser', rule: 'armas/laser', cargaMax: 3,
           opts: { modo: ['Contínuo'], pente: ['Pente médio', 'Sobrecarga'], alcance: ['Médio', 'Longo'], empunhadura: ['Duas mãos'] }
-        }
+        },
+        // tipos especiais do catálogo Wathrever (sem média de criação nas regras: escolha livre)
+        { id: 'gravitacional', title: 'Gravitacional', sub: 'Puxa objetos; não causa dano direto', cargaMax: 3 },
+        { id: 'hibrida', title: 'Híbrida', sub: 'Combina dois tipos de arma', cargaMax: 3 },
+        { id: 'portal', title: 'Portal', sub: 'Abre portais entre dois pontos', cargaMax: 2 },
+        { id: 'lancador', title: 'Lançador', sub: 'Disparos explosivos em área', cargaMax: 4 }
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'dano', label: 'Tipo de dano', kind: 'select', options: 'tiposDano' },
         { key: 'subtipo', label: 'Propriedade do Fuzil', kind: 'select', optKey: 'subtipo', options: [], onlyWithOpts: true },
         { key: 'modo', label: 'Modo', kind: 'multi', optKey: 'modo', options: 'modos' },
         { key: 'cadencia', label: 'Cadência (disparos por ação)', kind: 'number', min: 1, step: 1 },
         { key: 'pente', label: 'Pente/Recarga', kind: 'select', optKey: 'pente', options: 'pentes' },
+        { key: 'municao', label: 'Munição (disparos por pente)', kind: 'number', min: 0, step: 1 },
         { key: 'alcance', label: 'Alcance efetivo', kind: 'select', optKey: 'alcance', options: 'alcances' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', optKey: 'empunhadura', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25, maxFrom: 'cargaMax', defaultFrom: 'cargaMax' },
@@ -158,6 +166,7 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'armadura', label: 'Defesa', kind: 'number', min: 0, step: 1, auto: { from: 'raridade', table: 'defesaPorRaridade' }, hint: 'Vem do tipo e da raridade; muda sozinha quando a raridade muda.' },
         { key: 'penalidade', label: 'Penalidade (com proficiência; sem, dobra)', kind: 'number', min: 0, step: 1 },
         { key: 'carga', label: 'Carga (só conta quando transportada)', kind: 'number', min: 0, step: 0.25 },
@@ -179,6 +188,7 @@ window.VORTEX_ITEMS = {
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true }
       ]
@@ -193,6 +203,7 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'capacidade', label: 'Capacidade Cibernética', kind: 'number', min: 0, step: 1 },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
         { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
@@ -285,6 +296,7 @@ window.VORTEX_ITEMS = {
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
@@ -331,3 +343,79 @@ window.VORTEX_ITEMS = {
     { id: 'of-pod-gatilho', kind: 'poder', name: 'Gatilho do velho mundo', values: { efeito: 'Com um revólver de disparo único, obtém cadência igual a 1 + metade da precisão (para cima). O primeiro disparo não conta na penalidade de cadência. Precisa da outra mão livre.' } }
   ]
 };
+
+/* -----------------------------------------------------------------
+   Catálogo Tnnak (armaduras) e Wathrever (armas de fogo), com preço
+   em Cronos. Uma linha por item; o bloco no fim transforma cada linha
+   numa entrada do catálogo oficial.
+   ----------------------------------------------------------------- */
+(function () {
+  var cat = window.VORTEX_ITEMS.catalogo;
+  var slug = function (n) { return n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); };
+
+  /* Armaduras Tnnak: [nome, tipo, raridade, armadura, penalidade, carga, preço, especial] */
+  var TIPO_ARMADURA = { 'Leve': 'leve', 'Média': 'media', 'Pesada': 'pesada' };
+  [
+    ['Tnnaks Jackt', 'Leve', 'Comum', 5, 0, 1, '1.000'],
+    ['Tnnak Blazer', 'Média', 'Comum', 6, 1, 3, '3.000'],
+    ['Tnnak Parka', 'Pesada', 'Comum', 8, 2, 5, '5.000'],
+    ['Tnnak Guard-L', 'Leve', 'Incomum', 5, 0, 1, '2.000', 'Propriedade: 1'],
+    ['Tnnak Guard-M', 'Média', 'Incomum', 6, 1, 3, '6.000', 'Propriedade: 1'],
+    ['Tnnak Guard-H', 'Pesada', 'Incomum', 8, 2, 5, '10.000', 'Propriedade: 1'],
+    ['Tnnak Shalt-L', 'Leve', 'Rara', 6, 0, 1, '3.500'],
+    ['Tnnak Ki-l-l-M', 'Média', 'Rara', 7, 1, 3, '10.500'],
+    ['Tnnak Siege-H', 'Pesada', 'Rara', 9, 2, 5, '17.500'],
+    ['Tnnak Teclack', 'Leve', 'Epica', 6, 0, 1, '6.500', 'Propriedade: 1'],
+    ['Tnnak Umbra & Flex', 'Média', 'Epica', 7, 1, 3, '19.500', 'Propriedade: 1'],
+    ['Tnnak Brut', 'Pesada', 'Epica', 9, 2, 5, '32.500', 'Propriedade: 1'],
+    ['Mirage', 'Leve', 'Lendária', 7, 0, 1, '12.000',
+      'Propriedade: 1 + Especial: OVER-R.E.S\nA armadura é equipada com módulo de radar (todos), módulo de I.A (Combate), e módulo perito (Precisão), por fim, módulo de rede. Esses módulos não dependem de núcleo e funcionam em qualquer condição, menos quando o equipamento for destruído, essa armadura pode assumir a forma de outras roupas comuns.'],
+    ['Heavy-Metal', 'Média', 'Lendária', 9, 1, 3, '36.000',
+      'Propriedade: 1 + Especial: Hora do Show!\nUtilize 5 PE. Pelo restante da cena, sua Armadura aumenta em +3, você entra em chamas e se torna Imune a Fogo.\nEnquanto estiver sob este efeito, qualquer criatura que realizar um ataque contra você a uma distância adjacente recebe 2d6 de dano de fogo.\nAlém disso, todos os seus ataques passam a causar dano de fogo adicional e aplicam o efeito Incendiar. O dano causado por esta fonte pode se acumular normalmente.\nDurante a duração, você possui vantagem em testes realizados com armas ou instrumentos que possuam as palavras-chave Ritmo ou Musical.'],
+    ['Juggernaut', 'Pesada', 'Lendária', 11, 2, 5, '60.000',
+      'Propriedade: 1 + Especial: Steamroller\nSempre que se desloca em linha reta. Você recebe +1 no próximo ataque ou manobra para cada 3 metros percorridos, até um máximo igual ao seu Corpo.\nAo mesmo tempo, recebe um bônus de Armadura igual ao valor acumulado, que permanece até o início do seu próximo turno.\nSe utilizar esse impulso durante uma queda e atingir uma criatura ao aterrissar, você pode transferir a queda e seu dano para o alvo escolhido em vez de sofrê-lo.']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-arm-' + slug(a[0]), kind: 'armadura', typeId: TIPO_ARMADURA[a[1]], name: a[0],
+      values: { modelo: 'Tnnak', raridade: a[2], preco: a[6], armadura: String(a[3]), penalidade: String(a[4]), carga: String(a[5]), nucleo: 'Não', especial: a[7] || '' }
+    });
+  });
+
+  /* Armas Wathrever: [nome, tipo, modelo, raridade, dano, cadência, munição, recarga, alcance, carga, empunhadura, preço, especial]
+     Carga/empunhadura entre colchetes no comentário = não vieram na ficha do item; usamos o padrão de uma arma parecida. */
+  var TIPO_ARMA = { 'Pistola': 'pistola', 'Revólver': 'revolver', 'Rifle': 'rifle', 'Espingarda': 'espingarda', 'Submetralhadora': 'submetralhadora', 'Metralhadora': 'metralhadora', 'Fuzil': 'fuzil', 'Laser': 'laser', 'Gravitacional': 'gravitacional', 'Híbrida': 'hibrida', 'Portal': 'portal', 'Lançador': 'lancador' };
+  var PENTE = { 'Leve': 'Pente leve', 'Parcial': 'Pente parcial', 'Médio': 'Pente médio', 'Pesado': 'Pente pesado', 'Superaquecimento': 'Superaquecimento' };
+  [
+    ['Pulse P-01', 'Pistola', 'Pulse P-01', 'Comum', 'Balístico', 2, 14, 'Leve', 'Médio', 1, 'Uma mão', '250'],
+    ['Iron Revolver ER-2', 'Revólver', 'ER-2', 'Comum', 'Balístico', 1, 6, 'Parcial', 'Médio', 1, 'Uma mão', '300'],
+    ['Carbine R-10', 'Rifle', 'R-10', 'Comum', 'Balístico', 2, 18, 'Leve', 'Longo', 2, 'Duas mãos', '500'],
+    ['Crusher SG-4', 'Espingarda', 'SG-4', 'Comum', 'Balístico', 1, 8, 'Parcial', 'Curto', 2, 'Duas mãos', '450'],
+    ['Storm SM-5', 'Submetralhadora', 'SM-5', 'Comum', 'Balístico', 4, 28, 'Médio', 'Curto', 2, 'Duas mãos', '400'],
+    ['Bastion MG-1', 'Metralhadora', 'MG-1', 'Comum', 'Balístico', 6, 60, 'Pesado', 'Longo', 4, 'Duas mãos', '1.250'],
+    ['Helix P-20', 'Pistola', 'P-20', 'Incomum', 'Energia', 2, 18, 'Leve', 'Médio', 1, 'Uma mão', '500', 'Propriedade: 1'], // [carga/empunhadura]
+    ['Hammer F-12', 'Fuzil', 'F-12', 'Incomum', 'Energia', 3, 24, 'Médio', 'Longo', 2, 'Duas mãos', '850', 'Propriedade: 1'],
+    ['Cyclops SG-9', 'Espingarda', 'SG-9', 'Incomum', 'Fogo', 2, 10, 'Parcial', 'Curto', 2, 'Duas mãos', '700', 'Propriedade: 1'], // [carga/empunhadura]
+    ['Viper L-1', 'Laser', 'L-1', 'Incomum', 'Ácido/químico', 1, 3, 'Superaquecimento', 'Muito longo', 2, 'Duas mãos', '900', 'Propriedade: 1'],
+    ['Suppressor SM-9', 'Submetralhadora', 'SM-9', 'Incomum', 'Balístico', 5, 36, 'Médio', 'Médio', 2, 'Duas mãos', '650', 'Propriedade: 1'], // [carga/empunhadura]
+    ['Titan F-30', 'Fuzil', 'F-30', 'Rara', 'Balístico', 3, 30, 'Médio', 'Muito longo', 2, 'Duas mãos', '1.250'], // [carga/empunhadura]
+    ['Atlas MG-8', 'Metralhadora', 'MG-8', 'Rara', 'Fogo', 7, 80, 'Pesado', 'Longo', 4, 'Duas mãos', '1.900'], // [carga/empunhadura]
+    ['Nova L-7', 'Laser', 'L-7', 'Rara', 'Energia', 2, 5, 'Superaquecimento', 'Extremo', 2, 'Duas mãos', '1.300'], // [carga/empunhadura]
+    ['Quasar G-4', 'Gravitacional', 'G-4', 'Rara', 'Impacto', 1, 10, 'Pesado', 'Médio', 2, 'Duas mãos', '1.600', // [carga/empunhadura]
+      'Especial (tipo): Essa arma não causa dano diretamente.\nEm alcance curto você pode utilizar essa arma para puxar objetos do cenário ou em posse de outro (ação de movimento/teste contra), efetivo contra construções.'],
+    ['Hydra H-2', 'Híbrida', 'H-2', 'Rara', 'Balístico', 2, 18, 'Leve', 'Longo', 2, 'Duas mãos', '2.100', 'Híbrida (Escopeta/Rifle)'], // [carga/empunhadura]
+    ['Jesper 4k', 'Portal', 'Jas', 'Epica', '', 1, 8, 'Pesado', 'Curto', 1, 'Uma mão', '2.600', // [carga/empunhadura]
+      'Portal: Permite ao usuário abrir um portal entre 2 pontos, atravessar um dos pontos te faz aparecer no outro, cada carga gera o portal de saída e o de entrada, o portal consome 1 projétil por rodada enquanto estiver em campo, sem cargas ele se dissipa.'],
+    ['Leviathan MG-X', 'Metralhadora', 'MG-X', 'Epica', 'Energia', 8, 120, 'Pesado', 'Longo', 4, 'Duas mãos', '2.700', 'Propriedade: 1'], // [carga/empunhadura]
+    ['Hyperion LX', 'Lançador', 'LX', 'Epica', 'Explosivo', 1, 3, 'Parcial', 'Longo', 3, 'Duas mãos', '2.100', 'Propriedade: 1\nDano: Explosão (4x4/3m³)'], // [carga/empunhadura]
+    ['ODIN-ONE', 'Híbrida', 'ODIN-01', 'Lendária', 'Balístico', 5, 30, 'Médio', 'Horizonte', 3, 'Duas mãos', '4.700',
+      'Híbrida (Rifle/Fuzil)\nPropriedade: 1 + Especial: Demolidor.\nSeus disparos ignoram cobertura até total (não blindada), é efetivo contra escudos e blindagens.']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-wat-' + slug(a[0]), kind: 'arma-fogo', typeId: TIPO_ARMA[a[1]], name: a[0],
+      values: {
+        modelo: a[2] + ' / Wathrever', raridade: a[3], preco: a[11], dano: a[4], cadencia: String(a[5]), municao: String(a[6]),
+        pente: PENTE[a[7]], alcance: a[8], carga: String(a[9]), empunhadura: a[10], especial: a[12] || ''
+      }
+    });
+  });
+})();
