@@ -1722,15 +1722,11 @@ const FIREBASE_CONFIG = {
         h('dt', '', 'Dinheiro'), h('dd', 'member__money', fmtCronos(money) + ' Cronos (nesta campanha)')),
       link);
     if (currentCamp && (m.mine || currentCamp.gm)) info.append(moneyEditor(m, panel));
-    if (m.mine && m.sheet) {
-      const st = memberAtk[m.characterId] = memberAtk[m.characterId] || { uid: null, mode: '', shots: 1, mod: 0 };
-      const acts = h('div', 'member__actions', h('h3', 'member__sub', 'Ações'));
-      acts.append(attackBuilder(Object.assign({}, m, { sheet: normSheet(m.sheet) }), st, async (t, btn) => {
-        btn.disabled = true;
-        await campaignRoll(m, rollTest(t));
-        btn.disabled = false;
-      }, 'atk-' + m.characterId + '-'));
-      info.append(acts);
+    if (m.mine && m.sheet) { // as ações ficam no painel do personagem, no topo da campanha
+      const play = h('button', 'btn btn--primary btn--sm', 'Jogar com ' + m.name);
+      play.type = 'button';
+      play.addEventListener('click', () => playAs(m.characterId));
+      info.append(play);
     }
     panel.replaceChildren(pic, info);
   }
@@ -5018,7 +5014,118 @@ const FIREBASE_CONFIG = {
     });
     if (keep && $('option[value="' + CSS.escape(keep) + '"]', testPick)) testPick.value = keep;
   }
-  speakerEl.addEventListener('change', renderTestPick);
+  speakerEl.addEventListener('change', () => { lastCharacterId = speakerEl.value; renderTestPick(); renderDock(); });
+
+  /* ---------- Painel do personagem (estilo barra de ações de RPG) ----------
+     O personagem escolhido fica no topo da campanha: retrato, barras de recurso
+     e as ações dele em abas (Ações, Testes, Dados). "Fixar" guarda a escolha
+     neste aparelho para a campanha e coloca a ficha no acesso rápido. */
+  const pinKey = (campId) => 'vortex.campChar.' + campId;
+  const pinGet = (campId) => { try { return localStorage.getItem(pinKey(campId)) || ''; } catch (e) { return ''; } };
+  const pinSet = (campId, id) => { try { if (id) localStorage.setItem(pinKey(campId), id); else localStorage.removeItem(pinKey(campId)); } catch (e) { /* sem armazenamento: só nesta visita */ } };
+  const dockMember = () => members.find((m) => m.mine && m.characterId === speakerEl.value);
+
+  function dockBar(key, label, cur, max) {
+    const pct = max > 0 ? clamp(cur / max, 0, 1) * 100 : 0;
+    const fill = h('span', 'dbar__fill');
+    fill.style.width = pct.toFixed(1) + '%';
+    const bar = h('div', 'dbar dbar--' + key, h('span', 'dbar__label', label), h('span', 'dbar__val', cur + '/' + max), h('span', 'dbar__track', fill));
+    bar.setAttribute('role', 'meter');
+    bar.setAttribute('aria-label', label);
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(max));
+    bar.setAttribute('aria-valuenow', String(cur));
+    return bar;
+  }
+
+  function renderDock() {
+    const dock = $('#dock');
+    const mb = currentCamp && dockMember();
+    if (!mb || !mb.sheet) { dock.hidden = !mb; if (mb) { $('#dock-title').textContent = mb.name; $('#dock-meta').textContent = 'Ficha ainda sem atributos.'; } return; }
+    dock.hidden = false;
+    const c = sheetOf(mb);
+    const s = c.sheet;
+    const m = compute(c);
+    const pic = $('#dock-pic');
+    pic.className = 'dock__pic token token--' + mb.type;
+    pic.replaceChildren();
+    if (mb.image || mb.thumb) { const img = h('img'); img.src = mb.image || mb.thumb; img.alt = ''; pic.append(img); pic.classList.add('token--img'); }
+    else pic.textContent = mb.name.trim().charAt(0).toUpperCase();
+    $('#dock-title').textContent = mb.name;
+    const def = charDef(c, m);
+    $('#dock-meta').textContent = [mb.species, mb.origin, 'Defesa ' + def, 'Corpo ' + signed(s.attrs.corpo) + ' · Precisão ' + signed(s.attrs.precisao) + ' · Essência ' + signed(s.attrs.essencia)].filter(Boolean).join(' · ');
+    const pinned = pinGet(currentCamp.id) === mb.characterId;
+    const pin = $('#dock-pin');
+    pin.textContent = pinned ? '★ Seu personagem nesta campanha' : '☆ Fixar como meu personagem';
+    pin.setAttribute('aria-pressed', String(pinned));
+    pin.classList.toggle('dock__pin--on', pinned);
+    $('#dock-sheet').href = '#/character/' + encodeURIComponent(mb.characterId);
+
+    const bars = [];
+    charLayers(c).filter((l) => l.max > 0).reverse().forEach((l) => bars.push(dockBar(l.key, l.key === 'pv' ? 'PV' : l.key === 'escudo' ? 'Escudo' : 'Blindagem', l.cur, l.max)));
+    bars.push(dockBar('pe', 'PE', getCur(s, 'pe', m.max.pe), m.max.pe));
+    bars.push(dockBar('pa', 'PA', getCur(s, 'pa', m.max.pa), m.max.pa));
+    const state = lifeState(charLayers(c));
+    $('#dock-bars').replaceChildren(...bars, ...(state ? [h('span', 'tag tag--down dock__state', state)] : []));
+
+    // Ações: o ataque usa os alvos marcados no Combate; sem alvo, só rola
+    const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
+    const hasTargets = combat.targets.size > 0;
+    $('#dock-attack').replaceChildren(attackBuilder(Object.assign({}, c, { btnLabel: hasTargets ? 'Atacar os alvos' : 'Atacar' }), st, async (t, b) => {
+      if (combat.targets.size) { await runAttack({ member: mb, c }, t, st, b); return; }
+      b.disabled = true;
+      await campaignRoll(mb, rollTest(t));
+      b.disabled = false;
+    }, 'dock-'));
+    const names = combatants().filter((x) => combat.targets.has(x.id)).map((x) => x.name);
+    $('#dock-targets').textContent = names.length ? 'Alvos marcados no Combate: ' + names.join(', ') + '. O dano entra sozinho.' : 'Sem alvo marcado: o ataque só rola. Marque alvos no Combate para aplicar o dano.';
+
+    // Testes rápidos: atributos e as perícias que o personagem tem
+    const quick = testCatalog(c).filter((t) => t.group === 'Atributos' || num(s.skills[t.id.slice(2)]) > 0);
+    $('#dock-quick').replaceChildren(...quick.map((t) => {
+      const b = h('button', 'qtest' + (t.group === 'Atributos' ? ' qtest--attr' : ''), t.label);
+      b.type = 'button';
+      b.addEventListener('click', async () => { b.disabled = true; await campaignRoll(mb, rollTest(t.make())); b.disabled = false; });
+      return b;
+    }));
+  }
+
+  // Abas do painel
+  $$('.dock__tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      $$('.dock__tab').forEach((t) => {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        $('#dock-' + t.dataset.tab).hidden = !on;
+      });
+    });
+    tab.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+      const all = $$('.dock__tab');
+      const next = all[(all.indexOf(tab) + (ev.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length];
+      next.click();
+      next.focus();
+    });
+  });
+  $('#dock-pin').addEventListener('click', () => {
+    const mb = dockMember();
+    if (!mb || !currentCamp) return;
+    const on = pinGet(currentCamp.id) !== mb.characterId;
+    pinSet(currentCamp.id, on ? mb.characterId : '');
+    if (on) {
+      quickAdd({ id: mb.characterId, name: mb.name, type: mb.type, thumb: mb.thumb || '', species: mb.species || '', mine: true });
+      toast(mb.name + ' é o seu personagem nesta campanha e está no acesso rápido.');
+    }
+    renderDock();
+  });
+  function playAs(id) {
+    speakerEl.value = id;
+    lastCharacterId = id;
+    renderTestPick();
+    renderDock();
+    $('#dock').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   $('#test-roll').addEventListener('click', async () => {
     const speaker = members.find((m) => m.mine && m.characterId === speakerEl.value);
     if (!speaker || !testPick.value) return;
@@ -5180,6 +5287,7 @@ const FIREBASE_CONFIG = {
     $('#combat-empty').hidden = list.length > 0;
     renderAttackPanel(list, gm);
     block.hidden = false;
+    renderDock();
   }
 
   function combatantRow(x, gm) {
@@ -5187,7 +5295,7 @@ const FIREBASE_CONFIG = {
     chk.type = 'checkbox';
     chk.checked = combat.targets.has(x.id);
     chk.setAttribute('aria-label', 'Alvo: ' + x.name);
-    chk.addEventListener('change', () => { if (chk.checked) combat.targets.add(x.id); else combat.targets.delete(x.id); renderTargetsHint(); });
+    chk.addEventListener('change', () => { if (chk.checked) combat.targets.add(x.id); else combat.targets.delete(x.id); renderTargetsHint(); renderDock(); });
     const state = lifeState(x.layers);
     const meta = layersText(x.layers) + ' · Defesa ' + x.def + (x.defRolled ? ' (rolada)' : ' (mínima)');
     const main = h('span', 'row__main',
@@ -5243,8 +5351,7 @@ const FIREBASE_CONFIG = {
   function renderAttackPanel(list, gm) {
     const panel = $('#combat-attack');
     const opts = [];
-    members.filter((mb) => mb.mine && mb.sheet).forEach((mb) => opts.push(['chr:' + mb.characterId, mb.name]));
-    if (gm) foes.forEach((f) => opts.push(['foe:' + f.id, f.name + ' (inimigo)']));
+    if (gm) foes.forEach((f) => opts.push(['foe:' + f.id, f.name])); // os jogadores atacam pelo painel do personagem
     panel.hidden = !opts.length || !list.length;
     if (panel.hidden) return;
     const sel = $('#atk-who');
@@ -5414,7 +5521,9 @@ const FIREBASE_CONFIG = {
       o.value = m.characterId;
       return o;
     }));
-    if (mine.some((m) => m.characterId === lastCharacterId)) speakerEl.value = lastCharacterId;
+    const pinned = pinGet(camp.id);
+    if (mine.some((m) => m.characterId === pinned)) speakerEl.value = pinned;
+    else if (mine.some((m) => m.characterId === lastCharacterId)) speakerEl.value = lastCharacterId;
     speakerEl.disabled = mine.length < 2;
     $('#speaker-field').hidden = !canRoll;
 
@@ -5427,6 +5536,7 @@ const FIREBASE_CONFIG = {
     $$('[data-dice]').forEach((b) => { b.disabled = !canRoll; });
     $('#test-bar').hidden = !canRoll;
     renderTestPick();
+    renderDock();
     setError(errRoll, inRoll, '');
 
     foes = [];
