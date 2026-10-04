@@ -565,9 +565,7 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .roll--crit .roll__flag { color: var(--ambar); }
 .roll--fail .roll__flag { color: var(--erro); }
 
-.dice-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.dice-bar .btn { min-width: 3.5rem; padding-inline: 0.8rem; }
-.roll-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; }
+
 
 /* ---------- 8. DIÁLOGO E AVISO ---------- */
 .dialog {
@@ -1831,3 +1829,280 @@ body {
 .dock__powers-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--essencia); margin-right: 0.25rem; }
 .qtest--power { border-color: rgba(183, 155, 255, 0.6); color: var(--nevoa); display: inline-flex; align-items: center; gap: 0.5rem; }
 .qtest__cost { font-size: 0.75rem; font-weight: 700; color: var(--essencia); }
+
+/* =====================================================================
+   12. FICHA 3.0: cabeçalho de herói, números vitais e abas
+   Referências: D&D Beyond (vitais sempre à vista e abas por assunto),
+   Ordem Paranormal / CRIS (anéis de recurso), Pathfinder e Old Dragon
+   (atributos como brasões e blocos bem delimitados).
+   ===================================================================== */
+.sheet-head {
+  position: relative;
+  padding: 1.25rem 1.25rem 1.25rem 1.25rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--r-l);
+  background:
+    radial-gradient(90% 140% at 0% 0%, rgba(240, 184, 90, 0.14), transparent 55%),
+    linear-gradient(180deg, var(--casco-3), var(--casco));
+  box-shadow: var(--sombra);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0.75rem 2rem;
+}
+.sheet-head .portrait { grid-row: span 2; }
+.sheet-head .sheet-actions { grid-column: 2; align-self: start; margin: 0; }
+.sheet-head::after {
+  /* faixa ornamental embaixo, como a moldura de um livro de regras */
+  content: "";
+  position: absolute;
+  inset: auto 1.5rem 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--ambar), transparent);
+  opacity: 0.6;
+}
+.sheet-title-wrap h1 { font-size: clamp(2rem, 1.3rem + 2.6vw, 3.1rem); line-height: 1.05; }
+.sheet-sub { margin: 0; color: var(--nevoa-2); font-size: var(--t-s); letter-spacing: 0.02em; }
+.sheet-sub:empty { display: none; }
+
+/* Atributos como brasões */
+.attr-band { gap: 0.75rem; margin-bottom: 0.75rem; }
+.attr {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "value name step" "value feeds step";
+  gap: 0.15rem 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--linha);
+  border-left: 0;
+  border-top: 1px solid var(--linha);
+  border-radius: var(--r-m);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 14%, var(--casco)), var(--casco) 60%);
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+.attr::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--c);
+}
+.attr__value {
+  display: grid;
+  place-items: center;
+  width: 4.1rem;
+  height: 4.6rem;
+  font-size: 2.1rem;
+  color: var(--c);
+  background: rgba(0, 0, 0, 0.3);
+  /* escudo heráldico */
+  clip-path: polygon(50% 0, 100% 12%, 100% 62%, 50% 100%, 0 62%, 0 12%);
+  box-shadow: inset 0 0 0 2px var(--c);
+}
+.attr__name { align-self: end; font-size: 0.8rem; letter-spacing: 0.1em; }
+.attr__feeds { align-self: start; margin: 0; padding: 0; border: 0; font-size: 0.8rem; }
+.attr .stepper { flex-direction: column-reverse; }
+
+/* Números vitais */
+.vitals {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+.vital {
+  --c: var(--nevoa-2);
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.15rem;
+  min-height: 7.25rem;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--r-m);
+  background: var(--casco);
+  text-align: center;
+}
+.vital--life { --c: var(--pv); }
+.vital--pe { --c: var(--pe); }
+.vital--pa { --c: var(--pa); }
+.vital--def { --c: var(--ambar); }
+.vital--up { --c: var(--mare); }
+.vital__label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c); }
+.vital__big { font: 800 1.9rem/1 var(--fonte-titulo); font-variant-numeric: lining-nums tabular-nums; color: var(--nevoa); }
+.vital__note { font-size: 0.75rem; color: var(--nevoa-2); overflow-wrap: anywhere; }
+.vital--def .vital__big {
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 4rem;
+  color: var(--ambar-tinta);
+  background: linear-gradient(180deg, #f6c978, var(--ambar));
+  clip-path: polygon(50% 0, 100% 14%, 100% 60%, 50% 100%, 0 60%, 0 14%);
+}
+/* anel de recurso (conic-gradient) */
+.vital__dial {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  width: 4.4rem;
+  height: 4.4rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, var(--casco) 76%, transparent 78%),
+    conic-gradient(var(--c) calc(var(--pct, 0) * 1%), rgba(255, 255, 255, 0.08) 0);
+}
+.vital__num { font: 800 1.35rem/1 var(--fonte-titulo); font-variant-numeric: lining-nums tabular-nums; }
+.vital__max { font-size: 0.7rem; color: var(--nevoa-2); }
+
+/* Abas da ficha */
+.sheet-tabs {
+  position: sticky;
+  top: calc(var(--bar-h, 0px) + 0.5rem);
+  z-index: 5;
+  display: flex;
+  gap: 0.25rem;
+  margin: 0 0 1.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--linha);
+  border-radius: var(--r-m);
+  background: color-mix(in srgb, var(--abismo) 88%, transparent);
+  box-shadow: var(--sombra);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sheet-tabs::-webkit-scrollbar { display: none; }
+.sheet-tab {
+  flex: 1 0 auto;
+  min-height: 2.6rem;
+  padding: 0.4rem 0.9rem;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--nevoa-2);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sheet-tab:hover { color: var(--nevoa); background: rgba(255, 255, 255, 0.05); }
+.sheet-tab[aria-selected="true"] { color: var(--ambar-tinta); background: linear-gradient(180deg, #f6c978, var(--ambar)); box-shadow: var(--brilho-ambar); }
+.sheet-tab:focus-visible { outline: 2px solid var(--mare); outline-offset: 2px; }
+.sheet-panel[hidden] { display: none; }
+.sheet-panel > .block:first-child { margin-top: 0; }
+.sheet-panel .danger-zone { margin-top: 1.25rem; }
+
+@media (max-width: 1100px) {
+  .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .attr-band { grid-template-columns: 1fr; }
+  .vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+  .vital { min-height: 6.25rem; padding: 0.6rem 0.35rem; }
+  .vital__dial { width: 3.8rem; height: 3.8rem; }
+  .sheet-head { padding: 1rem; }
+}
+
+/* Cadência por alvo */
+.per { display: grid; gap: 0.45rem; margin: 0; padding: 0.75rem; border: 1px solid var(--linha); border-radius: var(--r-s); background: rgba(0, 0, 0, 0.18); grid-column: 1 / -1; min-width: 0; }
+.per legend { padding: 0 0.35rem; }
+.per__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 15rem); gap: 0.5rem; align-items: center; }
+.per__name { font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .per__row { grid-template-columns: 1fr; } }
+
+/* Cena e iniciativa (estilo rastreador de combate dos VTTs) */
+.scene { border-color: rgba(240, 184, 90, 0.35); }
+.scene__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 0.75rem 1rem; margin-bottom: 0.9rem; }
+.scene__head .eyebrow { margin: 0; }
+.scene__title { margin: 0.1rem 0 0; }
+.scene__meta { margin: 0.2rem 0 0; color: var(--ambar); font-weight: 700; }
+.scene__meta:empty { display: none; }
+.scene__ctl { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.scene__gm, .scene__start, .scene__run { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.scene__start .input { width: min(16rem, 100%); }
+.scene__gm [hidden], .scene__ctl [hidden] { display: none; }
+.initiative { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; counter-reset: none; }
+.init {
+  display: grid;
+  grid-template-columns: 2rem 3rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--linha);
+  border-left: 4px solid var(--ambar);
+  border-radius: var(--r-s);
+  background: var(--casco);
+}
+.init--foe { border-left-color: var(--erro); }
+.init--out { border-left-style: dashed; opacity: 0.85; }
+.init--down { opacity: 0.6; }
+.init--now {
+  border-color: var(--ambar);
+  background: linear-gradient(90deg, rgba(240, 184, 90, 0.18), var(--casco) 70%);
+  box-shadow: var(--brilho-ambar);
+}
+.init__pos { font-weight: 800; color: var(--nevoa-2); text-align: center; }
+.init--now .init__pos { color: var(--ambar); }
+.init__val {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  font: 800 1.15rem/1 var(--fonte-titulo);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 2px var(--linha-forte);
+}
+.init--now .init__val { box-shadow: inset 0 0 0 2px var(--ambar); color: var(--ambar); }
+.init__main { display: grid; min-width: 0; }
+.init__name { font-weight: 700; overflow-wrap: anywhere; }
+.init__meta { font-size: var(--t-s); color: var(--nevoa-2); }
+@media (max-width: 480px) {
+  .init { grid-template-columns: 1.5rem 2.6rem minmax(0, 1fr); }
+  .init .btn { grid-column: 1 / -1; justify-self: start; }
+}
+
+/* Painel: é a sua vez */
+.dock__turn {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--ambar);
+  color: var(--ambar-tinta);
+  letter-spacing: 0.06em;
+}
+.dock__turn[hidden] { display: none; }
+.dock--turn { border-color: var(--ambar); box-shadow: var(--sombra), 0 0 0 2px rgba(240, 184, 90, 0.45), var(--brilho-ambar); }
+@media (max-width: 720px) {
+  /* atributos lado a lado, como os três brasões de uma ficha impressa */
+  .attr-band { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; }
+  .attr {
+    grid-template-columns: 1fr;
+    grid-template-areas: "name" "value" "step" "feeds";
+    justify-items: center;
+    text-align: center;
+    gap: 0.35rem;
+    padding: 0.7rem 0.35rem;
+  }
+  .attr::before { inset: 0 0 auto 0; width: auto; height: 3px; }
+  .attr__name { font-size: 0.68rem; letter-spacing: 0.06em; }
+  .attr__value { width: 3.4rem; height: 3.8rem; font-size: 1.7rem; }
+  .attr .stepper { flex-direction: row; }
+  .attr__feeds { font-size: 0.7rem; }
+  .vital__label { font-size: 0.6rem; letter-spacing: 0.05em; overflow-wrap: anywhere; }
+  .vital__big { font-size: 1.5rem; }
+  .sheet-head { gap: 0.75rem 1rem; }
+  .sheet-head .portrait { grid-row: auto; }
+  .sheet-head .portrait__btn { width: 5.5rem; height: 5.5rem; font-size: 0.7rem; padding: 0.4rem; }
+  .sheet-head .portrait__empty { max-width: 4rem; }
+  .sheet-title-wrap { gap: 0.3rem; }
+  .sheet-title-wrap h1 { font-size: 1.75rem; }
+  .sheet-head .sheet-actions { grid-column: 1 / -1; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0; padding-bottom: 2px; }
+  .sheet-actions::-webkit-scrollbar { display: none; }
+  .sheet-actions .btn { flex: none; }
+}
