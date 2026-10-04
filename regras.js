@@ -880,6 +880,16 @@ window.VORTEX_REGRAS = {
           ['p', 'Como um bom pedaço de lata, você não pode equipar itens, e sim os acoplar em seu corpo. Isso vale para armaduras e módulos. Leva ao menos 1 hora para acoplar; se acoplado a você, você tem carga cibernética adicional igual a +1 a cada +2 na carga concedida pelo núcleo.'],
           ['h4', 'Não vivo'],
           ['p', 'Você é lata, lata não é afetada por coisas biológicas, nem precisa descansar, só colocar na tomada! Não recupera PVs por descanso nem curas, mas pode ser consertado com testes de tecnologia e um kit de ferramentas adequado (demora 1 descanso longe de serviço; a perícia de tecnologia recupera blindagem igual o resultado no dado.)']
+        ]],
+        ['card', 'Android', [
+          ['p', 'Você é um robô, só que humanoide...'],
+          ['h4', 'Engenharia'],
+          ['p', 'Como um bom pedaço de lata, você não pode equipar itens, e sim acoplar em seu corpo. Isso vale para armas e armaduras: se acopladas, elas passam a ocupar sua carga cibernética em vez da capacidade de carga. Leva ao menos 1 hora para acoplar; se acoplado a você, você tem carga cibernética adicional igual a +1 a cada +2 na carga concedida pelo núcleo.'],
+          ['p', 'Próteses para você são peças, e você não precisa de uma prótese para colocar os módulos.'],
+          ['h4', 'Núcleo'],
+          ['p', 'Você contém núcleo! Você depende do mesmo acoplado a você para sobreviver, você contém um núcleo +2 comum desde o início do jogo, e seus PV são convertidos para blindagem e os negativos contam como Shield!'],
+          ['h4', 'Humanidade'],
+          ['p', '“Resistência” a PE e capacidade de se regenerar como um ser orgânico, e também por engenharia e bateria.']
         ]]
       ]
     },

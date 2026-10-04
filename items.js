@@ -295,12 +295,14 @@ window.VORTEX_ITEMS = {
     {
       id: 'especime', title: 'Espécime', group: 'Personagem', image: true, bonus: true,
       hint: 'A espécie escolhida na ficha. A vida base diz em que tipo de resistência os PV do personagem entram na barra.',
-      defaults: { vidaBase: 'PV', upInicial: '0', nucleoBase: '0' },
+      defaults: { vidaBase: 'PV', upInicial: '0', nucleoBase: '0', acopla: 'Não', humanidade: 'Não' },
       fields: [
         { key: 'nome', label: 'Nome do espécime', kind: 'text', big: true },
         { key: 'vidaBase', label: 'Vida base', kind: 'select', options: 'vidaBase' },
         { key: 'upInicial', label: 'UP iniciais', kind: 'number', min: 0, step: 1 },
         { key: 'nucleoBase', label: 'Núcleo de nascença (capacidade)', kind: 'number', min: 0, step: 1 },
+        { key: 'acopla', label: 'Engenharia: acopla armas e armaduras na Carga Cibernética?', kind: 'select', options: 'simNao' },
+        { key: 'humanidade', label: 'Humanidade: regenera vida no descanso como um ser orgânico?', kind: 'select', options: 'simNao' },
         { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
         { key: 'tracos', label: 'Traços e regras', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
@@ -364,6 +366,10 @@ window.VORTEX_ITEMS = {
     {
       id: 'of-esp-robo', kind: 'especime', name: 'Robô',
       values: { vidaBase: 'Blindagem', upInicial: '0', nucleoBase: '2', descricao: 'Meio que é… feito de lata né não?', tracos: 'Núcleo: contém um núcleo +2 comum desde o início; os PV são convertidos para blindagem e os negativos contam como Shield. Engenharia: não equipa itens, acopla (ao menos 1 hora). Não vivo: não é afetado por coisas biológicas, não recupera PV por descanso nem curas; é consertado com Tecnologia e um kit de ferramentas.' }
+    },
+    {
+      id: 'of-esp-android', kind: 'especime', name: 'Android',
+      values: { vidaBase: 'Blindagem', upInicial: '0', nucleoBase: '2', acopla: 'Sim', humanidade: 'Sim', descricao: 'Você é um robô, só que humanoide...', tracos: 'Engenharia: não equipa, acopla (ao menos 1 hora). Armas e armaduras acopladas ocupam a Carga Cibernética em vez da carga; +1 de Carga Cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças, e módulos não precisam de prótese. Núcleo: núcleo +2 comum desde o início; os PV viram blindagem e os negativos contam como Shield. Humanidade: “resistência” a PE e se regenera como um ser orgânico, e também por engenharia e bateria.' }
     },
 
     // Poderes (capítulo Habilidades)
