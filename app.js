@@ -1259,17 +1259,17 @@ const FIREBASE_CONFIG = {
     },
     recursos: {
       title: 'Recursos',
-      text: 'Nada aqui é digitado: PV = 5 + Corpo × 5, PE = 5 + Essência × 5, PA = Precisão. A barra de resistência é uma só e junta PV, Blindagem e Escudo, cada um com a sua cor; itens equipados, poderes e o espécime somam o tipo deles sozinhos. Você só marca o valor atual.',
+      text: 'Nada aqui é digitado: PV = 5 + Corpo × 5, PE = 5 + Essência × 5, PA = Precisão (mínimo 1). A barra de resistência é uma só e junta PV, Blindagem e Escudo, cada um com a sua cor; itens equipados, poderes e o espécime somam o tipo deles sozinhos. Você só marca o valor atual; "Sofrer dano" desconta na ordem Escudo → Blindagem → Vida.',
       rule: 'atributos-e-recursos/recursos'
     },
     pericias: {
       title: 'Perícias',
-      text: 'Bônus de +1 a +3. O número ao lado já é o total do teste (atributo + perícia), com a penalidade da armadura equipada em Manha, Reflexos e Sentidos.',
+      text: 'Bônus de +1 a +3. O número ao lado já é o total do teste (atributo + perícia), com a penalidade da armadura equipada em Manha, Reflexos, Sentidos e Operações. Abaixo ficam as 4 proficiências iniciais.',
       rule: 'pericias'
     },
     progressao: {
       title: 'Progressão',
-      text: '10 XP viram 1 UP. Cada UP compra +10 PV, +10 PE, +2 PA ou +2 pontos de perícia; poderes também custam UP.',
+      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia. UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos.',
       rule: 'progressao'
     },
     poderes: {
@@ -1279,7 +1279,7 @@ const FIREBASE_CONFIG = {
     },
     inventario: {
       title: 'Inventário',
-      text: 'A carga é somada sozinha. Limite: 5 + Corpo × 5. Armadura equipada e implantes instalados não contam. Só 4 itens equipados dão benefício ao mesmo tempo. Abra um item para encaixar mods, propriedade e acessórios nos slots.',
+      text: 'Em cima, o que está equipado: núcleo, corpo (vestíveis e próteses por região), armadura e as duas mãos; arma de duas mãos ocupa as duas. Embaixo, a mochila. Passe o mouse (ou toque) num bloco para ver os detalhes e equipar; também dá para arrastar. Carga = 2 + Corpo × 5 + Precisão + Essência × 2, e só a mochila conta. Em "Detalhes" ficam os slots de mod, propriedade e acessórios.',
       rule: 'carga'
     },
     banco: {
@@ -2042,6 +2042,13 @@ const FIREBASE_CONFIG = {
     return Array.isArray(field.options) ? field.options : (ITEM_DATA[field.options] || []);
   }
 
+  // campo automático: o valor sai de uma tabela conforme outro campo (raridade → Defesa, tipo → CC)
+  function autoValue(f, type, values) {
+    if (!f.auto) return undefined;
+    const table = (type && type[f.auto.table]) || ITEM_DATA[f.auto.table];
+    return table ? table[values[f.auto.from]] : undefined;
+  }
+
   function newDraft(kind, typeId, from) {
     const cat = findCategory(kind);
     const type = findType(cat, typeId);
@@ -2057,10 +2064,12 @@ const FIREBASE_CONFIG = {
       const opts = fieldOptions(f, type);
       if (f.kind === 'multi') values[f.key] = (type && type.opts && type.opts[f.optKey]) ? opts.join(', ') : '';
       else if (f.kind === 'rarity') values[f.key] = opts[0] || '';
+      else if (f.kind === 'cards') values[f.key] = opts[0] ? opts[0].value : '';
       else if (f.kind === 'select' && opts.length === 1) values[f.key] = opts[0];
       else if (f.defaultFrom && type && type[f.defaultFrom] !== undefined) values[f.key] = String(type[f.defaultFrom]);
       else values[f.key] = '';
     });
+    cat.fields.forEach((f) => { const v = autoValue(f, type, values); if (v !== undefined) values[f.key] = v; });
     return { id: null, kind, typeId: typeId || '', name: '', values, image: '', thumb: '', slots: normSlots(null), bonus: {} };
   }
 
@@ -2090,6 +2099,20 @@ const FIREBASE_CONFIG = {
         inp.checked = on.indexOf(op) >= 0;
         inp.addEventListener('change', () => onChange($$('input:checked', box).map((x) => x.value).join(', ')));
         box.append(h('label', 'check check--pill', inp, h('span', '', op)));
+      });
+      return box;
+    }
+    if (field.kind === 'cards') {
+      const box = h('div', 'pick-grid pick-grid--form');
+      box.setAttribute('role', 'radiogroup');
+      opts.forEach((op) => {
+        const inp = h('input');
+        inp.type = 'radio';
+        inp.name = id;
+        inp.value = op.value;
+        inp.checked = op.value === value;
+        inp.addEventListener('change', () => onChange(op.value));
+        box.append(h('label', 'pick-card pick-card--radio', inp, h('span', 'pick-card__title', op.value), h('span', 'pick-card__text', op.sub)));
       });
       return box;
     }
@@ -2162,24 +2185,34 @@ const FIREBASE_CONFIG = {
     const d = itemState.draft = newDraft(kind, typeId, from);
     const type = findType(cat, d.typeId);
     $('#item-form-title').textContent = (d.id ? 'Editar: ' : '') + cat.title + (type ? ' · ' + type.title : '');
-    $('#item-form-hint').textContent = type && type.opts && cat.id === 'arma-fogo'
-      ? (type.cargaMax ? 'Opções limitadas à média de criação de ' + type.title + ' (carga máxima ' + type.cargaMax + ').' : 'As regras ainda não trazem a média de criação de ' + type.title + ': escolha entre todas as opções.')
+    $('#item-form-hint').textContent = type && type.opts && isWeapon(cat.id)
+      ? 'Opções limitadas à média de criação de ' + type.title + (type.cargaMax ? ' (carga máxima ' + type.cargaMax + ').' : '.')
       : (cat.hint || '');
 
     const grid = $('#item-fields');
     grid.replaceChildren();
     cat.fields.forEach((f) => {
+      if (f.onlyWithOpts && !(type && type.opts && type.opts[f.optKey])) return; // campo que só existe em alguns tipos
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
         if (isName) d.name = v; else d.values[f.key] = v;
+        cat.fields.forEach((g) => { // campos automáticos que dependem deste
+          if (!g.auto || g.auto.from !== f.key) return;
+          const nv = autoValue(g, type, d.values);
+          if (nv === undefined) return;
+          d.values[g.key] = nv;
+          const el = $('#item-f-' + g.key);
+          if (el) el.value = nv;
+        });
         if (f.key === 'raridade' || f.key === 'para') renderItemSlots();
       });
-      const grouped = f.kind === 'multi' || f.kind === 'rarity';
+      const grouped = f.kind === 'multi' || f.kind === 'rarity' || f.kind === 'cards';
       const label = h(grouped ? 'span' : 'label', 'field__label', f.label);
       if (!grouped) label.htmlFor = 'item-f-' + f.key;
       if (grouped) { const gid = 'item-l-' + f.key; label.id = gid; ctrl.setAttribute('aria-labelledby', gid); }
       const wrap = h('div', 'field' + (f.big || f.kind === 'multi' ? ' field--wide' : ''), label, ctrl);
       if (f.kind === 'number' && ctrl.max) wrap.append(h('p', 'field__hint', 'Máximo ' + ctrl.max + ' para este tipo.'));
+      if (f.hint) wrap.append(h('p', 'field__hint', f.hint));
       grid.append(wrap);
     });
 
@@ -2354,16 +2387,15 @@ const FIREBASE_CONFIG = {
   ];
   const SKILLS = {
     corpo: [['luta', 'Luta'], ['resistencia', 'Resistência'], ['atletismo', 'Atletismo'], ['fortitude', 'Fortitude']],
-    precisao: [['mira', 'Mira'], ['tecnologia', 'Tecnologia'], ['manha', 'Manha'], ['pilotagem', 'Pilotagem'], ['intelecto', 'Intelecto'], ['reflexos', 'Reflexos'], ['oficio', 'Ofício']],
+    precisao: [['mira', 'Mira'], ['tecnologia', 'Tecnologia'], ['iniciativa', 'Iniciativa'], ['manha', 'Manha'], ['pilotagem', 'Pilotagem'], ['intelecto', 'Intelecto'], ['reflexos', 'Reflexos'], ['oficio', 'Ofício']],
     essencia: [['operacoes', 'Operações'], ['sentidos', 'Sentidos'], ['vontade', 'Vontade'], ['intimidacao', 'Intimidação'], ['diplomacia', 'Diplomacia'], ['enganacao', 'Enganação']]
   };
-  const PENALTY_SKILLS = ['manha', 'reflexos', 'sentidos']; // sofrem a penalidade da armadura
+  const PENALTY_SKILLS = ['manha', 'reflexos', 'sentidos', 'operacoes']; // sofrem a penalidade da armadura
   const LIFE = [['pv', 'PV'], ['blindagem', 'Blindagem'], ['escudo', 'Escudo']]; // de dentro para fora
-  const MAX_EQUIPPED = 4;
 
   function blankSheet() {
     return {
-      v: 1, setup: false, attrs: { corpo: 0, precisao: 0, essencia: 0 }, skills: {}, oficio: '', height: '', sex: '',
+      v: 2, setup: false, attrs: { corpo: 0, precisao: 0, essencia: 0 }, skills: {}, profs: [], oficio: '', height: '', weight: '', sex: '',
       xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0 },
       cur: {}, specimen: null, powers: [], inventory: [], originItems: ''
     };
@@ -2374,7 +2406,18 @@ const FIREBASE_CONFIG = {
     const s = Object.assign({}, b, r);
     ['attrs', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
     s.powers = Array.isArray(r.powers) ? r.powers : [];
-    s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, equipped: false, values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
+    s.profs = Array.isArray(r.profs) ? r.profs.filter((x) => typeof x === 'string') : [];
+    s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
+    // fichas da versão anterior marcavam só "equipado": cada item vai para o primeiro espaço livre que o aceite
+    s.inventory.forEach((i) => {
+      const was = i.equipped === true && !i.slot;
+      delete i.equipped;
+      if (i.slot && slotsFor(i).indexOf(i.slot) < 0) i.slot = '';
+      if (!was) return;
+      const free = slotsFor(i).find((id) => id === 'modulo' || !s.inventory.some((x) => x.slot === id));
+      if (free && !(free === 'mao-e' && s.inventory.some((x) => x.slot === 'mao-d' && twoHanded(x)))) i.slot = twoHanded(i) && free === 'mao-e' ? '' : free;
+    });
+    s.v = 2;
     return s;
   }
 
@@ -2392,7 +2435,7 @@ const FIREBASE_CONFIG = {
   function quickEntry2(name, carga, efeito) {
     return {
       uid: uid(), id: '', kind: 'item-geral', typeId: '', typeTitle: '', name: cleanName(name).slice(0, 60),
-      values: { carga: carga ? String(carga) : '', efeito: efeito || '' }, bonus: {}, slots: normSlots(null), thumb: '', qty: 1, equipped: false
+      values: { carga: carga ? String(carga) : '', efeito: efeito || '' }, bonus: {}, slots: normSlots(null), thumb: '', qty: 1, slot: ''
     };
   }
   function originItemEntry(text) {
@@ -2412,16 +2455,40 @@ const FIREBASE_CONFIG = {
     return out;
   }
 
+  const PROFS = ITEM_DATA.proficiencias || [];
+  const ARMOR_BASE = ITEM_DATA.armaduraBase === undefined ? 6 : ITEM_DATA.armaduraBase;
+  function profIdOf(i) { // a proficiência que vale para este item
+    if (i.kind === 'armadura') return i.typeId ? 'armadura-' + i.typeId : '';
+    if (isWeapon(i.kind)) { const t = findType(findCategory(i.kind), i.typeId); return t ? (t.prof || t.id) : ''; }
+    return '';
+  }
+  const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && s.profs.indexOf(id) >= 0; };
+  const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
+  const isModule = (i) => i.kind === 'protese-modulo' && i.values.classe === 'Módulo';
+  const twoHanded = (i) => /duas/i.test(String((i.values && i.values.empunhadura) || ''));
+
   function compute(c) {
     const s = c.sheet;
     const a = s.attrs;
     const sp = s.specimen;
     const spv = (sp && sp.values) || {};
-    const equipped = s.inventory.filter((i) => i.equipped);
+    const equipped = s.inventory.filter((i) => i.slot);
+    const armor = equipped.find((i) => i.slot === 'armadura');
+    const core = equipped.find((i) => i.slot === 'nucleo');
+
+    // núcleo: só um ativo (o da espécie, o implantado ou o da armadura; vale o maior)
+    const nucleo = Math.max(num(spv.nucleoBase), core ? num(core.values.capacidade) : 0, armor && armor.values.nucleo === 'Sim' ? num(armor.values.capacidade) : 0);
+    const implants = equipped.filter((i) => i.kind === 'protese-modulo');
+    const protUsed = implants.filter((i) => !isModule(i)).reduce((t, i) => t + ccOf(i), 0);
+    const modUsed = implants.filter(isModule).reduce((t, i) => t + ccOf(i), 0);
+    const ccMax = nucleo > 0 ? Math.max(0, nucleo + a.corpo) : 0;
+    const modExtra = nucleo > 0 ? Math.max(0, a.essencia) : 0;
+
     const sources = [];
     if (sp) sources.push({ name: sp.name, b: sp.bonus || {} });
     s.powers.forEach((p) => sources.push({ name: p.name, b: p.bonus || {} }));
-    equipped.forEach((i) => sources.push({ name: i.name, b: entryBonus(i) }));
+    // sem núcleo, próteses só substituem o órgão e módulos ficam inativos: não dão bônus
+    equipped.forEach((i) => { if (i.kind !== 'protese-modulo' || nucleo > 0) sources.push({ name: i.name, b: entryBonus(i) }); });
     sources.push({ name: 'ajuste manual', b: s.extra });
 
     const src = { pv: [], escudo: [], blindagem: [], pe: [], pa: [], carga: [], armadura: [] };
@@ -2430,7 +2497,7 @@ const FIREBASE_CONFIG = {
 
     // vida: PV vem do Corpo; a espécie pode converter para Blindagem ou Escudo
     src.pv.push({ name: 'base (5 + Corpo × 5)', val: Math.max(5, 5 + a.corpo * 5) });
-    if (s.up.pv) src.pv.push({ name: 'UP', val: 10 * s.up.pv });
+    if (s.up.pv) src.pv.push({ name: 'benefícios de UP', val: 5 * s.up.pv });
     ['pv', 'escudo', 'blindagem'].forEach(fromSources);
     const base = spv.vidaBase === 'Blindagem' ? 'blindagem' : spv.vidaBase === 'Escudo' ? 'escudo' : 'pv';
     if (base !== 'pv') {
@@ -2439,47 +2506,42 @@ const FIREBASE_CONFIG = {
     }
 
     src.pe.push({ name: 'base (5 + Essência × 5)', val: Math.max(5, 5 + a.essencia * 5) });
-    if (s.up.pe) src.pe.push({ name: 'UP', val: 10 * s.up.pe });
+    if (s.up.pe) src.pe.push({ name: 'benefícios de UP', val: 5 * s.up.pe });
     fromSources('pe');
-    src.pa.push({ name: 'base (Precisão)', val: Math.max(0, a.precisao) });
-    if (s.up.pa) src.pa.push({ name: 'UP', val: 2 * s.up.pa });
+    src.pa.push({ name: 'base (Precisão, mínimo 1)', val: Math.max(1, a.precisao) });
+    if (s.up.pa) src.pa.push({ name: 'benefícios de UP', val: s.up.pa });
     fromSources('pa');
 
-    // carga: (–1 no atributo = 2 de carga)
-    src.carga.push({ name: 'base (5 + Corpo × 5)', val: a.corpo < 0 ? 2 : 5 + a.corpo * 5 });
+    // Carga = 2 + (Corpo × 5) + Precisão + (Essência × 2)
+    src.carga.push({ name: 'base', val: 2 }, { name: 'Corpo × 5', val: a.corpo * 5 }, { name: 'Precisão', val: a.precisao }, { name: 'Essência × 2', val: a.essencia * 2 });
     fromSources('carga');
 
-    const armor = equipped.find((i) => i.kind === 'armadura');
-    if (armor) src.armadura.push({ name: armor.name, val: num(armor.values.armadura) });
+    // armadura: a básica de todos os seres é 6; a vestida vale quando for maior. Proficiência: +1 de defesa
+    const armorProf = armor ? isProficient(s, armor) : false;
+    const worn = armor ? num(armor.values.armadura) + (armorProf ? 1 : 0) : 0;
+    if (armor && worn >= ARMOR_BASE) src.armadura.push({ name: armor.name + (armorProf ? ' (+1 proficiência)' : ''), val: worn });
+    else src.armadura.push({ name: 'armadura básica de todos os seres', val: ARMOR_BASE });
     fromSources('armadura');
-    const pen = armor ? Math.abs(num(armor.values.penalidade)) : 0;
+    // penalidade: a da ficha vale para quem é proficiente; sem proficiência, dobra
+    const pen = armor ? Math.abs(num(armor.values.penalidade)) * (armorProf ? 1 : 2) : 0;
 
-    // núcleo: o da espécie, o implantado ou o da armadura
-    const core = equipped.find((i) => i.kind === 'nucleo');
-    const nucleo = num(spv.nucleoBase) + (core ? num(core.values.capacidade) : 0) + (armor && armor.values.nucleo === 'Sim' ? num(armor.values.capacidade) : 0);
-    const implants = equipped.filter((i) => i.kind === 'protese-modulo');
-    const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc)) * (i.qty || 1);
-    const protUsed = implants.filter((i) => i.values.classe !== 'Módulo').reduce((t, i) => t + ccOf(i), 0);
-    const modUsed = implants.filter((i) => i.values.classe === 'Módulo').reduce((t, i) => t + ccOf(i), 0);
-
-    // carga usada: armadura equipada e implantes instalados não contam
-    const cargaUsed = s.inventory.reduce((t, i) => {
-      if (i.equipped && (i.kind === 'armadura' || IMPLANT_KINDS.indexOf(i.kind) >= 0)) return t;
-      return t + parseCarga(i.values.carga) * (i.qty || 1);
-    }, 0);
+    // carga usada: só o que está na mochila (itens equipados não ocupam carga)
+    const cargaUsed = s.inventory.reduce((t, i) => (i.slot ? t : t + parseCarga(i.values.carga) * (i.qty || 1)), 0);
 
     const max = {};
     Object.keys(src).forEach((k) => { max[k] = Math.max(0, Math.round(total(k) * 100) / 100); });
     const powerCost = s.powers.reduce((t, p) => t + num(p.values && p.values.custo), 0);
+    const upEarned = Math.floor(num(s.xp) / 10); // os de origem/espécie não contam para os benefícios
     return {
-      max, src, base, pen, armor, nucleo,
+      max, src, base, pen, armor, armorProf, nucleo, core,
       cargaUsed: Math.round(cargaUsed * 100) / 100, cargaMax: max.carga, over: cargaUsed > max.carga,
       defMin: max.armadura + a.corpo + num(s.skills.resistencia),
-      protMax: nucleo > 0 ? Math.max(0, nucleo + a.corpo) : 0, modMax: nucleo > 0 ? Math.max(0, nucleo + a.essencia) : 0, protUsed, modUsed,
-      equipCount: equipped.filter((i) => IMPLANT_KINDS.indexOf(i.kind) < 0).length,
-      upTotal: Math.floor(num(s.xp) / 10) + num(spv.upInicial) + num(s.upExtra),
-      upSpent: s.up.pv + s.up.pe + s.up.pa + s.up.per + powerCost,
-      skillBudget: 5 + 2 * s.up.per,
+      ccMax, modExtra, protUsed, modUsed,
+      ccOver: nucleo > 0 && (protUsed > ccMax || protUsed + modUsed > ccMax + modExtra),
+      upEarned, upTotal: upEarned + num(spv.upInicial) + num(s.upExtra),
+      upSpent: s.up.per + powerCost,
+      picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
   }
@@ -2501,7 +2563,6 @@ const FIREBASE_CONFIG = {
   const fSpecies = $('#f-species'), fAge = $('#f-age'), fOrigin = $('#f-origin'), fHeight = $('#f-height'), fSex = $('#f-sex');
   const formAttach = $('#form-attach'), inAttach = $('#attach-code'), errAttach = $('#attach-error');
   const setStatus = (text) => { statusEl.textContent = text; };
-  const invOpen = new Set(); // itens do inventário com os detalhes abertos
 
   function renderSheetHeader() {
     $('#sheet-title').textContent = sheetChar.name;
@@ -2571,6 +2632,7 @@ const FIREBASE_CONFIG = {
     renderAttrs(m);
     renderResources(m);
     renderSkills(m);
+    renderProfs();
     renderProgress(m);
     renderSpeciesLink();
     renderPowers(m);
@@ -2636,7 +2698,7 @@ const FIREBASE_CONFIG = {
     const pvCur = getCur(s, 'pv', m.max.pv);
     let state = '';
     if (m.base === 'pv' && m.max.pv > 0 && pvCur <= -m.max.pv) state = 'Morto: chegou a –PV máximo.';
-    else if (lifeCur <= 0) state = m.base === 'pv' ? 'Agonizando: teste de sobrevivência (CD 6, +1 a cada tentativa no dia).' : 'Sem resistência.';
+    else if (lifeCur <= 0) state = m.base === 'pv' ? 'Agonizando: teste de Fortitude (CD 6, +1 a cada tentativa no dia).' : 'Sem resistência.';
 
     const head = h('div', 'res-head', h('span', 'res-head__label', 'Resistência'), h('span', 'res-head__num', lifeCur + ' / ' + lifeMax));
     const legend = h('div', 'legend', ...life.map((l) => h('span', 'legend__item legend__item--' + l.key, h('span', 'res__dot'), l.label + ' ' + l.cur + '/' + l.max)));
@@ -2654,10 +2716,44 @@ const FIREBASE_CONFIG = {
     const stat = (label, value, note) => h('div', 'stat', h('span', 'stat__label', label), h('span', 'stat__value', value), note ? h('span', 'stat__note', note) : null);
     const stats = h('div', 'stats',
       stat('Defesa mínima', String(m.defMin), 'Armadura ' + m.max.armadura + ' + Corpo + Resistência'),
-      stat('Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarga: metade' : 'padrão'),
-      stat('Penalidade de armadura', m.pen ? '–' + m.pen : '—', m.pen ? 'Manha, Reflexos e Sentidos' : (m.armor ? m.armor.name : 'sem armadura equipada')));
+      stat('Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarregado: metade' : 'padrão'),
+      stat('Penalidade de armadura', m.pen ? '–' + m.pen : '—', m.pen ? 'Manha, Reflexos, Sentidos e Operações' + (m.armorProf ? '' : ' (dobrada: sem proficiência)') : (m.armor ? m.armor.name : 'sem armadura equipada')));
 
-    const rest = h('button', 'btn btn--ghost btn--sm', 'Descanso longo (recuperar tudo)');
+    // dano entra sempre na ordem Escudo → Blindagem → Vida
+    const dmg = h('input', 'input res__dmg');
+    dmg.type = 'number';
+    dmg.min = '1';
+    dmg.step = '1';
+    dmg.inputMode = 'numeric';
+    dmg.placeholder = 'Dano';
+    dmg.setAttribute('aria-label', 'Dano sofrido');
+    const dmgForm = h('form', 'res-dmg', dmg, (() => { const b = h('button', 'btn btn--danger btn--sm', 'Sofrer dano'); b.type = 'submit'; return b; })());
+    dmgForm.title = 'O dano é aplicado na ordem Escudo → Blindagem → Vida.';
+    dmgForm.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      let left = Math.round(num(dmg.value));
+      if (left < 1) { dmg.focus(); return; }
+      ['escudo', 'blindagem', 'pv'].forEach((k) => {
+        const mx = m.max[k];
+        if (!mx || left <= 0) return;
+        const cur = getCur(s, k, mx);
+        const take = Math.min(left, cur - curMin(k, mx));
+        left -= take;
+        setCur(s, k, cur - take, mx);
+      });
+      changed();
+    });
+    const shortRest = h('button', 'btn btn--ghost btn--sm', 'Descanso curto (metade)');
+    shortRest.type = 'button';
+    shortRest.dataset.fid = 'rest-short';
+    shortRest.title = 'De 1 a 4 horas: recupera metade dos recursos (PV, PE e PA). Em descansos curtos seguidos, a recuperação cai pela metade a cada vez.';
+    shortRest.addEventListener('click', () => {
+      ['pv', 'pe', 'pa'].forEach((k) => { const mx = m.max[k]; if (mx) setCur(s, k, getCur(s, k, mx) + Math.ceil(mx / 2), mx); });
+      changed();
+      toast('Descanso curto: metade de PV, PE e PA recuperada.');
+    });
+
+    const rest = h('button', 'btn btn--ghost btn--sm', 'Descanso longo (tudo)');
     rest.type = 'button';
     rest.dataset.fid = 'rest';
     rest.addEventListener('click', () => { s.cur = {}; changed(); toast('Todos os recursos recuperados.'); });
@@ -2682,7 +2778,7 @@ const FIREBASE_CONFIG = {
         return h('div', 'field', lab, inp);
       })));
 
-    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', rest), extra);
+    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm, shortRest, rest), extra);
   }
 
   function renderSkills(m) {
@@ -2733,17 +2829,44 @@ const FIREBASE_CONFIG = {
       return h('div', 'field', lab, inp);
     };
     const free = m.upTotal - m.upSpent;
-    const buy = (key, label) => h('div', 'buy',
+    const picksLeft = m.picksAllowed - m.picksUsed;
+    const buy = (key, label, max) => h('div', 'buy',
       h('span', 'buy__label', label),
-      stepper(s.up[key], { min: 0, max: 99, label: 'UP em ' + label, fid: 'up-' + key, onChange: (n) => { s.up[key] = n; changed(); } }));
-    const sum = h('p', 'prog__sum' + (free < 0 ? ' prog__sum--over' : ''), 'UP: ' + m.upTotal + ' no total · ' + m.upSpent + ' gastos · ' + free + (free === 1 ? ' livre' : ' livres'));
+      stepper(s.up[key], { min: 0, max, label, fid: 'up-' + key, onChange: (n) => { s.up[key] = n; changed(); } }));
+    const pick = (key, label) => buy(key, label, s.up[key] + Math.max(0, picksLeft));
     $('#prog-block').replaceChildren(
       h('div', 'fields-grid',
         numField('f-xp', 'XP (10 XP = 1 UP)', s.xp, (v) => { s.xp = v; }),
-        numField('f-up-extra', 'UP extras (mestre, idade...)', s.upExtra, (v) => { s.upExtra = v; })),
-      sum,
-      h('div', 'buys', buy('pv', '+10 PV'), buy('pe', '+10 PE'), buy('pa', '+2 PA'), buy('per', '+2 em perícias')),
-      h('p', 'field__hint', 'Cada passo acima gasta 1 UP e já entra nos recursos. A cada 4 UP obtidos, +1 em um atributo (mude no topo).'));
+        numField('f-up-extra', 'UP de origem ou extras', s.upExtra, (v) => { s.upExtra = v; })),
+      h('p', 'prog__sum' + (free < 0 ? ' prog__sum--over' : ''), 'UP: ' + m.upTotal + ' no total (' + m.upEarned + ' por XP) · ' + m.upSpent + ' gastos · ' + free + (free === 1 ? ' livre' : ' livres')),
+      h('p', 'prog__sum' + (picksLeft < 0 ? ' prog__sum--over' : ''), 'Benefícios: ' + m.picksUsed + ' de ' + m.picksAllowed + ' escolhidos'),
+      h('div', 'buys', pick('pv', '+5 PV'), pick('pe', '+5 PE'), pick('pa', '+1 PA')),
+      h('p', 'field__hint', 'A cada UP par alcançado (sem contar os de origem), escolha 2 benefícios. A cada UP ímpar, +1 ponto de perícia (já somado nos pontos de perícia).'),
+      h('div', 'buys', buy('per', 'UP investidos em perícias', 99)),
+      h('p', 'field__hint', 'Cada UP investido em perícias dá +3 pontos livres. Poderes custam UP conforme o custo de cada um.'));
+  }
+
+  function profPills(list, onToggle, limit, prefix) {
+    const box = h('div', 'checks');
+    box.setAttribute('role', 'group');
+    PROFS.forEach((p) => {
+      const inp = h('input');
+      inp.type = 'checkbox';
+      inp.checked = list.indexOf(p.id) >= 0;
+      inp.disabled = Boolean(limit) && !inp.checked && list.length >= limit;
+      inp.dataset.fid = (prefix || 'prof-') + p.id;
+      inp.addEventListener('change', () => onToggle(p.id, inp.checked));
+      box.append(h('label', 'check check--pill' + (inp.disabled ? ' check--off' : ''), inp, h('span', '', p.label)));
+    });
+    return box;
+  }
+
+  function renderProfs() {
+    const s = sheetChar.sheet;
+    $('#profs-block').replaceChildren(
+      h('h3', 'sub-title', 'Proficiências ', h('span', 'count', '(' + s.profs.length + ' de 4 iniciais)')),
+      profPills(s.profs, (id, on) => { s.profs = s.profs.filter((x) => x !== id); if (on) s.profs.push(id); changed(); }, 0),
+      h('p', 'field__hint', 'Em armas: cadência perita e o aprimoramento do tipo. Em armaduras: a penalidade não dobra e a defesa ganha +1. Usar um item fora da empunhadura ideal conta como sem proficiência.'));
   }
 
   function renderSpeciesLink() {
@@ -2778,55 +2901,255 @@ const FIREBASE_CONFIG = {
     $('#power-empty').hidden = s.powers.length > 0;
   }
 
-  function toggleEquip(i, m) {
+  /* ---------- Inventário em blocos ----------
+     Em cima, o que está equipado: núcleo, corpo (vestíveis e próteses, por região),
+     armadura e as duas mãos. Embaixo, a mochila. Só a mochila ocupa Carga.
+     Passar o mouse (ou tocar) num bloco estende um retângulo com os detalhes. */
+  const EQUIP = [
+    { id: 'nucleo', label: 'Núcleo', full: 'Núcleo', kind: 'nucleo', accepts: 'um núcleo' },
+    { id: 'cabeca', label: 'Cabeça', full: 'Cabeça', region: 'cabeca', accepts: 'vestível ou prótese de cabeça' },
+    { id: 'orgaos', label: 'Órgãos', full: 'Órgãos internos', region: 'orgaos-internos', accepts: 'vestível ou prótese de órgãos internos' },
+    { id: 'braco-d', label: 'Braço dir.', full: 'Braço direito', region: 'membros-superiores', accepts: 'vestível ou prótese de membros superiores' },
+    { id: 'tronco', label: 'Tronco', full: 'Tronco', region: 'tronco', accepts: 'vestível ou prótese de tronco' },
+    { id: 'braco-e', label: 'Braço esq.', full: 'Braço esquerdo', region: 'membros-superiores', accepts: 'vestível ou prótese de membros superiores' },
+    { id: 'mao-d', label: 'Mão direita', full: 'Mão direita', hand: true, accepts: 'arma ou item empunhado' },
+    { id: 'armadura', label: 'Armadura', full: 'Armadura', kind: 'armadura', accepts: 'uma armadura' },
+    { id: 'mao-e', label: 'Mão esquerda', full: 'Mão esquerda', hand: true, accepts: 'arma ou item empunhado' },
+    { id: 'perna-d', label: 'Perna dir.', full: 'Perna direita', region: 'membros-inferiores', accepts: 'vestível ou prótese de membros inferiores' },
+    { id: 'perna-e', label: 'Perna esq.', full: 'Perna esquerda', region: 'membros-inferiores', accepts: 'vestível ou prótese de membros inferiores' }
+  ];
+  const MODULE_SLOT = { id: 'modulo', label: 'Módulo', full: 'Módulo', multi: true, accepts: 'um módulo (precisa de núcleo)' };
+  const slotDef = (id) => (id === 'modulo' ? MODULE_SLOT : EQUIP.find((e) => e.id === id));
+
+  // em quais espaços este item pode ser equipado
+  function slotsFor(i) {
+    if (i.kind === 'armadura') return ['armadura'];
+    if (i.kind === 'nucleo') return ['nucleo'];
+    if (isModule(i)) return ['modulo'];
+    if (i.kind === 'protese-modulo' || i.kind === 'vestivel') return EQUIP.filter((e) => e.region && e.region === i.typeId).map((e) => e.id);
+    return ['mao-d', 'mao-e'];
+  }
+  const itemBy = (u) => (sheetChar ? sheetChar.sheet.inventory.find((x) => x.uid === u) : null);
+
+  function equipItem(i, slotId) {
     const s = sheetChar.sheet;
-    const implant = IMPLANT_KINDS.indexOf(i.kind) >= 0;
-    if (i.equipped) { i.equipped = false; return true; }
+    if (slotsFor(i).indexOf(slotId) < 0) { toast((slotDef(slotId) || {}).full + ' não aceita ' + i.name + '.'); return false; }
+    const hand = slotId === 'mao-d' || slotId === 'mao-e';
+    const two = hand && twoHanded(i);
+    const occupant = slotId === 'modulo' ? null : s.inventory.find((x) => x.slot === slotId && x !== i);
+
     if (i.kind === 'protese-modulo') {
-      const isMod = i.values.classe === 'Módulo';
-      const need = (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc)) * (i.qty || 1);
-      if (!m.nucleo) { toast('Sem núcleo não dá para implantar: implante um núcleo (ou use uma armadura com núcleo).'); return false; }
-      if ((isMod ? m.modUsed : m.protUsed) + need > (isMod ? m.modMax : m.protMax)) { toast('Capacidade cibernética insuficiente para ' + (isMod ? 'módulos' : 'próteses') + '.'); return false; }
+      const m = compute(sheetChar);
+      const mod = isModule(i);
+      if (mod && !m.nucleo) { toast('Sem um Núcleo ativo os módulos ficam inativos. Implante um núcleo (ou vista uma armadura com núcleo) antes.'); return false; }
+      if (m.nucleo) {
+        const freed = occupant && occupant.kind === 'protese-modulo' ? ccOf(occupant) : 0;
+        const prot = m.protUsed + (mod ? 0 : ccOf(i)) - (i.slot && !mod ? ccOf(i) : 0) - freed;
+        const mods = m.modUsed + (mod ? ccOf(i) : 0);
+        if (prot > m.ccMax || prot + mods > m.ccMax + m.modExtra) {
+          toast('Carga Cibernética insuficiente: ' + i.name + ' usa ' + ccOf(i) + ' CC. Limite ' + m.ccMax + (m.modExtra ? ' (+' + m.modExtra + ' só para módulos)' : '') + '.');
+          return false;
+        }
+      }
     }
-    if (i.kind === 'armadura' || i.kind === 'nucleo') s.inventory.forEach((x) => { if (x.kind === i.kind) x.equipped = false; }); // só um por vez
-    if (!implant && s.inventory.filter((x) => x.equipped && IMPLANT_KINDS.indexOf(x.kind) < 0).length >= MAX_EQUIPPED) {
-      toast('Só ' + MAX_EQUIPPED + ' itens equipados dão benefício ao mesmo tempo. Desequipe um antes.');
-      return false;
+
+    if ((i.qty || 1) > 1) { // equipa uma unidade; o resto da pilha fica na mochila
+      const one = deep(i);
+      one.uid = uid();
+      one.qty = 1;
+      i.qty -= 1;
+      s.inventory.push(one);
+      i = one;
     }
-    i.equipped = true;
+    if (hand) {
+      s.inventory.forEach((x) => { // arma de duas mãos ocupa as duas; e sai de cena se outra coisa entrar em qualquer mão
+        if (x === i || (x.slot !== 'mao-d' && x.slot !== 'mao-e')) return;
+        if (two || twoHanded(x) || x.slot === slotId) x.slot = '';
+      });
+      i.slot = two ? 'mao-d' : slotId;
+    } else {
+      if (occupant) occupant.slot = '';
+      i.slot = slotId;
+    }
     return true;
   }
 
-  function invRow(i, m) {
+  function itemFacts(i) {
+    const v = i.values || {};
+    const out = [];
+    const add = (l, val) => { if (val !== undefined && val !== null && val !== '') out.push([l, String(val)]); };
+    add('Dano', v.dano); add('Propriedade', v.subtipo); add('Modo', v.modo); add('Cadência', v.cadencia); add('Pente', v.pente); add('Alcance', v.alcance); add('Empunhadura', v.empunhadura);
+    if (i.kind === 'armadura') {
+      add('Defesa', v.armadura);
+      add('Penalidade', num(v.penalidade) ? '–' + Math.abs(num(v.penalidade)) + ' (sem proficiência –' + Math.abs(num(v.penalidade)) * 2 + ')' : 'nenhuma');
+      if (v.nucleo === 'Sim') add('Núcleo', '+' + num(v.capacidade));
+    }
+    if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
+    if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
+    add('Carga', fmtNum(parseCarga(v.carga)) + (i.slot ? ' (equipado: não conta)' : ''));
+    return out;
+  }
+
+  function cellCard(i, m, def, ghost) {
+    const s = sheetChar.sheet;
+    const card = h('div', 'cell__card');
+    const act = (label, cls, fn) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); }); return b; };
+    if (!i) { // espaço vazio: diz o que aceita e oferece o que há de compatível na mochila
+      card.append(h('p', 'cell__name', def.full), h('p', 'cell__meta', 'Vazio. Aceita ' + def.accepts + '.'));
+      const fits = s.inventory.filter((x) => !x.slot && slotsFor(x).indexOf(def.id) >= 0).slice(0, 6);
+      if (fits.length) card.append(h('div', 'cell__actions', ...fits.map((x) => act(x.name, 'btn--ghost', () => { if (equipItem(x, def.id)) changed(); }))));
+      else card.append(h('p', 'cell__text', 'Nada compatível na mochila.'));
+      return card;
+    }
+    card.append(h('p', 'cell__name', i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '')),
+      h('p', 'cell__meta', [kindTitle(i.kind), i.typeTitle, i.values.raridade].filter(Boolean).join(' · ')));
+    if (ghost) { card.append(h('p', 'cell__text', 'Arma de duas mãos: ocupa também esta mão.')); return card; }
+    const dl = h('dl', 'cell__facts');
+    itemFacts(i).forEach((f) => dl.append(h('dt', '', f[0]), h('dd', '', f[1])));
+    card.append(dl);
+    const pid = profIdOf(i);
+    if (pid) card.append(h('p', 'cell__tag' + (isProficient(s, i) ? ' cell__tag--on' : ''), isProficient(s, i) ? 'Proficiente' : 'Sem proficiência'));
+    if (i.kind === 'protese-modulo' && i.slot && !m.nucleo) card.append(h('p', 'cell__tag', 'Sem núcleo: só substitui o órgão natural'));
+    const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);
+    if (parts.length) card.append(h('p', 'cell__text', 'Encaixes: ' + parts.join(', ')));
+    const b = bonusLine(entryBonus(i));
+    if (b) card.append(h('p', 'cell__text', 'Bônus: ' + b + (i.slot ? '' : ' (só equipado)')));
+    const text = entryText(i);
+    if (text) card.append(h('p', 'cell__text cell__text--clamp', text));
+
+    const actions = h('div', 'cell__actions');
+    if (i.slot) actions.append(act('Guardar na mochila', 'btn--ghost', () => { i.slot = ''; changed(); }));
+    else {
+      const opts = slotsFor(i);
+      if (opts[0] === 'modulo') actions.append(act('Instalar', 'btn--primary', () => { if (equipItem(i, 'modulo')) changed(); }));
+      else if (opts[0] === 'mao-d' && twoHanded(i)) actions.append(act('Empunhar (duas mãos)', 'btn--primary', () => { if (equipItem(i, 'mao-d')) changed(); }));
+      else if (opts.length === 1) actions.append(act('Equipar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
+      else opts.forEach((id) => actions.append(act(slotDef(id).full, 'btn--primary', () => { if (equipItem(i, id)) changed(); })));
+    }
+    actions.append(act('Detalhes', 'btn--ghost', () => openInvDialog(i.uid)));
+    card.append(actions);
+    return card;
+  }
+
+  let dragUid = null;
+  function makeCell(i, m, def, ghost) {
+    const cell = h('div', 'cell' + (def ? ' cell--slot cell--' + def.id + (def.hand ? ' cell--hand' : '') : '') + (i ? ' cell--full' : '') + (ghost ? ' cell--ghost' : ''));
+    const face = h('button', 'cell__face');
+    face.type = 'button';
+    if (i) {
+      face.dataset.fid = 'cell-' + i.uid + (ghost ? '-g' : '');
+      const color = rarColor(i.values.raridade);
+      if (color) cell.style.setProperty('--rar', color);
+      face.append(entryIcon(i));
+      if ((i.qty || 1) > 1) face.append(h('span', 'cell__qty', '×' + i.qty));
+      face.setAttribute('aria-label', (def ? def.full + ': ' : '') + i.name + (ghost ? ' (duas mãos)' : '') + '. Abrir detalhes.');
+    } else {
+      face.dataset.fid = 'slot-' + def.id;
+      face.setAttribute('aria-label', def.full + ': vazio. Aceita ' + def.accepts + '.');
+    }
+    if (def) face.append(h('span', 'cell__label', def.label));
+    const place = () => { // perto da borda direita, o retângulo abre para a esquerda
+      const r = cell.getBoundingClientRect();
+      cell.classList.toggle('cell--flip', r.left + 310 > window.innerWidth - 8);
+    };
+    cell.addEventListener('mouseenter', place);
+    face.addEventListener('focus', place);
+    face.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      place();
+      const on = !cell.classList.contains('is-open');
+      $$('.cell.is-open').forEach((c) => c.classList.remove('is-open'));
+      cell.classList.toggle('is-open', on);
+    });
+    if (i && !ghost) {
+      face.draggable = true;
+      face.addEventListener('dragstart', (ev) => { dragUid = i.uid; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', i.uid); });
+      face.addEventListener('dragend', () => { dragUid = null; $$('.cell--drop').forEach((c) => c.classList.remove('cell--drop')); });
+    }
+    if (def) { // arrastar da mochila para um espaço: só entra se o espaço aceitar
+      cell.addEventListener('dragover', (ev) => {
+        const it = dragUid ? itemBy(dragUid) : null;
+        if (!it || slotsFor(it).indexOf(def.id) < 0) return;
+        ev.preventDefault();
+        cell.classList.add('cell--drop');
+      });
+      cell.addEventListener('dragleave', () => cell.classList.remove('cell--drop'));
+      cell.addEventListener('drop', (ev) => {
+        ev.preventDefault();
+        const it = dragUid ? itemBy(dragUid) : null;
+        dragUid = null;
+        if (it && equipItem(it, def.id)) changed(); else cell.classList.remove('cell--drop');
+      });
+    }
+    cell.append(face, cellCard(i, m, def, ghost));
+    return cell;
+  }
+  document.addEventListener('click', (ev) => { if (!ev.target.closest('.cell')) $$('.cell.is-open').forEach((c) => c.classList.remove('is-open')); });
+
+  function renderInventory(m) {
+    const s = sheetChar.sheet;
+    const inv = s.inventory;
+    const sum = h('div', 'inv-sum' + (m.over ? ' inv-sum--over' : ''),
+      h('div', 'res-head', h('span', 'res-head__label', 'Carga da mochila'), h('span', 'res-head__num', fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax))),
+      meter([{ key: m.over ? 'over' : 'carga', cur: Math.min(m.cargaUsed, m.cargaMax || 1), max: m.cargaMax || 1 }], 'Carga ' + fmtNum(m.cargaUsed) + ' de ' + fmtNum(m.cargaMax)),
+      h('p', 'inv-sum__line', 'Limite: ' + srcText(m.src.carga) + '. Itens equipados não ocupam carga.'));
+    if (m.over) sum.append(h('p', 'res-state', 'Sobrecarregado: deslocamento pela metade e ações físicas sobem uma categoria (Bônus → Movimento → Padrão).'));
+    $('#inv-summary').replaceChildren(sum);
+
+    // equipado: boneco + fileira de módulos
+    $('#equip-doll').replaceChildren(...EQUIP.map((def) => {
+      let i = inv.find((x) => x.slot === def.id);
+      let ghost = false;
+      if (!i && def.id === 'mao-e') { const d = inv.find((x) => x.slot === 'mao-d'); if (d && twoHanded(d)) { i = d; ghost = true; } }
+      return makeCell(i || null, m, def, ghost);
+    }));
+    const mods = inv.filter((x) => x.slot === 'modulo');
+    $('#equip-mods').replaceChildren(...mods.map((x) => makeCell(x, m, MODULE_SLOT, false)), makeCell(null, m, MODULE_SLOT, false));
+
+    const hands = ['mao-d', 'mao-e'].map((id) => inv.find((x) => x.slot === id));
+    const handText = hands[0] && twoHanded(hands[0]) ? hands[0].name + ' (duas mãos)' : [hands[0] ? hands[0].name : 'direita livre', hands[1] ? hands[1].name : 'esquerda livre'].join(' · ');
+    const line = (k, v, bad) => h('div', 'equip-line' + (bad ? ' equip-line--bad' : ''), h('span', 'equip-line__k', k), h('span', 'equip-line__v', v));
+    $('#equip-info').replaceChildren(
+      line('Mãos', handText),
+      line('Defesa mínima', m.defMin + ' = ' + srcText(m.src.armadura) + ' · Corpo ' + signed(s.attrs.corpo) + ' · Resistência +' + num(s.skills.resistencia)),
+      line('Armadura', m.armor ? m.armor.name + (m.armorProf ? ' · proficiente' : ' · sem proficiência') + (m.pen ? ' · penalidade –' + m.pen : '') : 'nenhuma (vale a básica, ' + ARMOR_BASE + ')'),
+      line('Núcleo', m.nucleo ? '+' + m.nucleo + ' ativo' : 'sem núcleo: próteses só substituem o órgão; módulos inativos'),
+      line('Carga Cibernética', m.nucleo ? 'próteses ' + m.protUsed + ' / ' + m.ccMax + ' · módulos ' + m.modUsed + (m.modExtra ? ' (reserva +' + m.modExtra + ' da Essência)' : '') : '—', m.ccOver));
+    if (m.ccOver) $('#equip-info').append(h('p', 'res-state', 'CC acima do limite: guarde uma prótese ou um módulo.'));
+
+    // mochila: um bloco por item, e blocos vazios para completar a grade
+    const bag = inv.filter((x) => !x.slot);
+    const cells = bag.map((x) => makeCell(x, m, null, false));
+    const want = Math.max(24, Math.ceil((bag.length + 4) / 8) * 8);
+    for (let k = bag.length; k < want; k++) cells.push(h('div', 'cell cell--empty'));
+    $('#bag').replaceChildren(...cells);
+    $('#bag-count').textContent = bag.length ? '(' + plural(bag.length, 'item', 'itens') + ')' : '(vazia)';
+    if (invDlg.open) fillInvDialog();
+  }
+
+  // soltar um item equipado na mochila = guardar
+  $('#bag').addEventListener('dragover', (ev) => { const it = dragUid ? itemBy(dragUid) : null; if (it && it.slot) ev.preventDefault(); });
+  $('#bag').addEventListener('drop', (ev) => {
+    const it = dragUid ? itemBy(dragUid) : null;
+    dragUid = null;
+    if (!it || !it.slot) return;
+    ev.preventDefault();
+    it.slot = '';
+    changed();
+  });
+
+  /* Detalhes de um item do inventário: ficha completa, slots (mods, propriedade, acessórios) e quantidade */
+  const invDlg = $('#inv-dialog');
+  let invDlgUid = null;
+  function fillInvDialog() {
+    const i = itemBy(invDlgUid);
+    if (!i) { if (invDlg.open) closeDialog(invDlg); return; }
     const s = sheetChar.sheet;
     const cat = findCategory(i.kind);
-    const implant = IMPLANT_KINDS.indexOf(i.kind) >= 0;
-    const carga = parseCarga(i.values.carga) * (i.qty || 1);
-    const free = i.equipped && (i.kind === 'armadura' || implant);
-    const meta = [kindTitle(i.kind), i.typeTitle, i.values.raridade, 'carga ' + fmtNum(carga) + (free && carga ? ' (não conta)' : '')].filter(Boolean).join(' · ');
-    const open = invOpen.has(i.uid);
-    const panelId = 'inv-' + i.uid;
-
-    const toggle = h('button', 'row__open member__toggle',
-      entryIcon(i),
-      h('span', 'row__main', h('span', 'row__title', i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '')), h('span', 'row__meta', meta)),
-      i.equipped ? h('span', 'tag tag--on', implant ? 'Implantado' : 'Equipado') : null);
-    toggle.type = 'button';
-    toggle.dataset.fid = 'inv-t-' + i.uid;
-    toggle.setAttribute('aria-expanded', String(open));
-    toggle.setAttribute('aria-controls', panelId);
-    toggle.addEventListener('click', () => { if (invOpen.has(i.uid)) invOpen.delete(i.uid); else invOpen.add(i.uid); rerender(); });
-
-    const eq = h('button', 'btn btn--sm ' + (i.equipped ? 'btn--ghost' : 'btn--primary'), i.equipped ? (implant ? 'Remover implante' : 'Desequipar') : (implant ? 'Implantar' : 'Equipar'));
-    eq.type = 'button';
-    eq.dataset.fid = 'inv-e-' + i.uid;
-    eq.addEventListener('click', () => { if (toggleEquip(i, m)) changed(); });
-
-    const li = h('li', 'inv' + (i.equipped ? ' inv--on' : ''), h('div', 'row', toggle, eq));
-    if (!open) return li;
-
-    const panel = h('div', 'inv__panel');
-    panel.id = panelId;
+    $('#inv-dialog-title').textContent = i.name;
+    $('#inv-dialog-meta').textContent = [kindTitle(i.kind), i.typeTitle, i.values.raridade, i.slot ? 'Equipado: ' + slotDef(i.slot).full : 'Na mochila'].filter(Boolean).join(' · ');
+    const body = $('#inv-dialog-body');
+    const keepFocus = body.contains(document.activeElement) ? document.activeElement.id : '';
     const dl = h('dl', 'member__data');
     ((cat && cat.fields) || []).forEach((f) => {
       const v = i.values[f.key];
@@ -2834,49 +3157,40 @@ const FIREBASE_CONFIG = {
       dl.append(h('dt', '', f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', String(v)));
     });
     const b = bonusLine(entryBonus(i));
-    if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (i.equipped ? '' : ' (só quando equipado)')));
-    if (dl.children.length) panel.append(dl);
-    if (cat && cat.slots && cat.slots !== 'mod') panel.append(slotEditor(i, () => { touchSheet(); rerender(); }));
+    if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (i.slot ? '' : ' (só quando equipado)')));
+    body.replaceChildren();
+    if (dl.children.length) body.append(dl);
+    if (cat && cat.slots && cat.slots !== 'mod') body.append(slotEditor(i, () => { touchSheet(); rerender(); }));
 
     const qty = h('input', 'input');
     qty.type = 'number';
     qty.min = '1';
     qty.step = '1';
     qty.value = i.qty || 1;
-    qty.id = 'inv-q-' + i.uid;
-    qty.dataset.fid = qty.id;
+    qty.id = 'inv-qty';
+    qty.disabled = Boolean(i.slot);
     qty.addEventListener('change', () => { i.qty = clamp(Math.round(num(qty.value)) || 1, 1, 999); changed(); });
-    const qLab = h('label', 'field__label', 'Quantidade');
+    const qLab = h('label', 'field__label', i.slot ? 'Quantidade (equipado: 1)' : 'Quantidade');
     qLab.htmlFor = qty.id;
     const del = h('button', 'btn btn--danger btn--sm', 'Tirar do inventário');
     del.type = 'button';
-    del.addEventListener('click', () => { s.inventory.splice(s.inventory.indexOf(i), 1); invOpen.delete(i.uid); changed(); });
-    panel.append(h('div', 'inv__foot', h('div', 'field inv__qty', qLab, qty), del));
-    li.append(panel);
-    return li;
+    del.addEventListener('click', () => { s.inventory.splice(s.inventory.indexOf(i), 1); closeDialog(invDlg); changed(); });
+    body.append(h('div', 'inv__foot', h('div', 'field inv__qty', qLab, qty), del));
+    if (keepFocus) { const el = document.getElementById(keepFocus); if (el) el.focus({ preventScroll: true }); }
   }
-
-  function renderInventory(m) {
-    const s = sheetChar.sheet;
-    const sum = h('div', 'inv-sum' + (m.over ? ' inv-sum--over' : ''),
-      h('div', 'res-head', h('span', 'res-head__label', 'Carga'), h('span', 'res-head__num', fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax))),
-      meter([{ key: m.over ? 'over' : 'carga', cur: Math.min(m.cargaUsed, m.cargaMax || 1), max: m.cargaMax || 1 }], 'Carga ' + fmtNum(m.cargaUsed) + ' de ' + fmtNum(m.cargaMax)),
-      h('p', 'inv-sum__line',
-        'Limite: ' + srcText(m.src.carga) + '. Equipados: ' + m.equipCount + ' de ' + MAX_EQUIPPED + '.' +
-        (m.nucleo ? ' Núcleo +' + m.nucleo + ': próteses ' + m.protUsed + '/' + m.protMax + ', módulos ' + m.modUsed + '/' + m.modMax + '.' : '')));
-    if (m.over) sum.append(h('p', 'res-state', 'Sobrecarga: –3 em todos os testes e metade do deslocamento.'));
-    $('#inv-summary').replaceChildren(sum);
-    $('#inv-list').replaceChildren(...s.inventory.map((i) => invRow(i, m)));
-    $('#inv-empty').hidden = s.inventory.length > 0;
+  function openInvDialog(u) {
+    invDlgUid = u;
+    fillInvDialog();
+    openDialog(invDlg);
   }
+  $('#inv-dialog-close').addEventListener('click', () => closeDialog(invDlg));
 
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
-    const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: ['Armas', 'Armaduras', 'Implantes', 'Itens gerais'], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: ['Armas', 'Armaduras', 'Vestíveis', 'Implantes', 'Itens gerais'], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!e || sheetChar !== ch) return;
-    const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, equipped: false });
+    const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
     ch.sheet.inventory.push(entry);
-    invOpen.add(entry.uid);
     changed();
     toast(e.name + ' entrou no inventário.');
   });
@@ -2987,7 +3301,7 @@ const FIREBASE_CONFIG = {
       saveTimer = setTimeout(flushSave, 600);
     });
   });
-  [['height', fHeight], ['sex', fSex]].forEach((pair) => {
+  [['height', fHeight], ['weight', $('#f-weight')], ['sex', fSex]].forEach((pair) => {
     pair[1].addEventListener('input', () => { sheetChar.sheet[pair[0]] = pair[1].value; touchSheet(); });
   });
 
@@ -3050,6 +3364,7 @@ const FIREBASE_CONFIG = {
     { title: 'Quem é', lead: 'Espécime, origem e os dados de apresentação. Dá para mudar tudo depois na ficha.' },
     { title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
     { title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 perícia com +1. Toque para alternar entre nada, +1 e +2.' },
+    { title: 'Proficiências', lead: 'Escolha 4 tipos de arma ou armadura em que o personagem é proficiente desde o início.' },
     { title: 'Resumo', lead: 'Confira. Os recursos já saem calculados dos atributos.' }
   ];
   let wz = null;
@@ -3073,6 +3388,7 @@ const FIREBASE_CONFIG = {
       const c = skillCount(wz.skills);
       if (c.two !== 2 || c.one !== 1) return 'Marcadas: ' + c.two + ' de 2 perícias com +2 e ' + c.one + ' de 1 perícia com +1.';
     }
+    if (wz.step === 3 && wz.profs.length !== 4) return 'Escolhidas: ' + wz.profs.length + ' de 4 proficiências.';
     return '';
   }
 
@@ -3087,7 +3403,7 @@ const FIREBASE_CONFIG = {
 
   function previewSheet() { // a ficha como ficaria com as escolhas do assistente
     const s = normSheet(deep(sheetChar.sheet));
-    s.attrs = wz.attrs; s.skills = wz.skills; s.specimen = wz.specimen; s.cur = {};
+    s.attrs = wz.attrs; s.skills = wz.skills; s.specimen = wz.specimen; s.profs = wz.profs; s.cur = {};
     return compute({ sheet: s });
   }
 
@@ -3177,6 +3493,12 @@ const FIREBASE_CONFIG = {
     }
 
     if (wz.step === 3) {
+      body.append(h('p', 'setup__pool', 'Escolhidas: ', h('strong', '', wz.profs.length + ' de 4')),
+        profPills(wz.profs, (id, on) => { wz.profs = wz.profs.filter((x) => x !== id); if (on) wz.profs.push(id); renderSetup('wzp-' + id); }, 4, 'wzp-'),
+        h('p', 'field__hint', 'Em armas: cadência perita e o aprimoramento do tipo. Em armaduras: a penalidade não dobra e a defesa ganha +1.'));
+    }
+
+    if (wz.step === 4) {
       const m = previewSheet();
       const skills = [];
       ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (wz.skills[sk[0]]) skills.push(sk[1] + ' +' + wz.skills[sk[0]]); }));
@@ -3186,7 +3508,9 @@ const FIREBASE_CONFIG = {
         ...row('Origem', wz.origin),
         ...row('Atributos', ATTRS.map((at) => at.label + ' ' + signed(wz.attrs[at.id])).join(' · ')),
         ...row('Perícias', skills.join(' · ')),
+        ...row('Proficiências', PROFS.filter((p) => wz.profs.indexOf(p.id) >= 0).map((p) => p.label).join(' · ')),
         ...row('Recursos', LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + m.max[l[0]]).join(' · ') + ' · PE ' + m.max.pe + ' · PA ' + m.max.pa),
+        ...row('Defesa mínima', String(m.defMin)),
         ...row('Carga', fmtNum(m.cargaMax)),
         ...row('UP iniciais', String(m.upTotal))));
       const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
@@ -3213,7 +3537,7 @@ const FIREBASE_CONFIG = {
   function openSetup() {
     const c = sheetChar, s = c.sheet;
     wz = {
-      step: 0, attrs: Object.assign({}, s.attrs), skills: {}, oficio: s.oficio || '',
+      step: 0, attrs: Object.assign({}, s.attrs), skills: {}, profs: s.profs.slice(0, 4), oficio: s.oficio || '',
       specimen: s.specimen ? deep(s.specimen) : null, origin: c.origin || '', age: c.age || '', height: s.height || '', sex: s.sex || '', addItems: true
     };
     Object.keys(s.skills).forEach((k) => { if (s.skills[k] === 1 || s.skills[k] === 2) wz.skills[k] = s.skills[k]; });
@@ -3227,6 +3551,7 @@ const FIREBASE_CONFIG = {
     const c = sheetChar, s = c.sheet;
     s.attrs = Object.assign({}, wz.attrs);
     s.skills = Object.assign({}, wz.skills);
+    s.profs = wz.profs.slice();
     s.oficio = wz.skills.oficio ? cleanName(wz.oficio) : '';
     s.specimen = wz.specimen;
     s.height = wz.height;
@@ -3282,14 +3607,15 @@ const FIREBASE_CONFIG = {
     const life = LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + getCur(s, l[0], m.max[l[0]]) + '/' + m.max[l[0]]);
     const inv = s.inventory.map((i) => {
       const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);
-      return i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '') + (i.equipped ? ' [equipado]' : '') + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+      return i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '') + (i.slot ? ' [' + slotDef(i.slot).full + ']' : '') + (parts.length ? ' (' + parts.join(', ') + ')' : '');
     });
     return [
-      ['Espécime', c.species], ['Idade', c.age], ['Altura', s.height], ['Sexo', s.sex], ['Origem', c.origin],
+      ['Espécime', c.species], ['Idade', c.age], ['Altura e peso', [s.height, s.weight].filter(Boolean).join(' · ')], ['Sexo', s.sex], ['Origem', c.origin],
       ['Atributos', ATTRS.map((at) => at.label + ' ' + signed(s.attrs[at.id])).join(' · ')],
       ['Recursos', life.concat(['PE ' + getCur(s, 'pe', m.max.pe) + '/' + m.max.pe, 'PA ' + getCur(s, 'pa', m.max.pa) + '/' + m.max.pa]).join(' · ')],
       ['Defesa mínima', String(m.defMin)],
       ['Perícias', skills.join(' · ')],
+      ['Proficiências', PROFS.filter((p) => s.profs.indexOf(p.id) >= 0).map((p) => p.label).join(' · ')],
       ['XP e UP', 'XP ' + num(s.xp) + ' · UP ' + m.upTotal + ' (' + m.upSpent + ' gastos)'],
       ['Poderes', s.powers.map((p) => p.name).join(' · ')],
       ['Carga', fmtNum(m.cargaUsed) + ' de ' + fmtNum(m.cargaMax) + (m.over ? ' (sobrecarga)' : '')],
@@ -3323,6 +3649,7 @@ const FIREBASE_CONFIG = {
     fAge.value = c.age;
     fOrigin.value = c.origin;
     fHeight.value = c.sheet.height || '';
+    $('#f-weight').value = c.sheet.weight || '';
     fSex.value = c.sheet.sex || '';
   }
   $('#origin-list').replaceChildren(...ORIGINS.map((o) => { const op = h('option'); op.value = o.name; return op; }));
@@ -3334,7 +3661,6 @@ const FIREBASE_CONFIG = {
     c.sheet = normSheet(c.sheet);
     sheetChar = c;
     dirty.clear();
-    invOpen.clear();
     lastCharacterId = id;
     quickUpdate(c, true);
     onLeave = () => { flushSave(); };

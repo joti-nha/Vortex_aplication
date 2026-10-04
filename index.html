@@ -179,7 +179,7 @@
       <header class="screen__head">
         <div>
           <h1 id="itens-title" tabindex="-1">Oficina</h1>
-          <p class="screen__sub">Crie itens, mods, propriedades, acessórios, espécimes e poderes. Tudo o que for salvo entra no banco de dados e aparece na pesquisa das fichas.</p>
+          <p class="screen__sub">Crie armas, armaduras, vestíveis, implantes, mods, propriedades, acessórios, espécimes e poderes. Tudo o que for salvo entra no banco de dados e aparece na pesquisa das fichas.</p>
         </div>
       </header>
 
@@ -314,6 +314,10 @@
               <input class="input" id="f-height" type="text" maxlength="20" autocomplete="off" placeholder="Ex.: 1,78 m">
             </div>
             <div class="field">
+              <label class="field__label" for="f-weight">Peso</label>
+              <input class="input" id="f-weight" type="text" maxlength="20" autocomplete="off" placeholder="Ex.: 72 kg">
+            </div>
+            <div class="field">
               <label class="field__label" for="f-sex">Sexo</label>
               <input class="input" id="f-sex" type="text" maxlength="20" autocomplete="off">
             </div>
@@ -332,6 +336,7 @@
           <h2 class="block__title" id="skills-title"><button class="help" type="button" data-help="pericias">Perícias</button></h2>
           <p class="block__hint" id="skills-hint"></p>
           <div id="skills-block"></div>
+          <div id="profs-block"></div>
         </section>
       </div>
 
@@ -349,9 +354,22 @@
           <h2 class="block__title" id="inv-title"><button class="help" type="button" data-help="inventario">Inventário</button></h2>
           <button class="btn btn--primary btn--sm" type="button" id="inv-add">Adicionar do banco</button>
         </div>
+        <div class="equip">
+          <div>
+            <h3 class="inv-title">Equipado</h3>
+            <div class="equip-doll" id="equip-doll"></div>
+          </div>
+          <div class="equip-side">
+            <h3 class="inv-title">Módulos</h3>
+            <div class="equip-mods" id="equip-mods"></div>
+            <div class="equip-info" id="equip-info"></div>
+          </div>
+        </div>
+
+        <h3 class="inv-title">Mochila <span class="count" id="bag-count"></span></h3>
         <div id="inv-summary"></div>
-        <ul class="rows" id="inv-list"></ul>
-        <p class="empty" id="inv-empty">Inventário vazio. Adicione itens do banco ou anote um item rápido abaixo.</p>
+        <div class="bag" id="bag"></div>
+        <p class="field__hint">Passe o mouse ou toque num bloco para ver os detalhes e equipar. Também dá para arrastar da mochila para um espaço (e de volta).</p>
         <form class="quick-item" id="form-quick-item" novalidate>
           <div class="field">
             <label class="field__label" for="quick-item-name">Item rápido (sem passar pela Oficina)</label>
@@ -545,6 +563,18 @@
       <p class="block__hint" id="picker-hint" role="status"></p>
       <ul class="rows picker__list" id="picker-list"></ul>
       <p class="empty" id="picker-empty">Nada compatível encontrado. Crie na aba Itens e volte aqui.</p>
+    </div>
+  </dialog>
+
+  <!-- Detalhes de um item do inventário (ficha completa, slots e quantidade) -->
+  <dialog class="dialog dialog--wide" id="inv-dialog" aria-labelledby="inv-dialog-title">
+    <div class="picker">
+      <div class="picker__head">
+        <h2 id="inv-dialog-title"></h2>
+        <button class="btn btn--ghost btn--sm" type="button" id="inv-dialog-close">Fechar</button>
+      </div>
+      <p class="block__hint" id="inv-dialog-meta"></p>
+      <div id="inv-dialog-body"></div>
     </div>
   </dialog>
 

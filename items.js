@@ -14,7 +14,10 @@
 
    Tipos de campo (kind):
      text · textarea · number · select (uma opção) · multi (várias opções)
-     rarity (raridade, com cor)
+     rarity (raridade, com cor) · cards (uma opção, em cartões com descrição)
+   "auto: { from, table }": quando o campo "from" muda, este campo recebe o
+   valor da tabela (procurada primeiro no tipo, depois aqui em cima). É assim
+   que a raridade da armadura muda a Defesa e o tipo da prótese muda o CC.
    Em select/multi, "optKey" busca as opções no tipo escolhido (type.opts)
    e, se o tipo não tiver, usa a lista geral com o nome dado em "options".
    ===================================================================== */
@@ -28,9 +31,25 @@ window.VORTEX_ITEMS = {
   modos: ['Único', 'Semi', 'Automático', 'Contínuo'],
   pentes: ['Pente leve', 'Pente parcial', 'Pente médio', 'Pente pesado', 'Sobrecarga'],
   alcances: ['Curto', 'Médio', 'Longo', 'Muito longo', 'Horizonte'],
-  empunhaduras: ['Uma mão', 'Duas mãos'],
+  empunhaduras: ['Saque', 'Uma mão', 'Duas mãos'],
   simNao: ['Não', 'Sim'],
   classesImplante: ['Prótese', 'Módulo'],
+  // os 3 tipos de prótese/módulo: definem o custo em Carga Cibernética (CC)
+  tiposImplante: [
+    { value: 'Suporte', sub: '1 CC · Sistema simples para auxiliar em tarefas específicas: melhorias pequenas, funções auxiliares ou utilidades narrativas.' },
+    { value: 'Operacional', sub: '2 CC · Sistema completo que substitui equipamentos, cumpre funções inteiras ou traz ferramentas integradas.' },
+    { value: 'Mecânico', sub: '3 CC · Sistema avançado de alto desempenho: altera capacidades do usuário e pode conter habilidades especiais.' }
+  ],
+  custoCC: { 'Suporte': '1', 'Operacional': '2', 'Mecânico': '3' },
+  armaduraBase: 6, // a armadura básica de todos os seres
+
+  /* Proficiências: 4 iniciais, entre tipos de arma e de armadura */
+  proficiencias: [
+    { id: 'espada', label: 'Espada' }, { id: 'lanca', label: 'Lança' }, { id: 'marreta', label: 'Marreta' }, { id: 'machado', label: 'Machado' },
+    { id: 'pistola', label: 'Pistola' }, { id: 'espingarda', label: 'Espingarda' }, { id: 'rifle', label: 'Rifle de precisão' }, { id: 'fuzil', label: 'Fuzil' },
+    { id: 'metralhadora', label: 'Metralhadora leve' }, { id: 'submetralhadora', label: 'Submetralhadora' }, { id: 'laser', label: 'Laser' },
+    { id: 'armadura-leve', label: 'Armadura leve' }, { id: 'armadura-media', label: 'Armadura média' }, { id: 'armadura-pesada', label: 'Armadura pesada' }
+  ],
   paraMod: ['Qualquer arma', 'Arma de fogo', 'Arma corpo a corpo'],
   paraPropriedade: ['Qualquer item', 'Arma', 'Armadura'],
   vidaBase: ['PV', 'Blindagem', 'Escudo'],
@@ -40,11 +59,11 @@ window.VORTEX_ITEMS = {
     modsPorRaridade: { 'Comum': 1, 'Incomum': 1, 'Rara': 2, 'Epica': 2, 'Lendária': 3 }, // slots de mod da arma
     custoMod: { 'Comum': 1, 'Rara': 2, 'Lendária': 3 },                                   // quantos slots o mod usa
     propArma: { 'Comum': 0, 'Incomum': 1, 'Rara': 0, 'Epica': 1, 'Lendária': 1 },         // propriedades que a arma comporta
-    propArmadura: { 'Comum': 0, 'Incomum': 1, 'Rara': 0, 'Epica': 1, 'Lendária': 2 },     // idem para armadura
+    propArmadura: { 'Comum': 0, 'Incomum': 1, 'Rara': 0, 'Epica': 1, 'Lendária': 1 },     // idem para armadura (Lendária: uma grande)
     acessoriosPorSlot: 3,                                                                 // 1 slot de mod livre = 3 acessórios
     posicoes: {                                                                           // um acessório por posição
-      'arma-fogo': ['Mira', 'Bocal', 'Carregador', 'Guarda'],
-      'arma-melee': ['Fio', 'Guardas', 'Cabo']
+      'arma-fogo': ['Mira', 'Bocal', 'Carregador', 'Empunhadura'],
+      'arma-melee': ['Ponta', 'Dorso', 'Empunhadura', 'Cabo']
     }
   },
 
@@ -52,14 +71,20 @@ window.VORTEX_ITEMS = {
     /* ------------------------------ Armas ------------------------------ */
     {
       id: 'arma-melee', title: 'Arma corpo a corpo', group: 'Armas', inventory: true, slots: 'arma', image: true, bonus: true,
-      hint: 'As regras ainda não definem tipos de arma corpo a corpo. Mods, propriedade e acessórios entram nos slots.',
+      hint: 'Escolha o tipo: dano e carga máxima vêm da média de criação. A empunhadura decide quantas mãos a arma ocupa no inventário.',
+      types: [
+        { id: 'espada', title: 'Espada', sub: 'Pode atacar com Precisão; crítico causa sangramento', rule: 'armas/espada', cargaMax: 2, opts: { dano: ['Cortante'] } },
+        { id: 'lanca', title: 'Lança', sub: '1,5 m de alcance por carga ocupada', rule: 'armas/lanca', cargaMax: 3, opts: { dano: ['Perfurante'] } },
+        { id: 'marreta', title: 'Marreta', sub: 'Crítico atordoa; efetiva contra blindagem', rule: 'armas/marreta', cargaMax: 3, opts: { dano: ['Contundente'] } },
+        { id: 'machado', title: 'Machado', sub: 'Crítico causa sangramento; efetivo contra escudos', rule: 'armas/machado', cargaMax: 3, opts: { dano: ['Contundente', 'Cortante'] } }
+      ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
-        { key: 'dano', label: 'Tipo de dano', kind: 'select', options: 'tiposDano' },
+        { key: 'dano', label: 'Tipo de dano', kind: 'select', optKey: 'dano', options: 'tiposDano' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
-        { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
+        { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25, maxFrom: 'cargaMax', defaultFrom: 'cargaMax' },
         { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
       ]
     },
@@ -72,7 +97,7 @@ window.VORTEX_ITEMS = {
           opts: { modo: ['Único', 'Semi', 'Automático'], pente: ['Pente leve'], alcance: ['Curto', 'Médio'], empunhadura: ['Uma mão', 'Duas mãos'] }
         },
         {
-          id: 'revolver', title: 'Revólver', sub: 'Variante da Pistola', rule: 'armas/pistola', cargaMax: 1,
+          id: 'revolver', title: 'Revólver', sub: 'Variante da Pistola', rule: 'armas/pistola', prof: 'pistola', cargaMax: 1,
           opts: { modo: ['Único', 'Semi'], pente: ['Pente parcial'], alcance: ['Longo'], empunhadura: ['Uma mão', 'Duas mãos'] }
         },
         {
@@ -80,21 +105,24 @@ window.VORTEX_ITEMS = {
           opts: { modo: ['Único', 'Semi'], pente: ['Pente leve', 'Pente parcial', 'Pente médio'], alcance: ['Curto', 'Médio'], empunhadura: ['Duas mãos'] }
         },
         {
-          id: 'espingarda-cano-curto', title: 'Espingarda de cano curto', sub: 'Variante da Espingarda', rule: 'armas/espingarda', cargaMax: 2,
+          id: 'espingarda-cano-curto', title: 'Espingarda de cano curto', sub: 'Variante da Espingarda', rule: 'armas/espingarda', prof: 'espingarda', cargaMax: 2,
           opts: { modo: ['Único', 'Semi'], pente: ['Pente leve', 'Pente parcial'], alcance: ['Curto'], empunhadura: ['Uma mão', 'Duas mãos'] }
         },
         {
-          // as regras ainda não trazem a média de criação do Rifle: fica livre entre todas as opções
-          id: 'rifle', title: 'Rifle', sub: 'Sem média de criação nas regras: opções livres', rule: 'armas/rifle',
-          opts: { empunhadura: ['Duas mãos'] }
+          id: 'rifle', title: 'Rifle de precisão', rule: 'armas/rifle-de-precisao', cargaMax: 3,
+          opts: { modo: ['Único', 'Semi'], pente: ['Pente médio', 'Pente parcial', 'Pente pesado'], alcance: ['Médio', 'Longo', 'Muito longo'], empunhadura: ['Duas mãos'] }
+        },
+        {
+          id: 'fuzil', title: 'Fuzil', sub: 'Assalto, Batalha ou Precisão', rule: 'armas/fuzil', cargaMax: 3,
+          opts: { modo: ['Semi', 'Automático'], pente: ['Pente médio', 'Pente pesado'], alcance: ['Médio', 'Longo'], empunhadura: ['Duas mãos'], subtipo: ['Assalto (Leve)', 'Batalha (Médio)', 'Precisão (Pesado)'] }
+        },
+        {
+          id: 'metralhadora', title: 'Metralhadora leve', rule: 'armas/metralhadora-leve', cargaMax: 5,
+          opts: { modo: ['Semi', 'Automático'], pente: ['Pente médio', 'Pente pesado', 'Sobrecarga'], alcance: ['Médio', 'Longo'], empunhadura: ['Duas mãos'] }
         },
         {
           id: 'submetralhadora', title: 'Submetralhadora', rule: 'armas/submetralhadora', cargaMax: 2,
           opts: { modo: ['Semi', 'Automático'], pente: ['Pente leve', 'Pente médio'], alcance: ['Curto', 'Médio'], empunhadura: ['Uma mão', 'Duas mãos'] }
-        },
-        {
-          id: 'metralhadora', title: 'Metralhadora', rule: 'armas/metralhadora', cargaMax: 5,
-          opts: { modo: ['Semi', 'Automático'], pente: ['Pente médio', 'Pente pesado', 'Sobrecarga'], alcance: ['Médio', 'Longo'], empunhadura: ['Duas mãos'] }
         },
         {
           id: 'laser', title: 'Laser', rule: 'armas/laser', cargaMax: 3,
@@ -106,6 +134,7 @@ window.VORTEX_ITEMS = {
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'dano', label: 'Tipo de dano', kind: 'select', options: 'tiposDano' },
+        { key: 'subtipo', label: 'Propriedade do Fuzil', kind: 'select', optKey: 'subtipo', options: [], onlyWithOpts: true },
         { key: 'modo', label: 'Modo', kind: 'multi', optKey: 'modo', options: 'modos' },
         { key: 'cadencia', label: 'Cadência (disparos por ação)', kind: 'number', min: 1, step: 1 },
         { key: 'pente', label: 'Pente/Recarga', kind: 'select', optKey: 'pente', options: 'pentes' },
@@ -119,29 +148,46 @@ window.VORTEX_ITEMS = {
     /* ------------------------------ Proteção ------------------------------ */
     {
       id: 'armadura', title: 'Armadura', group: 'Proteção', inventory: true, slots: 'armadura', image: true, bonus: true,
-      hint: 'Escolha o tipo: armadura básica, penalidade e carga já vêm das regras.',
+      hint: 'Escolha o tipo: a Defesa muda sozinha com a raridade; penalidade e carga vêm das regras.',
       types: [
-        { id: 'leve', title: 'Leve', rule: 'armaduras/tipos', defaults: { armadura: '4', penalidade: '0', carga: '1' } },
-        { id: 'media', title: 'Média', rule: 'armaduras/tipos', defaults: { armadura: '5', penalidade: '1', carga: '2' } },
-        { id: 'pesada', title: 'Pesada', rule: 'armaduras/tipos', defaults: { armadura: '6', penalidade: '2', carga: '3' } }
+        { id: 'leve', title: 'Leve', sub: 'Sem penalidade · 1 carga', rule: 'armaduras/armadura-leve', defaults: { penalidade: '0', carga: '1' }, defesaPorRaridade: { 'Comum': '5', 'Incomum': '5', 'Rara': '6', 'Epica': '6', 'Lendária': '7' } },
+        { id: 'media', title: 'Média', sub: 'Penalidade –1 (–2 sem proficiência) · 3 cargas', rule: 'armaduras/armadura-media', defaults: { penalidade: '1', carga: '3' }, defesaPorRaridade: { 'Comum': '6', 'Incomum': '6', 'Rara': '7', 'Epica': '7', 'Lendária': '9' } },
+        { id: 'pesada', title: 'Pesada', sub: 'Penalidade –2 (–4 sem proficiência) · 5 cargas', rule: 'armaduras/armadura-pesada', defaults: { penalidade: '2', carga: '5' }, defesaPorRaridade: { 'Comum': '8', 'Incomum': '8', 'Rara': '9', 'Epica': '9', 'Lendária': '11' } }
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
-        { key: 'armadura', label: 'Armadura', kind: 'number', min: 0, step: 1 },
-        { key: 'penalidade', label: 'Penalidade (–X em Manha, Reflexos e Sentidos)', kind: 'number', min: 0, step: 1 },
-        { key: 'carga', label: 'Carga (não conta quando equipada)', kind: 'number', min: 0, step: 0.25 },
+        { key: 'armadura', label: 'Defesa', kind: 'number', min: 0, step: 1, auto: { from: 'raridade', table: 'defesaPorRaridade' }, hint: 'Vem do tipo e da raridade; muda sozinha quando a raridade muda.' },
+        { key: 'penalidade', label: 'Penalidade (com proficiência; sem, dobra)', kind: 'number', min: 0, step: 1 },
+        { key: 'carga', label: 'Carga (só conta quando transportada)', kind: 'number', min: 0, step: 0.25 },
         { key: 'nucleo', label: 'Tem núcleo?', kind: 'select', options: 'simNao' },
         { key: 'capacidade', label: 'Capacidade do núcleo (se tiver)', kind: 'number', min: 0, step: 1 },
         { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
+      ]
+    },
+    {
+      id: 'vestivel', title: 'Vestível', group: 'Proteção', inventory: true, image: true, bonus: true,
+      hint: 'Roupas, capacetes, mochilas, luvas, botas: ocupam um espaço do corpo no inventário, sem gastar CC. Escolha a região.',
+      types: [
+        { id: 'cabeca', title: 'Cabeça' },
+        { id: 'tronco', title: 'Tronco' },
+        { id: 'membros-superiores', title: 'Membros superiores', sub: 'um braço' },
+        { id: 'membros-inferiores', title: 'Membros inferiores', sub: 'uma perna' },
+        { id: 'orgaos-internos', title: 'Órgãos internos' }
+      ],
+      fields: [
+        { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
+        { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true }
       ]
     },
 
     /* ------------------------------ Implantes ------------------------------ */
     {
       id: 'nucleo', title: 'Núcleo', group: 'Implantes', inventory: true, implant: true, image: true, bonus: true,
-      hint: 'Todo núcleo pesa 1 de carga (não conta quando implantado) e sustenta próteses e módulos.',
+      hint: 'Todo núcleo tem Carga 1 (não conta quando implantado) e sustenta próteses e módulos. Só um núcleo ativo por personagem.',
       defaults: { carga: '1' },
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
@@ -154,8 +200,8 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'protese-modulo', title: 'Prótese ou Módulo', group: 'Implantes', inventory: true, implant: true, image: true, bonus: true,
-      hint: 'Escolha a região do corpo onde o implante fica instalado.',
-      defaults: { cc: '1' },
+      hint: 'Escolha a região do corpo. Próteses ocupam o espaço daquela região no inventário (como um vestível) e gastam CC; módulos vão na fileira de módulos.',
+      defaults: { classe: 'Prótese', tipo: 'Suporte', cc: '1' },
       types: [
         { id: 'cabeca', title: 'Cabeça', sub: 'olhos, ouvidos, nariz, boca', rule: 'nucleo-proteses-modulos/regioes-do-corpo' },
         { id: 'tronco', title: 'Tronco', sub: 'pescoço, espinha, tórax, abdómen, pélvis', rule: 'nucleo-proteses-modulos/regioes-do-corpo' },
@@ -166,7 +212,8 @@ window.VORTEX_ITEMS = {
       fields: [
         { key: 'nome', label: 'Nome (Prótese ou Módulo)', kind: 'text', big: true },
         { key: 'classe', label: 'É prótese ou módulo?', kind: 'select', options: 'classesImplante' },
-        { key: 'cc', label: 'CC (capacidade que ocupa)', kind: 'number', min: 0, step: 1 },
+        { key: 'tipo', label: 'Tipo (define o custo em CC)', kind: 'cards', options: 'tiposImplante', big: true },
+        { key: 'cc', label: 'CC (Carga Cibernética)', kind: 'number', min: 0, step: 1, auto: { from: 'tipo', table: 'custoCC' }, hint: 'Suporte 1, Operacional 2, Mecânico 3.' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true }
       ]
     },
@@ -196,8 +243,8 @@ window.VORTEX_ITEMS = {
       id: 'acessorio', title: 'Acessório', group: 'Peças de slot',
       hint: 'Escolha o tipo de arma. Cada posição da arma só aceita um acessório daquela posição.',
       types: [
-        { id: 'arma-fogo', title: 'Para arma de fogo', sub: 'Mira, Bocal, Carregador, Guarda', rule: 'armas/acessorios', opts: { posicao: ['Mira', 'Bocal', 'Carregador', 'Guarda'] } },
-        { id: 'arma-melee', title: 'Para arma corpo a corpo', sub: 'Fio, Guardas, Cabo', rule: 'armas/acessorios', opts: { posicao: ['Fio', 'Guardas', 'Cabo'] } }
+        { id: 'arma-fogo', title: 'Para arma de fogo', sub: 'Mira, Bocal, Carregador, Empunhadura', rule: 'mods-e-acessorios/acessorios', opts: { posicao: ['Mira', 'Bocal', 'Carregador', 'Empunhadura'] } },
+        { id: 'arma-melee', title: 'Para arma corpo a corpo', sub: 'Ponta, Dorso, Empunhadura, Cabo', rule: 'mods-e-acessorios/acessorios', opts: { posicao: ['Ponta', 'Dorso', 'Empunhadura', 'Cabo'] } }
       ],
       fields: [
         { key: 'nome', label: 'Nome do acessório', kind: 'text', big: true },
@@ -234,10 +281,11 @@ window.VORTEX_ITEMS = {
     /* ------------------------------ Geral ------------------------------ */
     {
       id: 'item-geral', title: 'Item geral', group: 'Geral', inventory: true, image: true, bonus: true,
-      hint: 'Kits, consumíveis, ferramentas, munição e qualquer coisa que ocupe carga.',
+      hint: 'Kits, consumíveis, ferramentas, munição e qualquer coisa que ocupe carga. Com empunhadura, pode ir para as mãos.',
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
         { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
@@ -251,18 +299,19 @@ window.VORTEX_ITEMS = {
      ----------------------------------------------------------------- */
   catalogo: [
     // Acessórios de arma de fogo
-    { id: 'of-acc-red-dot', kind: 'acessorio', typeId: 'arma-fogo', name: 'Red dot/Holográfica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância.' } },
-    { id: 'of-acc-ampliacao', kind: 'acessorio', typeId: 'arma-fogo', name: 'Ampliação', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância a longa e cobertura parcial nas mesmas distâncias.' } },
-    { id: 'of-acc-telescopica', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telescópica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de longa, a muito longa distância e cobertura leve nas mesmas distâncias.' } },
+    { id: 'of-acc-red-dot', kind: 'acessorio', typeId: 'arma-fogo', name: 'Red dot/Holográfica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância quando estiver mirando.' } },
+    { id: 'of-acc-ampliacao', kind: 'acessorio', typeId: 'arma-fogo', name: 'Ampliação', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância a longa e cobertura parcial nas mesmas distâncias quando estiver mirando.' } },
+    { id: 'of-acc-telescopica', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telescópica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de longa, a muito longa distância e cobertura leve nas mesmas distâncias quando estiver mirando.' } },
     { id: 'of-acc-silenciador', kind: 'acessorio', typeId: 'arma-fogo', name: 'Silenciador', values: { posicao: 'Bocal', efeito: 'Pode se fazer teste de furtividade para disparos.' } },
-    { id: 'of-acc-tripe', kind: 'acessorio', typeId: 'arma-fogo', name: 'Tripé', values: { posicao: 'Bocal', efeito: 'Use somente uma ação de movimento para apoiar a arma.' } },
+    { id: 'of-acc-cano-longo', kind: 'acessorio', typeId: 'arma-fogo', name: 'Cano longo', values: { posicao: 'Bocal', efeito: 'Aumenta em uma categoria o alcance da arma.' } },
     { id: 'of-acc-estendido', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador estendido', values: { posicao: 'Carregador', efeito: 'Chegue ao limite de munições do tiro de munição.' } },
     { id: 'of-acc-escalar', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador escalar', values: { posicao: 'Carregador', efeito: 'Aumenta de leve para médio, de médio para pesado, e vice versa.' } },
     { id: 'of-acc-duplo', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador duplo', values: { posicao: 'Carregador', efeito: 'Se o carregador contiver no máximo 30 munições, se pode carregar usando ação bônus, uma vez sim, outra não.' } },
-    { id: 'of-acc-telemetro', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telêmetro', values: { posicao: 'Guarda', efeito: 'Contabiliza a distância que você está mirando em tempo real.' } },
-    { id: 'of-acc-mira-laser', kind: 'acessorio', typeId: 'arma-fogo', name: 'Mira laser', values: { posicao: 'Guarda', efeito: 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância. -1 em furtividade a curta a média distância.' } },
-    { id: 'of-acc-lanterna', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna', values: { posicao: 'Guarda', efeito: 'Pode ligar quando quiser, te concede uma fonte de luz frontal da arma de 9 metros à sua frente.' } },
-    { id: 'of-acc-lanterna-uv', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna UV', values: { posicao: 'Guarda', efeito: 'Como lanterna, mas é uma luz UV que não serve para enxergar no escuro.' } },
+    { id: 'of-acc-telemetro', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telêmetro', values: { posicao: 'Empunhadura', efeito: 'Contabiliza a distância que você está mirando em tempo real.' } },
+    { id: 'of-acc-mira-laser', kind: 'acessorio', typeId: 'arma-fogo', name: 'Mira laser', values: { posicao: 'Empunhadura', efeito: 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância. -1 em furtividade a curta a média distância.' } },
+    { id: 'of-acc-lanterna', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna', values: { posicao: 'Empunhadura', efeito: 'Pode ligar quando quiser, te concede uma fonte de luz frontal (cone) da arma de 9 metros à sua frente.' } },
+    { id: 'of-acc-lanterna-uv', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna UV', values: { posicao: 'Empunhadura', efeito: 'Como lanterna, mas é uma luz UV que não serve para enxergar no escuro.' } },
+    { id: 'of-acc-tripe', kind: 'acessorio', typeId: 'arma-fogo', name: 'Tripé', values: { posicao: 'Empunhadura', efeito: 'Use somente uma ação de movimento para apoiar a arma (em vez de ação completa).' } },
 
     // Espécimes
     {
@@ -275,7 +324,7 @@ window.VORTEX_ITEMS = {
     },
 
     // Poderes (capítulo Habilidades)
-    { id: 'of-pod-esquiva', kind: 'poder', name: 'Esquiva', values: { custo: '2', efeito: 'Use precisão como atributo básico, e reflexo como perícia para os testes de defesa. Pode gastar +1 Up point para contar na defesa básica também.' } },
+    { id: 'of-pod-esquiva', kind: 'poder', name: 'Esquiva', values: { custo: '1', efeito: 'Use precisão como atributo básico, e reflexo como perícia para os testes de defesa. Pode gastar +1 Up point para contar na defesa básica também.' } },
     { id: 'of-pod-regeneracao', kind: 'poder', name: 'Regeneração', values: { custo: '2', efeito: 'Se for uma criatura biológica, recupere 3 PVs por turno. Se caído, pode recobrar a consciência quando recuperar todos os PV. A cada Up point acima do primeiro, +1 na recuperação de PVs.' } },
     { id: 'of-pod-transformacao', kind: 'poder', name: 'Transformação', values: { efeito: 'Com uma ação completa você se transforma; cria uma transformação trocando seus Up points e os realocando como quiser. Seus itens caem ao chão no processo. Cada Up point equivale a uma transformação.' } },
     { id: 'of-pod-akimbo', kind: 'poder', name: 'Akimbo', values: { efeito: 'Empunhe pistolas ou submetralhadoras uma em cada mão. O tempo de recarga aumenta em uma categoria. Pode mirar em um único alvo com ambas ou escolher até dois alvos; faz um teste de ataque com cada arma, que aplicam dano separadamente.' } },
