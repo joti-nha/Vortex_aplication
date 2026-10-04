@@ -1339,7 +1339,7 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 .cell__actions .btn { min-height: 36px; padding: 0.25rem 0.7rem; }
 
 .res-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
-.res-dmg { display: inline-flex; gap: 0.4rem; margin-right: auto; }
+.res-dmg { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; margin-right: auto; max-width: 100%; }
 .res__dmg { width: 6rem; min-height: 40px; }
 .check--off { opacity: 0.4; cursor: not-allowed; }
 .pick-grid--form { margin-bottom: 0; }
