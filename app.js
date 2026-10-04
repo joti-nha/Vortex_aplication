@@ -2959,7 +2959,8 @@ const FIREBASE_CONFIG = {
     const s = c.sheet;
     const a = s.attrs;
     const sp = s.specimen;
-    const spv = (sp && sp.values) || {};
+    const official = sp ? BUILTINS.find((e) => e.id === sp.id) : null; // fichas antigas ganham os traços novos do espécime oficial
+    const spv = Object.assign({}, official ? official.values : {}, (sp && sp.values) || {});
     const equipped = s.inventory.filter((i) => i.slot);
     const armor = equipped.find((i) => i.slot === 'armadura');
     const core = equipped.find((i) => i.slot === 'nucleo');
@@ -4214,7 +4215,7 @@ const FIREBASE_CONFIG = {
     b.addEventListener('click', onClick);
     return b;
   }
-  const specimenLine = (e) => { const v = e.values || {}; return 'Vida base ' + (v.vidaBase || 'PV') + ' · ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ' · núcleo +' + num(v.nucleoBase) : '') + (v.acopla === 'Sim' ? ' · acopla armas e armaduras' : '') + (v.humanidade === 'Sim' ? ' · Humanidade' : ''); };
+  const specimenLine = (e) => { const v = e.values || {}; return 'Vida base ' + (v.vidaBase || 'PV') + ' · ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ' · núcleo +' + num(v.nucleoBase) : '') + (v.acopla === 'Sim' ? ' · acopla armas e armaduras' : '') + (v.humanidade === 'Sim' ? ' · Humanidade' : '') + (v.eletronico === 'Sim' ? ' · eletrônico' : ''); };
 
   function previewSheet() { // a ficha como ficaria com as escolhas do assistente
     const s = normSheet(deep(sheetChar.sheet));
