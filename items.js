@@ -35,6 +35,13 @@ window.VORTEX_ITEMS = {
   simNao: ['Não', 'Sim'],
   // criadoras/companhias/corporações do mundo (tag opcional dos itens; só se escolhe na criação)
   fabricantes: ['Wathrever', 'Pinger', 'Live Service', 'Tnnaks'],
+  // lore de cada criadora: aparece ao tocar no selo dela (escreva aqui o texto do mundo)
+  fabricantesLore: {
+    'Tnnaks': 'A Tnnak fabrica equipamentos de proteção voltados para uso civil, industrial e militar. Seu catálogo básico prioriza proteção confiável e produção em larga escala, enquanto os modelos especiais incorporam sistemas experimentais e propriedades próprias.',
+    'Wathrever': '',
+    'Pinger': '',
+    'Live Service': ''
+  },
   classesImplante: ['Prótese', 'Módulo'],
   // os 3 tipos de prótese/módulo: definem o custo em Carga Cibernética (CC)
   tiposImplante: [
@@ -89,7 +96,8 @@ window.VORTEX_ITEMS = {
         { key: 'dano', label: 'Tipo de dano', kind: 'select', optKey: 'dano', options: 'tiposDano' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25, maxFrom: 'cargaMax', defaultFrom: 'cargaMax' },
-        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
+        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
@@ -153,7 +161,8 @@ window.VORTEX_ITEMS = {
         { key: 'alcance', label: 'Alcance efetivo', kind: 'select', optKey: 'alcance', options: 'alcances' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', optKey: 'empunhadura', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25, maxFrom: 'cargaMax', defaultFrom: 'cargaMax' },
-        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
+        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
 
@@ -177,7 +186,8 @@ window.VORTEX_ITEMS = {
         { key: 'carga', label: 'Carga (só conta quando transportada)', kind: 'number', min: 0, step: 0.25 },
         { key: 'nucleo', label: 'Tem núcleo?', kind: 'select', options: 'simNao' },
         { key: 'capacidade', label: 'Capacidade do núcleo (se tiver)', kind: 'number', min: 0, step: 1 },
-        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
+        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
@@ -196,7 +206,8 @@ window.VORTEX_ITEMS = {
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
-        { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true }
+        { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
 
@@ -213,7 +224,8 @@ window.VORTEX_ITEMS = {
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'capacidade', label: 'Capacidade Cibernética', kind: 'number', min: 0, step: 1 },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
-        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
+        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
@@ -233,7 +245,8 @@ window.VORTEX_ITEMS = {
         { key: 'classe', label: 'É prótese ou módulo?', kind: 'select', options: 'classesImplante' },
         { key: 'tipo', label: 'Tipo (define o custo em CC)', kind: 'cards', options: 'tiposImplante', big: true },
         { key: 'cc', label: 'CC (Carga Cibernética)', kind: 'number', min: 0, step: 1, auto: { from: 'tipo', table: 'custoCC' }, hint: 'Suporte 1, Operacional 2, Mecânico 3.' },
-        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true }
+        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
 
@@ -247,7 +260,8 @@ window.VORTEX_ITEMS = {
         { key: 'raridade', label: 'Raridade (define a cor e quantos slots usa)', kind: 'rarity', options: 'raridadesMod', big: true },
         { key: 'para', label: 'Serve em', kind: 'select', options: 'paraMod' },
         { key: 'tipo', label: 'Mod (tipo)', kind: 'text' },
-        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true }
+        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
@@ -257,7 +271,8 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome da propriedade', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'para', label: 'Serve em', kind: 'select', options: 'paraPropriedade' },
-        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true }
+        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
@@ -271,7 +286,8 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome do acessório', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'posicao', label: 'Posição (slot)', kind: 'select', optKey: 'posicao', options: [] },
-        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true }
+        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
 
@@ -286,7 +302,8 @@ window.VORTEX_ITEMS = {
         { key: 'upInicial', label: 'UP iniciais', kind: 'number', min: 0, step: 1 },
         { key: 'nucleoBase', label: 'Núcleo de nascença (capacidade)', kind: 'number', min: 0, step: 1 },
         { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
-        { key: 'tracos', label: 'Traços e regras', kind: 'textarea', big: true }
+        { key: 'tracos', label: 'Traços e regras', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
@@ -296,7 +313,8 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome do poder', kind: 'text', big: true },
         { key: 'custo', label: 'Custo (UP)', kind: 'number', min: 0, step: 1 },
         { key: 'custoUso', label: 'Custo de uso (PE, PA...)', kind: 'text' },
-        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true }
+        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
 
@@ -312,7 +330,8 @@ window.VORTEX_ITEMS = {
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
-        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' }
+        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     }
   ],

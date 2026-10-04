@@ -1474,6 +1474,7 @@ const FIREBASE_CONFIG = {
     link.href = '#/character/' + encodeURIComponent(m.characterId);
     const money = num(m.sheet && m.sheet.money && currentCamp ? m.sheet.money[currentCamp.id] : 0);
     const info = h('div', 'member__info',
+      ...(loreButton(m.name, 'Lore do personagem', m.sheet && m.sheet.lore) ? [h('p', 'member__lore', loreButton(m.name, 'Lore do personagem', m.sheet.lore), ' Lore de ' + m.name)] : []),
       h('dl', 'member__data',
         h('dt', '', 'Espécie'), h('dd', '', m.species || '—'),
         h('dt', '', 'Idade'), h('dd', '', m.age || '—'),
@@ -1856,6 +1857,36 @@ const FIREBASE_CONFIG = {
     const v = e.values || {};
     return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, priceText(v.preco)].filter(Boolean).join(' · ');
   }
+  /* Lore: texto do mundo escondido atrás do ícone 📜 (itens, criadoras, espécimes, origens, personagens) */
+  const loreDlg = $('#lore-dialog');
+  function openLore(title, meta, text) {
+    $('#lore-title').textContent = title;
+    $('#lore-meta').textContent = meta || '';
+    const box = $('#lore-text');
+    const t = String(text || '').trim();
+    box.replaceChildren(...(t ? t.split(/\n+/).map((p) => h('p', '', p)) : [h('p', 'empty', 'Ainda não há lore escrita para ' + title + '.')]));
+    openDialog(loreDlg);
+  }
+  $('#lore-close').addEventListener('click', () => closeDialog(loreDlg));
+  function loreButton(title, meta, text, always) {
+    if (!always && !String(text || '').trim()) return null;
+    const b = h('button', 'lore-btn', '📜');
+    b.type = 'button';
+    b.title = 'Lore: ' + title;
+    b.setAttribute('aria-label', 'Ver a lore de ' + title);
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); ev.preventDefault(); openLore(title, meta, text); });
+    return b;
+  }
+  const makerLore = (f) => ((ITEM_DATA.fabricantesLore || {})[f] || '');
+  function makerTag(f) {
+    const b = h('button', 'tag tag--maker tag--btn', f);
+    b.type = 'button';
+    b.title = 'Lore de ' + f;
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); ev.preventDefault(); openLore(f, 'Criadora / companhia / corporação', makerLore(f)); });
+    return b;
+  }
+  const entryLore = (e) => loreButton(e.name || 'Sem nome', [kindTitle(e.kind), (e.values || {}).fabricante].filter(Boolean).join(' · '), (e.values || {}).lore);
+
   const priceText = (p) => (String(p || '').trim() ? String(p).trim() + ' Cronos' : '');
   const entryText = (e) => { const v = e.values || {}; return v.efeito || v.especial || v.descricao || v.tracos || ''; };
 
@@ -1876,7 +1907,9 @@ const FIREBASE_CONFIG = {
   function libRow(e, actions, onFav) {
     const title = h('span', 'row__title', e.name || 'Sem nome');
     if (e.oficial) title.append(' ', h('span', 'tag', 'Oficial'));
-    if (e.values && e.values.fabricante) title.append(' ', h('span', 'tag tag--maker', e.values.fabricante));
+    if (e.values && e.values.fabricante) title.append(' ', makerTag(e.values.fabricante));
+    const lb = entryLore(e);
+    if (lb) title.append(' ', lb);
     const main = h('span', 'row__main', title, h('span', 'row__meta', entryMeta(e)));
     const text = entryText(e);
     if (text) main.append(h('span', 'row__text', text));
@@ -3078,6 +3111,8 @@ const FIREBASE_CONFIG = {
     un.type = 'button';
     un.addEventListener('click', () => { s.specimen = null; changed(); });
     box.replaceChildren('Traços de ' + s.specimen.name + ': vida base ' + (v.vidaBase || 'PV') + ', ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ', núcleo +' + num(v.nucleoBase) : '') + '. ', un);
+    const lb = entryLore(s.specimen);
+    if (lb) box.append(' ', lb);
     if (v.tracos) box.title = v.tracos;
   }
 
@@ -3090,7 +3125,7 @@ const FIREBASE_CONFIG = {
     $('#power-list').replaceChildren(...s.powers.map((p, i) => {
       const v = p.values || {};
       const meta = [num(v.custo) ? 'Custo ' + num(v.custo) + ' UP' : '', v.custoUso ? 'Uso: ' + v.custoUso : '', bonusLine(p.bonus || {})].filter(Boolean).join(' · ');
-      const main = h('span', 'row__main', h('span', 'row__title', p.name), h('span', 'row__meta', meta));
+      const main = h('span', 'row__main', h('span', 'row__title', p.name, ...(entryLore(p) ? [' ', entryLore(p)] : [])), h('span', 'row__meta', meta));
       if (v.efeito) main.append(h('span', 'row__text', v.efeito));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
       del.type = 'button';
@@ -3203,7 +3238,7 @@ const FIREBASE_CONFIG = {
       else card.append(h('p', 'cell__text', 'Nada compatível na mochila.'));
       return card;
     }
-    card.append(h('p', 'cell__name', i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '')),
+    card.append(h('p', 'cell__name', i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : ''), i.values.lore ? ' ' : '', entryLore(i)),
       h('p', 'cell__meta', [kindTitle(i.kind), i.typeTitle, i.values.raridade].filter(Boolean).join(' · ')));
     if (ghost) { card.append(h('p', 'cell__text', 'Arma de duas mãos: ocupa também esta mão.')); return card; }
     const dl = h('dl', 'cell__facts');
@@ -3381,15 +3416,15 @@ const FIREBASE_CONFIG = {
     if (!i) { if (invDlg.open) closeDialog(invDlg); return; }
     const s = sheetChar.sheet;
     const cat = findCategory(i.kind);
-    $('#inv-dialog-title').textContent = i.name;
+    $('#inv-dialog-title').replaceChildren(i.name, ...(entryLore(i) ? [' ', entryLore(i)] : []));
     $('#inv-dialog-meta').textContent = [kindTitle(i.kind), i.typeTitle, i.values.raridade, i.slot ? 'Equipado: ' + slotDef(i.slot).full : 'Na mochila'].filter(Boolean).join(' · ');
     const body = $('#inv-dialog-body');
     const keepFocus = body.contains(document.activeElement) ? document.activeElement.id : '';
     const dl = h('dl', 'member__data');
     ((cat && cat.fields) || []).forEach((f) => {
       const v = i.values[f.key];
-      if (f.key === 'nome' || v === undefined || v === '') return;
-      dl.append(h('dt', '', f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', String(v)));
+      if (f.key === 'nome' || f.key === 'lore' || v === undefined || v === '') return;
+      dl.append(h('dt', '', f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(v)) : String(v)));
     });
     const b = bonusLine(entryBonus(i));
     if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (i.slot ? '' : ' (só quando equipado)')));
@@ -3670,7 +3705,7 @@ const FIREBASE_CONFIG = {
       saveTimer = setTimeout(flushSave, 600);
     });
   });
-  [['height', fHeight], ['weight', $('#f-weight')], ['sex', fSex]].forEach((pair) => {
+  [['height', fHeight], ['weight', $('#f-weight')], ['sex', fSex], ['lore', $('#f-lore')]].forEach((pair) => {
     pair[1].addEventListener('input', () => { sheetChar.sheet[pair[0]] = pair[1].value; touchSheet(); });
   });
 
@@ -3729,13 +3764,34 @@ const FIREBASE_CONFIG = {
      Abre na primeira vez que a ficha é feita: espécime e origem, atributos
      (3 pontos; um pode ir a –1 por +1 ponto; máximo +3) e perícias (2 com +2, 1 com +1). */
   const setupDlg = $('#setup-dialog');
+  // Uma tela por parte. As abas no topo deixam ir direto a qualquer parte, em qualquer ordem.
   const SETUP = [
-    { title: 'Quem é', lead: 'Espécime, origem e os dados de apresentação. Dá para mudar tudo depois na ficha.' },
-    { title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
-    { title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 perícia com +1. Toque para alternar entre nada, +1 e +2.' },
-    { title: 'Proficiências', lead: 'Escolha 4 tipos de arma ou armadura em que o personagem é proficiente desde o início.' },
-    { title: 'Resumo', lead: 'Confira. Os recursos já saem calculados dos atributos.' }
+    { id: 'builds', tab: 'Builds', title: 'Builds recomendadas', lead: 'Escolha uma build comum para preencher atributos, perícias e proficiências de uma vez, ou monte do seu jeito nas outras partes. Tudo pode ser ajustado depois.', search: true },
+    { id: 'especime', tab: 'Espécime', title: 'Espécime', lead: 'A espécie define a vida base, os UP iniciais e se já nasce com núcleo.', search: true },
+    { id: 'origem', tab: 'Origem', title: 'Origem e apresentação', lead: 'A origem traz itens iniciais. Idade, altura e sexo podem ser mudados depois na ficha.', search: true },
+    { id: 'atributos', tab: 'Atributos', title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
+    { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 perícia com +1. Toque para alternar entre nada, +1 e +2.', search: true },
+    { id: 'profs', tab: 'Proficiências', title: 'Proficiências', lead: 'Escolha 4 tipos de arma ou armadura em que o personagem é proficiente desde o início.', search: true },
+    { id: 'resumo', tab: 'Resumo', title: 'Resumo', lead: 'Confira. Os recursos já saem calculados dos atributos.' }
   ];
+  const STEP = {};
+  SETUP.forEach((x, i) => { STEP[x.id] = i; });
+
+  /* Builds comuns, montadas com as regras de criação: 3 pontos de atributo (um pode ir a –1 por +1),
+     2 perícias com +2 e 1 com +1, e 4 proficiências. */
+  const BUILDS = [
+    { name: 'Atirador', role: 'Dano à distância', text: 'Precisão alta para fuzis e rifles; age cedo e reage rápido.', attrs: { corpo: 0, precisao: 3, essencia: 0 }, skills: { mira: 2, reflexos: 2, iniciativa: 1 }, profs: ['fuzil', 'rifle', 'pistola', 'armadura-leve'] },
+    { name: 'Combatente', role: 'Corpo a corpo', text: 'Golpes fortes e defesa sólida na linha de frente.', attrs: { corpo: 2, precisao: 1, essencia: 0 }, skills: { luta: 2, resistencia: 2, atletismo: 1 }, profs: ['espada', 'machado', 'armadura-media', 'armadura-pesada'] },
+    { name: 'Tanque', role: 'Aguentar dano', text: 'Muita vida e carga; segura a pressão para o grupo. Troca Essência por mais Corpo.', attrs: { corpo: 3, precisao: 1, essencia: -1 }, skills: { resistencia: 2, fortitude: 2, luta: 1 }, profs: ['marreta', 'metralhadora', 'armadura-media', 'armadura-pesada'] },
+    { name: 'Tecnomante', role: 'Energia e módulos', text: 'Essência alta: muitos PE, ataques tecnológicos e mente firme.', attrs: { corpo: 0, precisao: 0, essencia: 3 }, skills: { operacoes: 2, vontade: 2, sentidos: 1 }, profs: ['laser', 'pistola', 'submetralhadora', 'armadura-leve'] },
+    { name: 'Infiltrador', role: 'Tecnologia e furtividade', text: 'Hackeia sistemas, abre fechaduras e evita ser visto.', attrs: { corpo: 0, precisao: 2, essencia: 1 }, skills: { tecnologia: 2, manha: 2, reflexos: 1 }, profs: ['pistola', 'submetralhadora', 'espada', 'armadura-leve'] },
+    { name: 'Negociador', role: 'Social', text: 'Convence, engana e impõe respeito; resolve sem tiros quando dá.', attrs: { corpo: 0, precisao: 1, essencia: 2 }, skills: { diplomacia: 2, enganacao: 2, intimidacao: 1 }, profs: ['pistola', 'espingarda', 'espada', 'armadura-leve'] }
+  ];
+  const SKIP_BUILDS = 'vortex.skipBuilds.v1';
+  const skipBuilds = () => { try { return localStorage.getItem(SKIP_BUILDS) === '1'; } catch (e) { return false; } };
+  const setSkipBuilds = (on) => { try { if (on) localStorage.setItem(SKIP_BUILDS, '1'); else localStorage.removeItem(SKIP_BUILDS); } catch (e) { /* sem armazenamento: vale só agora */ } };
+  const skillLabel = (id) => { let out = id; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (sk[0] === id) out = sk[1]; })); return out; };
+  const profLabel = (id) => (PROFS.find((p) => p.id === id) || { label: id }).label;
   let wz = null;
 
   const attrPool = (a) => {
@@ -3747,18 +3803,35 @@ const FIREBASE_CONFIG = {
     const vals = Object.keys(sk).map((k) => sk[k]);
     return { two: vals.filter((v) => v === 2).length, one: vals.filter((v) => v === 1).length };
   };
-  function setupProblem() {
-    if (wz.step === 1) {
+  function stepProblem(step) {
+    if (step === STEP.atributos) {
       const p = attrPool(wz.attrs);
       if (p.left > 0) return 'Ainda ' + (p.left === 1 ? 'falta 1 ponto' : 'faltam ' + p.left + ' pontos') + ' para distribuir.';
       if (p.left < 0) return 'Você passou do limite em ' + (-p.left) + (p.left === -1 ? ' ponto.' : ' pontos.');
     }
-    if (wz.step === 2) {
+    if (step === STEP.pericias) {
       const c = skillCount(wz.skills);
       if (c.two !== 2 || c.one !== 1) return 'Marcadas: ' + c.two + ' de 2 perícias com +2 e ' + c.one + ' de 1 perícia com +1.';
     }
-    if (wz.step === 3 && wz.profs.length !== 4) return 'Escolhidas: ' + wz.profs.length + ' de 4 proficiências.';
+    if (step === STEP.profs && wz.profs.length !== 4) return 'Escolhidas: ' + wz.profs.length + ' de 4 proficiências.';
     return '';
+  }
+  const setupProblem = () => stepProblem(wz.step);
+  const allProblems = () => SETUP.map((x, i) => [i, stepProblem(i)]).filter((p) => p[1]);
+  const wzMatch = (...texts) => matchesText(nameKey(texts.filter(Boolean).join(' ')), wz.q || '');
+  function goStep(i) {
+    wz.step = clamp(i, 0, SETUP.length - 1);
+    wz.q = '';
+    $('#setup-search').value = '';
+    renderSetup();
+    $('#setup-title').focus({ preventScroll: true });
+    $('.setup').scrollTop = 0;
+  }
+  function applyBuild(b) {
+    wz.attrs = Object.assign({}, b.attrs);
+    wz.skills = Object.assign({}, b.skills);
+    wz.profs = b.profs.slice();
+    wz.build = b.name;
   }
 
   function pickCard(title, lines, on, onClick) {
@@ -3793,15 +3866,48 @@ const FIREBASE_CONFIG = {
   function renderSetup(focusId) {
     const body = $('#setup-body');
     const st = SETUP[wz.step];
-    $('#setup-step').textContent = 'Distribuição inicial · passo ' + (wz.step + 1) + ' de ' + SETUP.length;
+    $('#setup-step').textContent = 'Distribuição inicial · parte ' + (wz.step + 1) + ' de ' + SETUP.length;
     $('#setup-title').textContent = st.title;
     $('#setup-lead').textContent = st.lead;
+    $('#setup-search-wrap').hidden = !st.search;
+    $('#setup-tabs').replaceChildren(...SETUP.map((x, i) => {
+      const bad = stepProblem(i);
+      const b = h('button', 'setup__tab' + (i === wz.step ? ' is-on' : '') + (bad ? ' setup__tab--bad' : ''), x.tab);
+      b.type = 'button';
+      if (i === wz.step) b.setAttribute('aria-current', 'step');
+      b.title = bad || x.title;
+      b.addEventListener('click', () => goStep(i));
+      return b;
+    }));
     body.replaceChildren();
 
-    if (wz.step === 0) {
+    if (wz.step === STEP.builds) {
+      const list = BUILDS.filter((b) => wzMatch(b.name, b.role, b.text, Object.keys(b.skills).map(skillLabel).join(' '), b.profs.map(profLabel).join(' ')));
+      body.append(h('div', 'pick-grid', ...list.map((b) => pickCard(b.name, [
+        b.role + ' · ' + b.text,
+        ATTRS.map((at) => at.label + ' ' + (signed(b.attrs[at.id]) === '0' ? '0' : signed(b.attrs[at.id]))).join(' · '),
+        Object.keys(b.skills).map((k) => skillLabel(k) + ' +' + b.skills[k]).join(' · '),
+        b.profs.map(profLabel).join(' · ')
+      ], wz.build === b.name, () => { applyBuild(b); toast('Build ' + b.name + ' aplicada. Ajuste o que quiser nas outras partes.'); goStep(STEP.especime); }))));
+      if (!list.length) body.append(h('p', 'empty', 'Nenhuma build com esse termo.'));
+      const skip = h('button', 'btn btn--ghost btn--sm', skipBuilds() ? 'Voltar a mostrar esta tela sempre' : 'Sempre pular');
+      skip.type = 'button';
+      skip.addEventListener('click', () => {
+        const on = !skipBuilds();
+        setSkipBuilds(on);
+        toast(on ? 'As recomendações não abrem mais sozinhas. Ficam na aba Builds.' : 'As recomendações voltam a abrir primeiro.');
+        if (on) goStep(STEP.especime); else renderSetup();
+      });
+      const own = h('button', 'btn btn--ghost btn--sm', 'Montar do meu jeito');
+      own.type = 'button';
+      own.addEventListener('click', () => goStep(STEP.especime));
+      body.append(h('div', 'setup__builds-foot', own, skip));
+    }
+
+    if (wz.step === STEP.especime) {
       const species = BUILTINS.filter((e) => e.kind === 'especime');
       if (wz.specimen && !species.some((e) => e.id === wz.specimen.id)) species.push(wz.specimen);
-      const grid = h('div', 'pick-grid', ...species.map((e) => pickCard(e.name, [specimenLine(e), e.values.descricao],
+      const grid = h('div', 'pick-grid', ...species.filter((e) => wzMatch(e.name, e.values.descricao, e.values.tracos)).map((e) => pickCard(e.name, [specimenLine(e), e.values.descricao],
         Boolean(wz.specimen && wz.specimen.id === e.id), () => { wz.specimen = slotSnap(e); wz.specimen.thumb = e.thumb || ''; renderSetup(); })));
       grid.append(pickCard('Buscar outro', ['Qualquer espécime do banco, inclusive os criados na Oficina.'], false, async () => {
         const e = await openPicker({ title: 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime' });
@@ -3809,11 +3915,13 @@ const FIREBASE_CONFIG = {
         wz.specimen = Object.assign(slotSnap(e), { thumb: e.thumb || '' });
         renderSetup();
       }));
-      body.append(h('h3', 'setup__sub', 'Espécime'), grid);
+      body.append(grid);
+    }
 
-      const og = h('div', 'pick-grid', ...ORIGINS.map((o) => pickCard(o.name, [o.text],
+    if (wz.step === STEP.origem) {
+      const og = h('div', 'pick-grid', ...ORIGINS.filter((o) => wzMatch(o.name, o.text, o.items.join(' '))).map((o) => pickCard(o.name, [o.text],
         nameKey(wz.origin) === nameKey(o.name), () => { wz.origin = o.name; renderSetup(); })));
-      body.append(h('h3', 'setup__sub', 'Origem'), og,
+      body.append(og,
         h('div', 'fields-grid',
           setupField('wz-origin', 'Origem (ou escreva outra)', wz.origin, 'Ex.: Exilado Urbano', (v) => { wz.origin = v; }, 60),
           setupField('wz-age', 'Idade', wz.age, 'Ex.: 27 anos', (v) => { wz.age = v; }, 20),
@@ -3821,7 +3929,7 @@ const FIREBASE_CONFIG = {
           setupField('wz-sex', 'Sexo', wz.sex, '', (v) => { wz.sex = v; }, 20)));
     }
 
-    if (wz.step === 1) {
+    if (wz.step === STEP.atributos) {
       const p = attrPool(wz.attrs);
       const m = previewSheet();
       body.append(h('p', 'setup__pool' + (p.left < 0 ? ' setup__pool--over' : ''), 'Pontos para distribuir: ', h('strong', '', String(p.left))));
@@ -3836,18 +3944,21 @@ const FIREBASE_CONFIG = {
       body.append(h('p', 'setup__preview', 'Com isto: ' + LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + m.max[l[0]]).join(' · ') + ' · PE ' + m.max.pe + ' · PA ' + m.max.pa + ' · Carga ' + fmtNum(m.cargaMax) + '.'));
     }
 
-    if (wz.step === 2) {
+    if (wz.step === STEP.pericias) {
       const c = skillCount(wz.skills);
       body.append(h('p', 'setup__pool', 'Com +2: ', h('strong', '', c.two + ' de 2'), ' · Com +1: ', h('strong', '', c.one + ' de 1')));
       ATTRS.forEach((at) => {
         const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(wz.attrs[at.id]))));
         const line = h('div', 'skill-picks');
         SKILLS[at.id].forEach((sk) => {
+          const info = (window.VORTEX_PERICIAS || []).find((x) => x.name === sk[1]) || {};
+          if (!wzMatch(sk[1], at.label, info.summary, info.uses) && !wz.skills[sk[0]]) return;
           const v = wz.skills[sk[0]] || 0;
           const b = h('button', 'skill-pick' + (v ? ' skill-pick--' + v : ''), sk[1], h('span', 'skill-pick__v', v ? '+' + v : '—'));
           b.type = 'button';
           b.dataset.fid = 'wzs-' + sk[0];
           b.setAttribute('aria-label', sk[1] + ': ' + (v ? '+' + v : 'sem bônus') + '. Toque para alternar.');
+          if (info.summary) b.title = info.summary + ' ' + (info.uses || '');
           b.addEventListener('click', () => {
             const next = (v + 1) % 3;
             if (next) wz.skills[sk[0]] = next; else delete wz.skills[sk[0]];
@@ -3856,23 +3967,33 @@ const FIREBASE_CONFIG = {
           line.append(b);
         });
         group.append(line);
-        body.append(group);
+        if (line.children.length) body.append(group);
       });
       if (wz.skills.oficio) body.append(setupField('wz-oficio', 'Ofício: qual profissão?', wz.oficio, 'Ex.: mecânica', (v) => { wz.oficio = v; }, 40));
     }
 
-    if (wz.step === 3) {
+    if (wz.step === STEP.profs) {
+      const pills = profPills(wz.profs, (id, on) => { wz.profs = wz.profs.filter((x) => x !== id); if (on) wz.profs.push(id); renderSetup('wzp-' + id); }, 4, 'wzp-');
+      $$('label', pills).forEach((l) => { const inp = $('input', l); if (!inp.checked && !wzMatch(l.textContent)) l.hidden = true; });
       body.append(h('p', 'setup__pool', 'Escolhidas: ', h('strong', '', wz.profs.length + ' de 4')),
-        profPills(wz.profs, (id, on) => { wz.profs = wz.profs.filter((x) => x !== id); if (on) wz.profs.push(id); renderSetup('wzp-' + id); }, 4, 'wzp-'),
+        pills,
         h('p', 'field__hint', 'Em armas: cadência perita e o aprimoramento do tipo. Em armaduras: a penalidade não dobra e a defesa ganha +1.'));
     }
 
-    if (wz.step === 4) {
+    if (wz.step === STEP.resumo) {
       const m = previewSheet();
+      const probs = allProblems();
+      if (probs.length) body.append(h('div', 'setup__probs', h('p', 'alerts__title', 'Falta completar'), ...probs.map((p) => {
+        const b = h('button', 'link-btn', 'Ir para ' + SETUP[p[0]].tab);
+        b.type = 'button';
+        b.addEventListener('click', () => goStep(p[0]));
+        return h('p', 'alerts__item', p[1] + ' ', b);
+      })));
       const skills = [];
       ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (wz.skills[sk[0]]) skills.push(sk[1] + ' +' + wz.skills[sk[0]]); }));
       const row = (k, v) => [h('dt', '', k), h('dd', '', v || '—')];
       body.append(h('dl', 'member__data setup__summary',
+        ...row('Build', wz.build || 'do seu jeito'),
         ...row('Espécime', wz.specimen ? wz.specimen.name + ' (' + specimenLine(wz.specimen) + ')' : ''),
         ...row('Origem', wz.origin),
         ...row('Atributos', ATTRS.map((at) => at.label + ' ' + signed(wz.attrs[at.id])).join(' · ')),
@@ -3894,19 +4015,21 @@ const FIREBASE_CONFIG = {
       }
     }
 
+    // pode seguir mesmo com algo pendente: só o Concluir exige tudo certo
     const problem = setupProblem();
     $('#setup-error').textContent = problem;
     $('#setup-back').hidden = wz.step === 0;
     const next = $('#setup-next');
-    next.textContent = wz.step === SETUP.length - 1 ? 'Concluir' : 'Continuar';
-    next.disabled = Boolean(problem);
+    const last = wz.step === SETUP.length - 1;
+    next.textContent = last ? 'Concluir' : 'Continuar';
+    next.disabled = last && allProblems().length > 0;
     if (focusId) { const el = $('[data-fid="' + focusId + '"]', body) || $('[data-fid^="' + focusId.slice(0, -1) + '"]:not(:disabled)', body); if (el) el.focus({ preventScroll: true }); }
   }
 
   function openSetup() {
     const c = sheetChar, s = c.sheet;
     wz = {
-      step: 0, attrs: Object.assign({}, s.attrs), skills: {}, profs: s.profs.slice(0, 4), oficio: s.oficio || '',
+      step: skipBuilds() ? STEP.especime : STEP.builds, q: '', build: '', attrs: Object.assign({}, s.attrs), skills: {}, profs: s.profs.slice(0, 4), oficio: s.oficio || '',
       specimen: s.specimen ? deep(s.specimen) : null, origin: c.origin || '', age: c.age || '', height: s.height || '', sex: s.sex || '', addItems: true
     };
     Object.keys(s.skills).forEach((k) => { if (s.skills[k] === 1 || s.skills[k] === 2) wz.skills[k] = s.skills[k]; });
@@ -3945,15 +4068,12 @@ const FIREBASE_CONFIG = {
   }
 
   $('#setup-open').addEventListener('click', openSetup);
-  $('#setup-back').addEventListener('click', () => { wz.step = Math.max(0, wz.step - 1); renderSetup(); $('#setup-title').focus({ preventScroll: true }); });
+  $('#setup-back').addEventListener('click', () => goStep(wz.step - 1));
   $('#setup-next').addEventListener('click', () => {
-    if (setupProblem()) return;
-    if (wz.step === SETUP.length - 1) { finishSetup(); return; }
-    wz.step++;
-    renderSetup();
-    $('#setup-title').focus({ preventScroll: true });
-    $('.setup').scrollTop = 0;
+    if (wz.step === SETUP.length - 1) { if (!allProblems().length) finishSetup(); return; }
+    goStep(wz.step + 1);
   });
+  $('#setup-search').addEventListener('input', debounce(() => { if (!wz) return; wz.q = $('#setup-search').value; renderSetup(); }, 200));
   $('#setup-skip').addEventListener('click', () => {
     sheetChar.sheet.setup = true; // não abre sozinha de novo; o botão "Distribuição inicial" continua na ficha
     wz = null;
@@ -4020,6 +4140,7 @@ const FIREBASE_CONFIG = {
     fHeight.value = c.sheet.height || '';
     $('#f-weight').value = c.sheet.weight || '';
     fSex.value = c.sheet.sex || '';
+    $('#f-lore').value = c.sheet.lore || '';
   }
   $('#origin-list').replaceChildren(...ORIGINS.map((o) => { const op = h('option'); op.value = o.name; return op; }));
 

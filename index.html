@@ -333,6 +333,10 @@
               <input class="input" id="f-origin" type="text" maxlength="60" autocomplete="off" list="origin-list" placeholder="Ex.: Exilado Urbano">
               <datalist id="origin-list"></datalist>
             </div>
+            <div class="field field--wide">
+              <label class="field__label" for="f-lore">Lore do personagem (opcional)</label>
+              <textarea class="input" id="f-lore" rows="3" maxlength="4000" placeholder="História, passado e lugar no mundo. Aparece no ícone 📜 da campanha."></textarea>
+            </div>
           </div>
 
           <h3 class="sub-title"><button class="help" type="button" data-help="progressao">Progressão</button></h3>
@@ -615,8 +619,13 @@
   <dialog class="dialog dialog--wide" id="setup-dialog" aria-labelledby="setup-title">
     <div class="setup">
       <p class="setup__step" id="setup-step"></p>
+      <nav class="setup__tabs" id="setup-tabs" aria-label="Partes da distribuição inicial"></nav>
       <h2 id="setup-title" tabindex="-1"></h2>
       <p class="setup__lead" id="setup-lead"></p>
+      <div class="field setup__search" id="setup-search-wrap">
+        <label class="visually-hidden" for="setup-search">Buscar nesta parte</label>
+        <input class="input" id="setup-search" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar nesta parte (ex.: mira, robô, pistola)">
+      </div>
       <div class="setup__body" id="setup-body"></div>
       <p class="field__error" id="setup-error" role="alert"></p>
       <div class="dialog__actions">
@@ -624,6 +633,18 @@
         <button class="btn btn--ghost" type="button" id="setup-back">Voltar</button>
         <button class="btn btn--primary" type="button" id="setup-next">Continuar</button>
       </div>
+    </div>
+  </dialog>
+
+  <!-- Lore: o texto do mundo sobre um item, criadora, espécime, origem ou personagem -->
+  <dialog class="dialog" id="lore-dialog" aria-labelledby="lore-title">
+    <div class="picker">
+      <div class="picker__head">
+        <h2 id="lore-title"></h2>
+        <button class="btn btn--ghost btn--sm" type="button" id="lore-close">Fechar</button>
+      </div>
+      <p class="block__hint" id="lore-meta"></p>
+      <div class="lore__text" id="lore-text"></div>
     </div>
   </dialog>
 
