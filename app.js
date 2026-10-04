@@ -115,92 +115,8 @@ const FIREBASE_CONFIG = {
   }
 
   /* =====================================================================
-     3. DADOS: comandos como d20, 2d6+3, 4d6kh3, 1d20+5 # ataque
+     3. DADOS
      ===================================================================== */
-  const DICE_HELP = 'Tente algo como d20, 2d6+3 ou 4d6kh3.';
-
-  function rollDice(input) {
-    let text = String(input).trim().replace(/^\/(?:r|roll)\s+/i, '');
-    let label = '';
-    const hash = text.indexOf('#');
-    if (hash >= 0) { label = text.slice(hash + 1).trim().slice(0, 60); text = text.slice(0, hash); }
-    if (!text.trim()) throw new UserError('Digite um comando de dados. ' + DICE_HELP);
-    // espaço só é aceito em volta de + e - ("2d6 + 3"); "2d6 3" não vira 2d63
-    if (/[a-z0-9]\s+[a-z0-9]/i.test(text.trim())) throw new UserError('Não entendi "' + text.trim() + '". ' + DICE_HELP);
-    const src = text.replace(/\s+/g, '').toLowerCase();
-
-    const re = /([+-]?)(?:(\d*)d(\d+)(?:k([hl])(\d+))?|(\d+))/y;
-    const terms = [];
-    let pos = 0;
-    let diceTotal = 0;
-
-    while (pos < src.length) {
-      re.lastIndex = pos;
-      const m = re.exec(src);
-      if (!m || (pos > 0 && !m[1])) throw new UserError('Não entendi "' + text.trim() + '". ' + DICE_HELP);
-      pos = re.lastIndex;
-      if (terms.length >= 10) throw new UserError('Use no máximo 10 termos por comando.');
-      const sign = m[1] === '-' ? -1 : 1;
-
-      if (m[3] !== undefined) { // termo de dados: NdM, com kh/kl opcional
-        const count = m[2] === '' ? 1 : parseInt(m[2], 10);
-        const sides = parseInt(m[3], 10);
-        if (count < 1 || count > 100) throw new UserError('Role de 1 a 100 dados por termo.');
-        if (sides < 2 || sides > 1000) throw new UserError('Os dados têm de 2 a 1000 lados.');
-        let keep = null;
-        if (m[4]) {
-          keep = { mode: m[4], n: parseInt(m[5], 10) };
-          if (keep.n < 1 || keep.n > count) throw new UserError('Em kh/kl, mantenha de 1 a ' + count + ' dados.');
-        }
-        diceTotal += count;
-        if (diceTotal > 200) throw new UserError('Máximo de 200 dados por comando.');
-        terms.push({ kind: 'dice', sign, count, sides, keep });
-      } else { // número fixo
-        const value = parseInt(m[6], 10);
-        if (value > 9999) throw new UserError('Use números fixos até 9999.');
-        terms.push({ kind: 'num', sign, value });
-      }
-    }
-    if (!terms.some((t) => t.kind === 'dice')) throw new UserError('Inclua pelo menos um dado, como 1d20.');
-
-    let total = 0;
-    const exprParts = [];
-    const detailParts = [];
-    terms.forEach((t, i) => {
-      const lead = i === 0 ? (t.sign < 0 ? '-' : '') : (t.sign < 0 ? '-' : '+');
-      const detailLead = i === 0 ? (t.sign < 0 ? '-' : '') : (t.sign < 0 ? ' - ' : ' + ');
-      if (t.kind === 'num') {
-        total += t.sign * t.value;
-        exprParts.push(lead + t.value);
-        detailParts.push(detailLead + t.value);
-        return;
-      }
-      const rolls = Array.from({ length: t.count }, () => randInt(t.sides));
-      let kept = rolls.map(() => true);
-      if (t.keep) {
-        kept = rolls.map(() => false);
-        rolls.map((v, idx) => [v, idx])
-          .sort((a, b) => (t.keep.mode === 'h' ? b[0] - a[0] : a[0] - b[0]))
-          .slice(0, t.keep.n)
-          .forEach((pair) => { kept[pair[1]] = true; });
-      }
-      const subtotal = rolls.reduce((s, v, idx) => (kept[idx] ? s + v : s), 0);
-      total += t.sign * subtotal;
-      t.rolls = rolls;
-      const name = t.count + 'd' + t.sides + (t.keep ? 'k' + t.keep.mode + t.keep.n : '');
-      exprParts.push(lead + name);
-      detailParts.push(detailLead + name + ' [' + rolls.map((v, idx) => (kept[idx] ? v : '(' + v + ')')).join(', ') + ']');
-    });
-
-    let flag = '';
-    const only = terms.length === 1 ? terms[0] : null;
-    if (only && only.kind === 'dice' && only.count === 1 && only.sides === 20 && only.sign > 0) {
-      if (only.rolls[0] === 20) flag = 'crit';
-      if (only.rolls[0] === 1) flag = 'fail';
-    }
-    return { expr: exprParts.join(''), label, detail: detailParts.join(''), total, flag };
-  }
-
   /* Teste do sistema: 2d6 + Atributo + Perícia (regras "Testes e Dados").
      - Cada 6 soma o atributo de novo, mas só vale 1 crítico por teste.
      - Cada 1 é uma perda: anula o bônus da perícia; duas perdas = falha completa.
@@ -312,6 +228,7 @@ const FIREBASE_CONFIG = {
 
     const listeners = {}; // campaignId -> Set de callbacks
     const foeListeners = {};
+    const sceneListeners = {};
     const foesOf = (campaignId) => Object.values((read().foes || {})[campaignId] || {}).map(clone).sort((a, b) => a.createdAt - b.createdAt);
     function notifyFoes(campaignId) { (foeListeners[campaignId] || new Set()).forEach((cb) => cb(foesOf(campaignId))); }
     function rollsOf(campaignId) {
@@ -553,6 +470,20 @@ const FIREBASE_CONFIG = {
         (foeListeners[campaignId] = foeListeners[campaignId] || new Set()).add(callback);
         callback(foesOf(campaignId));
         return () => foeListeners[campaignId].delete(callback);
+      },
+
+      // ---------- Cena: iniciativa, rodada e turno ----------
+      async saveScene(campaignId, scene) {
+        const d = read();
+        d.scenes = d.scenes || {};
+        d.scenes[campaignId] = clone(scene);
+        write(d);
+        (sceneListeners[campaignId] || new Set()).forEach((fn) => fn(clone(scene)));
+      },
+      subscribeScene(campaignId, callback) {
+        (sceneListeners[campaignId] = sceneListeners[campaignId] || new Set()).add(callback);
+        callback(clone((read().scenes || {})[campaignId] || null));
+        return () => sceneListeners[campaignId].delete(callback);
       }
     };
   })();
@@ -899,6 +830,17 @@ const FIREBASE_CONFIG = {
       subscribeFoes(campaignId, callback, onError) {
         return camps().doc(campaignId).collection('foes').onSnapshot(
           (snap) => callback(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))),
+          (err) => { if (onError) onError(err); }
+        );
+      },
+
+      // ---------- Cena: iniciativa, rodada e turno (um documento por campanha) ----------
+      async saveScene(campaignId, scene) {
+        await camps().doc(campaignId).collection('scene').doc('state').set(Object.assign(deep(scene), { updatedAt: Date.now() }));
+      },
+      subscribeScene(campaignId, callback, onError) {
+        return camps().doc(campaignId).collection('scene').doc('state').onSnapshot(
+          (snap) => callback(snap.exists ? snap.data() : null),
           (err) => { if (onError) onError(err); }
         );
       }
@@ -1496,7 +1438,7 @@ const FIREBASE_CONFIG = {
     },
     rolagens: {
       title: 'Dados',
-      text: 'Chat de rolagens da campanha. Comandos: d20, 2d6+3, 4d6kh3 (fica com os 3 maiores), 2d20kl1 (fica com o menor) e um comentário depois de #. A rolagem sai em nome do personagem escolhido em "Rolando como". Nas regras, todos os testes usam 2d6 + Atributo + Perícia.',
+      text: 'Registro da mesa: testes, ataques, defesas, iniciativa e poderes usados aparecem aqui, em nome de cada personagem. Todos os testes usam 2d6 + Atributo + Perícia, montados pela ficha no painel do personagem.',
       rule: 'testes-e-dados/rolagens'
     },
     combate: {
@@ -3386,6 +3328,7 @@ const FIREBASE_CONFIG = {
       b.addEventListener('click', () => {
         if (typeof p.go === 'function') { p.go(); return; }
         const el = $(p.go);
+        if (el) showSheetTab(el.closest('.sheet-panel'));
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = $('button:not(:disabled), input', el); if (f) f.focus({ preventScroll: true }); }
       });
       return h('p', 'alerts__item', p.text + ' ', b);
@@ -3417,6 +3360,7 @@ const FIREBASE_CONFIG = {
     renderPowers(m);
     renderInventory(m);
     renderAlerts(m);
+    renderVitals(m);
     // avisa quando a carga passa do limite (colocar ou tirar itens nunca é bloqueado)
     if (watch.id === sheetChar.id && m.over && !watch.over) toast('Carga ' + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '. ' + OVERLOAD_TEXT);
     watch.over = m.over;
@@ -3425,6 +3369,66 @@ const FIREBASE_CONFIG = {
     if (fid) { const el = $('[data-fid="' + fid + '"]'); if (el && !el.disabled) el.focus({ preventScroll: true }); }
   }
   const changed = () => { touchSheet(); rerender(); };
+
+  /* Abas da ficha (a última aberta fica lembrada neste aparelho) */
+  const SHEET_TAB_KEY = 'vortex.sheetTab.v1';
+  function showSheetTab(panel, focus) {
+    if (!panel) return;
+    $$('.sheet-tab').forEach((tab) => {
+      const on = tab.getAttribute('aria-controls') === panel.id;
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+      if (on && focus) tab.focus();
+      $('#' + tab.getAttribute('aria-controls')).hidden = !on;
+    });
+    try { localStorage.setItem(SHEET_TAB_KEY, panel.id); } catch (e) { /* só nesta visita */ }
+  }
+  $$('.sheet-tab').forEach((tab, i, all) => {
+    tab.addEventListener('click', () => showSheetTab($('#' + tab.getAttribute('aria-controls'))));
+    tab.addEventListener('keydown', (ev) => {
+      const k = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
+      if (ev.key === 'Home' || ev.key === 'End') { ev.preventDefault(); const t2 = all[ev.key === 'Home' ? 0 : all.length - 1]; showSheetTab($('#' + t2.getAttribute('aria-controls')), true); return; }
+      if (!k) return;
+      ev.preventDefault();
+      const next = all[(i + k + all.length) % all.length];
+      showSheetTab($('#' + next.getAttribute('aria-controls')), true);
+    });
+  });
+  try { const last = localStorage.getItem(SHEET_TAB_KEY); if (last && $('#' + last)) showSheetTab($('#' + last)); } catch (e) { /* sem armazenamento */ }
+
+  /* Números vitais: o que mais se consulta na mesa, sempre à vista (como no D&D Beyond) */
+  function ring(key, label, cur, max, note) {
+    const pct = max > 0 ? clamp(Math.max(0, cur) / max, 0, 1) : 0;
+    const el = h('div', 'vital vital--ring vital--' + key,
+      h('span', 'vital__dial', h('span', 'vital__num', String(cur)), h('span', 'vital__max', '/ ' + max)),
+      h('span', 'vital__label', label),
+      note ? h('span', 'vital__note', note) : null);
+    el.style.setProperty('--pct', (pct * 100).toFixed(1));
+    el.setAttribute('role', 'meter');
+    el.setAttribute('aria-label', label);
+    el.setAttribute('aria-valuemin', '0');
+    el.setAttribute('aria-valuemax', String(max));
+    el.setAttribute('aria-valuenow', String(cur));
+    return el;
+  }
+  function renderVitals(m) {
+    const s = sheetChar.sheet;
+    const life = LIFE.map((l) => ({ key: l[0], max: m.max[l[0]], cur: getCur(s, l[0], m.max[l[0]]) })).filter((l) => l.max > 0 || l.key === m.base);
+    const lifeCur = life.reduce((t, l) => t + Math.max(0, l.cur), 0);
+    const lifeMax = life.reduce((t, l) => t + l.max, 0);
+    const lifeNote = life.filter((l) => l.max > 0).map((l) => (l.key === 'pv' ? 'PV' : l.key === 'escudo' ? 'Esc' : 'Bld') + ' ' + l.cur).join(' · ');
+    const box = (cls, label, value, note) => h('div', 'vital vital--' + cls, h('span', 'vital__label', label), h('span', 'vital__big', value), note ? h('span', 'vital__note', note) : null);
+    const free = m.upTotal - m.upSpent;
+    $('#vitals').replaceChildren(
+      box('def', 'Defesa', String(m.defMin), 'mínima'),
+      ring('life', 'Resistência', lifeCur, lifeMax, lifeNote),
+      ring('pe', 'PE', getCur(s, 'pe', m.max.pe), m.max.pe, 'Esforço'),
+      ring('pa', 'PA', getCur(s, 'pa', m.max.pa), m.max.pa, 'Ação'),
+      box('move', 'Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarregado' : 'padrão'),
+      box('carga', 'Carga', fmtNum(m.cargaUsed) + '/' + fmtNum(m.cargaMax), m.over ? 'acima do limite' : 'mochila'),
+      box('up', 'UP livres', String(free), 'XP ' + num(s.xp)));
+    $('#sheet-sub').textContent = [sheetChar.species, sheetChar.origin, m.armor ? m.armor.name : ''].filter(Boolean).join(' · ');
+  }
 
   function renderAttrs(m) {
     const s = sheetChar.sheet;
@@ -3659,7 +3663,7 @@ const FIREBASE_CONFIG = {
     $('#profs-block').replaceChildren(
       h('h3', 'sub-title', 'Proficiências ', h('span', 'count', '(' + s.profs.length + ' de 4 iniciais' + (upProfsOf(s).length ? ' + ' + upProfsOf(s).length + ' por poder' : '') + ')')),
       profPills(s.profs, (id, on) => { s.profs = s.profs.filter((x) => x !== id); if (on) s.profs.push(id); changed(); }, 0),
-      upProfsOf(s).length ? h('p', 'field__hint', 'Vindas de poderes: ' + upProfsOf(s).map(profLabel).join(', ') + '.') : null,
+      ...(upProfsOf(s).length ? [h('p', 'field__hint', 'Vindas de poderes: ' + upProfsOf(s).map(profLabel).join(', ') + '.')] : []),
       h('p', 'field__hint', 'Em armas: cadência perita e o aprimoramento do tipo. Em armaduras: a penalidade não dobra e a defesa ganha +1. Usar um item fora da empunhadura ideal conta como sem proficiência.'));
   }
 
@@ -4173,6 +4177,39 @@ const FIREBASE_CONFIG = {
   // cadência: com proficiência, –N para N disparos; sem, –(1 + 2 + ... + N). Um disparo não tem penalidade.
   const shotPenalty = (n, prof) => (n <= 1 ? 0 : prof ? n : (n * (n + 1)) / 2);
 
+  /* Cadência por alvo: os disparos da ação se dividem entre os alvos marcados.
+     A penalidade vem do total de disparos; o dano de cada alvo é multiplicado pelos disparos nele.
+     st.per = { idDoAlvo: disparos }. Devolve os campos, o total e se faltou cadência. */
+  function perTargetShots(st, cad, targets, prof, redraw, idp) {
+    st.per = st.per || {};
+    Object.keys(st.per).forEach((k) => { if (!targets.some((x) => x.id === k)) delete st.per[k]; });
+    targets.forEach((x) => { st.per[x.id] = clamp(Math.round(st.per[x.id] || 1), 1, cad); });
+    let total = targets.reduce((a, x) => a + st.per[x.id], 0);
+    for (let k = targets.length - 1; total > cad && k >= 0; k--) {
+      const cut = Math.min(st.per[targets[k].id] - 1, total - cad);
+      st.per[targets[k].id] -= cut;
+      total -= cut;
+    }
+    const over = targets.length > cad;
+    const rows = targets.map((x) => {
+      const sel = h('select', 'input');
+      sel.id = idp + 'per-' + x.id.replace(/[^a-z0-9]/gi, '');
+      const room = Math.max(1, cad - (total - st.per[x.id]));
+      for (let k = 1; k <= room; k++) { const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos') + ' · dano ×' + k); o.value = String(k); sel.append(o); }
+      sel.value = String(st.per[x.id]);
+      sel.addEventListener('change', () => { st.per[x.id] = Math.round(num(sel.value)) || 1; redraw(); });
+      const lab = h('label', 'per__name', x.name);
+      lab.htmlFor = sel.id;
+      return h('div', 'per__row', lab, sel);
+    });
+    const pen = shotPenalty(Math.min(total, cad), prof);
+    const box = h('fieldset', 'per field--wide',
+      h('legend', 'field__label', 'Cadência por alvo: ' + Math.min(total, cad) + ' de ' + cad + ' disparos' + (pen ? ' · –' + pen + ' no ataque' + (prof ? ' (perita)' : '') : '')),
+      ...rows,
+      over ? h('p', 'field__error', 'A cadência ' + cad + ' só alcança ' + plural(cad, 'alvo', 'alvos') + '. Desmarque alvos no Combate.') : null);
+    return { box, total: Math.min(total, cad), over };
+  }
+
   function attackTest(s, m, i, modeId, shots) {
     const modes = attackModes(s, i);
     const mode = modes.find((x) => x.id === modeId) || modes[0];
@@ -4261,7 +4298,14 @@ const FIREBASE_CONFIG = {
       mSel.value = st.mode;
       mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
       const fields = [field('weapon', 'Arma', wSel), field('mode', 'Forma de ataque', mSel)];
-      if (maxShots(weapon) > 1) {
+      const targets = c.targets || [];
+      let per = null;
+      if (maxShots(weapon) > 1 && targets.length) {
+        per = perTargetShots(st, maxShots(weapon), targets, isProficient(s, weapon), draw, idp);
+        st.shots = per.total;
+        fields.push(per.box);
+      } else if (maxShots(weapon) > 1) {
+        st.per = null;
         const nSel = h('select', 'input');
         for (let k = 1; k <= maxShots(weapon); k++) {
           const p = shotPenalty(k, isProficient(s, weapon));
@@ -4291,6 +4335,7 @@ const FIREBASE_CONFIG = {
       fields.push(field('mod', 'Outro modificador (cobertura...)', modIn));
 
       const t = attackTest(s, m, weapon, st.mode, st.shots);
+      if (per) t.label = ('Ataque: ' + (weapon ? weapon.name : 'Desarmado') + ' · ' + st.shots + (st.shots === 1 ? ' disparo' : ' disparos')).slice(0, 60);
       const dist = DISTANCES.find((d) => d.id === st.dist);
       if (dist && dist.mod) t.mods.push([dist.short, dist.mod]);
       if (st.mod) t.mods.push(['modificador', st.mod]);
@@ -4299,6 +4344,7 @@ const FIREBASE_CONFIG = {
       const info = [weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
       const go = h('button', 'btn btn--primary btn--sm', (c.btnLabel || 'Atacar') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
+      go.disabled = Boolean(per && per.over);
       go.addEventListener('click', () => onRoll(t, go));
       box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, info ? h('span', 'attack__info', info) : null));
     };
@@ -5041,7 +5087,7 @@ const FIREBASE_CONFIG = {
   let currentCamp = null;
   let members = [];
   let firstRolls = true;
-  const inRoll = $('#roll-input'), errRoll = $('#roll-error'), speakerEl = $('#speaker');
+  const speakerEl = $('#speaker');
 
   function renderRolls(list) {
     const log = $('#roll-log');
@@ -5050,21 +5096,6 @@ const FIREBASE_CONFIG = {
     $('#roll-empty').hidden = list.length > 0;
     if (stick) log.scrollTop = log.scrollHeight;
     firstRolls = false;
-  }
-
-  async function doRoll(text) {
-    const speaker = members.find((m) => m.mine && m.characterId === speakerEl.value);
-    if (!speaker) return;
-    let result;
-    try { result = rollDice(text); }
-    catch (err) { setError(errRoll, inRoll, errorMessage(err)); inRoll.focus(); return; }
-    setError(errRoll, inRoll, '');
-    try {
-      await db.addRoll(currentCamp.id, {
-        characterId: speaker.characterId, characterName: speaker.name, characterType: speaker.type,
-        expr: result.expr, label: result.label, detail: result.detail, total: result.total, flag: result.flag
-      });
-    } catch (err) { toast(errorMessage(err)); }
   }
 
   // Testes prontos com a ficha de quem está rolando
@@ -5113,6 +5144,9 @@ const FIREBASE_CONFIG = {
     const mb = currentCamp && dockMember();
     if (!mb || !mb.sheet) { dock.hidden = !mb; if (mb) { $('#dock-title').textContent = mb.name; $('#dock-meta').textContent = 'Ficha ainda sem atributos.'; } return; }
     dock.hidden = false;
+    const myTurn = Boolean(sceneOn() && sceneCurrent() && sceneCurrent().id === 'chr:' + mb.characterId);
+    $('#dock-turn').hidden = !myTurn;
+    dock.classList.toggle('dock--turn', myTurn);
     const c = sheetOf(mb);
     const s = c.sheet;
     const m = compute(c);
@@ -5141,7 +5175,7 @@ const FIREBASE_CONFIG = {
     // Ações: o ataque usa os alvos marcados no Combate; sem alvo, só rola
     const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
     const hasTargets = combat.targets.size > 0;
-    $('#dock-attack').replaceChildren(attackBuilder(Object.assign({}, c, { btnLabel: hasTargets ? 'Atacar os alvos' : 'Atacar' }), st, async (t, b) => {
+    $('#dock-attack').replaceChildren(attackBuilder(Object.assign({}, c, { btnLabel: hasTargets ? 'Atacar os alvos' : 'Atacar', targets: combatants().filter((x) => combat.targets.has(x.id)).map((x) => ({ id: x.id, name: x.name })) }), st, async (t, b) => {
       if (combat.targets.size) { await runAttack({ member: mb, c }, t, st, b); return; }
       b.disabled = true;
       await campaignRoll(mb, rollTest(t));
@@ -5268,9 +5302,6 @@ const FIREBASE_CONFIG = {
     $('#member-list').replaceChildren(...members.map(memberRow));
   });
 
-  $('#form-roll').addEventListener('submit', (ev) => { ev.preventDefault(); doRoll(inRoll.value); });
-  inRoll.addEventListener('input', () => setError(errRoll, inRoll, ''));
-  $$('[data-dice]').forEach((b) => b.addEventListener('click', () => doRoll(b.dataset.dice)));
 
   $('#copy-code').addEventListener('click', async () => {
     if (await copyText($('#campaign-code').textContent)) toast('ID copiado.');
@@ -5380,6 +5411,7 @@ const FIREBASE_CONFIG = {
     $('#combat-empty').hidden = list.length > 0;
     renderAttackPanel(list, gm);
     block.hidden = false;
+    renderScene();
     renderDock();
   }
 
@@ -5479,7 +5511,14 @@ const FIREBASE_CONFIG = {
       mSel.value = st.mode;
       mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
       const fields = [field('mode', 'Forma de ataque', mSel)];
-      if (cad > 1) {
+      const targets = combatants().filter((x) => combat.targets.has(x.id));
+      let per = null;
+      if (cad > 1 && targets.length) {
+        per = perTargetShots(st, cad, targets, true, draw, 'cbf-');
+        st.shots = per.total;
+        fields.push(per.box);
+      } else if (cad > 1) {
+        st.per = null;
         const nSel = h('select', 'input');
         for (let k = 1; k <= cad; k++) { const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos · –' + shotPenalty(k, true) + ' · dano ×' + k)); o.value = String(k); nSel.append(o); }
         nSel.value = String(st.shots);
@@ -5507,10 +5546,11 @@ const FIREBASE_CONFIG = {
       const dist = DISTANCES.find((d) => d.id === st.dist);
       if (st.mode === 'À distância' && dist && dist.mod) mods.push([dist.short, dist.mod]);
       if (st.mod) mods.push(['modificador', st.mod]);
-      const t = applyDice({ label: ('Ataque: ' + (v.arma || st.mode) + (st.shots > 1 ? ' · dano ×' + st.shots : '')).slice(0, 60), attrName: md[2], attr: num(v[md[0]]), skillName: md[3], skill: num(v[md[1]]), mods }, st);
+      const t = applyDice({ label: ('Ataque: ' + (v.arma || st.mode) + (st.shots > 1 ? (per ? ' · ' + st.shots + ' disparos' : ' · dano ×' + st.shots) : '')).slice(0, 60), attrName: md[2], attr: num(v[md[0]]), skillName: md[3], skill: num(v[md[1]]), mods }, st);
       const fixed = t.attr + t.skill + mods.reduce((a, b) => a + b[1], 0);
       const go = h('button', 'btn btn--primary btn--sm', 'Atacar os alvos · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
+      go.disabled = Boolean(per && per.over);
       go.addEventListener('click', () => runAttack({ foe: f }, t, st, go));
       const info = [v.dano ? 'dano ' + v.dano : '', v.efetivo ? 'efetivo contra ' + v.efetivo.toLowerCase() : ''].filter(Boolean).join(' · ');
       box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, info ? h('span', 'attack__info', info) : null));
@@ -5540,11 +5580,12 @@ const FIREBASE_CONFIG = {
     const lines = [];
     for (const x of list) {
       if (r.flag === 'falha') { lines.push(x.name + ': errou (falha completa)'); continue; }
-      const base = Math.max(1, r.total - x.def) * shots;
+      const k = st.per && shots > 1 ? st.per[x.id] || 1 : shots; // cadência por alvo
+      const base = Math.max(1, r.total - x.def) * k;
       const res = applyLayeredDamage(base, types, x.layers, effective);
       const parts = res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k));
       const state = lifeState(res.layers);
-      lines.push(x.name + ': ' + base + ' de dano' + (shots > 1 ? ' (×' + shots + ')' : '') + ' vs defesa ' + x.def + (parts.length ? ' → ' + parts.join(', ') : '') + (state ? ' · ' + state : ''));
+      lines.push(x.name + ': ' + base + ' de dano' + (k > 1 ? ' (×' + k + ')' : '') + ' vs defesa ' + x.def + (parts.length ? ' → ' + parts.join(', ') : '') + (state ? ' · ' + state : ''));
       try {
         if (x.foe) {
           const cur = {};
@@ -5579,6 +5620,138 @@ const FIREBASE_CONFIG = {
     const list = combatants().filter((x) => x.foe);
     if (!list.length) { toast('Nenhum inimigo na cena.'); return; }
     for (const x of list) { try { await rollDefense(x); } catch (err) { toast(errorMessage(err)); } }
+  });
+
+  /* ---------- Cena e iniciativa ----------
+     Regras de Combate: ao entrar num combate, todos fazem um teste de Precisão (2d6 + Precisão + Iniciativa)
+     e a ordem vai do maior para o menor, mantida até o fim; a defesa da cena é rolada junto.
+     Cena → rodadas → turnos. O mestre abre e encerra; quem está na vez pode encerrar o próprio turno. */
+  let scene = null;
+  const sceneOn = () => Boolean(scene && scene.active && Array.isArray(scene.order) && scene.order.length);
+  const sceneOrder = () => (sceneOn() ? scene.order.filter((o) => combatants().some((x) => x.id === o.id)) : []);
+  const sceneCurrent = () => { const o = sceneOn() ? scene.order[scene.turn] : null; return o || null; };
+  const isMineId = (id) => members.some((mb) => mb.mine && 'chr:' + mb.characterId === id);
+
+  function rollInitiative(x) {
+    let attr, skill;
+    if (x.foe) { const v = foeVals(x.foe); attr = num(v.precisao); skill = num(v.iniciativa); }
+    else { const s = normSheet(x.member.sheet); attr = num(s.attrs.precisao); skill = num(s.skills.iniciativa); }
+    const r = rollTest({ label: 'Iniciativa', attrName: 'Precisão', attr, skillName: 'Iniciativa', skill });
+    // empate: maior Precisão primeiro, depois a sorte
+    return { id: x.id, name: x.name, init: r.total, tie: attr + Math.random() / 10, detail: r.detail };
+  }
+  const byInit = (a, b) => (b.init - a.init) || ((b.tie || 0) - (a.tie || 0));
+
+  async function saveScene(next) {
+    scene = next;
+    renderScene();
+    try { await db.saveScene(currentCamp.id, next); } catch (err) { toast(errorMessage(err)); }
+  }
+  async function sceneLog(label, detail, total) {
+    try {
+      await db.addRoll(currentCamp.id, { characterId: 'scene', characterName: (scene && scene.name) || 'Cena', characterType: 'criatura', expr: 'cena', label: label.slice(0, 60), detail: detail.slice(0, 1450), total: Math.round(total) || 0, flag: '' });
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  function renderScene() {
+    const block = $('#scene-block');
+    if (!currentCamp) return;
+    const gm = Boolean(currentCamp.gm);
+    const list = combatants();
+    block.hidden = !gm && !sceneOn() && !list.length;
+    const on = sceneOn();
+    const cur = sceneCurrent();
+    $('#scene-title').textContent = on ? (scene.name || 'Combate') : 'Sem combate';
+    $('#scene-meta').textContent = on ? 'Rodada ' + scene.round + (cur ? ' · Vez de ' + cur.name : '') : '';
+    $('#scene-gm').hidden = !gm;
+    $('#scene-start-box').hidden = on;
+    $('#scene-run').hidden = !on;
+    $('#scene-pass').hidden = !(on && cur && isMineId(cur.id) && !gm);
+    $('#scene-empty').hidden = on;
+    const order = on ? scene.order : [];
+    const rows = order.map((o, i) => {
+      const x = list.find((y) => y.id === o.id);
+      const state = x ? lifeState(x.layers) : 'fora da cena';
+      const li = h('li', 'init' + (i === scene.turn ? ' init--now' : '') + (x && x.foe ? ' init--foe' : '') + (state ? ' init--down' : ''),
+        h('span', 'init__pos', String(i + 1)),
+        h('span', 'init__val', String(o.init)),
+        h('span', 'init__main', h('span', 'init__name', o.name), h('span', 'init__meta', [x ? x.kind : '', x ? 'Defesa ' + x.def : '', state].filter(Boolean).join(' · '))));
+      if (i === scene.turn) li.setAttribute('aria-current', 'step');
+      if (gm) {
+        const out = h('button', 'btn btn--ghost btn--sm', 'Tirar');
+        out.type = 'button';
+        out.setAttribute('aria-label', 'Tirar da ordem: ' + o.name);
+        out.addEventListener('click', () => {
+          const next = deep(scene);
+          next.order.splice(i, 1);
+          if (i < next.turn) next.turn -= 1;
+          if (next.turn >= next.order.length) next.turn = 0;
+          if (!next.order.length) next.active = false;
+          saveScene(next);
+        });
+        li.append(out);
+      }
+      return li;
+    });
+    // quem está no Combate e ainda não entrou na ordem (chegou depois)
+    if (on) list.filter((x) => !order.some((o) => o.id === x.id)).forEach((x) => {
+      if (!gm && !isMineId(x.id)) return;
+      const b = h('button', 'btn btn--ghost btn--sm', 'Rolar iniciativa');
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Rolar iniciativa: ' + x.name);
+      b.addEventListener('click', () => joinScene(x));
+      rows.push(h('li', 'init init--out', h('span', 'init__pos', '—'), h('span', 'init__val', '?'), h('span', 'init__main', h('span', 'init__name', x.name), h('span', 'init__meta', 'fora da ordem')), b));
+    });
+    $('#scene-order').replaceChildren(...rows);
+  }
+
+  async function joinScene(x) {
+    const r = rollInitiative(x);
+    const next = deep(scene);
+    const now = next.order[next.turn];
+    next.order.push({ id: r.id, name: r.name, init: r.init, tie: r.tie });
+    next.order.sort(byInit);
+    if (now) next.turn = next.order.findIndex((o) => o.id === now.id);
+    await saveScene(next);
+    await sceneLog('Iniciativa: ' + x.name, r.detail + ' → entra na ordem com ' + r.init, r.init);
+  }
+
+  $('#scene-start').addEventListener('click', async () => {
+    const list = combatants();
+    if (!list.length) { toast('Ninguém no Combate. Adicione inimigos ou vincule personagens.'); return; }
+    const btn = $('#scene-start');
+    btn.disabled = true;
+    const rolls = list.map(rollInitiative).sort(byInit);
+    const name = $('#scene-name').value.trim().slice(0, 60);
+    await saveScene({ active: true, name, round: 1, turn: 0, order: rolls.map((r) => ({ id: r.id, name: r.name, init: r.init, tie: r.tie })) });
+    await sceneLog('Iniciativa' + (name ? ': ' + name : ''), rolls.map((r, i) => (i + 1) + 'º ' + r.name + ' ' + r.init).join(' · '), rolls[0].init);
+    // a defesa da cena é rolada junto com a iniciativa, para quem ainda não tem
+    for (const x of list.filter((y) => !y.defRolled)) { try { await rollDefense(x); } catch (err) { toast(errorMessage(err)); } }
+    $('#scene-name').value = '';
+    btn.disabled = false;
+    toast('Combate iniciado: ' + rolls[0].name + ' começa.');
+  });
+
+  function stepTurn(d) {
+    if (!sceneOn()) return;
+    const next = deep(scene);
+    const n = next.order.length;
+    next.turn += d;
+    if (next.turn >= n) { next.turn = 0; next.round += 1; }
+    if (next.turn < 0) { if (next.round > 1) { next.turn = n - 1; next.round -= 1; } else next.turn = 0; }
+    saveScene(next);
+    const cur = next.order[next.turn];
+    if (cur && d > 0) toast('Rodada ' + next.round + ' · vez de ' + cur.name + '.');
+  }
+  $('#scene-next').addEventListener('click', () => stepTurn(1));
+  $('#scene-prev').addEventListener('click', () => stepTurn(-1));
+  $('#scene-pass').addEventListener('click', () => stepTurn(1));
+  $('#scene-end').addEventListener('click', async () => {
+    const ok = await askConfirm({ title: 'Encerrar a cena?', text: 'A ordem de iniciativa é apagada. PV, defesa e inimigos continuam como estão.', ok: 'Encerrar' });
+    if (!ok) return;
+    const rounds = scene ? scene.round : 0;
+    await saveScene({ active: false, name: '', round: 0, turn: 0, order: [] });
+    await sceneLog('Fim da cena', 'Cena encerrada após ' + plural(rounds, 'rodada', 'rodadas') + '.', rounds);
   });
 
   views.campaign = async function showCampaign(id) {
@@ -5625,22 +5798,22 @@ const FIREBASE_CONFIG = {
     notice.textContent = noAccess
       ? 'Você ainda não participa desta campanha. Abra uma ficha e vincule com o ID de entrada.'
       : 'Para rolar dados, vincule um personagem seu a esta campanha (pela ficha dele).';
-    inRoll.disabled = $('#roll-button').disabled = !canRoll;
-    $$('[data-dice]').forEach((b) => { b.disabled = !canRoll; });
     $('#test-bar').hidden = !canRoll;
     renderTestPick();
     renderDock();
-    setError(errRoll, inRoll, '');
 
     foes = [];
+    scene = null;
     combat.targets.clear();
     $('#combat-block').hidden = noAccess && !camp.gm;
     if (noAccess && !camp.gm) { renderRolls([]); return; }
     renderCombat();
     const stopFoes = db.subscribeFoes(id, (list) => { foes = list; renderCombat(); }, (err) => console.warn(err));
-    if (noAccess) { renderRolls([]); onLeave = () => { if (typeof stopFoes === 'function') stopFoes(); }; return; }
+    const stopScene = db.subscribeScene(id, (sc) => { if (currentCamp && currentCamp.id === id) { scene = sc; renderScene(); renderDock(); } }, (err) => console.warn(err));
+    const stopAll = (more) => () => { [stopFoes, stopScene].concat(more || []).forEach((fn) => { if (typeof fn === 'function') fn(); }); };
+    if (noAccess) { renderRolls([]); onLeave = stopAll(); return; }
     const stop = db.subscribeRolls(id, renderRolls, (err) => toast(errorMessage(err)));
-    onLeave = () => { if (typeof stop === 'function') stop(); if (typeof stopFoes === 'function') stopFoes(); };
+    onLeave = stopAll([stop]);
   };
 
   /* ---------- Regras: livro em abas, no estilo de tutorial ----------

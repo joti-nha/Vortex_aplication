@@ -156,6 +156,17 @@ service cloud.firestore {
                       && request.resource.data.name == resource.data.name;
       }
 
+      // ---------- Cena: ordem de iniciativa, rodada e turno ----------
+      // O mestre abre e encerra; quem participa pode avançar o turno e entrar na ordem.
+      match /scene/{docId} {
+        allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
+        allow create, update: if signedIn() && docId == 'state'
+                              && (isCampaignMember(campaignId) || isCampaignOwner(campaignId))
+                              && request.resource.data.order is list
+                              && request.resource.data.order.size() <= 60;
+        allow delete: if signedIn() && isCampaignOwner(campaignId);
+      }
+
       // ---------- Chat de dados (rolagens não podem ser editadas) ----------
       // O mestre também rola (pelos inimigos), mesmo sem personagem na campanha.
       match /rolls/{rollId} {

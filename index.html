@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -386,30 +386,107 @@
         <div class="sheet-title-wrap">
           <span class="badge" id="sheet-badge"></span>
           <h1 id="sheet-title" tabindex="-1"></h1>
+          <p class="sheet-sub" id="sheet-sub"></p>
           <p class="save-status" id="sheet-status" aria-live="polite"></p>
-          <div class="sheet-actions">
-            <button class="btn btn--ghost btn--sm" type="button" id="setup-open">Distribuição inicial</button>
-            <button class="btn btn--ghost btn--sm" type="button" id="export-open">Exportar ficha</button>
-            <button class="btn btn--ghost btn--sm" type="button" id="pin-toggle">Fixar no acesso rápido</button>
-            <button class="btn btn--ghost btn--sm" type="button" id="fav-toggle" aria-pressed="false">☆ Favoritar</button>
-            <button class="btn btn--ghost btn--sm" type="button" id="profile-toggle" hidden>Salvar no perfil</button>
-          </div>
+        </div>
+        <div class="sheet-actions">
+          <button class="btn btn--ghost btn--sm" type="button" id="setup-open">Distribuição inicial</button>
+          <button class="btn btn--ghost btn--sm" type="button" id="export-open">Exportar ficha</button>
+          <button class="btn btn--ghost btn--sm" type="button" id="pin-toggle">Fixar no acesso rápido</button>
+          <button class="btn btn--ghost btn--sm" type="button" id="fav-toggle" aria-pressed="false">☆ Favoritar</button>
+          <button class="btn btn--ghost btn--sm" type="button" id="profile-toggle" hidden>Salvar no perfil</button>
         </div>
       </header>
 
       <!-- Pendências: pontos e recursos ainda por distribuir -->
       <div class="alerts" id="sheet-alerts" role="status" hidden></div>
 
-      <!-- Atributos: no topo, cada um com a sua cor -->
+      <!-- Atributos e números vitais: sempre visíveis, acima das abas -->
       <section class="attr-band" id="attr-band" aria-label="Atributos"></section>
+      <section class="vitals" id="vitals" aria-label="Números vitais"></section>
 
-      <!-- Recursos: calculados dos atributos, itens equipados, poderes e espécime -->
+      <!-- Abas da ficha -->
+      <nav class="sheet-tabs" role="tablist" aria-label="Partes da ficha">
+        <button class="sheet-tab" type="button" role="tab" id="stab-combate" data-stab="combate" aria-controls="spanel-combate" aria-selected="true">Combate</button>
+        <button class="sheet-tab" type="button" role="tab" id="stab-pericias" data-stab="pericias" aria-controls="spanel-pericias" aria-selected="false" tabindex="-1">Perícias</button>
+        <button class="sheet-tab" type="button" role="tab" id="stab-poderes" data-stab="poderes" aria-controls="spanel-poderes" aria-selected="false" tabindex="-1">Poderes</button>
+        <button class="sheet-tab" type="button" role="tab" id="stab-inventario" data-stab="inventario" aria-controls="spanel-inventario" aria-selected="false" tabindex="-1">Inventário</button>
+        <button class="sheet-tab" type="button" role="tab" id="stab-progressao" data-stab="progressao" aria-controls="spanel-progressao" aria-selected="false" tabindex="-1">Progressão</button>
+        <button class="sheet-tab" type="button" role="tab" id="stab-descricao" data-stab="descricao" aria-controls="spanel-descricao" aria-selected="false" tabindex="-1">Descrição</button>
+        <button class="sheet-tab" type="button" role="tab" id="stab-campanhas" data-stab="campanhas" aria-controls="spanel-campanhas" aria-selected="false" tabindex="-1">Campanhas</button>
+      </nav>
+
+      <div class="sheet-panel" id="spanel-combate" role="tabpanel" aria-labelledby="stab-combate">
       <section class="block" aria-labelledby="res-title">
         <h2 class="block__title" id="res-title"><button class="help" type="button" data-help="recursos">Recursos</button></h2>
         <div id="res-block"></div>
       </section>
+      </div>
 
-      <div class="two-col sheet-cols">
+      <div class="sheet-panel" id="spanel-pericias" role="tabpanel" aria-labelledby="stab-pericias" hidden>
+      <section class="block" aria-labelledby="skills-title">
+          <h2 class="block__title" id="skills-title"><button class="help" type="button" data-help="pericias">Perícias</button></h2>
+          <p class="block__hint" id="skills-hint"></p>
+          <div id="skills-block"></div>
+          <div id="profs-block"></div>
+        </section>
+      </div>
+
+      <div class="sheet-panel" id="spanel-poderes" role="tabpanel" aria-labelledby="stab-poderes" hidden>
+      <section class="block sheet-block" aria-labelledby="powers-title">
+        <div class="block__head">
+          <h2 class="block__title" id="powers-title"><button class="help" type="button" data-help="poderes">Poderes</button></h2>
+          <button class="btn btn--ghost btn--sm" type="button" id="power-add">Adicionar poder</button>
+        </div>
+        <ul class="rows" id="power-list"></ul>
+        <p class="empty" id="power-empty">Nenhum poder ainda.</p>
+      </section>
+      </div>
+
+      <div class="sheet-panel" id="spanel-inventario" role="tabpanel" aria-labelledby="stab-inventario" hidden>
+      <section class="block sheet-block" aria-labelledby="inv-title">
+        <div class="block__head">
+          <h2 class="block__title" id="inv-title"><button class="help" type="button" data-help="inventario">Inventário</button></h2>
+          <button class="btn btn--primary btn--sm" type="button" id="inv-add">Adicionar do banco</button>
+        </div>
+        <div class="equip">
+          <div>
+            <h3 class="inv-title">Equipado</h3>
+            <div class="equip-doll" id="equip-doll"></div>
+          </div>
+          <div class="equip-side">
+            <h3 class="inv-title">Módulos</h3>
+            <div class="equip-mods" id="equip-mods"></div>
+            <div class="equip-info" id="equip-info"></div>
+          </div>
+        </div>
+
+        <h3 class="inv-title">Mochila <span class="count" id="bag-count"></span></h3>
+        <div id="inv-summary"></div>
+        <div class="bag" id="bag"></div>
+        <p class="field__hint">Passe o mouse ou toque num bloco para ver os detalhes e equipar. Também dá para arrastar da mochila para um espaço (e de volta).</p>
+        <form class="quick-item" id="form-quick-item" novalidate>
+          <div class="field">
+            <label class="field__label" for="quick-item-name">Item rápido (sem passar pela Oficina)</label>
+            <input class="input" id="quick-item-name" type="text" maxlength="60" autocomplete="off" placeholder="Ex.: Kit de primeiros socorros">
+          </div>
+          <div class="field">
+            <label class="field__label" for="quick-item-carga">Carga</label>
+            <input class="input" id="quick-item-carga" type="number" min="0" step="0.25" value="0" inputmode="decimal">
+          </div>
+          <button class="btn btn--ghost" type="submit">Anotar</button>
+        </form>
+      </section>
+      </div>
+
+      <div class="sheet-panel" id="spanel-progressao" role="tabpanel" aria-labelledby="stab-progressao" hidden>
+      <section class="block" aria-labelledby="prog-title">
+        <h2 class="block__title" id="prog-title"><button class="help" type="button" data-help="progressao">Progressão</button></h2>
+        <div id="prog-block"></div>
+      </section>
+      </div>
+
+      <div class="sheet-panel" id="spanel-descricao" role="tabpanel" aria-labelledby="stab-descricao" hidden>
         <section class="block" aria-labelledby="basic-title">
           <h2 class="block__title" id="basic-title"><button class="help" type="button" data-help="dados-basicos">Dados básicos</button></h2>
           <p class="block__hint">Todas as fichas são públicas: qualquer pessoa pode ver e editar.</p>
@@ -453,62 +530,13 @@
               <textarea class="input" id="f-lore" rows="3" maxlength="4000" placeholder="História, passado e lugar no mundo. Aparece no ícone 📜 da campanha."></textarea>
             </div>
           </div>
-
-          <h3 class="sub-title"><button class="help" type="button" data-help="progressao">Progressão</button></h3>
-          <div id="prog-block"></div>
         </section>
-
-        <section class="block" aria-labelledby="skills-title">
-          <h2 class="block__title" id="skills-title"><button class="help" type="button" data-help="pericias">Perícias</button></h2>
-          <p class="block__hint" id="skills-hint"></p>
-          <div id="skills-block"></div>
-          <div id="profs-block"></div>
-        </section>
+      <div class="danger-zone" id="danger-zone">
+        <button class="btn btn--danger" type="button" id="delete-character">Excluir personagem</button>
+      </div>
       </div>
 
-      <section class="block sheet-block" aria-labelledby="powers-title">
-        <div class="block__head">
-          <h2 class="block__title" id="powers-title"><button class="help" type="button" data-help="poderes">Poderes</button></h2>
-          <button class="btn btn--ghost btn--sm" type="button" id="power-add">Adicionar poder</button>
-        </div>
-        <ul class="rows" id="power-list"></ul>
-        <p class="empty" id="power-empty">Nenhum poder ainda.</p>
-      </section>
-
-      <section class="block sheet-block" aria-labelledby="inv-title">
-        <div class="block__head">
-          <h2 class="block__title" id="inv-title"><button class="help" type="button" data-help="inventario">Inventário</button></h2>
-          <button class="btn btn--primary btn--sm" type="button" id="inv-add">Adicionar do banco</button>
-        </div>
-        <div class="equip">
-          <div>
-            <h3 class="inv-title">Equipado</h3>
-            <div class="equip-doll" id="equip-doll"></div>
-          </div>
-          <div class="equip-side">
-            <h3 class="inv-title">Módulos</h3>
-            <div class="equip-mods" id="equip-mods"></div>
-            <div class="equip-info" id="equip-info"></div>
-          </div>
-        </div>
-
-        <h3 class="inv-title">Mochila <span class="count" id="bag-count"></span></h3>
-        <div id="inv-summary"></div>
-        <div class="bag" id="bag"></div>
-        <p class="field__hint">Passe o mouse ou toque num bloco para ver os detalhes e equipar. Também dá para arrastar da mochila para um espaço (e de volta).</p>
-        <form class="quick-item" id="form-quick-item" novalidate>
-          <div class="field">
-            <label class="field__label" for="quick-item-name">Item rápido (sem passar pela Oficina)</label>
-            <input class="input" id="quick-item-name" type="text" maxlength="60" autocomplete="off" placeholder="Ex.: Kit de primeiros socorros">
-          </div>
-          <div class="field">
-            <label class="field__label" for="quick-item-carga">Carga</label>
-            <input class="input" id="quick-item-carga" type="number" min="0" step="0.25" value="0" inputmode="decimal">
-          </div>
-          <button class="btn btn--ghost" type="submit">Anotar</button>
-        </form>
-      </section>
-
+      <div class="sheet-panel" id="spanel-campanhas" role="tabpanel" aria-labelledby="stab-campanhas" hidden>
       <section class="block sheet-block" aria-labelledby="attach-title">
         <h2 class="block__title" id="attach-title"><button class="help" type="button" data-help="campanhas">Campanhas</button></h2>
         <form class="inline-form inline-form--row" id="form-attach" novalidate>
@@ -523,10 +551,8 @@
         <ul class="rows" id="sheet-camp-list"></ul>
         <p class="empty" id="sheet-camp-empty">Ainda não está em nenhuma campanha.</p>
       </section>
-
-      <div class="danger-zone" id="danger-zone">
-        <button class="btn btn--danger" type="button" id="delete-character">Excluir personagem</button>
       </div>
+
     </section>
 
     <!-- ===================== TELA: CAMPANHA ===================== -->
@@ -547,7 +573,7 @@
         <div class="dock__head">
           <span class="dock__pic token" id="dock-pic" aria-hidden="true"></span>
           <div class="dock__who">
-            <p class="eyebrow">Jogando como</p>
+            <p class="eyebrow">Jogando como <span class="dock__turn" id="dock-turn" hidden>Sua vez</span></p>
             <h2 class="dock__name" id="dock-title"></h2>
             <p class="dock__meta" id="dock-meta"></p>
           </div>
@@ -566,7 +592,6 @@
         <div class="dock__tabs" role="tablist" aria-label="Ações do personagem">
           <button class="dock__tab" type="button" role="tab" id="dock-tab-acoes" data-tab="acoes" aria-controls="dock-acoes" aria-selected="true">Ações</button>
           <button class="dock__tab" type="button" role="tab" id="dock-tab-testes" data-tab="testes" aria-controls="dock-testes" aria-selected="false" tabindex="-1">Testes</button>
-          <button class="dock__tab" type="button" role="tab" id="dock-tab-dados" data-tab="dados" aria-controls="dock-dados" aria-selected="false" tabindex="-1">Dados</button>
         </div>
         <div class="dock__panel" id="dock-acoes" role="tabpanel" aria-labelledby="dock-tab-acoes">
           <div id="dock-attack"></div>
@@ -583,27 +608,54 @@
             </div>
           </div>
         </div>
-        <div class="dock__panel" id="dock-dados" role="tabpanel" aria-labelledby="dock-tab-dados" hidden>
-          <div class="dice-bar" role="group" aria-label="Rolagens rápidas">
-            <button class="btn btn--ghost btn--sm" type="button" data-dice="2d6">2d6</button>
-            <button class="btn btn--ghost btn--sm" type="button" data-dice="d4">d4</button>
-            <button class="btn btn--ghost btn--sm" type="button" data-dice="d6">d6</button>
-            <button class="btn btn--ghost btn--sm" type="button" data-dice="d8">d8</button>
-            <button class="btn btn--ghost btn--sm" type="button" data-dice="d10">d10</button>
-            <button class="btn btn--ghost btn--sm" type="button" data-dice="d12">d12</button>
-            <button class="btn btn--ghost btn--sm" type="button" data-dice="d20">d20</button>
-            <button class="btn btn--ghost btn--sm" type="button" data-dice="d100">d100</button>
+      </section>
+
+      <section class="block scene" id="scene-block" aria-labelledby="scene-title" hidden>
+        <div class="scene__head">
+          <div>
+            <p class="eyebrow">Cena e iniciativa</p>
+            <h2 class="block__title scene__title" id="scene-title">Sem combate</h2>
+            <p class="scene__meta" id="scene-meta" role="status"></p>
           </div>
-          <form class="roll-form" id="form-roll" novalidate>
-            <div class="field">
-              <label class="visually-hidden" for="roll-input">Comando de dados</label>
-              <input class="input" id="roll-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-                     placeholder="Ex.: 2d6+3" aria-describedby="roll-error roll-help">
+          <div class="scene__ctl">
+            <button class="btn btn--primary btn--sm" type="button" id="scene-pass" hidden>Encerrar meu turno</button>
+            <div class="scene__gm" id="scene-gm" hidden>
+              <div class="scene__start" id="scene-start-box">
+                <label class="visually-hidden" for="scene-name">Nome da cena</label>
+                <input class="input" id="scene-name" type="text" maxlength="60" autocomplete="off" placeholder="Nome da cena (opcional)">
+                <button class="btn btn--primary btn--sm" type="button" id="scene-start">Iniciar combate</button>
+              </div>
+              <div class="scene__run" id="scene-run" hidden>
+                <button class="btn btn--ghost btn--sm" type="button" id="scene-prev" aria-label="Turno anterior">◀ Anterior</button>
+                <button class="btn btn--primary btn--sm" type="button" id="scene-next">Próximo turno ▶</button>
+                <button class="btn btn--danger btn--sm" type="button" id="scene-end">Encerrar cena</button>
+              </div>
             </div>
-            <button class="btn btn--primary" type="submit" id="roll-button">Rolar</button>
-          </form>
-          <p class="field__error" id="roll-error" role="alert"></p>
-          <p class="field__hint" id="roll-help">Exemplos: d20, 2d6+3, 4d6kh3 (fica com os 3 maiores), 1d20+5 # ataque</p>
+          </div>
+        </div>
+        <ol class="initiative" id="scene-order" aria-label="Ordem de iniciativa"></ol>
+        <p class="empty" id="scene-empty">Nenhum combate em andamento. Ao iniciar, o mestre rola a iniciativa (2d6 + Precisão + Iniciativa) e a defesa da cena de todos que estão no Combate.</p>
+      </section>
+
+      <section class="block combat" id="combat-block" aria-labelledby="combat-title">
+        <div class="block__head">
+          <h2 class="block__title" id="combat-title"><button class="help" type="button" data-help="combate">Combate</button></h2>
+          <div class="combat__gm" id="combat-gm" hidden>
+            <button class="btn btn--primary btn--sm" type="button" id="foe-add">Adicionar inimigo</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="foe-def">Rolar defesa dos inimigos</button>
+          </div>
+        </div>
+        <p class="block__hint">Marque um ou mais alvos na cena e ataque pelo painel do seu personagem (no topo) ou, se for o mestre, pelos inimigos aqui embaixo. O dano (ataque – defesa, mínimo 1) entra sozinho na ordem Escudo → Blindagem → Vida, com fraquezas e resistências de cada camada.</p>
+        <ul class="rows combatants" id="combatants" aria-label="Na cena"></ul>
+        <p class="empty" id="combat-empty">Ninguém na cena ainda. O mestre adiciona inimigos da lista aberta; os personagens da campanha entram sozinhos.</p>
+        <div class="combat__attack" id="combat-attack" hidden>
+          <h3 class="sub-title">Ataque dos inimigos (mestre)</h3>
+          <div class="field">
+            <label class="field__label" for="atk-who">Atacante</label>
+            <select class="input" id="atk-who"></select>
+          </div>
+          <div id="atk-builder"></div>
+          <p class="field__hint" id="atk-targets"></p>
         </div>
       </section>
 
@@ -640,27 +692,6 @@
         </section>
       </div>
 
-      <section class="block combat" id="combat-block" aria-labelledby="combat-title">
-        <div class="block__head">
-          <h2 class="block__title" id="combat-title"><button class="help" type="button" data-help="combate">Combate</button></h2>
-          <div class="combat__gm" id="combat-gm" hidden>
-            <button class="btn btn--primary btn--sm" type="button" id="foe-add">Adicionar inimigo</button>
-            <button class="btn btn--ghost btn--sm" type="button" id="foe-def">Rolar defesa dos inimigos</button>
-          </div>
-        </div>
-        <p class="block__hint">Marque um ou mais alvos na cena e ataque pelo painel do seu personagem (no topo) ou, se for o mestre, pelos inimigos aqui embaixo. O dano (ataque – defesa, mínimo 1) entra sozinho na ordem Escudo → Blindagem → Vida, com fraquezas e resistências de cada camada.</p>
-        <ul class="rows combatants" id="combatants" aria-label="Na cena"></ul>
-        <p class="empty" id="combat-empty">Ninguém na cena ainda. O mestre adiciona inimigos da lista aberta; os personagens da campanha entram sozinhos.</p>
-        <div class="combat__attack" id="combat-attack" hidden>
-          <h3 class="sub-title">Ataque dos inimigos (mestre)</h3>
-          <div class="field">
-            <label class="field__label" for="atk-who">Atacante</label>
-            <select class="input" id="atk-who"></select>
-          </div>
-          <div id="atk-builder"></div>
-          <p class="field__hint" id="atk-targets"></p>
-        </div>
-      </section>
 
       <div class="danger-zone" id="camp-danger" hidden>
         <button class="btn btn--danger" type="button" id="delete-campaign">Excluir campanha</button>
@@ -873,8 +904,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=16"></script>
-  <script src="items.js?v=16"></script>
-  <script src="app.js?v=16"></script>
+  <script src="regras.js?v=17"></script>
+  <script src="items.js?v=17"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
