@@ -2925,6 +2925,10 @@ const FIREBASE_CONFIG = {
     }));
   }
   const ORIGINS = originsFromRules();
+  // origem vinda do banco (inclusive as criadas na Oficina): itens iniciais, um por linha
+  const bankOrigin = (e) => ({ name: e.name, text: (e.values || {}).descricao || '', items: String((e.values || {}).itens || '').split('\n').map((t) => t.trim()).filter(Boolean) });
+  const originOf = (name) => ORIGINS.find((o) => nameKey(o.name) === nameKey(name))
+    || (wz && wz.originEntry && nameKey(wz.originEntry.name) === nameKey(name) ? wz.originEntry : null);
 
   function quickEntry2(name, carga, efeito) {
     return {
@@ -4245,7 +4249,7 @@ const FIREBASE_CONFIG = {
   }
 
   function renderGear(body) {
-    const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
+    const origin = originOf(wz.origin);
     const g = gearFor(origin);
     const modes = [['kit', 'Kit da origem'], ['preco', 'Por preço'], ['nenhum', 'Nenhum']];
     const seg = h('div', 'segmented gear__modes', ...modes.map((m) => {
@@ -4315,6 +4319,17 @@ const FIREBASE_CONFIG = {
         box.append(acts);
         body.append(box);
       });
+      const more = h('button', 'btn btn--ghost btn--sm', 'Adicionar item do banco');
+      more.type = 'button';
+      more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
+        const e = await openPicker({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
+          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+        if (!e || !wz) return;
+        g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e });
+        renderSetup();
+      });
+      body.append(h('div', 'gear-line__acts', more));
       return;
     }
 
@@ -4418,8 +4433,17 @@ const FIREBASE_CONFIG = {
     }
 
     if (wz.step === STEP.origem) {
-      const og = h('div', 'pick-grid', ...ORIGINS.filter((o) => wzMatch(o.name, o.text, o.items.join(' '))).map((o) => pickCard(o.name, [o.text],
+      const list = ORIGINS.slice();
+      if (wz.originEntry && !list.some((o) => nameKey(o.name) === nameKey(wz.originEntry.name))) list.push(wz.originEntry);
+      const og = h('div', 'pick-grid', ...list.filter((o) => wzMatch(o.name, o.text, o.items.join(' '))).map((o) => pickCard(o.name, [o.text],
         nameKey(wz.origin) === nameKey(o.name), () => { wz.origin = o.name; renderSetup(); })));
+      og.append(pickCard('Buscar outra', ['Qualquer origem do banco, inclusive as criadas na Oficina.'], false, async () => {
+        const e = await openPicker({ title: 'Escolher origem', kinds: ['origem'], chips: ['Origem'], filter: (x) => x.kind === 'origem' });
+        if (!e || !wz) return;
+        wz.originEntry = bankOrigin(e);
+        wz.origin = e.name;
+        renderSetup();
+      }));
       body.append(og,
         h('div', 'fields-grid',
           setupField('wz-origin', 'Origem (ou escreva outra)', wz.origin, 'Ex.: Exilado Urbano', (v) => { wz.origin = v; }, 60),
@@ -4497,7 +4521,7 @@ const FIREBASE_CONFIG = {
         ...row('Build', wz.build || 'do seu jeito'),
         ...row('Espécime', wz.specimen ? wz.specimen.name + ' (' + specimenLine(wz.specimen) + ')' : ''),
         ...row('Origem', wz.origin),
-        ...row('Itens iniciais', gearSummary(gearFor(ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin))))),
+        ...row('Itens iniciais', gearSummary(gearFor(originOf(wz.origin)))),
         ...row('Atributos', ATTRS.map((at) => at.label + ' ' + signed(wz.attrs[at.id])).join(' · ')),
         ...row('Perícias', skills.join(' · ')),
         ...row('Proficiências', PROFS.filter((p) => wz.profs.indexOf(p.id) >= 0).map((p) => p.label).join(' · ')),
@@ -4547,7 +4571,7 @@ const FIREBASE_CONFIG = {
     c.origin = cleanName(wz.origin).slice(0, 60);
     c.age = wz.age;
     dirty.add('origin'); dirty.add('age');
-    const origin = ORIGINS.find((o) => nameKey(o.name) === nameKey(wz.origin));
+    const origin = originOf(wz.origin);
     const g = gearFor(origin);
     const got = gearEntries(g);
     got.forEach((e) => s.inventory.push(e));

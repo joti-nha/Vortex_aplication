@@ -322,6 +322,17 @@ window.VORTEX_ITEMS = {
       ]
     },
 
+    {
+      id: 'origem', title: 'Origem', group: 'Personagem',
+      hint: 'De onde o personagem vem. Os itens iniciais (um por linha) aparecem na distribuição inicial, no kit da origem.',
+      fields: [
+        { key: 'nome', label: 'Nome da origem', kind: 'text', big: true },
+        { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
+        { key: 'itens', label: 'Itens iniciais (um por linha)', kind: 'textarea', big: true, placeholder: '1 pistola básica ou rifle (3 slots de munição);' },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
+      ]
+    },
+
     /* ------------------------------ Geral ------------------------------ */
     {
       id: 'item-geral', title: 'Item geral', group: 'Geral', inventory: true, image: true, bonus: true,
@@ -459,6 +470,15 @@ window.VORTEX_ITEMS = {
         pente: PENTE[a[7]], alcance: a[8], carga: String(a[9]), empunhadura: a[10], especial: a[12] || ''
       }
     });
+  });
+
+  /* Origens do livro (capítulo Origens de regras.js), para buscar no banco como os espécimes */
+  var regras = (window.VORTEX_REGRAS && window.VORTEX_REGRAS.chapters) || [];
+  var origens = regras.filter(function (c) { return c.id === 'origens'; })[0];
+  (origens ? origens.blocks : []).filter(function (b) { return b[0] === 'card'; }).forEach(function (b) {
+    var p = b[2].filter(function (x) { return x[0] === 'p'; })[0];
+    var ul = b[2].filter(function (x) { return x[0] === 'ul'; })[0];
+    cat.push({ id: 'of-ori-' + slug(b[1]), kind: 'origem', typeId: '', name: b[1], values: { descricao: p ? p[1] : '', itens: (ul ? ul[1] : []).join('\n') } });
   });
 
   /* Live Service (itens gerais de recuperação): [nome, raridade, tipo, usos, carga, bônus, efeito, preço] */
