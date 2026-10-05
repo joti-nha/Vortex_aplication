@@ -2924,3 +2924,36 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 /* pixel art dos itens oficiais: fundo escuro e sem borrar */
 .lib-icon img[src^="data:image/svg"], .entry__img[src^="data:image/svg"] { image-rendering: pixelated; object-fit: contain; background: #0f141c; }
 .entry__img[src^="data:image/svg"] { width: 9rem; height: 9rem; }
+
+/* ---------- Celular estreito: nada passa da borda da tela ----------
+   A barra do topo (marca + som + modo + perfil) era mais larga que 400px e alargava a página toda,
+   cortando janelas e telas na direita. Agora ela encolhe, e as janelas cabem e rolam por dentro. */
+@media (max-width: 1023px) {
+  .app-bar { gap: 0.5rem; }
+  .brand { min-width: 0; }
+  .app-bar__tools { min-width: 0; flex: 0 1 auto; gap: 0.4rem; }
+  .mode-pill, .profile-btn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (max-width: 480px) {
+  .brand > span { display: none; }
+  .mode-pill { max-width: 5.5rem; }
+  .profile-btn { max-width: 7rem; }
+}
+@media (max-width: 360px) {
+  .mode-pill { display: none; }
+}
+html, body { max-width: 100%; overflow-x: clip; }
+.dialog { max-width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; overflow-wrap: break-word; }
+.dialog--wide { overflow: hidden; }
+@media (max-width: 520px) {
+  .dialog:not(.dialog--wide) { padding: 1.1rem 1rem; }
+  .dialog__actions { gap: 0.5rem; margin-top: 1rem; }
+  .dialog__actions > .btn { flex: 1 1 auto; }
+  .pickchar__list { max-height: none; overflow: visible; }
+}
+.pickchar__sub { margin: 0.4rem 0 0; font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nevoa-2); }
+@media (max-width: 520px) {
+  .gear__shop .row { flex-wrap: wrap; row-gap: 0.4rem; }
+  .gear__shop .row > .row__open { flex: 1 1 100%; }
+  .gear__shop .row > .gear__price { margin-left: auto; }
+}

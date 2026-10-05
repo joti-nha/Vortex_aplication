@@ -379,6 +379,13 @@ const FIREBASE_CONFIG = {
         write(d);
       },
 
+      // o mestre tira qualquer personagem da campanha
+      async removeMember(campaignId, characterId) {
+        const d = read();
+        removeFromCampaign(d, campaignId, characterId);
+        write(d);
+      },
+
       async listCharacterCampaigns(characterId) {
         const d = read();
         const ch = d.characters[characterId];
@@ -400,7 +407,7 @@ const FIREBASE_CONFIG = {
         return Object.values(c.members)
           .filter((m) => d.characters[m.characterId])
           .sort((a, b) => a.joinedAt - b.joinedAt)
-          .map((m) => Object.assign(toChar(d.characters[m.characterId]), { characterId: m.characterId, mine: m.ownerUid === ME }));
+          .map((m) => Object.assign(toChar(d.characters[m.characterId]), { characterId: m.characterId, ownerUid: m.ownerUid, mine: m.ownerUid === ME }));
       },
 
       // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
@@ -796,6 +803,21 @@ const FIREBASE_CONFIG = {
         await batch.commit();
       },
 
+      // o mestre tira qualquer personagem: apaga o vínculo, limpa a ficha (se ela ainda existir)
+      // e tira o dono de memberUids quando ele não tem mais ninguém na campanha
+      async removeMember(campaignId, characterId) {
+        const cRef = camps().doc(campaignId);
+        const snap = await cRef.collection('members').get();
+        const row = snap.docs.find((d) => d.id === characterId);
+        const owner = row ? row.data().ownerUid : '';
+        const batch = fs.batch();
+        if (row) batch.delete(row.ref);
+        const cs = await chars().doc(characterId).get();
+        if (cs.exists && (cs.data().campaignIds || []).indexOf(campaignId) >= 0) batch.update(cs.ref, { campaignIds: FV.arrayRemove(campaignId) });
+        if (owner && !snap.docs.some((d) => d.id !== characterId && d.data().ownerUid === owner)) batch.update(cRef, { memberUids: FV.arrayRemove(owner) });
+        await batch.commit();
+      },
+
       async listCharacterCampaigns(characterId) {
         const s = await chars().doc(characterId).get();
         if (!s.exists) return [];
@@ -829,7 +851,7 @@ const FIREBASE_CONFIG = {
           // ficha apagada, ou que já saiu desta campanha: não aparece e o vínculo é limpo
           if (!cs.exists || (cs.data().campaignIds || []).indexOf(campaignId) < 0) { d.ref.delete().catch(() => {}); return null; }
           const at = m.joinedAt && m.joinedAt.toMillis ? m.joinedAt.toMillis() : 0;
-          return Object.assign(toChar(cs), { characterId: d.id, mine: m.ownerUid === me, at });
+          return Object.assign(toChar(cs), { characterId: d.id, ownerUid: m.ownerUid || '', mine: m.ownerUid === me, at });
         }));
         return rows.filter(Boolean).sort((x, y) => x.at - y.at);
       },
@@ -1869,7 +1891,40 @@ const FIREBASE_CONFIG = {
       play.addEventListener('click', () => playAs(m.characterId));
       info.append(play);
     }
+    // o mestre sempre pode tirar qualquer personagem; o jogador tira os próprios
+    if (currentCamp && (currentCamp.gm || m.mine)) {
+      const out = h('button', 'btn btn--danger btn--sm', currentCamp.gm ? 'Tirar da campanha' : 'Sair da campanha');
+      out.type = 'button';
+      out.dataset.fid = 'member-out-' + m.characterId;
+      out.addEventListener('click', () => removeFromCamp(m, out));
+      info.append(out);
+    }
     panel.replaceChildren(pic, info);
+  }
+
+  async function removeFromCamp(m, btn) {
+    const gm = currentCamp.gm;
+    const ok = await askConfirm({
+      title: (gm ? 'Tirar ' + m.name + ' da campanha?' : 'Sair de ' + currentCamp.name + '?'),
+      text: gm ? m.name + ' sai do grupo e do combate. A ficha continua salva; dá para pôr de novo depois.' : m.name + ' deixa de participar. Você pode entrar de novo com o ID de entrada.',
+      ok: gm ? 'Tirar' : 'Sair'
+    });
+    if (!ok) return;
+    if (btn) btn.disabled = true;
+    try {
+      if (gm) await db.removeMember(currentCamp.id, m.characterId);
+      else await db.leaveCampaign(currentCamp.id, m.characterId);
+      const id = 'chr:' + m.characterId;
+      if (gm && scene) { // sai da ordem, de "fora do combate" e do time
+        const next = sceneBase();
+        dropFromOrder(next, id);
+        next.out = sceneOut().filter((x) => x !== id);
+        if (next.team && next.team[id]) { next.team = Object.assign({}, next.team); delete next.team[id]; }
+        await saveScene(next);
+      }
+      toast(m.name + ' saiu da campanha.');
+      views.campaign(currentCamp.id);
+    } catch (err) { if (btn) btn.disabled = false; toast(errorMessage(err)); }
   }
 
   const memberAtk = {}; // escolhas de ataque de cada personagem, enquanto a página estiver aberta
@@ -2553,7 +2608,7 @@ const FIREBASE_CONFIG = {
     const cat = findCategory(e.kind);
     const v = e.values || {};
     $('#entry-title').replaceChildren(e.name || 'Sem nome', ...(e.oficial ? [' ', h('span', 'tag', 'Oficial')] : []));
-    $('#entry-meta').textContent = [e.kindTitle || kindTitle(e.kind), e.typeTitle, e.oficial ? 'Catálogo oficial' : (e.mine ? 'Criado por você' : 'Banco compartilhado')].filter(Boolean).join(' · ');
+    $('#entry-meta').textContent = [e.kindTitle || kindTitle(e.kind), e.typeTitle, e.source || (e.oficial ? 'Catálogo oficial' : (e.mine ? 'Criado por você' : 'Banco compartilhado'))].filter(Boolean).join(' · ');
     const body = $('#entry-body');
     body.replaceChildren();
     const pic = e.image || e.thumb || itemArt(e);
@@ -5809,6 +5864,32 @@ const FIREBASE_CONFIG = {
     return 'nenhum';
   }
 
+  // tela de itens iniciais: tocar no item abre todos os dados dele (a mesma janela do banco)
+  function gearOpen(e, ...kids) {
+    const open = h('span', 'row__open lib-row__open', ...kids);
+    open.tabIndex = 0;
+    open.setAttribute('role', 'button');
+    open.setAttribute('aria-label', 'Ver os detalhes de ' + e.name);
+    open.addEventListener('click', () => openEntry(e));
+    open.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openEntry(e); } });
+    return open;
+  }
+  // linha do kit: o item do banco escolhido, um item oficial com o mesmo nome ou, sem nada disso, o texto da origem
+  function gearRef(l, origin) {
+    const found = l.bank || BUILTINS.find((x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 && nameKey(x.name) === nameKey(l.opts[l.opt]));
+    if (found) return found;
+    const e = originItemEntry(l.opts[l.opt] + (l.detail ? ' (' + l.detail + ')' : ''));
+    return Object.assign(e, { kindTitle: 'Item do kit', source: origin ? 'Kit de ' + origin.name : '',
+      values: Object.assign(e.values, { especial: 'Texto da origem: ' + String(l.text).replace(/[;.]\s*$/, '') + '. É um item simples; troque por um item do banco para ter preço, dano e os outros dados.' }) });
+  }
+  function detailsBtn(e) {
+    const b = h('button', 'btn btn--ghost btn--sm', 'Detalhes');
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Detalhes de ' + e.name);
+    b.addEventListener('click', () => openEntry(e));
+    return b;
+  }
+
   function pickCard(title, lines, on, onClick) {
     const b = h('button', 'pick-card', h('span', 'pick-card__title', title), ...lines.filter(Boolean).map((l) => h('span', 'pick-card__text', l)));
     b.type = 'button';
@@ -5911,7 +5992,7 @@ const FIREBASE_CONFIG = {
           l.take = true;
           renderSetup();
         });
-        const acts = h('div', 'gear-line__acts', swap);
+        const acts = h('div', 'gear-line__acts', detailsBtn(gearRef(l, origin)), swap);
         if (l.bank) {
           const back = h('button', 'btn btn--ghost btn--sm', 'Voltar ao texto da origem');
           back.type = 'button';
@@ -5955,10 +6036,10 @@ const FIREBASE_CONFIG = {
         rm.type = 'button';
         rm.setAttribute('aria-label', 'Tirar ' + e.name);
         rm.addEventListener('click', () => { g.cart.splice(i, 1); renderSetup(); });
-        return h('li', 'row', h('span', 'row__open row__open--static', h('span', 'row__main', h('span', 'row__title', e.name), h('span', 'row__meta', kindTitle(e.kind) + ' · ' + priceText(e.values.preco)))), rm);
+        return h('li', 'row', gearOpen(e, entryIcon(e), h('span', 'row__main', h('span', 'row__title', e.name), h('span', 'row__meta', kindTitle(e.kind) + ' · ' + priceText(e.values.preco)))), rm);
       })));
     }
-    body.append(h('h3', 'setup__sub', 'Loja'));
+    body.append(h('h3', 'setup__sub', 'Loja'), h('p', 'field__hint', 'Toque num item para ver todos os dados dele (dano, alcance, efeitos e lore).'));
     if (!g.shop) {
       body.append(h('p', 'empty', 'Carregando os itens com preço...'));
       libSearch(INVENTORY_KINDS, '').catch(() => BUILTINS.filter((e) => INVENTORY_KINDS.indexOf(e.kind) >= 0))
@@ -5972,8 +6053,10 @@ const FIREBASE_CONFIG = {
       add.disabled = priceOf(e) > left;
       add.setAttribute('aria-label', 'Comprar ' + e.name + ' por ' + priceText(e.values.preco));
       add.addEventListener('click', () => { g.cart.push(e); renderSetup(); });
-      return h('li', 'row', h('span', 'row__open row__open--static', entryIcon(e),
-        h('span', 'row__main', h('span', 'row__title', e.name), h('span', 'row__meta', [e.kindTitle, e.typeTitle, e.values.raridade].filter(Boolean).join(' · ')))),
+      const text = entryText(e);
+      return h('li', 'row', gearOpen(e, entryIcon(e),
+        h('span', 'row__main', h('span', 'row__title', e.name), h('span', 'row__meta', [e.kindTitle, e.typeTitle, e.values.raridade].filter(Boolean).join(' · ')),
+          text ? h('span', 'row__text', text) : null)),
         h('strong', 'gear__price', fmtCronos(priceOf(e))), add);
     })));
     if (!shown.length) body.append(h('p', 'empty', 'Nada com esse termo na loja.'));
@@ -6964,6 +7047,91 @@ const FIREBASE_CONFIG = {
     openDialog(tagDlg);
   }
 
+  /* O mestre põe qualquer personagem na cena: os do grupo que estão fora do combate voltam,
+     e qualquer ficha do banco de personagens entra na campanha (sob o controle do mestre) e já luta. */
+  let sceneAddDlg = null;
+  async function putInScene(id) {
+    if (sceneOut().indexOf(id) >= 0) await saveOut(id, false);
+    const x = combatants().find((y) => y.id === id);
+    if (x && sceneOn() && !scene.order.some((o) => o.id === id)) await joinScene(x);
+  }
+  function openSceneAdd() {
+    if (!sceneAddDlg) { sceneAddDlg = h('dialog', 'dialog pickchar'); sceneAddDlg.setAttribute('aria-labelledby', 'scadd-title'); document.body.append(sceneAddDlg); }
+    const dlg = sceneAddDlg;
+    const close = () => { if (dlg.open) closeDialog(dlg); };
+    const fighting = () => new Set(combatants().map((x) => x.id));
+    const banner = (c, label, note, onPick) => {
+      const art = h('span', 'pickchar__art');
+      const pic = c.thumb || c.image;
+      if (pic) { const img = h('img'); img.src = pic; img.alt = ''; art.append(img); art.classList.add('pickchar__art--img'); }
+      else art.textContent = (c.name || '?').trim().charAt(0).toUpperCase();
+      const b = h('button', 'btn btn--sm ' + (onPick ? 'btn--primary' : 'btn--ghost'), label);
+      b.type = 'button';
+      b.disabled = !onPick;
+      b.dataset.fid = 'scadd-' + (c.characterId || c.id);
+      if (onPick) b.addEventListener('click', async () => { b.disabled = true; try { await onPick(); } catch (err) { b.disabled = false; toast(errorMessage(err)); } });
+      return h('li', 'pickchar__card' + (onPick ? '' : ' is-here'), art,
+        h('span', 'pickchar__info', h('strong', 'pickchar__name', c.name), h('span', 'pickchar__meta', [c.species, c.origin].filter(Boolean).join(' · ') || (c.type === 'criatura' ? 'Criatura' : 'Personagem')),
+          note ? h('span', 'pickchar__meta', note) : null), b);
+    };
+    const groupList = h('ul', 'pickchar__list');
+    const drawGroup = () => {
+      const on = fighting();
+      groupList.replaceChildren(...members.map((mb) => {
+        const id = 'chr:' + mb.characterId;
+        if (!mb.sheet || !mb.sheet.attrs) return banner(mb, 'Sem ficha pronta', 'Falta a distribuição inicial', null);
+        if (on.has(id)) return banner(mb, 'Já está na cena', '', null);
+        return banner(mb, 'Pôr na cena', 'Fora do combate', async () => { await putInScene(id); toast(mb.name + ' entrou na cena.'); drawGroup(); });
+      }));
+      if (!members.length) groupList.replaceChildren(h('li', 'field__hint', 'Ninguém no grupo ainda.'));
+    };
+    drawGroup();
+    const found = h('ul', 'pickchar__list');
+    const hint = h('p', 'field__hint', 'Busque qualquer personagem salvo: ele entra na campanha sob o seu controle e já vai para a cena.');
+    const q = h('input', 'input');
+    q.type = 'search';
+    q.id = 'scadd-q';
+    q.placeholder = 'Buscar personagem pelo nome';
+    q.setAttribute('aria-label', 'Buscar personagem');
+    q.autocomplete = 'off';
+    let seq = 0;
+    const search = debounce(async () => {
+      const my = ++seq;
+      const text = q.value.trim();
+      if (!text) { found.replaceChildren(); return; }
+      let list = [];
+      try { list = await db.searchCharacters(text); } catch (err) { if (my === seq) found.replaceChildren(h('li', 'field__hint', errorMessage(err))); return; }
+      if (my !== seq) return;
+      const inCamp = new Set(members.map((mb) => mb.characterId));
+      list = list.filter((c) => !inCamp.has(c.id)).slice(0, 20);
+      found.replaceChildren(...list.map((c) => banner(c, 'Trazer para a cena', 'Ainda não está na campanha', async () => {
+        await db.joinCampaign(currentCamp.id, c.id);
+        members = await db.listMembers(currentCamp.id);
+        members.forEach((mb) => { if (isMyChar(mb.characterId)) mb.mine = true; });
+        $('#member-list').replaceChildren(...members.map(memberRow));
+        $('#member-empty').hidden = members.length > 0;
+        tabBadges();
+        renderCombat();
+        const mb = members.find((x) => x.characterId === c.id);
+        if (mb && mb.sheet && mb.sheet.attrs) { await putInScene('chr:' + c.id); toast(c.name + ' entrou na campanha e na cena.'); }
+        else toast(c.name + ' entrou na campanha, mas a ficha ainda não tem a distribuição inicial.');
+        drawGroup();
+        search();
+      })));
+      if (!list.length) found.replaceChildren(h('li', 'field__hint', 'Nenhum personagem fora da campanha com esse nome.'));
+    }, 250);
+    q.addEventListener('input', search);
+    const cancel = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+    cancel.type = 'button';
+    cancel.addEventListener('click', close);
+    const title = h('h2', '', 'Pôr na cena');
+    title.id = 'scadd-title';
+    dlg.replaceChildren(h('div', 'pickchar__body', title,
+      h('h3', 'pickchar__sub', 'Do grupo'), groupList,
+      h('h3', 'pickchar__sub', 'De fora da campanha'), hint, q, found, h('div', 'dialog__actions', cancel)));
+    openDialog(dlg);
+  }
+
   function gmBtn(label, cls, fn) {
     const b = h('button', 'btn btn--sm ' + cls, label);
     b.type = 'button';
@@ -6978,6 +7146,7 @@ const FIREBASE_CONFIG = {
       box.replaceChildren(
         gmBtn('◀ Anterior', 'btn--ghost', () => stepTurn(-1)),
         gmBtn('Próximo turno ▶', 'btn--primary', () => stepTurn(1)),
+        gmBtn('Pôr na cena', 'btn--ghost', openSceneAdd),
         gmBtn('Times', 'btn--ghost', () => openTeams(false)),
         gmBtn('Presets', 'btn--ghost', openPresets),
         gmBtn('Encerrar', 'btn--danger', endScene));
@@ -6992,6 +7161,7 @@ const FIREBASE_CONFIG = {
     name.setAttribute('aria-label', 'Nome da cena');
     name.addEventListener('input', () => { battle.name = name.value; });
     box.replaceChildren(
+      gmBtn('Pôr na cena', 'btn--ghost', openSceneAdd),
       gmBtn('Times', 'btn--ghost', () => openTeams(false)),
       gmBtn('Presets', 'btn--ghost', openPresets),
       gmBtn('Rolar defesas', 'btn--ghost', rollAllDefenses),
