@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=33">
+  <link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -631,17 +631,7 @@
         </div>
         <ol class="ctb" id="battle-order" aria-label="Ordem dos turnos" hidden></ol>
         <div class="battle__banner" id="battle-banner" hidden></div>
-        <div class="arena" id="arena">
-          <div class="arena__side arena__side--party">
-            <p class="arena__label">Grupo</p>
-            <ul class="arena__list" id="arena-party" aria-label="Grupo"></ul>
-          </div>
-          <div class="arena__vs" aria-hidden="true">VS</div>
-          <div class="arena__side arena__side--foes">
-            <p class="arena__label">Inimigos</p>
-            <ul class="arena__list" id="arena-foes" aria-label="Inimigos"></ul>
-          </div>
-        </div>
+        <div class="arena" id="arena"></div>
         <p class="battle__hint" id="battle-hint"></p>
         <div class="battle__bottom">
           <section class="ff-window cmd" id="battle-cmd" aria-label="Comandos"></section>
@@ -716,7 +706,7 @@
       <div class="camp-panel" id="cpanel-mestre" role="tabpanel" aria-labelledby="ctab-mestre" hidden>
         <section class="block gmlib" aria-labelledby="gmlib-title">
           <h2 class="block__title" id="gmlib-title">Itens e bestiário</h2>
-          <p class="block__hint">Só você, o mestre, vê esta aba. Ponha criaturas do bestiário na arena como inimigos ou aliados, e dê itens direto na mochila dos personagens.</p>
+          <p class="block__hint">Só você, o mestre, vê esta aba. Ponha criaturas do bestiário na arena, no time que quiser, e dê itens direto na mochila dos personagens.</p>
           <div class="gmlib__bar">
             <div class="field">
               <label class="field__label" for="gmlib-kind">Mostrar</label>
@@ -986,8 +976,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=33"></script>
-  <script src="items.js?v=33"></script>
-  <script src="app.js?v=33"></script>
+  <script src="regras.js?v=34"></script>
+  <script src="items.js?v=34"></script>
+  <script src="app.js?v=34"></script>
 </body>
 </html>
