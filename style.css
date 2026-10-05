@@ -1065,7 +1065,7 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 .bonus { margin-top: 1rem; padding: 0.2rem 1rem; border: 1px solid var(--linha); border-radius: var(--r-s); }
 .bonus summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
 .bonus[open] { padding-bottom: 1rem; }
-.bonus__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+.bonus__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
 .bonus__label--pv { color: var(--pv); }
 .bonus__label--escudo { color: var(--escudo); }
 .bonus__label--blindagem { color: var(--blindagem); }
@@ -2299,6 +2299,41 @@ body {
 .secret--ether .secret__icon { color: #e9dcff; background: radial-gradient(circle at 40% 35%, #f3e6ff, #9c5cff 45%, #2a0f5c 75%); box-shadow: 0 0 14px #9c5cff, 0 0 30px rgba(94, 242, 255, 0.45); animation: ether-pulse 1.6s ease-in-out infinite; }
 .secret--claptrap { background: linear-gradient(90deg, rgba(245, 197, 24, 0.18), transparent 70%); box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.55); }
 .secret--claptrap .secret__icon { background: radial-gradient(circle, #43d3ee 0 24%, #13262b 25% 34%, #2a2a2a 35% 46%, #f5c518 47%); box-shadow: 0 -5px 0 -1px #3f6b2a; }
+/* Ficha do Claptrap na busca de personagens */
+.clap-token { position: relative; background: radial-gradient(circle, #43d3ee 0 24%, #13262b 25% 34%, #2a2a2a 35% 46%, #f5c518 47%) !important; box-shadow: 0 -5px 0 -1px #3f6b2a; color: transparent !important; }
+.secret--claptrap-char { background: linear-gradient(90deg, rgba(245, 197, 24, 0.14), transparent 70%); }
+.star--fall { color: var(--ambar); animation: star-fall 0.7s ease-in forwards; }
+@keyframes star-fall { 0% { transform: none; } 25% { transform: rotate(-20deg); } 100% { transform: translateY(26px) rotate(160deg); opacity: 0; } }
+.clap--shake { animation: clap-shake 0.45s; }
+@keyframes clap-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+.clap__sheet { display: grid; gap: 1rem; }
+.clap__head { display: flex; align-items: center; gap: 1rem; }
+.clap__id { flex: 1; min-width: 0; }
+.clap__name { margin: 0.2rem 0 0; font: 800 clamp(1.6rem, 6vw, 2.3rem)/1.05 var(--fonte-titulo); }
+.clap__name span { font-size: 0.55em; color: var(--nevoa-2); }
+.clap__meta { margin: 0.25rem 0 0; color: var(--nevoa-2); font-size: var(--t-s); }
+.clap__eye { position: relative; flex: none; display: grid; place-items: center; width: 4.5rem; height: 4.5rem; margin-top: 0.6rem; border-radius: 16px 16px 12px 12px; background: #f5c518; box-shadow: inset 0 -6px 0 #c99a00; }
+.clap__eye::before { content: ""; position: absolute; top: -0.9rem; left: -0.3rem; right: -0.3rem; height: 1.3rem; border-radius: 50% 50% 6px 6px; background: #3f6b2a; box-shadow: inset 0 -3px 0 #2c4d1d; }
+.clap__eye i { width: 2.6rem; height: 2.6rem; border-radius: 50%; background: radial-gradient(circle, #9ff0ff 0 12%, #43d3ee 13% 40%, #13262b 41% 58%, #2a2a2a 59%); animation: clap-eye 4s ease-in-out infinite; }
+.clap__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.clap__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); gap: 0.5rem; }
+.clap__stat { display: grid; gap: 0.1rem; padding: 0.6rem 0.7rem; border-radius: var(--r-s); background: rgba(var(--casco2-rgb), 0.6); box-shadow: inset 0 0 0 1px rgba(245, 197, 24, 0.35); }
+.clap__stat strong { font: 800 1.4rem/1.1 var(--fonte-titulo); color: #f5c518; }
+.clap__label { font: 700 0.72rem/1.2 var(--fonte-ui); letter-spacing: 0.04em; text-transform: uppercase; color: var(--nevoa-2); }
+.clap__sub { font-size: 0.78rem; color: var(--nevoa-2); }
+.clap__cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.clap__cols .sub-title { margin: 0 0 0.4rem; }
+.clap__list { display: grid; gap: 0.35rem; margin: 0; padding: 0; list-style: none; font-size: var(--t-s); }
+.clap__list li { padding-left: 0.9rem; position: relative; }
+.clap__list li::before { content: ""; position: absolute; left: 0; top: 0.5em; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: #f5c518; }
+.clap__list li > span { color: var(--nevoa-2); }
+@media (max-width: 640px) {
+  .clap__cols { grid-template-columns: 1fr; }
+  .clap__head { position: relative; align-items: flex-start; padding-right: 5.5rem; }
+  .clap__close { position: absolute; top: 0; right: 0; }
+  .clap__eye { width: 3.6rem; height: 3.6rem; }
+  .clap__eye i { width: 2.1rem; height: 2.1rem; }
+}
 @keyframes ether-pulse { 50% { box-shadow: 0 0 22px #b47bff, 0 0 44px rgba(94, 242, 255, 0.6); transform: scale(1.06); } }
 
 /* Animação de desbloqueio */
