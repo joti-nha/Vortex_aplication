@@ -167,6 +167,23 @@ service cloud.firestore {
         allow delete: if signedIn() && isCampaignOwner(campaignId);
       }
 
+      // ---------- Lojas: o mestre cria as dele, das companhias e de NPCs; um jogador abre a própria ----------
+      // Quem participa atualiza (comprar baixa o estoque; o dono abastece). Tipo e dono não mudam.
+      match /shops/{shopId} {
+        allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
+        allow create: if signedIn()
+                      && request.resource.data.items is list && request.resource.data.items.size() <= 300
+                      && (isCampaignOwner(campaignId)
+                          || (isCampaignMember(campaignId)
+                              && request.resource.data.kind == 'jogador'
+                              && request.resource.data.ownerUid == request.auth.uid));
+        allow update: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId))
+                      && request.resource.data.kind == resource.data.kind
+                      && request.resource.data.ownerUid == resource.data.ownerUid
+                      && request.resource.data.items is list && request.resource.data.items.size() <= 300;
+        allow delete: if signedIn() && (isCampaignOwner(campaignId) || resource.data.ownerUid == request.auth.uid);
+      }
+
       // ---------- Chat de dados (rolagens não podem ser editadas) ----------
       // O mestre também rola (pelos inimigos), mesmo sem personagem na campanha.
       match /rolls/{rollId} {

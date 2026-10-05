@@ -231,6 +231,9 @@ const FIREBASE_CONFIG = {
     const sceneListeners = {};
     const foesOf = (campaignId) => Object.values((read().foes || {})[campaignId] || {}).map(clone).sort((a, b) => a.createdAt - b.createdAt);
     function notifyFoes(campaignId) { (foeListeners[campaignId] || new Set()).forEach((cb) => cb(foesOf(campaignId))); }
+    const shopListeners = {};
+    const shopsOf = (campaignId) => Object.values((read().shops || {})[campaignId] || {}).map(clone).sort((a, b) => a.createdAt - b.createdAt);
+    function notifyShops(campaignId) { (shopListeners[campaignId] || new Set()).forEach((cb) => cb(shopsOf(campaignId))); }
     function rollsOf(campaignId) {
       try { return JSON.parse(localStorage.getItem(ROLLS + campaignId)) || []; } catch (e) { return []; }
     }
@@ -251,6 +254,7 @@ const FIREBASE_CONFIG = {
 
     return {
       mode: 'local',
+      uid: ME,
 
       async nameTaken(kind, name, exceptId) {
         const d = read();
@@ -484,6 +488,37 @@ const FIREBASE_CONFIG = {
         (sceneListeners[campaignId] = sceneListeners[campaignId] || new Set()).add(callback);
         callback(clone((read().scenes || {})[campaignId] || null));
         return () => sceneListeners[campaignId].delete(callback);
+      },
+
+      // ---------- Lojas da campanha ----------
+      async addShop(campaignId, shop) {
+        const d = read();
+        d.shops = d.shops || {};
+        const box = d.shops[campaignId] = d.shops[campaignId] || {};
+        const id = uid();
+        box[id] = Object.assign(clone(shop), { id, createdAt: Date.now() });
+        write(d);
+        notifyShops(campaignId);
+        return id;
+      },
+      async updateShop(campaignId, id, patch) {
+        const d = read();
+        const box = (d.shops || {})[campaignId] || {};
+        if (!box[id]) throw new UserError('Essa loja não existe mais.');
+        Object.assign(box[id], clone(patch));
+        write(d);
+        notifyShops(campaignId);
+      },
+      async removeShop(campaignId, id) {
+        const d = read();
+        if (d.shops && d.shops[campaignId]) delete d.shops[campaignId][id];
+        write(d);
+        notifyShops(campaignId);
+      },
+      subscribeShops(campaignId, callback) {
+        (shopListeners[campaignId] = shopListeners[campaignId] || new Set()).add(callback);
+        callback(shopsOf(campaignId));
+        return () => shopListeners[campaignId].delete(callback);
       }
     };
   })();
@@ -532,6 +567,7 @@ const FIREBASE_CONFIG = {
 
     const db = {
       mode: 'firebase',
+      uid: me,
 
       async nameTaken(kind, name, exceptId) {
         const s = await nameDoc(kind, name).get();
@@ -841,6 +877,25 @@ const FIREBASE_CONFIG = {
       subscribeScene(campaignId, callback, onError) {
         return camps().doc(campaignId).collection('scene').doc('state').onSnapshot(
           (snap) => callback(snap.exists ? snap.data() : null),
+          (err) => { if (onError) onError(err); }
+        );
+      },
+
+      // ---------- Lojas da campanha ----------
+      async addShop(campaignId, shop) {
+        const ref = camps().doc(campaignId).collection('shops').doc();
+        await ref.set(Object.assign(deep(shop), { createdAt: Date.now() }));
+        return ref.id;
+      },
+      async updateShop(campaignId, id, patch) {
+        await camps().doc(campaignId).collection('shops').doc(id).update(deep(patch));
+      },
+      async removeShop(campaignId, id) {
+        await camps().doc(campaignId).collection('shops').doc(id).delete();
+      },
+      subscribeShops(campaignId, callback, onError) {
+        return camps().doc(campaignId).collection('shops').onSnapshot(
+          (snap) => callback(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))),
           (err) => { if (onError) onError(err); }
         );
       }
@@ -1700,6 +1755,7 @@ const FIREBASE_CONFIG = {
     if (!fresh) throw new UserError('Essa ficha não existe mais.');
     const sheet = normSheet(fresh.sheet);
     fn(sheet);
+    guideSync(sheet); // build guiada: o UP ganho na campanha já entra na ficha
     await db.saveCharacter(m.characterId, { sheet });
     m.sheet = sheet;
     return sheet;
@@ -1728,6 +1784,7 @@ const FIREBASE_CONFIG = {
           });
           toast((sign > 0 ? '+' : '–') + fmtCronos(v) + ' Cronos para ' + m.name + '.');
           fillMemberPanel(m, panel);
+          renderShops();
         } catch (err) { toast(errorMessage(err)); b.disabled = false; }
       });
       return b;
@@ -2091,6 +2148,7 @@ const FIREBASE_CONFIG = {
   });
 
   views.perfil = async function showPerfil() {
+    renderThemes();
     const on = Boolean(profile);
     $('#perfil-out').hidden = on;
     $('#perfil-body').hidden = !on;
@@ -2871,6 +2929,129 @@ const FIREBASE_CONFIG = {
     finally { btn.disabled = false; }
   });
 
+  /* ---------- Temas secretos ----------
+     Ether: pesquise "elemento 115" nos itens e toque no item escondido que aparece.
+     Claptrap: escreva o nome dele numa busca de itens. Desbloqueados ficam neste aparelho;
+     a troca de tema fica no Perfil. O <head> do index.html aplica o tema antes de desenhar. */
+  const THEME_KEY = 'vortex.themes.v1';
+  const THEMES = [
+    { id: '', name: 'Vortex', text: 'O de sempre: tempestade e lanterna.' },
+    { id: 'ether', name: 'Ether', text: 'Elemento 115: violeta, ciano e energia instável.', hint: 'Dizem que um elemento perdido, de número 115, se esconde entre os itens.' },
+    { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante atende quando chamam o nome dele na busca.' }
+  ];
+  const themeState = (() => {
+    try { const v = JSON.parse(localStorage.getItem(THEME_KEY)) || {}; return { unlocked: Array.isArray(v.unlocked) ? v.unlocked : [], active: v.active || '' }; }
+    catch (e) { return { unlocked: [], active: '' }; }
+  })();
+  const saveThemes = () => { try { localStorage.setItem(THEME_KEY, JSON.stringify(themeState)); } catch (e) { /* sem armazenamento: vale até fechar */ } };
+  function applyTheme(id) {
+    themeState.active = id;
+    if (id) document.documentElement.dataset.theme = id; else delete document.documentElement.dataset.theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--abismo').trim() || '#0f1c26';
+    saveThemes();
+  }
+  applyTheme(themeState.unlocked.indexOf(themeState.active) >= 0 ? themeState.active : '');
+
+  function secretHit(q) {
+    const k = nameKey(q || '');
+    if (/elemento\s*115|element\s*115|^115$/.test(k)) return 'ether';
+    if (/clap\s*trap|cl4p/.test(k)) return 'claptrap';
+    return '';
+  }
+  function secretRow(id) {
+    const t = THEMES.find((x) => x.id === id);
+    const got = themeState.unlocked.indexOf(id) >= 0;
+    const btn = h('button', 'row__open secret secret--' + id,
+      h('span', 'secret__icon', id === 'ether' ? '115' : ''),
+      h('span', 'row__main',
+        h('span', 'row__title', id === 'ether' ? 'Elemento 115' : 'CL4P-TP', ' ', h('span', 'tag', got ? 'Tema ' + t.name : '???')),
+        h('span', 'row__meta', id === 'ether' ? 'Item oculto · energia Ether pura · instável' : 'Unidade robótica de uso geral · fala demais'),
+        h('span', 'row__text', got ? 'Toque para equipar o tema ' + t.name + ' de novo.' : 'Toque para pegar.')));
+    btn.type = 'button';
+    btn.addEventListener('click', () => unlockTheme(id));
+    return h('li', 'row secret-row', btn);
+  }
+
+  function playThemeSound(id) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ac = new AC();
+      const now = ac.currentTime + 0.02;
+      const out = ac.createGain();
+      out.gain.value = 0.2;
+      out.connect(ac.destination);
+      const tone = (type, f0, f1, t0, dur, vol) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f0, now + t0);
+        o.frequency.exponentialRampToValueAtTime(f1, now + t0 + dur);
+        g.gain.setValueAtTime(0.0001, now + t0);
+        g.gain.exponentialRampToValueAtTime(vol, now + t0 + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + t0 + dur);
+        o.connect(g); g.connect(out);
+        o.start(now + t0); o.stop(now + t0 + dur + 0.05);
+      };
+      if (id === 'ether') { // zumbido grave, carga subindo, estalos e um brilho no fim
+        tone('sine', 50, 95, 0, 2.4, 0.9);
+        tone('sawtooth', 90, 1500, 0.15, 1.3, 0.22);
+        tone('triangle', 990, 1980, 1.3, 0.9, 0.45);
+        tone('sine', 1480, 2960, 1.4, 0.8, 0.25);
+        const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 1.4), ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() < 0.015 ? Math.random() * 2 - 1 : 0;
+        const n = ac.createBufferSource(), hp = ac.createBiquadFilter(), ng = ac.createGain();
+        n.buffer = buf; hp.type = 'highpass'; hp.frequency.value = 2500; ng.gain.value = 0.6;
+        n.connect(hp); hp.connect(ng); ng.connect(out);
+        n.start(now + 0.2);
+      } else { // bipes de robô animado
+        [523, 659, 784, 1047, 880, 1319, 1568].forEach((f, i) => tone('square', f, f * 1.03, i * 0.085, 0.075, 0.3));
+        tone('sine', 260, 920, 0.7, 0.22, 0.5);
+        tone('sine', 920, 340, 0.95, 0.25, 0.4);
+      }
+      setTimeout(() => ac.close().catch(() => {}), 3200);
+    } catch (e) { /* sem áudio: só a animação */ }
+  }
+
+  function unlockTheme(id) {
+    const t = THEMES.find((x) => x.id === id);
+    if (!t || document.querySelector('.unlock')) return;
+    const first = themeState.unlocked.indexOf(id) < 0;
+    if (first) themeState.unlocked.push(id);
+    saveThemes();
+    playThemeSound(id);
+    const ov = h('div', 'unlock unlock--' + id,
+      h('div', 'unlock__fx', h('span', 'unlock__orb'), h('span', 'unlock__ring'), h('span', 'unlock__ring unlock__ring--2')),
+      h('div', 'unlock__card',
+        h('p', 'unlock__kicker', first ? 'Tema desbloqueado' : 'Tema equipado'),
+        h('p', 'unlock__name', t.name),
+        h('p', 'unlock__sub', id === 'ether' ? 'Elemento 115 absorvido. A energia Ether toma conta do Vortex.' : 'CL4P-TP online! Pronto para servir, caçador.')));
+    ov.setAttribute('role', 'status');
+    document.body.append(ov);
+    setTimeout(() => applyTheme(id), 900);
+    setTimeout(() => ov.classList.add('is-out'), 2600);
+    setTimeout(() => { ov.remove(); toast('Tema ' + t.name + ' equipado. Troque de tema no Perfil.'); }, 3200);
+  }
+
+  function renderThemes() {
+    $('#theme-list').replaceChildren(...THEMES.map((t) => {
+      const open = !t.id || themeState.unlocked.indexOf(t.id) >= 0;
+      const on = themeState.active === t.id;
+      const card = h('div', 'theme-card theme-card--' + (t.id || 'vortex') + (open ? '' : ' is-locked') + (on ? ' is-on' : ''),
+        h('span', 'theme-card__swatch', h('i'), h('i'), h('i')),
+        h('span', 'theme-card__main', h('strong', '', open ? t.name : '???'), h('span', '', open ? t.text : t.hint)));
+      if (open) {
+        const b = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Em uso' : 'Usar');
+        b.type = 'button';
+        b.disabled = on;
+        b.addEventListener('click', () => { applyTheme(t.id); renderThemes(); toast('Tema ' + t.name + '.'); });
+        card.append(b);
+      } else card.append(h('span', 'theme-card__lock', '🔒'));
+      return card;
+    }));
+  }
+
   /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
   const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'build', 'npc'];
   const ITEM_KINDS = ITEM_DATA.categories.map((c) => c.id).filter((k) => NON_ITEM_KINDS.indexOf(k) < 0);
@@ -2889,7 +3070,8 @@ const FIREBASE_CONFIG = {
     const maker = $('#lib-maker').value;
     if (maker) list = list.filter((e) => (e.values || {}).fabricante === maker);
     list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
-    $('#lib-list').replaceChildren(...list.map((e) => {
+    const secret = secretHit(q);
+    $('#lib-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => {
       const actions = [{ label: 'Usar de base', onClick: () => openForm(e.kind, e.typeId, Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' })) }];
       if (e.mine) {
         actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) });
@@ -2904,7 +3086,7 @@ const FIREBASE_CONFIG = {
       }
       return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
     }));
-    $('#lib-empty').hidden = list.length > 0;
+    $('#lib-empty').hidden = list.length > 0 || Boolean(secret);
     $('#lib-hint').textContent = libSearch.warn
       ? plural(list.length, 'registro', 'registros') + ' do catálogo oficial. O banco compartilhado não abriu: ' + libSearch.warn
       : plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
@@ -2953,8 +3135,9 @@ const FIREBASE_CONFIG = {
     let list = await libSearch(g ? g.kinds : null, q);
     if (seq !== catState.seq) return;
     list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
-    $('#cat-list').replaceChildren(...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
-    $('#cat-empty').hidden = list.length > 0;
+    const secret = secretHit(q);
+    $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
+    $('#cat-empty').hidden = list.length > 0 || Boolean(secret);
     $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
       + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');
   }
@@ -3221,6 +3404,147 @@ const FIREBASE_CONFIG = {
     };
   }
 
+  /* ---------- Builds guiadas ----------
+     Folhas: o que comprar com cada UP, uma linha por UP ("3 | Poder: Ataques (Certeiro)"), ações separadas por ";".
+     Ações: "Poder: Nome", "Poder: Nome (Opção)", "Melhoria: Nome", "Doutor: Perícia", "Proficiência: Tipo",
+     "Perícias: Mira +2, Reflexos +1" (1 UP em perícias). Outro texto é um lembrete, feito à mão.
+     Os benefícios dos UP pares e os pontos de perícia seguem as listas da build, em ordem.
+     Com a atualização automática ligada, cada UP ganho aplica a folha dele (s.guide.done guarda as já feitas). */
+  const guideCache = { powers: null };
+  function guidePowers() { // poderes oficiais na hora; os do banco chegam depois
+    if (!guideCache.powers) {
+      guideCache.powers = BUILTINS.filter((e) => e.kind === 'poder');
+      libSearch(['poder'], '').then((list) => { guideCache.powers = list; }).catch(() => { /* fica com os oficiais */ });
+    }
+    return guideCache.powers;
+  }
+  const findPower = (name) => guidePowers().find((e) => nameKey(e.name) === nameKey(name));
+  const guideList = (txt) => String(txt || '').split(',').map((x) => x.trim()).filter(Boolean);
+  function guideActions(text) {
+    return String(text || '').split(';').map((t) => t.trim()).filter(Boolean).map((t) => {
+      const m = /^([^:]+):\s*(.+)$/.exec(t);
+      const kind = m ? nameKey(m[1]) : '';
+      const arg = m ? m[2].trim() : t;
+      if (kind === 'poder') { const o = /^(.+?)\s*\((.+)\)$/.exec(arg); return { type: 'poder', name: o ? o[1] : arg, opt: o ? o[2] : '', text: t }; }
+      if (kind === 'melhoria') return { type: 'melhoria', name: arg, text: t };
+      if (kind === 'doutor') return { type: 'doutor', id: skillIdOf(arg), text: t };
+      if (kind === 'proficiencia') return { type: 'prof', id: profByLabel(arg), text: t };
+      if (kind === 'pericias' || kind === 'pericia') {
+        const list = arg.split(',').map((x) => /^(.+?)\s*\+?(\d)?$/.exec(x.trim())).filter(Boolean).map((p) => [skillIdOf(p[1]), Number(p[2] || 1)]).filter((x) => x[0]);
+        return { type: 'pericias', list, text: t };
+      }
+      return { type: 'nota', text: t };
+    });
+  }
+  function guidePages(g) {
+    const pages = {};
+    String((g && g.folhas) || '').split('\n').forEach((l) => {
+      const m = /^\s*(\d+)\s*\|\s*(.+)$/.exec(l);
+      if (!m) return;
+      pages[m[1]] = (pages[m[1]] ? pages[m[1]] + '; ' : '') + m[2].trim();
+    });
+    return Object.keys(pages).map(Number).sort((a, b) => a - b).map((n) => ({ n, text: pages[n], acts: guideActions(pages[n]) }));
+  }
+  const guideFrom = (e) => {
+    const v = e.values || {};
+    return { id: e.id || '', name: e.name, folhas: v.folhas || '', beneficios: v.beneficios || '', periciasUp: v.periciasUp || '', auto: true, done: [], miss: {} };
+  };
+  function applyGuideAction(s, a) { // true = aplicada
+    if (a.type === 'poder') {
+      const e = findPower(a.name);
+      if (!e || CHOICE_POWERS[e.id]) return false; // Doutor e proficiências usam "Doutor:" e "Proficiência:"
+      const opts = powerOpts(e);
+      if (!opts.length) { s.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '' })); return true; }
+      const opt = a.opt ? opts.find((o) => nameKey(o.name) === nameKey(a.opt)) : opts[0];
+      if (!opt) return false;
+      const have = s.powers.find((p) => p.id === e.id && powerOpts(p).length);
+      if (have) { if (powerPicks(have).indexOf(opt.name) < 0) have.picks = powerPicks(have).concat([opt.name]); return true; }
+      s.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', picks: [opt.name] }));
+      return true;
+    }
+    if (a.type === 'melhoria') {
+      const k = nameKey(a.name);
+      const hasUp = (x) => powerUps(x).some((u) => nameKey(u.name) === k);
+      let p = s.powers.find(hasUp);
+      if (!p) { const e = guidePowers().find(hasUp); if (!e) return false; p = Object.assign(slotSnap(e), { thumb: e.thumb || '' }); s.powers.push(p); }
+      const u = powerUps(p).find((x) => nameKey(x.name) === k);
+      p.ups = Object.assign({}, p.ups);
+      p.ups[u.name] = upCount(p, u.name) + 1;
+      return true;
+    }
+    if (a.type === 'doutor' || a.type === 'prof') {
+      if (!a.id) return false;
+      const pid = a.type === 'doutor' ? 'of-pod-doutor' : a.id.indexOf('armadura-') === 0 ? 'of-pod-prof-armadura' : 'of-pod-prof-arma';
+      if (choicesOf(s, pid).indexOf(a.id) >= 0) return true;
+      const e = BUILTINS.find((b) => b.id === pid);
+      if (!e) return false;
+      s.powers.push(choicePower(e, a.id));
+      return true;
+    }
+    if (a.type === 'pericias') {
+      s.up.per += 1;
+      a.list.forEach((x) => { s.skills[x[0]] = Math.min(skillCap(s, x[0]), num(s.skills[x[0]]) + x[1]); });
+      return true;
+    }
+    return false;
+  }
+  function applyGuidePage(s, pg) { // devolve o texto do que entrou
+    const g = s.guide;
+    const ok = [], miss = [];
+    pg.acts.forEach((a) => { if (a.type === 'nota') return; if (applyGuideAction(s, a)) ok.push(a.text); else miss.push(a.text); });
+    if (g.done.indexOf(pg.n) < 0) g.done.push(pg.n);
+    g.miss = Object.assign({}, g.miss);
+    if (miss.length) g.miss[pg.n] = miss; else delete g.miss[pg.n];
+    return ok;
+  }
+  // Atualização automática: folhas até o UP atual, benefícios e pontos de perícia livres. Devolve o que mudou.
+  function guideSync(s) {
+    const g = s.guide;
+    if (!g || !g.auto) return [];
+    g.done = Array.isArray(g.done) ? g.done : [];
+    const out = [];
+    let m = compute({ sheet: s });
+    guidePages(g).forEach((pg) => {
+      if (pg.n > m.upTotal || g.done.indexOf(pg.n) >= 0) return;
+      const ok = applyGuidePage(s, pg);
+      if (ok.length) out.push('UP ' + pg.n + ': ' + ok.join(', '));
+    });
+    m = compute({ sheet: s });
+    const ben = guideList(g.beneficios).map((x) => (/pv/i.test(x) ? 'pv' : /pe/i.test(x) ? 'pe' : /pa/i.test(x) ? 'pa' : '')).filter(Boolean);
+    let picks = m.picksAllowed - m.picksUsed;
+    const got = [];
+    while (ben.length && picks > 0) {
+      const k = ben[(s.up.pv + s.up.pe + s.up.pa) % ben.length];
+      s.up[k] += 1;
+      picks -= 1;
+      got.push(k === 'pa' ? '+1 PA' : '+5 ' + k.toUpperCase());
+    }
+    if (got.length) out.push('benefícios ' + got.join(', '));
+    m = compute({ sheet: s });
+    const sk = guideList(g.periciasUp).map(skillIdOf).filter(Boolean);
+    let free = m.skillBudget - m.skillUsed;
+    const raised = [];
+    for (let i = 0; sk.length && free > 0 && i < sk.length * 5; i++) {
+      const id = sk[i % sk.length];
+      if (num(s.skills[id]) >= skillCap(s, id)) continue;
+      s.skills[id] = num(s.skills[id]) + 1;
+      free -= 1;
+      raised.push(SKILL_LABEL[id] || id);
+    }
+    if (raised.length) out.push('perícias +1 em ' + raised.join(', '));
+    return out;
+  }
+
+  /* Dinheiro inicial pelos UP com que o personagem começa (tabela interna, items.js) */
+  function startMoney(up) {
+    const t = ITEM_DATA.dinheiroInicial || [[0, 1500]];
+    const last = t[t.length - 1];
+    if (up > last[0]) return last[1] + (up - last[0]) * 1000;
+    let v = t[0][1];
+    t.forEach((r) => { if (up >= r[0]) v = r[1]; });
+    return v;
+  }
+
   // valor atual de um recurso: sem registro = cheio (assim acompanha o máximo quando ele muda)
   const curMin = (key, max) => (key === 'pv' ? -max : 0);
   function getCur(s, key, max) {
@@ -3310,7 +3634,7 @@ const FIREBASE_CONFIG = {
   }
 
   // o que a ficha já mostrou: avisos só aparecem quando algo muda depois de aberta
-  const watch = { id: null, over: false, pending: 0, skills: 0 };
+  const watch = { id: null, over: false, pending: 0, skills: 0, bad: 0 };
   let lastDmgType = '';
 
   /* Pendências: pontos e recursos ainda por distribuir */
@@ -3327,11 +3651,42 @@ const FIREBASE_CONFIG = {
     return out;
   }
 
+  /* Compras sem fonte: o que está na ficha além do que as regras (ou um poder) concedem */
+  function noSourceList(m) {
+    const s = sheetChar.sheet;
+    const out = [];
+    const up = m.upSpent - m.upTotal;
+    const picks = m.picksUsed - m.picksAllowed;
+    const skills = m.skillUsed - m.skillBudget;
+    const extraProfs = s.profs.length - 4;
+    if (up > 0) out.push({ n: up, text: plural(up, 'UP gasto', 'UP gastos') + ' sem UP que os pague (poderes, melhorias ou UP em perícias). Ganhe XP ou desfaça uma compra.', label: 'Ver progressão', go: '#prog-block' });
+    if (picks > 0) out.push({ n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' (+5 PV, +5 PE, +1 PA) sem UP par que os conceda.', label: 'Ver progressão', go: '#prog-block' });
+    if (skills > 0) out.push({ n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', label: 'Ver perícias', go: '#skills-block' });
+    if (s.setup && attrPool(s.attrs).left < 0) out.push({ n: -attrPool(s.attrs).left, text: 'Atributos acima dos 3 pontos da distribuição inicial.', label: 'Refazer distribuição', go: () => openSetup() });
+    if (extraProfs > 0) out.push({ n: extraProfs, text: plural(extraProfs, 'proficiência', 'proficiências') + ' além das 4 iniciais. As extras vêm do poder Proficiência em arma ou armadura.', label: 'Ver proficiências', go: '#profs-block' });
+    return out;
+  }
+  function alertGo(p) {
+    const b = h('button', 'link-btn', p.label);
+    b.type = 'button';
+    b.addEventListener('click', () => {
+      if (typeof p.go === 'function') { p.go(); return; }
+      const el = $(p.go);
+      if (el) showSheetTab(el.closest('.sheet-panel'));
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = $('button:not(:disabled), input', el); if (f) f.focus({ preventScroll: true }); }
+    });
+    return b;
+  }
+
   function renderAlerts(m) {
     const list = pendingList(m);
+    const bad = noSourceList(m);
     const box = $('#sheet-alerts');
-    box.hidden = !list.length;
-    box.replaceChildren(...(list.length ? [h('p', 'alerts__title', 'Há o que distribuir')] : []), ...list.map((p) => {
+    box.hidden = !list.length && !bad.length;
+    box.classList.toggle('alerts--bad', bad.length > 0);
+    box.replaceChildren(...(bad.length ? [h('p', 'alerts__title alerts__title--bad', 'Sem fonte reconhecida')] : []),
+      ...bad.map((p) => h('p', 'alerts__item alerts__item--bad', p.text + ' ', alertGo(p))),
+      ...(list.length ? [h('p', 'alerts__title', 'Há o que distribuir')] : []), ...list.map((p) => {
       const b = h('button', 'link-btn', p.label);
       b.type = 'button';
       b.addEventListener('click', () => {
@@ -3351,20 +3706,30 @@ const FIREBASE_CONFIG = {
       // ex.: comprar uma proficiência gasta 1 UP e dá 1 ponto de perícia (o total não muda, mas a perícia fica pendente)
       toast('Perícia pendente: ' + plural(skillsLeft, 'ponto', 'pontos') + ' para distribuir.');
     }
+    const badCount = bad.reduce((t, p) => t + p.n, 0);
+    if (watch.id === sheetChar.id && badCount > watch.bad) toast('Sem fonte: ' + bad.map((p) => p.text.replace(/[.(].*$/, '').trim()).join(' · ') + '. O sistema não reconhece de onde isso veio.');
     watch.pending = count;
     watch.skills = skillsLeft;
+    watch.bad = badCount;
+    // abas com algo a distribuir ou sem fonte ganham um ponto
+    const dot = { 'stab-progressao': m.picksAllowed - m.picksUsed > 0 || m.upTotal - m.upSpent > 0, 'stab-pericias': m.skillBudget - m.skillUsed > 0 };
+    const red = { 'stab-progressao': m.upSpent > m.upTotal || m.picksUsed > m.picksAllowed, 'stab-pericias': m.skillUsed > m.skillBudget || sheetChar.sheet.profs.length > 4 };
+    Object.keys(dot).forEach((id) => { const t = $('#' + id); t.classList.toggle('sheet-tab--dot', dot[id] && !red[id]); t.classList.toggle('sheet-tab--bad', red[id]); });
   }
 
   // Redesenha a ficha inteira e devolve o foco ao controle que estava em uso
   function rerender() {
     const a = document.activeElement;
     const fid = a && a.dataset ? a.dataset.fid : null;
+    const gd = sheetChar.mine || isMyChar(sheetChar.id) ? guideSync(sheetChar.sheet) : [];
+    if (gd.length) { touchSheet(); toast('Build ' + sheetChar.sheet.guide.name + ' atualizou a ficha: ' + gd.join(' · ') + '.'); }
     const m = compute(sheetChar);
     renderAttrs(m);
     renderResources(m);
     renderSkills(m);
     renderProfs();
     renderProgress(m);
+    renderGuide(m);
     renderSpeciesLink();
     renderPowers(m);
     renderInventory(m);
@@ -3650,6 +4015,103 @@ const FIREBASE_CONFIG = {
       h('p', 'field__hint', 'A cada UP par alcançado (sem contar os de origem), escolha 2 benefícios. A cada UP ímpar, +1 ponto de perícia (já somado nos pontos de perícia).'),
       h('div', 'buys', buy('per', 'UP investidos em perícias', 99)),
       h('p', 'field__hint', 'Cada UP investido em perícias dá +3 pontos livres. Poderes custam UP conforme o custo de cada um; Doutor e as proficiências extras de arma e armadura ficam em Poderes.'));
+  }
+
+  /* Folhas da build guiada: um livro, uma folha por UP */
+  const guideView = { key: '', page: null };
+  function renderGuide(m) {
+    const ch = sheetChar, s = ch.sheet, g = s.guide;
+    const box = $('#guide-block');
+    if (!g) {
+      const pick = h('button', 'btn btn--ghost btn--sm', 'Seguir uma build guiada');
+      pick.type = 'button';
+      pick.dataset.fid = 'guide-pick';
+      pick.addEventListener('click', async () => {
+        const e = await openPicker({ title: 'Escolher build guiada', kinds: ['build'], chips: ['Build guiada'], filter: (x) => x.kind === 'build' && (x.values || {}).tipo === 'Guiada' });
+        if (!e || sheetChar !== ch) return;
+        const ng = guideFrom(e);
+        const spent = compute(ch).upSpent;
+        ng.done = guidePages(ng).filter((pg) => pg.n <= spent).map((pg) => pg.n); // o que já foi gasto conta como feito
+        s.guide = ng;
+        changed();
+        toast('Seguindo ' + e.name + '. A cada UP ganho a ficha se atualiza sozinha.');
+      });
+      box.replaceChildren(h('p', 'field__hint', 'Uma build guiada diz o que pegar a cada UP, como um livro. Escolha uma na distribuição inicial ou aqui. As folhas até os UP que você já gastou contam como feitas.'), pick);
+      return;
+    }
+    const pages = guidePages(g);
+    const key = ch.id + '|' + g.id + '|' + g.name;
+    if (guideView.key !== key) { guideView.key = key; guideView.page = null; }
+    if (guideView.page === null) { const next = pages.findIndex((pg) => g.done.indexOf(pg.n) < 0); guideView.page = next < 0 ? Math.max(0, pages.length - 2) : next; }
+    guideView.page = clamp(guideView.page, 0, Math.max(0, pages.length - 1));
+
+    const auto = h('button', 'btn btn--sm ' + (g.auto ? 'btn--ghost' : 'btn--primary'), g.auto ? 'Parar de atualizar sozinha' : 'Voltar a atualizar sozinha');
+    auto.type = 'button';
+    auto.dataset.fid = 'guide-auto';
+    auto.addEventListener('click', () => {
+      g.auto = !g.auto;
+      changed();
+      toast(g.auto ? 'A ficha volta a seguir as folhas a cada UP.' : 'Atualização automática parada. As folhas ficam aqui para você aplicar à mão.');
+    });
+    const leave = h('button', 'btn btn--ghost btn--sm', 'Deixar a build');
+    leave.type = 'button';
+    leave.addEventListener('click', async () => {
+      const ok = await askConfirm({ title: 'Deixar ' + g.name + '?', text: 'As folhas somem da ficha. O que já entrou (poderes, perícias, benefícios) continua.', ok: 'Deixar' });
+      if (!ok || sheetChar !== ch) return;
+      s.guide = null;
+      changed();
+    });
+    const base = m.upTotal - m.upEarned;
+    const pageEl = (pg) => {
+      const done = g.done.indexOf(pg.n) >= 0;
+      const reached = pg.n <= m.upTotal;
+      const miss = (g.miss || {})[pg.n] || [];
+      const xpLeft = Math.max(0, (pg.n - base) * 10 - num(s.xp));
+      const state = done ? 'Feita' : reached ? 'Liberada' : 'Chega no UP ' + pg.n + (xpLeft ? ' · faltam ' + xpLeft + ' XP' : '');
+      const el = h('article', 'guide__page' + (done ? ' is-done' : reached ? ' is-open' : ' is-locked'),
+        h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', String(pg.n))),
+        h('p', 'guide__state', state),
+        h('ul', 'guide__list', ...pg.acts.map((a) => {
+          const bad = miss.indexOf(a.text) >= 0;
+          return h('li', 'guide__act' + (a.type === 'nota' ? ' guide__act--nota' : bad ? ' guide__act--miss' : ''), a.text,
+            a.type === 'nota' ? h('span', 'tag', 'à mão') : bad ? h('span', 'tag tag--bad', 'não achei no banco') : null);
+        })));
+      if (reached && !done) {
+        const ap = h('button', 'btn btn--primary btn--sm', 'Aplicar esta folha');
+        ap.type = 'button';
+        ap.dataset.fid = 'guide-apply-' + pg.n;
+        ap.addEventListener('click', () => { const ok = applyGuidePage(s, pg); changed(); toast(ok.length ? 'Folha ' + pg.n + ': ' + ok.join(', ') + '.' : 'Folha ' + pg.n + ' marcada como feita.'); });
+        el.append(ap);
+      }
+      return el;
+    };
+    const nav = (d, label, fid) => {
+      const b = h('button', 'guide__turn', label);
+      b.type = 'button';
+      b.dataset.fid = fid;
+      b.disabled = d < 0 ? guideView.page <= 0 : guideView.page >= pages.length - 1;
+      b.setAttribute('aria-label', d < 0 ? 'Folha anterior' : 'Próxima folha');
+      b.addEventListener('click', () => { guideView.page += d; renderGuide(compute(ch)); });
+      return b;
+    };
+    const marks = h('div', 'guide__marks', ...pages.map((pg, i) => {
+      const b = h('button', 'guide__mark' + (g.done.indexOf(pg.n) >= 0 ? ' is-done' : pg.n <= m.upTotal ? ' is-open' : '') + (i === guideView.page || i === guideView.page + 1 ? ' is-on' : ''), String(pg.n));
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Ir para a folha ' + pg.n);
+      b.addEventListener('click', () => { guideView.page = i; renderGuide(compute(ch)); });
+      return b;
+    }));
+    const shown = pages.slice(guideView.page, guideView.page + 2);
+    box.replaceChildren(
+      h('div', 'guide__head',
+        h('div', 'guide__name', h('span', 'guide__kicker', 'Build guiada'), h('strong', '', g.name)),
+        h('span', 'guide__auto' + (g.auto ? ' is-on' : ''), g.auto ? 'Atualiza sozinha a cada UP' : 'Atualização parada'),
+        h('div', 'guide__acts', auto, leave)),
+      pages.length
+        ? h('div', 'guide__book', nav(-1, '‹', 'guide-prev'), h('div', 'guide__spread', ...shown.map(pageEl)), nav(1, '›', 'guide-next'))
+        : h('p', 'empty', 'Esta build não tem folhas.'),
+      pages.length ? marks : null,
+      h('p', 'field__hint', [g.beneficios ? 'Benefícios dos UP pares, em ordem: ' + g.beneficios + '.' : '', g.periciasUp ? 'Pontos de perícia, em ordem: ' + g.periciasUp + '.' : ''].filter(Boolean).join(' ')));
   }
 
   function profPills(list, onToggle, limit, prefix) {
@@ -4534,7 +4996,8 @@ const FIREBASE_CONFIG = {
     const skills = {};
     [['pericia2a', 2], ['pericia2b', 2], ['pericia1', 1]].forEach((x) => { const id = skillIdOf(v[x[0]]); if (id && !skills[id]) skills[id] = x[1]; });
     return {
-      id: e.id, name: e.name, role: v.papel || '', text: v.descricao || '', mine: Boolean(e.mine),
+      id: e.id, name: e.name, role: v.papel || '', text: v.descricao || '', mine: Boolean(e.mine), entry: e,
+      guided: v.tipo === 'Guiada', pages: guidePages(v).length, itens: String(v.itens || '').split('\n').map((x) => x.trim()).filter(Boolean),
       attrs: { corpo: clamp(num(v.corpo), -1, 3), precisao: clamp(num(v.precisao), -1, 3), essencia: clamp(num(v.essencia), -1, 3) },
       skills, profs: String(v.profs || '').split(',').map(profByLabel).filter(Boolean).slice(0, 4)
     };
@@ -4593,6 +5056,8 @@ const FIREBASE_CONFIG = {
     wz.skills = Object.assign({}, b.skills);
     wz.profs = b.profs.slice();
     wz.build = b.name;
+    wz.guide = b.guided ? b.entry : null;
+    wz.gear.guideFilled = '';
   }
 
   /* ---------- Itens iniciais: kit da origem ou compra por preço ----------
@@ -4667,6 +5132,17 @@ const FIREBASE_CONFIG = {
   function renderGear(body) {
     const origin = originOf(wz.origin);
     const g = gearFor(origin);
+    const startUp = previewSheet().upTotal;
+    if (g.budgetAuto) g.budget = startMoney(startUp);
+    const gi = wz.guide ? String((wz.guide.values || {}).itens || '').split('\n').map((x) => x.trim()).filter(Boolean) : [];
+    if (gi.length && g.guideFilled !== wz.guide.id + wz.guide.name) {
+      if (g.guideFilled === '') g.mode = 'preco';
+      if (g.shop) {
+        g.cart = gi.map((n) => g.shop.find((e) => nameKey(e.name) === nameKey(n))).filter(Boolean);
+        g.guideFilled = wz.guide.id + wz.guide.name;
+        g.guideMissing = gi.filter((n) => !g.shop.some((e) => nameKey(e.name) === nameKey(n)));
+      }
+    }
     const modes = [['kit', 'Kit da origem'], ['preco', 'Por preço'], ['nenhum', 'Nenhum']];
     const seg = h('div', 'segmented gear__modes', ...modes.map((m) => {
       const inp = h('input');
@@ -4755,13 +5231,14 @@ const FIREBASE_CONFIG = {
     inp.inputMode = 'numeric';
     inp.id = 'gear-budget';
     inp.value = String(g.budget);
-    inp.addEventListener('change', () => { g.budget = Math.max(0, parseInt(inp.value.replace(/[^0-9]/g, ''), 10) || 0); renderSetup(); });
+    inp.addEventListener('change', () => { g.budget = Math.max(0, parseInt(inp.value.replace(/[^0-9]/g, ''), 10) || 0); g.budgetAuto = false; renderSetup(); });
     const lab = h('label', 'field__label', 'Orçamento (Cronos)');
     lab.htmlFor = 'gear-budget';
     const left = g.budget - cartTotal(g);
     body.append(h('div', 'gear__budget', h('div', 'field', lab, inp),
       h('p', 'setup__pool' + (left < 0 ? ' setup__pool--over' : ''), 'Sobra: ', h('strong', '', fmtCronos(left)), ' Cronos')),
-      h('p', 'field__hint', 'O livro não define dinheiro inicial. O padrão de ' + fmtCronos(START_BUDGET) + ' Cronos compra uma arma comum e uma armadura leve comum; combine o valor com o mestre.' + (origin ? ' O kit de ' + origin.name + ' continua na aba "Kit da origem" para comparar.' : '')));
+      h('p', 'field__hint', 'Dinheiro inicial pela tabela: começando com ' + plural(startUp, 'UP', 'UP') + ', ' + fmtCronos(startMoney(startUp)) + ' Cronos (0 UP = ' + fmtCronos(startMoney(0)) + ', uma arma comum e uma armadura leve comum). Combine o valor com o mestre.' + (origin ? ' O kit de ' + origin.name + ' continua na aba "Kit da origem" para comparar.' : '')));
+    if (wz.guide && gi.length) body.append(h('p', 'field__hint gear__guide', '📖 ' + wz.guide.name + ' já pôs no carrinho: ' + gi.join(', ') + '.' + (g.guideMissing && g.guideMissing.length ? ' Não achei no banco: ' + g.guideMissing.join(', ') + '.' : '')));
     if (g.cart.length) {
       body.append(h('h3', 'setup__sub', 'Comprados'), h('ul', 'rows', ...g.cart.map((e, i) => {
         const rm = h('button', 'btn btn--ghost btn--sm', 'Tirar');
@@ -4867,7 +5344,8 @@ const FIREBASE_CONFIG = {
         b.role + ' · ' + b.text,
         ATTRS.map((at) => at.label + ' ' + (signed(b.attrs[at.id]) === '0' ? '0' : signed(b.attrs[at.id]))).join(' · '),
         Object.keys(b.skills).map((k) => skillLabel(k) + ' +' + b.skills[k]).join(' · '),
-        b.profs.map(profLabel).join(' · ')
+        b.profs.map(profLabel).join(' · '),
+        b.guided ? '📖 Guiada: ' + plural(b.pages, 'folha', 'folhas') + (b.itens.length ? ' · ' + plural(b.itens.length, 'item', 'itens') + ' para comprar' : '') + ' · atualiza a ficha a cada UP' : ''
       ], wz.build === b.name, () => { applyBuild(b); toast('Build ' + b.name + ' aplicada. Ajuste o que quiser nas outras partes.'); goStep(STEP.especime); }))));
       if (!list.length) body.append(h('p', 'empty', 'Nenhuma build com esse termo.'));
       const skip = h('button', 'btn btn--ghost btn--sm', skipBuilds() ? 'Voltar a mostrar esta tela sempre' : 'Sempre pular');
@@ -5020,7 +5498,7 @@ const FIREBASE_CONFIG = {
     wz = {
       step: skipBuilds() ? STEP.especime : STEP.builds, q: '', build: '', attrs: Object.assign({}, s.attrs), skills: {}, profs: s.profs.slice(0, 4), oficio: s.oficio || '',
       specimen: s.specimen ? deep(s.specimen) : null, origin: c.origin || '', age: c.age || '', height: s.height || '', sex: s.sex || '',
-      gear: { mode: s.originItems ? 'nenhum' : 'kit', origin: null, lines: [], budget: START_BUDGET, cart: [], shop: null }
+      gear: { mode: s.originItems ? 'nenhum' : 'kit', origin: null, lines: [], budget: START_BUDGET, budgetAuto: true, cart: [], shop: null, guideFilled: '' }
     };
     Object.keys(s.skills).forEach((k) => { if (s.skills[k] === 1 || s.skills[k] === 2) wz.skills[k] = s.skills[k]; });
     if (attrPool(wz.attrs).left < 0 || ATTRS.some((at) => wz.attrs[at.id] > 3)) wz.attrs = { corpo: 0, precisao: 0, essencia: 0 }; // ficha já evoluída: recomeça do zero
@@ -5050,12 +5528,14 @@ const FIREBASE_CONFIG = {
     const got = gearEntries(g);
     got.forEach((e) => s.inventory.push(e));
     if (got.length) s.originItems = g.mode === 'preco' ? 'Compra inicial' : origin.name;
+    const guided = wz.guide && !(s.guide && s.guide.id === wz.guide.id && s.guide.name === wz.guide.name);
+    if (guided) s.guide = guideFrom(wz.guide); // as folhas até os UP iniciais entram já no próximo desenho da ficha
     wz = null;
     closeDialog(setupDlg);
     fillBasics();
     changed();
     flushSave();
-    toast('Distribuição inicial concluída.');
+    toast('Distribuição inicial concluída.' + (guided ? ' A build ' + s.guide.name + ' vai atualizar a ficha a cada UP; as folhas ficam em Progressão.' : ''));
   }
 
   $('#setup-open').addEventListener('click', openSetup);
@@ -5194,7 +5674,7 @@ const FIREBASE_CONFIG = {
     });
     if (keep && $('option[value="' + CSS.escape(keep) + '"]', testPick)) testPick.value = keep;
   }
-  speakerEl.addEventListener('change', () => { lastCharacterId = speakerEl.value; renderTestPick(); renderDock(); });
+  speakerEl.addEventListener('change', () => { lastCharacterId = speakerEl.value; renderTestPick(); renderDock(); renderShops(); });
 
   /* ---------- Painel do personagem (estilo barra de ações de RPG) ----------
      O personagem escolhido fica no topo da campanha: retrato, barras de recurso
@@ -5833,6 +6313,316 @@ const FIREBASE_CONFIG = {
     await sceneLog('Fim da cena', 'Cena encerrada após ' + plural(rounds, 'rodada', 'rodadas') + '.', rounds);
   });
 
+  /* ---------- Lojas da campanha ----------
+     O mestre cria as lojas (de uma companhia, dele ou de um NPC) e escolhe itens, quantidades e preços.
+     Loja de companhia tem estoque infinito do que a companhia fabrica. Um jogador pode abrir a própria loja
+     e abastecer com a mochila do personagem: os itens ficam no armazém ou à venda, com o preço por unidade dele.
+     Com fluxo de pessoas e NPCs comprando, cada descanso que o mestre passa pode vender o que está à venda.
+     A chance cai com a raridade e com o preço acima do catálogo, e é baixa de propósito: o estoque demora a esvaziar. */
+  let shops = [];
+  const shopUi = { open: new Set(), busy: false };
+  const TRAFFIC = [['nenhum', 'Sem fluxo de pessoas'], ['baixo', 'Fluxo baixo'], ['medio', 'Fluxo médio'], ['alto', 'Fluxo alto']];
+  const TRAFFIC_P = { baixo: 0.04, medio: 0.08, alto: 0.14 };   // chance por tentativa, item comum no preço do catálogo
+  const TRAFFIC_TRIES = { baixo: 1, medio: 2, alto: 3 };          // tentativas por item num descanso curto (longo: o dobro)
+  const RARITY_P = { 'Comum': 1, 'Incomum': 0.75, 'Rara': 0.5, 'Epica': 0.3, 'Épica': 0.3, 'Lendária': 0.15 };
+  const playing = () => members.find((m) => m.mine && m.characterId === speakerEl.value) || null;
+  const moneyOf = (m) => num(m && m.sheet && m.sheet.money ? m.sheet.money[currentCamp.id] : 0);
+  const isShopOwner = (sh) => sh.kind === 'jogador' && sh.ownerUid === db.uid;
+  const shopKindText = (sh) => (sh.kind === 'companhia' ? 'Companhia ' + sh.company : sh.kind === 'npc' ? 'NPC: ' + sh.npc : sh.kind === 'jogador' ? 'Loja de jogador (' + sh.ownerName + ')' : 'Do mestre');
+  const catalogPrice = (entry) => priceOf(BUILTINS.find((e) => e.id && e.id === entry.id) || entry);
+  const shopLog = (sh, text) => [{ t: Date.now(), text }].concat(sh.log || []).slice(0, 20);
+  const stockText = (it) => (it.qty === null || it.qty === undefined ? '∞' : '×' + it.qty);
+  async function saveShop(sh, patch) {
+    try { await db.updateShop(currentCamp.id, sh.id, patch); return true; }
+    catch (err) { toast(errorMessage(err)); return false; }
+  }
+  async function payMember(characterId, amount) { // dinheiro de venda para o dono da loja
+    const owner = members.find((m) => m.characterId === characterId);
+    if (!owner || !amount) return;
+    await patchMemberSheet(owner, (s) => { s.money = Object.assign({}, s.money); s.money[currentCamp.id] = num(s.money[currentCamp.id]) + amount; });
+  }
+
+  async function buyFromShop(sh, it) {
+    const me = playing();
+    if (!me) { toast('Escolha um personagem seu para comprar.'); return; }
+    const price = Math.max(0, Math.round(num(it.price)));
+    if (moneyOf(me) < price) { toast(me.name + ' tem ' + fmtCronos(moneyOf(me)) + ' Cronos nesta campanha; ' + it.entry.name + ' custa ' + fmtCronos(price) + '.'); return; }
+    const fresh = shops.find((x) => x.id === sh.id);
+    const cur = fresh && fresh.items.find((x) => x.uid === it.uid);
+    if (!cur || !cur.sale || (cur.qty !== null && cur.qty !== undefined && cur.qty < 1)) { toast('Esse item acabou.'); return; }
+    const camp = currentCamp.id;
+    try {
+      await patchMemberSheet(me, (s) => {
+        if (num((s.money || {})[camp]) < price) throw new UserError('Dinheiro insuficiente.');
+        s.money = Object.assign({}, s.money);
+        s.money[camp] = num(s.money[camp]) - price;
+        s.inventory.push(Object.assign(invEntryFrom(cur.entry), { src: 'loja' }));
+      });
+      const items = fresh.items.map((x) => (x.uid === cur.uid && x.qty !== null && x.qty !== undefined ? Object.assign({}, x, { qty: x.qty - 1 }) : x))
+        .filter((x) => x.qty === null || x.qty === undefined || x.qty > 0);
+      await db.updateShop(camp, sh.id, { items, log: shopLog(fresh, me.name + ' comprou ' + cur.entry.name + ' por ' + fmtCronos(price) + ' Cronos.') });
+      if (sh.kind === 'jogador' && sh.ownerCharId !== me.characterId) await payMember(sh.ownerCharId, price);
+      toast(me.name + ' comprou ' + cur.entry.name + '. Já está na mochila.');
+      renderDock();
+      renderShops();
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  async function stockFromInventory(sh) {
+    const me = members.find((m) => m.characterId === sh.ownerCharId) || playing();
+    if (!me || !me.sheet) return;
+    const inv = (me.sheet.inventory || []).filter((i) => !i.slot);
+    if (!inv.length) { toast('Nada na mochila de ' + me.name + ' para pôr na loja. Itens equipados não entram.'); return; }
+    const pick = await askChoice('Abastecer ' + sh.name, 'Item da mochila de ' + me.name, 'Vai para o armazém da loja. Depois marque "À venda" e o preço por unidade.', inv.map((i) => [i.uid, i.name + (num(i.qty) > 1 ? ' ×' + i.qty : '')]));
+    if (!pick) return;
+    let moved = null;
+    try {
+      await patchMemberSheet(me, (s) => {
+        const k = s.inventory.findIndex((i) => i.uid === pick && !i.slot);
+        if (k < 0) throw new UserError('Esse item não está mais na mochila.');
+        moved = s.inventory.splice(k, 1)[0];
+      });
+      const fresh = shops.find((x) => x.id === sh.id) || sh;
+      await saveShop(fresh, { items: fresh.items.concat([{ uid: uid(), entry: slotSnap(moved), qty: Math.max(1, num(moved.qty) || 1), price: priceOf(moved), sale: false }]) });
+      toast(moved.name + ' foi para o armazém de ' + sh.name + '.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  async function unstock(sh, it) { // dono tira do armazém de volta para a mochila
+    const owner = members.find((m) => m.characterId === sh.ownerCharId);
+    if (!owner) { toast('O personagem dono da loja não está nesta campanha.'); return; }
+    try {
+      const fresh = shops.find((x) => x.id === sh.id) || sh;
+      if (!fresh.items.some((x) => x.uid === it.uid)) return;
+      await saveShop(fresh, { items: fresh.items.filter((x) => x.uid !== it.uid) });
+      await patchMemberSheet(owner, (s) => { s.inventory.push(Object.assign(invEntryFrom(it.entry), { qty: Math.max(1, num(it.qty) || 1) })); });
+      toast(it.entry.name + ' voltou para a mochila de ' + owner.name + '.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  async function addBankItem(sh) {
+    const e = await openPicker({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
+      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    if (!e) return;
+    const fresh = shops.find((x) => x.id === sh.id) || sh;
+    await saveShop(fresh, { items: fresh.items.concat([{ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }]) });
+  }
+
+  // Descanso passado pelo mestre: NPCs podem comprar o que está à venda nas lojas com fluxo
+  async function shopRest(long) {
+    if (shopUi.busy) return;
+    shopUi.busy = true;
+    const sold = [];
+    try {
+      for (const sh of shops.slice()) {
+        if (!sh.npcBuyers || !TRAFFIC_P[sh.traffic]) continue;
+        let income = 0;
+        const lines = [];
+        const items = sh.items.map((x) => Object.assign({}, x));
+        items.forEach((it) => {
+          if (!it.sale || it.qty === null || it.qty === undefined || it.qty < 1) return; // estoque infinito não acaba
+          const base = catalogPrice(it.entry) || num(it.price) || 1;
+          const ratio = Math.max(0.25, num(it.price) / base);
+          const p = Math.min(0.5, TRAFFIC_P[sh.traffic] * (RARITY_P[(it.entry.values || {}).raridade] || 0.7) / (ratio * ratio));
+          const tries = Math.min(it.qty, TRAFFIC_TRIES[sh.traffic] * (long ? 2 : 1));
+          let n = 0;
+          for (let k = 0; k < tries; k++) if (Math.random() < p) n += 1;
+          if (!n) return;
+          it.qty -= n;
+          income += n * Math.max(0, Math.round(num(it.price)));
+          lines.push(n + '× ' + it.entry.name);
+        });
+        if (!lines.length) continue;
+        await db.updateShop(currentCamp.id, sh.id, { items: items.filter((x) => x.qty === null || x.qty === undefined || x.qty > 0),
+          log: shopLog(sh, 'Descanso ' + (long ? 'longo' : 'curto') + ': NPCs compraram ' + lines.join(', ') + (income ? ' (' + fmtCronos(income) + ' Cronos).' : '.')) });
+        if (sh.kind === 'jogador') await payMember(sh.ownerCharId, income);
+        sold.push(sh.name + ': ' + lines.join(', '));
+      }
+      toast(sold.length ? 'Vendas no descanso ' + (long ? 'longo' : 'curto') + ': ' + sold.join(' · ') + '.' : 'Descanso ' + (long ? 'longo' : 'curto') + ': nenhum NPC comprou nada desta vez.');
+    } catch (err) { toast(errorMessage(err)); }
+    finally { shopUi.busy = false; renderShops(); }
+  }
+
+  function shopItemRow(sh, it, manage) {
+    const e = it.entry;
+    const v = e.values || {};
+    const price = Math.max(0, Math.round(num(it.price)));
+    const main = h('span', 'row__main', h('span', 'row__title', e.name, ' ', h('span', 'tag shop__stock', stockText(it)), manage ? h('span', 'tag' + (it.sale ? ' tag--on' : ''), it.sale ? 'À venda' : 'No armazém') : null),
+      h('span', 'row__meta', [kindTitle(e.kind), e.typeTitle, v.raridade, v.fabricante].filter(Boolean).join(' · ')));
+    const row = h('li', 'row shop__item' + (it.sale ? '' : ' shop__item--off'), h('span', 'row__open row__open--static', entryIcon(e), main), h('strong', 'gear__price', fmtCronos(price)));
+    const me = playing();
+    if (it.sale && me && !(sh.kind === 'jogador' && sh.ownerCharId === me.characterId)) {
+      const buy = h('button', 'btn btn--primary btn--sm', 'Comprar');
+      buy.type = 'button';
+      buy.disabled = moneyOf(me) < price;
+      buy.title = buy.disabled ? 'Dinheiro insuficiente' : '';
+      buy.setAttribute('aria-label', 'Comprar ' + e.name + ' por ' + fmtCronos(price) + ' Cronos');
+      buy.addEventListener('click', () => { buy.disabled = true; buyFromShop(sh, it); });
+      row.append(buy);
+    }
+    if (!manage) return row;
+    const gm = currentCamp.gm;
+    const priceIn = h('input', 'input shop__num');
+    priceIn.type = 'number';
+    priceIn.min = '0';
+    priceIn.step = '1';
+    priceIn.value = String(price);
+    priceIn.setAttribute('aria-label', 'Preço por unidade de ' + e.name);
+    priceIn.addEventListener('change', () => saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { price: Math.max(0, Math.round(num(priceIn.value))) }) : x)) }));
+    const ctl = h('div', 'shop__ctl', h('label', 'shop__lab', 'Preço', priceIn));
+    if (gm && sh.kind !== 'jogador') {
+      const qtyIn = h('input', 'input shop__num');
+      qtyIn.type = 'number';
+      qtyIn.min = '0';
+      qtyIn.step = '1';
+      qtyIn.placeholder = '∞';
+      qtyIn.value = it.qty === null || it.qty === undefined ? '' : String(it.qty);
+      qtyIn.setAttribute('aria-label', 'Quantidade de ' + e.name + ' (vazio = infinito)');
+      qtyIn.addEventListener('change', () => {
+        const q = qtyIn.value.trim() === '' ? null : Math.max(0, Math.round(num(qtyIn.value)));
+        saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { qty: q }) : x)).filter((x) => x.qty === null || x.qty === undefined || x.qty > 0) });
+      });
+      ctl.append(h('label', 'shop__lab', 'Qtd.', qtyIn));
+    }
+    const sale = h('button', 'btn btn--ghost btn--sm', it.sale ? 'Pôr no armazém' : 'Pôr à venda');
+    sale.type = 'button';
+    sale.addEventListener('click', () => saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { sale: !x.sale }) : x)) }));
+    ctl.append(sale);
+    const out = h('button', 'btn btn--ghost btn--sm', sh.kind === 'jogador' ? 'Devolver à mochila' : 'Tirar');
+    out.type = 'button';
+    out.addEventListener('click', () => (sh.kind === 'jogador' ? unstock(sh, it) : saveShop(sh, { items: sh.items.filter((x) => x.uid !== it.uid) })));
+    ctl.append(out);
+    row.append(ctl);
+    return row;
+  }
+
+  function shopCard(sh) {
+    const gm = currentCamp.gm;
+    const owner = isShopOwner(sh);
+    const manage = gm || owner;
+    const forSale = sh.items.filter((i) => i.sale);
+    const det = h('details', 'shop shop--' + sh.kind);
+    det.open = shopUi.open.has(sh.id);
+    det.addEventListener('toggle', () => { if (det.open) shopUi.open.add(sh.id); else shopUi.open.delete(sh.id); });
+    const icon = { companhia: '🏭', npc: '🧑‍🔧', jogador: '🎒', mestre: '🏪' }[sh.kind] || '🏪';
+    det.append(h('summary', 'shop__head',
+      h('span', 'shop__icon', icon),
+      h('span', 'shop__main', h('strong', 'shop__name', sh.name),
+        h('span', 'shop__meta', [shopKindText(sh), plural(forSale.length, 'item à venda', 'itens à venda'), (TRAFFIC.find((t) => t[0] === sh.traffic) || TRAFFIC[0])[1], sh.npcBuyers ? 'NPCs compram' : ''].filter(Boolean).join(' · ')))));
+    const body = h('div', 'shop__body');
+    const shown = manage ? sh.items : forSale;
+    if (shown.length) body.append(h('ul', 'rows shop__items', ...shown.map((it) => shopItemRow(sh, it, manage))));
+    else body.append(h('p', 'empty', manage ? 'Loja vazia. ' + (owner ? 'Abasteça com itens da mochila.' : 'Adicione itens do banco.') : 'Nada à venda agora.'));
+    const acts = h('div', 'shop__acts');
+    if (gm) {
+      const add = h('button', 'btn btn--ghost btn--sm', 'Adicionar item do banco');
+      add.type = 'button';
+      add.addEventListener('click', () => addBankItem(sh));
+      acts.append(add);
+    }
+    if (owner) {
+      const stock = h('button', 'btn btn--primary btn--sm', 'Abastecer da mochila');
+      stock.type = 'button';
+      stock.addEventListener('click', () => stockFromInventory(sh));
+      acts.append(stock);
+    }
+    if (gm) {
+      const traffic = h('select', 'input shop__sel');
+      traffic.setAttribute('aria-label', 'Fluxo de pessoas em ' + sh.name);
+      TRAFFIC.forEach((t) => { const o = h('option', '', t[1]); o.value = t[0]; traffic.append(o); });
+      traffic.value = sh.traffic || 'nenhum';
+      traffic.addEventListener('change', () => saveShop(sh, { traffic: traffic.value }));
+      const buyers = h('input');
+      buyers.type = 'checkbox';
+      buyers.checked = Boolean(sh.npcBuyers);
+      buyers.addEventListener('change', () => saveShop(sh, { npcBuyers: buyers.checked }));
+      acts.append(traffic, h('label', 'check', buyers, h('span', '', 'NPCs compram')));
+    }
+    if (gm || owner) {
+      const del = h('button', 'btn btn--danger btn--sm', owner && !gm ? 'Fechar minha loja' : 'Excluir loja');
+      del.type = 'button';
+      del.addEventListener('click', async () => {
+        const ok = await askConfirm({ title: (owner && !gm ? 'Fechar ' : 'Excluir ') + sh.name + '?', text: sh.kind === 'jogador' ? 'Os itens da loja voltam para a mochila de ' + sh.ownerName + '.' : 'A loja e o estoque somem da campanha.', ok: owner && !gm ? 'Fechar' : 'Excluir' });
+        if (!ok) return;
+        try {
+          if (sh.kind === 'jogador' && sh.items.length) {
+            const o = members.find((m) => m.characterId === sh.ownerCharId);
+            if (o) await patchMemberSheet(o, (s) => { sh.items.forEach((it) => s.inventory.push(Object.assign(invEntryFrom(it.entry), { qty: Math.max(1, num(it.qty) || 1) }))); });
+          }
+          await db.removeShop(currentCamp.id, sh.id);
+        } catch (err) { toast(errorMessage(err)); }
+      });
+      acts.append(del);
+    }
+    if (acts.children.length) body.append(acts);
+    if ((sh.log || []).length && manage) body.append(h('details', 'shop__log', h('summary', '', 'Vendas e compras (' + sh.log.length + ')'), h('ul', '', ...sh.log.map((l) => h('li', '', l.text)))));
+    det.append(body);
+    return det;
+  }
+
+  function renderShops() {
+    if (!currentCamp) return;
+    const gm = currentCamp.gm;
+    const me = playing();
+    $('#shop-gm').hidden = !gm;
+    $('#shop-open-mine').hidden = !me || shops.some((sh) => sh.kind === 'jogador' && sh.ownerCharId === me.characterId);
+    $('#shop-wallet').textContent = me ? me.name + ' tem ' + fmtCronos(moneyOf(me)) + ' Cronos nesta campanha.' : gm ? 'Você é o mestre: crie lojas, ponha itens e preços, e passe os descansos para os NPCs comprarem.' : '';
+    $('#shop-list').replaceChildren(...shops.map(shopCard));
+    $('#shop-empty').hidden = shops.length > 0;
+  }
+
+  (function shopForm() {
+    const form = $('#shop-new');
+    const kind = $('#shop-kind');
+    const comp = $('#shop-company');
+    (ITEM_DATA.fabricantes || []).forEach((f) => { const o = h('option', '', f); o.value = f; comp.append(o); });
+    const tr = $('#shop-traffic');
+    TRAFFIC.forEach((t) => { const o = h('option', '', t[1]); o.value = t[0]; tr.append(o); });
+    const sync = () => { $('#shop-company-field').hidden = kind.value !== 'companhia'; $('#shop-npc-field').hidden = kind.value !== 'npc'; };
+    kind.addEventListener('change', sync);
+    sync();
+    $('#shop-new-btn').addEventListener('click', () => {
+      form.hidden = !form.hidden;
+      $('#shop-npc-list').replaceChildren(...foes.map((f) => { const o = h('option'); o.value = f.name; return o; }));
+      if (!form.hidden) kind.focus();
+    });
+    $('#shop-new-cancel').addEventListener('click', () => { form.hidden = true; });
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const k = kind.value;
+      const npc = cleanName($('#shop-npc').value).slice(0, 60);
+      if (k === 'npc' && !npc) { toast('Diga de qual NPC é a loja.'); $('#shop-npc').focus(); return; }
+      const name = cleanName($('#shop-name').value).slice(0, 60) || (k === 'companhia' ? comp.value : k === 'npc' ? 'Loja de ' + npc : 'Loja do mestre');
+      const items = k === 'companhia'
+        ? BUILTINS.filter((e) => (e.values || {}).fabricante === comp.value && priceOf(e) > 0).map((e) => ({ uid: uid(), entry: slotSnap(e), qty: null, price: priceOf(e), sale: true }))
+        : [];
+      try {
+        const id = await db.addShop(currentCamp.id, { name, kind: k, company: k === 'companhia' ? comp.value : '', npc: k === 'npc' ? npc : '', ownerUid: '', ownerCharId: '', ownerName: '',
+          traffic: tr.value, npcBuyers: $('#shop-buyers').checked, items, log: [] });
+        shopUi.open.add(id);
+        renderShops();
+        form.hidden = true;
+        form.reset();
+        sync();
+        toast(name + ' abriu' + (items.length ? ' com ' + plural(items.length, 'item', 'itens') + ' da ' + comp.value + ', estoque infinito.' : '. Adicione itens do banco.'));
+      } catch (err) { toast(errorMessage(err)); }
+    });
+    $('#shop-open-mine').addEventListener('click', async () => {
+      const me = playing();
+      if (!me) return;
+      try {
+        const id = await db.addShop(currentCamp.id, { name: 'Loja de ' + me.name, kind: 'jogador', company: '', npc: '', ownerUid: db.uid, ownerCharId: me.characterId, ownerName: me.name,
+          traffic: 'nenhum', npcBuyers: false, items: [], log: [] });
+        shopUi.open.add(id);
+        renderShops();
+        toast('Loja de ' + me.name + ' aberta. Abasteça com itens da mochila; o mestre define o fluxo de pessoas.');
+      } catch (err) { toast(errorMessage(err)); }
+    });
+    $('#shop-rest-short').addEventListener('click', () => shopRest(false));
+    $('#shop-rest-long').addEventListener('click', () => shopRest(true));
+  })();
+
   views.campaign = async function showCampaign(id) {
     const camp = await db.getCampaign(id);
     if (!camp) { toast('Não encontramos essa campanha.'); go('campanhas'); return; }
@@ -5883,13 +6673,18 @@ const FIREBASE_CONFIG = {
 
     foes = [];
     scene = null;
+    shops = [];
     combat.targets.clear();
     $('#combat-block').hidden = noAccess && !camp.gm;
+    $('#shop-block').hidden = noAccess && !camp.gm;
+    $('#shop-new').hidden = true;
     if (noAccess && !camp.gm) { renderRolls([]); return; }
+    renderShops();
     renderCombat();
     const stopFoes = db.subscribeFoes(id, (list) => { foes = list; renderCombat(); }, (err) => console.warn(err));
     const stopScene = db.subscribeScene(id, (sc) => { if (currentCamp && currentCamp.id === id) { scene = sc; renderScene(); renderDock(); } }, (err) => console.warn(err));
-    const stopAll = (more) => () => { [stopFoes, stopScene].concat(more || []).forEach((fn) => { if (typeof fn === 'function') fn(); }); };
+    const stopShops = db.subscribeShops(id, (list) => { if (currentCamp && currentCamp.id === id) { shops = list; renderShops(); } }, (err) => console.warn(err));
+    const stopAll = (more) => () => { [stopFoes, stopScene, stopShops].concat(more || []).forEach((fn) => { if (typeof fn === 'function') fn(); }); };
     if (noAccess) { renderRolls([]); onLeave = stopAll(); return; }
     const stop = db.subscribeRolls(id, renderRolls, (err) => toast(errorMessage(err)));
     onLeave = stopAll([stop]);

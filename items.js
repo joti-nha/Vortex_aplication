@@ -68,6 +68,10 @@ window.VORTEX_ITEMS = {
     'Operações', 'Sentidos', 'Vontade', 'Intimidação', 'Diplomacia', 'Enganação'],
   profNomes: ['Espada', 'Lança', 'Marreta', 'Machado', 'Pistola', 'Espingarda', 'Rifle de precisão', 'Fuzil', 'Metralhadora leve', 'Submetralhadora', 'Laser',
     'Armadura leve', 'Armadura média', 'Armadura pesada'],
+  buildTipos: ['Entrada', 'Guiada'],
+  /* Dinheiro inicial (Cronos) pelos UP com que o personagem começa: [UP, Cronos]. Acima do último, +1.000 por UP.
+     0 UP compra uma arma comum e uma armadura leve comum. */
+  dinheiroInicial: [[0, 1500], [1, 2000], [2, 2500], [3, 3000], [4, 3500], [5, 4500], [6, 5500], [7, 6500], [8, 8000], [9, 9000], [10, 10000]],
   paraMod: ['Qualquer arma', 'Arma de fogo', 'Arma corpo a corpo'],
   paraPropriedade: ['Qualquer item', 'Arma', 'Armadura'],
   vidaBase: ['PV', 'Blindagem', 'Escudo'],
@@ -344,10 +348,11 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'build', title: 'Build', group: 'Personagem',
-      hint: 'Um ponto de partida pronto para a distribuição inicial: 3 pontos de atributo (um pode ir a –1 por +1), 2 perícias com +2, 1 com +1 e 4 proficiências.',
-      defaults: { corpo: '0', precisao: '0', essencia: '0' },
+      hint: 'Build de entrada: só preenche a distribuição inicial (3 pontos de atributo, um pode ir a –1 por +1; 2 perícias com +2, 1 com +1; 4 proficiências). Build guiada: também diz os itens a comprar e, em folhas, o que pegar a cada UP; a ficha se atualiza sozinha a cada UP ganho.',
+      defaults: { tipo: 'Entrada', corpo: '0', precisao: '0', essencia: '0' },
       fields: [
         { key: 'nome', label: 'Nome da build', kind: 'text', big: true },
+        { key: 'tipo', label: 'Tipo', kind: 'select', options: 'buildTipos' },
         { key: 'papel', label: 'Papel no grupo', kind: 'text', placeholder: 'Ex.: Dano à distância' },
         { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
         { key: 'corpo', label: 'Corpo', kind: 'number', min: -1, step: 1 },
@@ -356,7 +361,14 @@ window.VORTEX_ITEMS = {
         { key: 'pericia2a', label: 'Perícia com +2', kind: 'select', options: 'pericias' },
         { key: 'pericia2b', label: 'Outra perícia com +2', kind: 'select', options: 'pericias' },
         { key: 'pericia1', label: 'Perícia com +1', kind: 'select', options: 'pericias' },
-        { key: 'profs', label: 'Proficiências (4)', kind: 'multi', options: 'profNomes' }
+        { key: 'profs', label: 'Proficiências (4)', kind: 'multi', options: 'profNomes' },
+        { key: 'itens', label: 'Guiada: itens a comprar (um por linha, nome do catálogo)', kind: 'textarea', big: true, placeholder: 'Carbine R-10\nTnnaks Jackt',
+          hint: 'Comprados com o dinheiro inicial, que sai da tabela pelos UP com que o personagem começa.' },
+        { key: 'folhas', label: 'Guiada: folhas, o que pegar com cada UP (uma por linha: UP | o que pegar)', kind: 'textarea', big: true,
+          placeholder: '1 | Poder: Ataques (Certeiro)\n2 | Doutor: Mira\n3 | Perícias: Mira +2, Reflexos +1\n4 | Proficiência: Fuzil\n5 | Melhoria: Regeneração maior',
+          hint: 'Separe ações da mesma folha com ";". Entende Poder: Nome (Opção), Melhoria: Nome, Doutor: Perícia, Proficiência: Tipo e Perícias: Mira +2, Reflexos +1 (1 UP em perícias). Qualquer outro texto vira um lembrete para fazer à mão.' },
+        { key: 'beneficios', label: 'Guiada: benefícios dos UP pares, em ordem', kind: 'text', placeholder: '+5 PV, +5 PE, +5 PV, +1 PA' },
+        { key: 'periciasUp', label: 'Guiada: perícias para os pontos de perícia, em ordem', kind: 'text', placeholder: 'Mira, Reflexos, Iniciativa' }
       ]
     },
 
@@ -451,6 +463,10 @@ window.VORTEX_ITEMS = {
     { id: 'of-build-tanque', kind: 'build', name: 'Tanque', values: { papel: 'Aguentar dano', descricao: 'Muita vida e carga; segura a pressão para o grupo. Troca Essência por mais Corpo.', corpo: '3', precisao: '1', essencia: '-1', pericia2a: 'Resistência', pericia2b: 'Fortitude', pericia1: 'Luta', profs: 'Marreta, Metralhadora leve, Armadura média, Armadura pesada' } },
     { id: 'of-build-tecnomante', kind: 'build', name: 'Tecnomante', values: { papel: 'Energia e módulos', descricao: 'Essência alta: muitos PE, ataques tecnológicos e mente firme.', corpo: '0', precisao: '0', essencia: '3', pericia2a: 'Operações', pericia2b: 'Vontade', pericia1: 'Sentidos', profs: 'Laser, Pistola, Submetralhadora, Armadura leve' } },
     { id: 'of-build-infiltrador', kind: 'build', name: 'Infiltrador', values: { papel: 'Tecnologia e furtividade', descricao: 'Hackeia sistemas, abre fechaduras e evita ser visto.', corpo: '0', precisao: '2', essencia: '1', pericia2a: 'Tecnologia', pericia2b: 'Manha', pericia1: 'Reflexos', profs: 'Pistola, Submetralhadora, Espada, Armadura leve' } },
+    { id: 'of-build-atirador-elite', kind: 'build', name: 'Atirador de elite', values: { tipo: 'Guiada', papel: 'Dano à distância (guiada)', descricao: 'O Atirador com um caminho pronto: crítico com 5 e 6, Doutor em Mira, esquiva por Precisão e regeneração no fim.', corpo: '0', precisao: '3', essencia: '0', pericia2a: 'Mira', pericia2b: 'Reflexos', pericia1: 'Iniciativa', profs: 'Fuzil, Rifle de precisão, Pistola, Armadura leve',
+      itens: 'Carbine R-10\nPulse P-01\nTnnaks Jackt\nKit Médico LS-1',
+      folhas: '1 | Poder: Ataques (Certeiro)\n2 | Doutor: Mira\n3 | Poder: Defensivas (Esquiva)\n4 | Perícias: Mira +1, Reflexos +1, Iniciativa +1\n5 | Proficiência: Submetralhadora\n6 | Poder: Ataques (Avante)\n7 | Guarde este UP: a Regeneração custa 2\n8 | Poder: Regeneração\n9 | Melhoria: Regeneração maior\n10 | Perícias: Iniciativa +2, Sentidos +1',
+      beneficios: '+5 PV, +5 PE, +5 PV, +1 PA', periciasUp: 'Mira, Reflexos, Iniciativa, Sentidos' } },
     { id: 'of-build-negociador', kind: 'build', name: 'Negociador', values: { papel: 'Social', descricao: 'Convence, engana e impõe respeito; resolve sem tiros quando dá.', corpo: '0', precisao: '1', essencia: '2', pericia2a: 'Diplomacia', pericia2b: 'Enganação', pericia1: 'Intimidação', profs: 'Pistola, Espingarda, Espada, Armadura leve' } },
 
     // NPCs e inimigos de exemplo (lista aberta da campanha)
@@ -469,6 +485,7 @@ window.VORTEX_ITEMS = {
     { id: 'of-pod-doutor', kind: 'poder', name: 'Doutor', values: { custo: '1', efeito: 'Seu limite de modificador na perícia escolhida se torna 4. Pode ser comprado mais de uma vez, uma perícia por compra.' } },
     { id: 'of-pod-prof-arma', kind: 'poder', name: 'Proficiência em arma', values: { custo: '1', efeito: 'Escolha um tipo de arma o qual é proficiente, para usar a regra de cadência proficiente. Ganha +1 de perícia para distribuir.' } },
     { id: 'of-pod-prof-armadura', kind: 'poder', name: 'Proficiência em armadura', values: { custo: '1', efeito: 'Escolha um tipo de armadura o qual é proficiente: ganha +1 de armadura com ela e usa a regra de proficiência com a armadura. Ganha +1 de perícia para distribuir.' } },
+    { id: 'of-pod-cria-eter', kind: 'poder', name: 'Cria do Éter', values: { custoUso: 'Concedido por origem', efeito: 'Quando é afetado por energia Ether pura, recupera uma quantidade de recursos igual ao tamanho do Ether: 10 de Resistência e PE para pequena, 25 de Resistência e PE para média, 50 de Resistência e PE para a grande. Recursos sobressalentes contam como recursos bônus até seu próximo descanso, e não são acumulados com outra fonte (considere o maior bônus).\nVocê pode tornar um Éter instável e forçar sua absorção, ainda dividindo a todos os indivíduos na área o XP cedido pelo Éter.' } },
     { id: 'of-pod-transformacao', kind: 'poder', name: 'Transformação', values: { efeito: 'Com uma ação completa você se transforma; cria uma transformação trocando seus Up points e os realocando como quiser. Seus itens caem ao chão no processo. Cada Up point equivale a uma transformação.' } },
     { id: 'of-pod-akimbo', kind: 'poder', name: 'Akimbo', values: { efeito: 'Empunhe pistolas ou submetralhadoras uma em cada mão. O tempo de recarga aumenta em uma categoria. Pode mirar em um único alvo com ambas ou escolher até dois alvos; faz um teste de ataque com cada arma, que aplicam dano separadamente.' } },
     { id: 'of-pod-gatilho', kind: 'poder', name: 'Gatilho do velho mundo', values: { efeito: 'Com um revólver de disparo único, obtém cadência igual a 1 + metade da precisão (para cima). O primeiro disparo não conta na penalidade de cadência. Precisa da outra mão livre.' } }
