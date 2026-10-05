@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=27">
+  <link rel="stylesheet" href="style.css?v=28">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -40,6 +40,7 @@
     </nav>
     <div class="app-bar__tools">
     <!-- Mostra onde os dados estão sendo salvos: modo local ou Firebase -->
+    <button class="sound-btn" type="button" id="sound-btn" aria-pressed="true" aria-label="Sons">🔊</button>
     <span class="mode-pill" id="mode-pill" role="status">Modo local</span>
     <!-- Falso login: um código de até 6 dígitos abre o perfil -->
     <button class="profile-btn" type="button" id="profile-btn">Entrar</button>
@@ -713,6 +714,15 @@
       </div>
 
       <div class="camp-panel" id="cpanel-grupo" role="tabpanel" aria-labelledby="ctab-grupo" hidden>
+        <!-- Descanso: o mestre descansa o grupo todo; o jogador, os personagens dele -->
+        <section class="block rest" id="rest-block" aria-labelledby="rest-title" hidden>
+          <h2 class="block__title" id="rest-title">Descanso</h2>
+          <p class="block__hint" id="rest-hint"></p>
+          <div class="rest__btns">
+            <button class="btn btn--ghost" type="button" id="rest-short">Descanso curto</button>
+            <button class="btn btn--primary" type="button" id="rest-long">Descanso longo</button>
+          </div>
+        </section>
         <section class="block" aria-labelledby="members-title">
           <h2 class="block__title" id="members-title"><button class="help" type="button" data-help="candidatos">Candidatos</button></h2>
           <ul class="rows" id="member-list"></ul>
@@ -947,8 +957,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=27"></script>
-  <script src="items.js?v=27"></script>
-  <script src="app.js?v=27"></script>
+  <script src="regras.js?v=28"></script>
+  <script src="items.js?v=28"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

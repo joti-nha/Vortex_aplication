@@ -2670,3 +2670,35 @@ body {
 .theme-card--claptrap .theme-card__swatch i:nth-child(3) { background: #43d3ee; }
 .theme-card.is-locked .theme-card__swatch i { background: var(--linha) !important; }
 .theme-card__lock { font-size: 1.2rem; }
+
+/* ---------- Animações de toque, arrasto e entrada (seguem a cor do tema) ---------- */
+.sound-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--linha-forte); border-radius: 999px; background: none; font-size: 1rem; cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
+.sound-btn:hover { border-color: var(--ambar); transform: scale(1.06); }
+.sound-btn[aria-pressed="false"] { opacity: 0.6; }
+.btn, .has-ripple, .tslot, .cmd__item, .cmd__tab, .inv__act, .man__opt, .sheet-tab, .fighter__act, .qtest { position: relative; overflow: hidden; }
+.ripple { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(var(--ambar-rgb), 0.45) 0%, rgba(var(--ambar-rgb), 0) 70%); transform: scale(0); pointer-events: none; animation: ripple 0.55s ease-out forwards; }
+@keyframes ripple { to { transform: scale(1); opacity: 0; } }
+.btn:active:not(:disabled), .tslot:active:not(:disabled), .sheet-tab:active, .cmd__item:active:not(:disabled), .inv__act:active:not(:disabled) { transform: scale(0.96); }
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.is-dragging { opacity: 0.6; transform: rotate(-3deg) scale(1.04); box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.7); transition: transform 0.15s; }
+.cell--drop { animation: drop-glow 0.8s ease-in-out infinite; }
+@keyframes drop-glow { 50% { box-shadow: 0 0 0 3px rgba(var(--ambar-rgb), 0.6), 0 0 18px rgba(var(--ambar-rgb), 0.45); } }
+.camp-panel:not([hidden]), .cmd__panel.is-new, .rt-page { animation: entrar 0.25s ease-out; }
+.blog__item.is-new, .roll.is-new { animation: surgir 0.3s ease-out both; }
+@keyframes surgir { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+.fighter.is-hit { animation: tremer 0.45s ease-in-out; }
+@keyframes tremer { 0%, 100% { transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+.toast.is-visible { animation: toast-pop 0.32s cubic-bezier(0.2, 1.4, 0.4, 1); }
+@keyframes toast-pop { from { transform: translate(-50%, 12px) scale(0.92); } to { transform: translate(-50%, 0) scale(1); } }
+dialog[open] { animation: dlg-in 0.22s ease-out; }
+@keyframes dlg-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+.rest__btns { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+/* Ether: brilho instável; Claptrap: tranco de robô */
+:root[data-theme="ether"] .btn--primary:hover:not(:disabled) { box-shadow: 0 0 18px rgba(var(--mare-rgb), 0.55); }
+:root[data-theme="ether"] .ripple { background: radial-gradient(circle, rgba(var(--mare-rgb), 0.5) 0%, rgba(var(--ambar-rgb), 0.2) 45%, transparent 70%); }
+:root[data-theme="claptrap"] .btn:active:not(:disabled) { transform: scale(0.94) rotate(-1deg); }
+:root[data-theme="claptrap"] .ripple { border-radius: 4px; animation-timing-function: steps(5); }
+@media (prefers-reduced-motion: reduce) {
+  .ripple, .camp-panel:not([hidden]), .cmd__panel.is-new, .rt-page, .blog__item.is-new, .roll.is-new, .fighter.is-hit, .toast.is-visible, dialog[open], .cell--drop { animation: none !important; }
+  .btn:hover:not(:disabled), .btn:active:not(:disabled), .is-dragging { transform: none; }
+}
