@@ -8881,20 +8881,79 @@ const FIREBASE_CONFIG = {
     } catch (err) { toast(errorMessage(err)); }
   });
   // jogador põe um personagem salvo no perfil direto no grupo
+  // Pôr no grupo: um banner por personagem do perfil, com busca
+  let addMineDlg = null;
   $('#member-add-mine').addEventListener('click', async () => {
     if (!profile) { openLogin(['campaign', currentCamp.id]); return; }
+    const all = await loadChars(profile.chars);
+    if (!all.length) { toast('Seu perfil ainda não tem personagens. Crie um em Personagens.'); return; }
     const inCamp = new Set(members.map((m) => m.characterId));
-    const list = (await loadChars(profile.chars)).filter((c) => !inCamp.has(c.id));
-    if (!list.length) { toast('Todos os personagens do seu perfil já estão aqui (ou o perfil não tem nenhum).'); return; }
-    const pick = await askChoice('Pôr no grupo', 'Personagem do seu perfil', 'Ele entra nesta campanha agora, como se você usasse o ID de entrada na ficha.', list.map((c) => [c.id, c.name + (c.species ? ' · ' + c.species : '')]), 'Pôr no grupo');
-    if (!pick) return;
-    try {
-      const camp = await db.joinCampaign(currentCamp.id, pick);
-      profileSet('chars', pick, true);
-      profileSet('camps', camp.id, true);
-      toast((list.find((c) => c.id === pick) || {}).name + ' entrou no grupo.');
-      views.campaign(currentCamp.id);
-    } catch (err) { toast(errorMessage(err)); }
+    if (!addMineDlg) {
+      addMineDlg = h('dialog', 'dialog pickchar');
+      addMineDlg.setAttribute('aria-labelledby', 'pickchar-title');
+      document.body.append(addMineDlg);
+    }
+    const close = () => { if (addMineDlg.open) closeDialog(addMineDlg); };
+    const join = async (c, btn) => {
+      btn.disabled = true;
+      try {
+        const camp = await db.joinCampaign(currentCamp.id, c.id);
+        profileSet('chars', c.id, true);
+        profileSet('camps', camp.id, true);
+        close();
+        toast(c.name + ' entrou no grupo.');
+        views.campaign(currentCamp.id);
+      } catch (err) { btn.disabled = false; toast(errorMessage(err)); }
+    };
+    const banner = (c) => {
+      const here = inCamp.has(c.id);
+      const art = h('span', 'pickchar__art');
+      const pic = c.image || c.thumb;
+      if (pic) { const img = h('img'); img.src = pic; img.alt = ''; art.append(img); art.classList.add('pickchar__art--img'); }
+      else art.textContent = (c.name || '?').trim().charAt(0).toUpperCase();
+      const meta = [c.species, c.origin, c.age].filter(Boolean).join(' · ');
+      const camps = (c.campaignIds || []).length;
+      const b = h('button', 'btn btn--sm ' + (here ? 'btn--ghost' : 'btn--primary'), here ? 'Já está no grupo' : 'Pôr no grupo');
+      b.type = 'button';
+      b.disabled = here;
+      b.dataset.fid = 'addmine-' + c.id;
+      b.setAttribute('aria-label', here ? c.name + ' já está no grupo' : 'Pôr ' + c.name + ' no grupo');
+      b.addEventListener('click', () => join(c, b));
+      const card = h('li', 'pickchar__card' + (here ? ' is-here' : ''), art,
+        h('span', 'pickchar__info', h('strong', 'pickchar__name', c.name), h('span', 'pickchar__meta', meta || TYPE_LABEL[c.type] || 'Personagem'),
+          h('span', 'pickchar__meta', camps ? plural(camps, 'campanha', 'campanhas') : 'Em nenhuma campanha')), b);
+      card.dataset.key = nameKey([c.name, c.species, c.origin].filter(Boolean).join(' '));
+      if (!here) card.addEventListener('click', (ev) => { if (!ev.target.closest('button')) join(c, b); });
+      return card;
+    };
+    const sorted = all.slice().sort((a, b) => (inCamp.has(a.id) - inCamp.has(b.id)) || String(a.name).localeCompare(String(b.name), 'pt-BR'));
+    const cards = sorted.map(banner);
+    const list = h('ul', 'pickchar__list', ...cards);
+    const none = h('p', 'field__hint', 'Nenhum personagem com esse nome.');
+    none.hidden = true;
+    const q = h('input', 'input');
+    q.type = 'search';
+    q.id = 'pickchar-q';
+    q.placeholder = 'Buscar personagem';
+    q.setAttribute('aria-label', 'Buscar personagem');
+    q.autocomplete = 'off';
+    q.addEventListener('input', () => {
+      const k = nameKey(q.value);
+      let shown = 0;
+      cards.forEach((el) => { el.hidden = Boolean(k) && el.dataset.key.indexOf(k) < 0; if (!el.hidden) shown++; });
+      none.hidden = shown > 0;
+    });
+    const cancel = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+    cancel.type = 'button';
+    cancel.addEventListener('click', close);
+    const title = h('h2', '', 'Pôr no grupo');
+    title.id = 'pickchar-title';
+    const free = all.filter((c) => !inCamp.has(c.id)).length;
+    addMineDlg.replaceChildren(h('div', 'pickchar__body', title,
+      h('p', 'field__hint', free ? 'Escolha um dos seus personagens salvos. Ele entra nesta campanha como se você usasse o ID de entrada na ficha.' : 'Todos os personagens do seu perfil já estão neste grupo.'),
+      all.length > 3 ? q : null, list, none, h('div', 'dialog__actions', cancel)));
+    openDialog(addMineDlg);
+    if (all.length > 3) q.focus();
   });
 
   views.campaign = async function showCampaign(id) {
