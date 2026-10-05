@@ -216,7 +216,7 @@ const FIREBASE_CONFIG = {
       catch (e) { if (!quiet) throw new UserError('O armazenamento do navegador está cheio. Apague algo ou remova imagens.'); }
     }
 
-    const summarize = (c) => ({ id: c.id, name: c.name, isOwner: c.ownerUid === ME });
+    const summarize = (c) => ({ id: c.id, name: c.name, isOwner: c.ownerUid === ME, passHash: c.passHash || '', public: Boolean(c.public) });
     const toChar = (c) => ({
       id: c.id, name: c.name, type: c.type, image: c.image || '', thumb: c.thumb || '',
       species: c.species || '', age: c.age || '', origin: c.origin || '',
@@ -332,6 +332,17 @@ const FIREBASE_CONFIG = {
       async getCampaign(id) {
         const c = read().campaigns[id];
         return c ? summarize(c) : null;
+      },
+      // acesso: pública (aparece na lista) e senha (guardada só como hash)
+      async updateCampaign(id, patch) {
+        const d = read();
+        const c = d.campaigns[id];
+        if (!c || c.ownerUid !== ME) throw new UserError('Só quem criou a campanha muda isso.');
+        Object.assign(c, patch);
+        write(d);
+      },
+      async listPublicCampaigns() {
+        return Object.values(read().campaigns).filter((c) => c.public).map(summarize).sort(byName);
       },
 
       async deleteCampaign(id) {
@@ -556,7 +567,7 @@ const FIREBASE_CONFIG = {
         updatedAt: d.updatedAt && d.updatedAt.toMillis ? d.updatedAt.toMillis() : 0
       };
     };
-    const toCamp = (snap) => ({ id: snap.id, name: snap.data().name, isOwner: snap.data().ownerUid === me });
+    const toCamp = (snap) => ({ id: snap.id, name: snap.data().name, isOwner: snap.data().ownerUid === me, passHash: snap.data().passHash || '', public: Boolean(snap.data().public) });
 
     // Fichas criadas antes da busca não têm searchKeys: completa em segundo plano
     function backfillKeys(snap) {
@@ -685,6 +696,13 @@ const FIREBASE_CONFIG = {
       async getCampaign(id) {
         const s = await camps().doc(id).get();
         return s.exists ? toCamp(s) : null;
+      },
+      async updateCampaign(id, patch) {
+        await camps().doc(id).update(deep(patch));
+      },
+      async listPublicCampaigns() {
+        const snap = await camps().where('public', '==', true).limit(60).get();
+        return snap.docs.map(toCamp).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
       },
 
       async deleteCampaign(id) {
@@ -1395,8 +1413,9 @@ const FIREBASE_CONFIG = {
   const openDialog = (dlg) => { play('open'); if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); };
 
   // Pergunta de uma escolha (ex.: a perícia do Doutor). Devolve o valor ou null.
-  function askChoice(title, label, hint, options) {
+  function askChoice(title, label, hint, options, ok) {
     const dlg = document.getElementById('choice-dialog');
+    document.getElementById('choice-ok').textContent = ok || 'Escolher';
     const sel = document.getElementById('choice-select');
     document.getElementById('choice-title').textContent = title;
     document.getElementById('choice-label').textContent = label;
@@ -1412,6 +1431,58 @@ const FIREBASE_CONFIG = {
     });
   }
   const closeDialog = (dlg) => { if (typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open'); };
+
+  // Senha de campanha: só o hash (SHA-256 com o ID) fica salvo; quem acerta a senha fica liberado neste aparelho
+  async function campHash(id, pw) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('vortex:' + id + ':' + pw));
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  const UNLOCK_KEY = 'vortex.unlock.v1';
+  const unlocked = () => { try { return new Set(JSON.parse(localStorage.getItem(UNLOCK_KEY) || '[]')); } catch (e) { return new Set(); } };
+  function unlock(id) { const s = unlocked(); s.add(id); try { localStorage.setItem(UNLOCK_KEY, JSON.stringify(Array.from(s).slice(-100))); } catch (e) { /* só nesta visita */ } }
+  let secretDlg = null;
+  function askSecret(title, text) {
+    if (!secretDlg) {
+      secretDlg = document.createElement('dialog');
+      secretDlg.className = 'dialog startdlg';
+      secretDlg.setAttribute('aria-labelledby', 'secret-title');
+      document.body.append(secretDlg);
+    }
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (secretDlg.open) closeDialog(secretDlg); };
+      const inp = h('input', 'input');
+      inp.type = 'password';
+      inp.id = 'secret-input';
+      inp.autocomplete = 'off';
+      inp.maxLength = 60;
+      const ok = h('button', 'btn btn--primary btn--sm', 'Entrar');
+      ok.type = 'submit';
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      const form = h('form', 'startdlg__body', h('h2', '', title), h('p', 'field__hint', text),
+        h('label', 'field__label', 'Senha'), inp, h('div', 'dialog__actions', cancel, ok));
+      form.querySelector('h2').id = 'secret-title';
+      form.querySelector('label').htmlFor = 'secret-input';
+      form.addEventListener('submit', (ev) => { ev.preventDefault(); finish(inp.value); });
+      secretDlg.onclose = () => { if (!secretDlg.open) finish(null); }; // o "close" da tentativa anterior chega atrasado
+      secretDlg.replaceChildren(form);
+      openDialog(secretDlg);
+      inp.focus();
+    });
+  }
+  // pede a senha quando a campanha tem uma e esta pessoa ainda não entrou; true = pode seguir
+  async function passGate(camp) {
+    if (!camp || !camp.passHash || camp.isOwner || isGmOf(camp.id) || unlocked().has(camp.id) || (profile && profile.camps.indexOf(camp.id) >= 0)) return true;
+    for (let tries = 0; tries < 3; tries++) {
+      const pw = await askSecret('Senha de ' + camp.name, tries ? 'Senha errada. Tente de novo.' : 'O mestre pôs uma senha para entrar nesta campanha.');
+      if (pw === null) return false;
+      if (await campHash(camp.id, pw) === camp.passHash) { unlock(camp.id); return true; }
+    }
+    toast('Senha errada.');
+    return false;
+  }
 
   function askConfirm({ title, text, ok }) {
     const dlg = $('#confirm');
@@ -2110,6 +2181,10 @@ const FIREBASE_CONFIG = {
     if (name.length < 3) { setError(errCampName, inCampName, 'Dê um nome com pelo menos 3 letras.'); inCampName.focus(); return; }
     try {
       const camp = await db.createCampaign(name);
+      const pw = $('#campaign-pass').value;
+      const access = { public: $('#campaign-public').checked };
+      if (pw) access.passHash = await campHash(camp.id, pw);
+      if (access.public || pw) await db.updateCampaign(camp.id, access);
       if (profile) { profileSet('camps', camp.id, true); profileSet('gm', camp.id, true); }
       formCreateCamp.reset();
       toast('Campanha criada. Vincule um personagem pela ficha dele para rolar dados.');
@@ -2140,6 +2215,10 @@ const FIREBASE_CONFIG = {
       ? { label: 'Excluir', onClick: async () => { if (await deleteCampaignFlow(c)) views.campanhas(); } }
       : null)));
     $('#camp-empty').hidden = camps.length > 0;
+    // campanhas públicas: qualquer um vê e abre (com senha, se o mestre pôs)
+    const pub = await db.listPublicCampaigns().catch((e) => { console.warn(e); return []; });
+    $('#pub-list').replaceChildren(...pub.map((c) => campaignRow(Object.assign({}, c, { name: c.name + (c.passHash ? ' 🔒' : '') }), null)));
+    $('#pub-empty').hidden = pub.length > 0;
   };
 
 
@@ -2156,9 +2235,9 @@ const FIREBASE_CONFIG = {
     $('#login-new').hidden = !on;
     $('#login-submit').textContent = on ? 'Criar perfil' : 'Entrar';
   }
-  let loginBack = ''; // tela para voltar depois de entrar (senão, o perfil)
+  let loginBack = ''; // tela para voltar depois de entrar (senão, o perfil); ['campaign', id] volta para a campanha
   function openLogin(back) {
-    loginBack = typeof back === 'string' ? back : '';
+    loginBack = typeof back === 'string' || Array.isArray(back) ? back : '';
     formLogin.reset();
     setLoginNew(false);
     setError(errLogin, inLoginCode, '');
@@ -2206,7 +2285,8 @@ const FIREBASE_CONFIG = {
       closeDialog(loginDlg);
       const back = loginBack;
       loginBack = '';
-      if (back && location.hash.indexOf('#/' + back) === 0 && views[back]) views[back](); else go(back || 'perfil');
+      if (Array.isArray(back)) go(back[0], back[1]);
+      else if (back && location.hash.indexOf('#/' + back) === 0 && views[back]) views[back](); else go(back || 'perfil');
     } catch (err) {
       setError(errLogin, inLoginCode, errorMessage(err));
     } finally { btn.disabled = false; }
@@ -5152,12 +5232,12 @@ const FIREBASE_CONFIG = {
         ? Object.keys(SKILLS).reduce((all, k) => all.concat(SKILLS[k]), []).filter((sk) => doutorOf(s).indexOf(sk[0]) < 0).map((sk) => [sk[0], sk[1]])
         : PROFS.filter((p) => (p.id.indexOf('armadura-') === 0) === (kind === 'armadura') && !hasProf(s, p.id)).map((p) => [p.id, p.label]);
       if (!opts.length) { toast('Nada disponível para ' + e.name + ': o personagem já tem todas as opções.'); return; }
-      const choice = await askChoice(e.name, kind === 'pericia' ? 'Escolha a perícia' : kind === 'arma' ? 'Escolha o tipo de arma' : 'Escolha o tipo de armadura', (e.values && e.values.efeito) || '', opts);
+      const choice = await askChoice(e.name, kind === 'pericia' ? 'Escolha a perícia' : kind === 'arma' ? 'Escolha o tipo de arma' : 'Escolha o tipo de armadura', (e.values && e.values.efeito) || '', opts, 'Adicionar');
       if (!choice || sheetChar !== ch) return;
       s.powers.push(choicePower(e, choice));
     } else if (powerOpts(e).length) {
       const opts = powerOpts(e);
-      const first = await askChoice(e.name, 'Escolha a primeira opção (' + num(e.values.custo) + ' UP cada)', 'As outras você marca depois, na lista de poderes.', opts.map((o) => [o.name, o.name + (o.cost ? ' · ' + o.cost : '')]));
+      const first = await askChoice(e.name, 'Escolha a primeira opção (' + num(e.values.custo) + ' UP cada)', 'As outras você marca depois, na lista de poderes.', opts.map((o) => [o.name, o.name + (o.cost ? ' · ' + o.cost : '')]), 'Adicionar poder');
       if (!first || sheetChar !== ch) return;
       ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', picks: [first] }));
     } else {
@@ -5506,6 +5586,8 @@ const FIREBASE_CONFIG = {
     const code = inAttach.value.trim().toUpperCase();
     if (!code) { setError(errAttach, inAttach, 'Digite o ID de entrada da campanha.'); inAttach.focus(); return; }
     try {
+      const target = await db.getCampaign(code);
+      if (target && !(await passGate(target))) return;
       const camp = await db.joinCampaign(code, sheetChar.id);
       profileSet('chars', sheetChar.id, true);
       profileSet('camps', camp.id, true);
@@ -6206,6 +6288,7 @@ const FIREBASE_CONFIG = {
     rerender();
     $('#setup-open').textContent = c.sheet.setup ? 'Refazer distribuição inicial' : 'Distribuição inicial';
     $('#danger-zone').hidden = !c.mine;
+    if (profile && c.mine && !isMyChar(c.id)) profileSet('chars', c.id, true); // ficha criada neste aparelho fica no perfil
     $('#delete-character').textContent = 'Excluir ' + (c.type === 'criatura' ? 'criatura' : 'personagem');
     await renderSheetCampaigns();
     if (!c.sheet.setup && (c.mine || isMyChar(c.id)) && sheetChar === c) openSetup(); // primeira vez: abre a distribuição inicial
@@ -6558,8 +6641,18 @@ const FIREBASE_CONFIG = {
   const PRESET_MAX = 12;
   const sceneTeams = () => (scene && Array.isArray(scene.teams) && scene.teams.length ? scene.teams : DEFAULT_TEAMS);
   const scenePresets = () => (scene && Array.isArray(scene.presets) ? scene.presets : []);
+  const sceneSquads = () => (scene && Array.isArray(scene.squads) ? scene.squads : []);
+  const SQUAD_MAX = 20;
+  // dois presets prontos: aliados contra inimigos, e com neutros
+  const DEFAULT_PRESETS = [
+    { id: 'p-av', builtin: true, name: 'Aliados vs Inimigos', teams: [{ id: 't1', name: 'Aliados', color: '#4f8cff' }, { id: 't2', name: 'Inimigos', color: '#e0484a' }], list: [] },
+    { id: 'p-avn', builtin: true, name: 'Aliados, Inimigos e Neutros', teams: [{ id: 't1', name: 'Aliados', color: '#4f8cff' }, { id: 't2', name: 'Inimigos', color: '#e0484a' }, { id: 't3', name: 'Neutros', color: '#e8a33a' }], list: [] }
+  ];
+  // jogador escolhe o time dos próprios personagens em scene.pteam; a escolha do mestre (scene.team) apaga a dele
   function teamIdOf(id, foe, teams, map) {
     const ts = teams || sceneTeams();
+    const p = !map && !foe && scene && scene.pteam ? scene.pteam[id] : '';
+    if (p && ts.some((y) => y.id === p)) return p;
     const t = (map || (scene && scene.team) || {})[id];
     if (t && ts.some((y) => y.id === t)) return t;
     return foe && foe.side !== 'ally' ? (ts[1] || ts[0]).id : ts[0].id;
@@ -6567,6 +6660,13 @@ const FIREBASE_CONFIG = {
   const teamById = (id) => sceneTeams().find((t) => t.id === id) || sceneTeams()[0];
   async function setTeam(id, teamId) {
     const next = sceneBase();
+    if (!currentCamp.gm) { // jogador: só o time dos próprios personagens
+      if (!isMineId(id)) { toast('Você só escolhe o time dos seus personagens.'); return; }
+      next.pteam = Object.assign({}, next.pteam, { [id]: teamId });
+      await saveScene(next);
+      return;
+    }
+    if (next.pteam && id in next.pteam) { next.pteam = Object.assign({}, next.pteam); delete next.pteam[id]; }
     next.teams = deep(sceneTeams());
     const keep = combatants().map((x) => x.id).concat(sceneOut());
     const map = {};
@@ -6605,11 +6705,19 @@ const FIREBASE_CONFIG = {
     renderOrder(gm, on, list);
     // um bloco por time, com a cor dele; o mestre vê também os times vazios e quem está fora
     const outs = members.filter((mb) => mb.sheet && mb.sheet.attrs && sceneOut().indexOf('chr:' + mb.characterId) >= 0);
-    const sides = sceneTeams().map((t) => ({ t, list: list.filter((x) => x.side === t.id) })).filter((g) => g.list.length || gm).map((g) => {
-      const ul = h('ul', 'arena__list', ...g.list.map((x) => fighterCard(x, gm, on)), ...(g.list.length ? [] : [h('li', 'arena__empty', 'Ninguém neste time.')]));
+    // tocar na caixa de um time abre quem pode entrar nele (o mestre: todos e NPCs; o jogador: os personagens dele)
+    const canPlace = gm || members.some((mb) => mb.mine && mb.sheet && mb.sheet.attrs);
+    const sides = sceneTeams().map((t) => ({ t, list: list.filter((x) => x.side === t.id) })).map((g) => {
+      const ul = h('ul', 'arena__list', ...g.list.map((x) => fighterCard(x, gm, on)), ...(g.list.length ? [] : [h('li', 'arena__empty', canPlace ? 'Ninguém neste time. Toque aqui para pôr alguém.' : 'Ninguém neste time.')]));
       ul.setAttribute('aria-label', g.t.name);
-      const side = h('div', 'arena__side', h('p', 'arena__label', h('span', 'arena__dot'), g.t.name, h('span', 'arena__count', String(g.list.length))), ul);
+      const add = h('button', 'arena__add', '+ Pôr no time');
+      add.type = 'button';
+      add.dataset.fid = 'teambox-' + g.t.id;
+      add.setAttribute('aria-label', 'Pôr alguém no time ' + g.t.name);
+      add.addEventListener('click', () => openTeamBox(g.t.id));
+      const side = h('div', 'arena__side' + (canPlace ? ' arena__side--click' : ''), h('p', 'arena__label', h('span', 'arena__dot'), g.t.name, h('span', 'arena__count', String(g.list.length)), canPlace ? add : null), ul);
       side.style.setProperty('--team', g.t.color);
+      if (canPlace) side.addEventListener('click', (ev) => { if (!battle.aim && !ev.target.closest('.fighter, button, select, input, a')) openTeamBox(g.t.id); });
       return side;
     });
     if (gm && outs.length) sides.push(h('div', 'arena__side arena__side--out', h('p', 'arena__label', 'Fora do combate'), h('ul', 'arena__list', ...outs.map(outCard))));
@@ -6678,14 +6786,6 @@ const FIREBASE_CONFIG = {
       acts.push(act('Tirar', async () => { await db.removeFoe(currentCamp.id, x.foe.id); combat.targets.delete(x.id); }, 'fighter__act--bad'));
     }
     if (!x.foe && gm) acts.push(act(on ? 'Tirar do combate' : 'Fora do combate', () => kickOut(x.id), 'fighter__act--bad'));
-    if (gm) { // o mestre troca o time a qualquer hora, antes ou durante o combate
-      const sel = h('select', 'input fighter__team');
-      sel.setAttribute('aria-label', 'Time de ' + x.name);
-      sceneTeams().forEach((t) => { const o = h('option', '', t.name); o.value = t.id; sel.append(o); });
-      sel.value = x.side;
-      sel.addEventListener('change', () => setTeam(x.id, sel.value));
-      acts.unshift(sel);
-    }
     const card = h('li', 'fighter' + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (aimable ? ' is-aimable' : aim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (state === 'morrendo' ? ' is-dying' : state ? ' is-down' : ''),
       sel, h('div', 'fighter__bars', ...bars),
       state || chips.length ? h('div', 'fighter__tags', state ? h('span', 'ftag ftag--down ftag--' + lifeKey(state), state) : null, ...chips) : null,
@@ -6811,8 +6911,8 @@ const FIREBASE_CONFIG = {
       box.replaceChildren(
         gmBtn('◀ Anterior', 'btn--ghost', () => stepTurn(-1)),
         gmBtn('Próximo turno ▶', 'btn--primary', () => stepTurn(1)),
-        gmBtn('Adicionar NPC', 'btn--ghost', addFoeFlow),
         gmBtn('Times', 'btn--ghost', () => openTeams(false)),
+        gmBtn('Presets', 'btn--ghost', openPresets),
         gmBtn('Encerrar', 'btn--danger', endScene));
       return;
     }
@@ -6825,8 +6925,8 @@ const FIREBASE_CONFIG = {
     name.setAttribute('aria-label', 'Nome da cena');
     name.addEventListener('input', () => { battle.name = name.value; });
     box.replaceChildren(
-      gmBtn('Adicionar NPC', 'btn--ghost', addFoeFlow),
       gmBtn('Times', 'btn--ghost', () => openTeams(false)),
+      gmBtn('Presets', 'btn--ghost', openPresets),
       gmBtn('Rolar defesas', 'btn--ghost', rollAllDefenses),
       name,
       gmBtn('Começar combate', 'btn--primary', startScene));
@@ -7702,13 +7802,147 @@ const FIREBASE_CONFIG = {
     box.scrollTop = box.scrollHeight;
   }
 
-  // NPC do bestiário entra na arena no time que o mestre escolher
-  async function addFoeFlow() {
-    const e = await openPicker({ title: 'Adicionar NPC da lista aberta', kinds: ['npc'], chips: ['NPC / Criatura'] });
-    if (!e) return;
-    const t = await chooseTeam(e.name);
-    if (t) await addFoeEntry(e, t);
+  // Caixa do time: quem pode entrar nele. O mestre move qualquer um e traz NPCs do bestiário;
+  // o jogador só move os próprios personagens.
+  let boxDlg = null;
+  function openTeamBox(teamId) {
+    if (!boxDlg) {
+      boxDlg = h('dialog', 'dialog teamsdlg');
+      boxDlg.setAttribute('aria-labelledby', 'boxdlg-title');
+      document.body.append(boxDlg);
+    }
+    const gm = Boolean(currentCamp.gm);
+    const t = teamById(teamId);
+    const out = sceneOut();
+    const list = combatants();
+    const cands = list.filter((x) => x.side !== teamId && (gm || (x.member && x.member.mine)))
+      .concat(members.filter((mb) => mb.sheet && mb.sheet.attrs && out.indexOf('chr:' + mb.characterId) >= 0 && (gm || mb.mine))
+        .map((mb) => ({ id: 'chr:' + mb.characterId, name: mb.name, member: mb, isOut: true })));
+    const close = () => { if (boxDlg.open) closeDialog(boxDlg); };
+    const rows = cands.map((x) => {
+      const from = x.isOut ? 'Fora do combate' : teamById(x.side).name;
+      const b = h('button', 'btn btn--primary btn--sm', 'Pôr aqui');
+      b.type = 'button';
+      b.dataset.fid = 'box-put-' + x.id;
+      b.setAttribute('aria-label', 'Pôr ' + x.name + ' no time ' + t.name);
+      b.addEventListener('click', async () => {
+        close();
+        if (x.isOut && gm) { await saveOut(x.id, false); }
+        await setTeam(x.id, teamId);
+        if (x.isOut && gm && sceneOn()) { const y = combatants().find((z) => z.id === x.id); if (y && !scene.order.some((o) => o.id === x.id)) await joinScene(y); }
+        play('drop');
+        toast(x.name + ' foi para o time ' + t.name + '.');
+      });
+      const dot = h('span', 'arena__dot');
+      if (!x.isOut) dot.style.setProperty('--team', teamById(x.side).color);
+      return h('div', 'teamsdlg__who teamsdlg__who--box', h('span', 'teamsdlg__name', x.name, h('span', 'teamsdlg__kind', ' ', x.foe ? 'NPC · ' : '', 'agora em ' + from)), dot, b);
+    });
+    const extra = [];
+    if (gm) {
+      const npc = h('button', 'btn btn--ghost btn--sm', 'Trazer NPC do bestiário');
+      npc.type = 'button';
+      npc.dataset.fid = 'box-npc';
+      npc.addEventListener('click', async () => {
+        close();
+        const e = await openPicker({ title: 'NPC para o time ' + t.name, kinds: ['npc'], chips: ['NPC / Criatura'] });
+        if (e) await addFoeEntry(e, teamId);
+      });
+      const squads = h('button', 'btn btn--ghost btn--sm', 'Acoplar time salvo');
+      squads.type = 'button';
+      squads.addEventListener('click', () => { close(); openPresets(); });
+      extra.push(h('div', 'teamsdlg__row', npc, squads));
+    }
+    const cancel = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+    cancel.type = 'button';
+    cancel.addEventListener('click', close);
+    const title = h('h2', '', 'Pôr no time ' + t.name);
+    title.id = 'boxdlg-title';
+    const box = h('div', 'teamsdlg__body', title,
+      h('p', 'field__hint', gm ? 'Toque em "Pôr aqui" para mover alguém para este time. Também dá para trazer um NPC novo.' : 'Você escolhe o time só dos seus personagens. Quem entra ou sai do combate é o mestre que decide.'),
+      rows.length ? h('div', 'teamsdlg__list', ...rows) : h('p', 'field__hint', gm ? 'Todo mundo já está neste time.' : 'Seus personagens já estão neste time.'),
+      ...extra, h('div', 'dialog__actions', cancel));
+    box.style.setProperty('--team', t.color);
+    boxDlg.replaceChildren(box);
+    openDialog(boxDlg);
   }
+
+  /* Presets: os dois prontos (aliados × inimigos, e com neutros) e os salvos pelo mestre.
+     Times salvos: um time com os NPCs dele, para acoplar em qualquer combate. */
+  let presetsDlg = null;
+  function openPresets() {
+    if (!presetsDlg) {
+      presetsDlg = h('dialog', 'dialog teamsdlg');
+      presetsDlg.setAttribute('aria-labelledby', 'presetsdlg-title');
+      document.body.append(presetsDlg);
+    }
+    const close = () => { if (presetsDlg.open) closeDialog(presetsDlg); };
+    const dots = (teams) => h('span', 'teamsdlg__dots', ...(teams || []).map((t) => { const s = h('span', 'arena__dot'); s.style.setProperty('--team', t.color); s.title = t.name; return s; }));
+    const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; if (fid) b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
+    const draw = () => {
+      const presets = DEFAULT_PRESETS.concat(scenePresets()).map((p) => {
+        const n = (p.list || []).filter((x) => x.k === 'npc').length;
+        const info = p.builtin ? 'pronto · ' + (p.teams || []).map((t) => t.name).join(', ') : plural(n, 'NPC', 'NPCs') + ' · ' + (p.teams || []).map((t) => t.name).join(', ');
+        return h('li', 'teamsdlg__preset', dots(p.teams), h('span', 'teamsdlg__name', p.name, h('span', 'teamsdlg__kind', ' ' + info)),
+          btn('Usar', 'btn--primary', () => { close(); openTeams(!sceneOn(), p); }, 'preset-use-' + p.id),
+          p.builtin ? h('span', '') : btn('Apagar', 'btn--ghost', async () => {
+            const next = sceneBase();
+            next.presets = scenePresets().filter((y) => y.id !== p.id);
+            await saveScene(next);
+            draw();
+          }));
+      });
+      const squads = sceneSquads().map((sq) => h('li', 'teamsdlg__preset', dots([sq]), h('span', 'teamsdlg__name', sq.name, h('span', 'teamsdlg__kind', ' ' + plural((sq.npcs || []).length, 'NPC', 'NPCs') + ((sq.npcs || []).length ? ': ' + sq.npcs.map((x) => x.name).join(', ') : ''))),
+        btn('Acoplar', 'btn--primary', async () => { close(); await attachSquad(sq); }, 'squad-use-' + sq.id),
+        btn('Apagar', 'btn--ghost', async () => {
+          const next = sceneBase();
+          next.squads = sceneSquads().filter((y) => y.id !== sq.id);
+          await saveScene(next);
+          draw();
+        })));
+      const title = h('h2', '', 'Presets');
+      title.id = 'presetsdlg-title';
+      presetsDlg.replaceChildren(h('div', 'teamsdlg__body', title,
+        h('p', 'field__hint', '"Usar" abre os times do preset para você conferir' + (sceneOn() ? ' e salvar.' : ' e começar o combate.') + ' Para criar um, monte os times em "Times" e salve como preset.'),
+        h('h3', 'sub-title', 'Presets de combate'), h('ul', 'teamsdlg__presets', ...presets),
+        btn('+ Criar preset', 'btn--ghost', () => { close(); openTeams(false, null, true); }, 'preset-new'),
+        h('h3', 'sub-title', 'Times salvos'),
+        h('p', 'field__hint', 'Um time com nome, cor e os NPCs dele (inimigos ou aliados já prontos). "Acoplar" põe o time e os NPCs no combate atual. Para salvar, use "Salvar time" em "Times".'),
+        squads.length ? h('ul', 'teamsdlg__presets', ...squads) : h('p', 'field__hint', 'Nenhum time salvo ainda.'),
+        h('div', 'dialog__actions', btn('Fechar', 'btn--ghost', close))));
+    };
+    draw();
+    openDialog(presetsDlg);
+  }
+  // time salvo entra no combate: time novo (ou o de mesmo nome) e os NPCs dele criados nele
+  async function attachSquad(sq) {
+    const next = sceneBase();
+    const teams = deep(sceneTeams());
+    let t = teams.find((y) => nameKey(y.name) === nameKey(sq.name));
+    if (!t) {
+      if (teams.length >= TEAM_MAX) { toast('Já são ' + TEAM_MAX + ' times. Apague um em "Times" para acoplar outro.'); return; }
+      t = { id: 't' + uid().slice(0, 6), name: sq.name, color: sq.color };
+      teams.push(t);
+    }
+    try {
+      const team = Object.assign({}, next.team);
+      const fresh = [];
+      for (const x of sq.npcs || []) {
+        const id = await db.addFoe(currentCamp.id, { npcId: x.npcId || '', name: String(x.name).slice(0, 60), values: deep(x.values || {}), thumb: x.thumb || '', cur: {}, def: null });
+        team['foe:' + id] = t.id;
+        fresh.push(id);
+      }
+      const now = sceneBase();
+      now.teams = teams;
+      now.team = Object.assign({}, now.team, team);
+      await saveScene(now);
+      if (fresh.length) await waitFoes(fresh);
+      if (sceneOn()) for (const x of combatants().filter((y) => fresh.some((id) => y.id === 'foe:' + id))) await joinScene(x);
+      play('ok');
+      toast('Time ' + t.name + ' acoplado' + (fresh.length ? ' com ' + plural(fresh.length, 'NPC', 'NPCs') : '') + '.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  // NPC do bestiário entra na arena no time que o mestre escolher
   async function addFoeEntry(e, teamId) {
     const same = foes.filter((f) => f.npcId === e.id).length;
     try {
@@ -7946,7 +8180,7 @@ const FIREBASE_CONFIG = {
      e pode salvar tudo como preset para usar depois. Ao começar o combate é esta mesma tela, perguntando
      quem luta contra quem. Tudo fica num rascunho até "Salvar" ou "Começar combate". */
   let teamsDlg = null;
-  function openTeams(start) {
+  function openTeams(start, preset, focusPreset) {
     if (!teamsDlg) {
       teamsDlg = h('dialog', 'dialog teamsdlg');
       teamsDlg.setAttribute('aria-labelledby', 'teamsdlg-title');
@@ -7993,7 +8227,21 @@ const FIREBASE_CONFIG = {
         del.disabled = d.teams.length <= 1;
         del.addEventListener('click', () => { d.teams.splice(i, 1); fixTeams(); draw(); });
         const n = fighters.filter((f) => d.map[f.id] === t.id).length + d.add.filter((x) => x.t === t.id).length;
-        const row = h('div', 'teamsdlg__team', color, name, h('span', 'teamsdlg__n', plural(n, 'lutador', 'lutadores')), del);
+        const keep = h('button', 'btn btn--ghost btn--sm', 'Salvar time');
+        keep.type = 'button';
+        keep.dataset.fid = 'squad-save-' + i;
+        keep.title = 'Guarda este time com os NPCs dele para acoplar em outros combates';
+        keep.addEventListener('click', async () => {
+          const nm = cleanName(t.name).slice(0, 30) || 'Time';
+          const npcs = fighters.filter((f) => f.foe && d.map[f.id] === t.id).map((f) => ({ npcId: f.foe.npcId || '', name: f.foe.name, values: deep(f.foe.values || {}), thumb: f.foe.thumb || '' }))
+            .concat(d.add.filter((x) => x.t === t.id).map((x) => ({ npcId: x.npcId, name: x.name, values: deep(x.values), thumb: x.thumb })));
+          const next = sceneBase();
+          next.squads = [{ id: uid(), name: nm, color: t.color, npcs }].concat(sceneSquads().filter((y) => nameKey(y.name) !== nameKey(nm))).slice(0, SQUAD_MAX);
+          await saveScene(next);
+          play('ok');
+          toast('Time "' + nm + '" salvo' + (npcs.length ? ' com ' + plural(npcs.length, 'NPC', 'NPCs') : '') + '. Acople em Presets.');
+        });
+        const row = h('div', 'teamsdlg__team', color, name, h('span', 'teamsdlg__n', plural(n, 'lutador', 'lutadores')), keep, del);
         row.style.setProperty('--team', t.color);
         return row;
       });
@@ -8037,22 +8285,6 @@ const FIREBASE_CONFIG = {
         toast('Preset "' + name + '" salvo.');
         draw();
       });
-      const plist = scenePresets().map((p) => {
-        const load = h('button', 'btn btn--ghost btn--sm', 'Carregar');
-        load.type = 'button';
-        load.dataset.fid = 'preset-load-' + nameKey(p.name);
-        load.addEventListener('click', () => { loadPreset(p); draw(); toast('Preset "' + p.name + '" carregado. Confira e salve, ou comece o combate.'); });
-        const del = h('button', 'btn btn--ghost btn--sm', 'Apagar');
-        del.type = 'button';
-        del.addEventListener('click', async () => {
-          const next = sceneBase();
-          next.presets = scenePresets().filter((y) => y.id !== p.id);
-          await saveScene(next);
-          draw();
-        });
-        const dots = h('span', 'teamsdlg__dots', ...(p.teams || []).map((t) => { const s = h('span', 'arena__dot'); s.style.setProperty('--team', t.color); s.title = t.name; return s; }));
-        return h('li', 'teamsdlg__preset', dots, h('span', 'teamsdlg__name', p.name, h('span', 'teamsdlg__kind', ' ' + plural((p.list || []).filter((x) => x.t !== 'out').length, 'lutador', 'lutadores'))), load, del);
-      });
       const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
       cancel.type = 'button';
       cancel.addEventListener('click', () => closeDialog(teamsDlg));
@@ -8072,9 +8304,9 @@ const FIREBASE_CONFIG = {
         h('h3', 'sub-title', 'Times'), h('div', 'teamsdlg__teams', ...teamRows), h('div', '', addTeam),
         h('h3', 'sub-title', 'Quem fica em qual time'),
         who.length ? h('div', 'teamsdlg__list', ...who) : h('p', 'field__hint', 'Ninguém ainda: adicione NPCs ou espere os jogadores vincularem as fichas.'),
-        h('h3', 'sub-title', 'Presets'),
+        h('h3', 'sub-title', 'Salvar como preset'),
+        h('p', 'field__hint', 'Guarda estes times e quem está em cada um. Os presets ficam em "Presets".'),
         h('div', 'teamsdlg__row', pname, psave),
-        plist.length ? h('ul', 'teamsdlg__presets', ...plist) : h('p', 'field__hint', 'Nenhum preset salvo ainda.'),
         h('div', 'dialog__actions', cancel, save, sceneOn() ? null : go)));
     };
     // preset no rascunho: times dele; jogadores voltam para o time salvo; NPCs que não estão na arena entram como novos
@@ -8090,8 +8322,10 @@ const FIREBASE_CONFIG = {
       });
       fixTeams();
     };
+    if (preset) loadPreset(preset);
     draw();
     openDialog(teamsDlg);
+    if (focusPreset) { const pn = teamsDlg.querySelector('#preset-name'); if (pn) pn.focus(); }
   }
 
   // espera os NPCs recém-criados chegarem na lista (o banco avisa logo depois de gravar)
@@ -8118,6 +8352,7 @@ const FIREBASE_CONFIG = {
       const next = sceneBase();
       next.teams = teams;
       next.team = team;
+      next.pteam = {}; // o mestre decidiu: vale o que está na tela
       next.out = sceneOut().filter((id) => charIds.indexOf(id) < 0).concat(charIds.filter((id) => d.map[id] === 'out'));
       if (sceneOn()) next.out.forEach((id) => dropFromOrder(next, id));
       await saveScene(next);
@@ -8165,7 +8400,7 @@ const FIREBASE_CONFIG = {
     if (!ok) return;
     const rounds = scene ? scene.round : 0;
     const keep = sceneBase();
-    await saveScene({ active: false, name: '', round: 0, turn: 0, order: [], out: sceneOut(), teams: keep.teams || null, team: keep.team || {}, presets: keep.presets || [] });
+    await saveScene({ active: false, name: '', round: 0, turn: 0, order: [], out: sceneOut(), teams: keep.teams || null, team: keep.team || {}, pteam: keep.pteam || {}, presets: keep.presets || [], squads: keep.squads || [] });
     await sceneLog('Fim da cena', 'Cena encerrada após ' + plural(rounds, 'rodada', 'rodadas') + '.', rounds);
   }
 
@@ -8238,6 +8473,74 @@ const FIREBASE_CONFIG = {
   const catalogPrice = (entry) => priceOf(BUILTINS.find((e) => e.id && e.id === entry.id) || entry);
   const shopLog = (sh, text) => [{ t: Date.now(), text }].concat(sh.log || []).slice(0, 20);
   const stockText = (it) => (it.qty === null || it.qty === undefined ? '∞' : '×' + it.qty);
+  /* Preços avançados (lojas do mestre, de companhia e de NPC): inflação ou desconto geral, por raridade
+     e por categoria, variação aleatória fixa por item e arredondamento. O preço do item é a base. */
+  const PRICE_RARITIES = ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'];
+  const PRICE_CATS = [['armas', 'Armas'], ['protecao', 'Proteção'], ['implantes', 'Implantes'], ['gerais', 'Itens gerais'], ['outros', 'Outros']];
+  const PRICE_ROUND = [1, 5, 10, 50, 100];
+  const PRICE_PRESETS = [
+    ['Zerar', { all: 0, rar: {}, cat: {}, jitter: 0 }],
+    ['Promoção (–20%)', { all: -20 }],
+    ['Inflação de guerra (+50%)', { all: 50 }],
+    ['Raros mais caros', { rar: { 'Rara': 25, 'Épica': 50, 'Lendária': 100 } }],
+    ['Armas em falta (+40%)', { cat: { armas: 40 } }],
+    ['Mercado instável (±15%)', { jitter: 15 }]
+  ];
+  const priceCat = (kind) => (/^arma/.test(kind) ? 'armas' : kind === 'armadura' || kind === 'vestivel' ? 'protecao' : kind === 'nucleo' || kind === 'protese-modulo' ? 'implantes' : kind === 'item-geral' ? 'gerais' : 'outros');
+  const rarKey = (r) => String(r || '').replace('Epica', 'Épica');
+  function seededUnit(str) { // de –1 a 1, sempre o mesmo para o mesmo texto
+    let x = 2166136261;
+    for (let i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 16777619); }
+    return ((x >>> 0) / 4294967295) * 2 - 1;
+  }
+  function shopPrice(sh, it) {
+    const base = Math.max(0, Math.round(num(it.price)));
+    const p = sh.pricing;
+    if (!p || sh.kind === 'jogador') return base;
+    const pct = num(p.all) + num((p.rar || {})[rarKey((it.entry.values || {}).raridade)]) + num((p.cat || {})[priceCat(it.entry.kind)])
+      + (num(p.jitter) ? seededUnit(it.uid + ':' + (p.seed || '')) * num(p.jitter) : 0);
+    const step = PRICE_ROUND.indexOf(num(p.round)) >= 0 ? num(p.round) : 1;
+    return Math.max(0, Math.round(base * Math.max(0, 1 + pct / 100) / step) * step);
+  }
+  function pricingPanel(sh) {
+    const p = Object.assign({ all: 0, rar: {}, cat: {}, jitter: 0, round: 1, seed: '' }, deep(sh.pricing || {}));
+    const numIn = (val, label, onv) => {
+      const n = h('input', 'input shop__num');
+      n.type = 'number';
+      n.step = '5';
+      n.value = String(num(val) || 0);
+      n.setAttribute('aria-label', label);
+      n.addEventListener('input', () => onv(Math.round(num(n.value))));
+      return h('label', 'shop__lab', label, n, '%');
+    };
+    const grid = (title, kids) => h('fieldset', 'pricing__set', h('legend', '', title), h('div', 'pricing__grid', ...kids));
+    const round = h('select', 'input shop__sel');
+    round.setAttribute('aria-label', 'Arredondar preços');
+    PRICE_ROUND.forEach((r) => { const o = h('option', '', r === 1 ? 'Sem arredondar' : 'Arredondar para ' + r); o.value = String(r); round.append(o); });
+    round.value = String(p.round || 1);
+    round.addEventListener('change', () => { p.round = num(round.value); });
+    const save = async (patch) => {
+      const next = Object.assign({}, p, patch || {});
+      if (patch && patch.rar) next.rar = Object.assign({}, patch.rar);
+      if (patch && patch.cat) next.cat = Object.assign({}, patch.cat);
+      if (await saveShop(sh, { pricing: next })) toast('Preços de ' + sh.name + ' atualizados.');
+    };
+    const quick = PRICE_PRESETS.map((q) => { const b = h('button', 'btn btn--ghost btn--sm', q[0]); b.type = 'button'; b.addEventListener('click', () => save(q[1])); return b; });
+    const reroll = h('button', 'btn btn--ghost btn--sm', 'Sortear nova variação');
+    reroll.type = 'button';
+    reroll.addEventListener('click', () => save({ seed: uid().slice(0, 6) }));
+    const ok = h('button', 'btn btn--primary btn--sm', 'Aplicar preços');
+    ok.type = 'button';
+    ok.dataset.fid = 'pricing-save';
+    ok.addEventListener('click', () => save());
+    return h('details', 'pricing', h('summary', '', 'Preços avançados (mestre)' + (sh.pricing ? ' · ativos' : '')),
+      h('p', 'field__hint', 'Somam por cima do preço de cada item: geral + raridade + categoria (+ variação). Negativo é desconto. Quem compra vê só o preço final.'),
+      h('div', 'pricing__quick', ...quick),
+      grid('Geral', [numIn(p.all, 'Inflação ou desconto geral', (v) => { p.all = v; }), numIn(p.jitter, 'Variação aleatória (±)', (v) => { p.jitter = Math.abs(v); })]),
+      grid('Por raridade', PRICE_RARITIES.map((r) => numIn(p.rar[r], r, (v) => { p.rar[r] = v; }))),
+      grid('Por categoria', PRICE_CATS.map((c) => numIn(p.cat[c[0]], c[1], (v) => { p.cat[c[0]] = v; }))),
+      h('div', 'pricing__foot', round, reroll, ok));
+  }
   async function saveShop(sh, patch) {
     try { await db.updateShop(currentCamp.id, sh.id, patch); return true; }
     catch (err) { toast(errorMessage(err)); return false; }
@@ -8251,7 +8554,7 @@ const FIREBASE_CONFIG = {
   async function buyFromShop(sh, it) {
     const me = playing();
     if (!me) { toast('Escolha um personagem seu para comprar.'); return; }
-    const price = Math.max(0, Math.round(num(it.price)));
+    const price = shopPrice(shops.find((x) => x.id === sh.id) || sh, it);
     if (moneyOf(me) < price) { toast(me.name + ' tem ' + fmtCronos(moneyOf(me)) + ' Cronos nesta campanha; ' + it.entry.name + ' custa ' + fmtCronos(price) + '.'); return; }
     const fresh = shops.find((x) => x.id === sh.id);
     const cur = fresh && fresh.items.find((x) => x.uid === it.uid);
@@ -8279,7 +8582,7 @@ const FIREBASE_CONFIG = {
     if (!me || !me.sheet) return;
     const inv = (me.sheet.inventory || []).filter((i) => !i.slot);
     if (!inv.length) { toast('Nada na mochila de ' + me.name + ' para pôr na loja. Itens equipados não entram.'); return; }
-    const pick = await askChoice('Abastecer ' + sh.name, 'Item da mochila de ' + me.name, 'Vai para o armazém da loja. Depois marque "À venda" e o preço por unidade.', inv.map((i) => [i.uid, i.name + (num(i.qty) > 1 ? ' ×' + i.qty : '')]));
+    const pick = await askChoice('Abastecer ' + sh.name, 'Item da mochila de ' + me.name, 'Vai para o armazém da loja. Depois marque "À venda" e o preço por unidade.', inv.map((i) => [i.uid, i.name + (num(i.qty) > 1 ? ' ×' + i.qty : '')]), 'Pôr no armazém');
     if (!pick) return;
     let moved = null;
     try {
@@ -8322,7 +8625,7 @@ const FIREBASE_CONFIG = {
     const sold = [];
     try {
       for (const sh of shops.slice()) {
-        if (!sh.npcBuyers || !TRAFFIC_P[sh.traffic]) continue;
+        if (sh.kind === 'companhia' || !sh.npcBuyers || !TRAFFIC_P[sh.traffic]) continue;
         let income = 0;
         const lines = [];
         const items = sh.items.map((x) => Object.assign({}, x));
@@ -8353,10 +8656,12 @@ const FIREBASE_CONFIG = {
   function shopItemRow(sh, it, manage) {
     const e = it.entry;
     const v = e.values || {};
-    const price = Math.max(0, Math.round(num(it.price)));
+    const base = Math.max(0, Math.round(num(it.price)));
+    const price = shopPrice(sh, it);
     const main = h('span', 'row__main', h('span', 'row__title', e.name, ' ', h('span', 'tag shop__stock', stockText(it)), manage ? h('span', 'tag' + (it.sale ? ' tag--on' : ''), it.sale ? 'À venda' : 'No armazém') : null),
       h('span', 'row__meta', [kindTitle(e.kind), e.typeTitle, v.raridade, v.fabricante].filter(Boolean).join(' · ')));
-    const row = h('li', 'row shop__item' + (it.sale ? '' : ' shop__item--off'), h('span', 'row__open row__open--static', entryIcon(e), main), h('strong', 'gear__price', fmtCronos(price)));
+    const row = h('li', 'row shop__item' + (it.sale ? '' : ' shop__item--off'), h('span', 'row__open row__open--static', entryIcon(e), main),
+      h('strong', 'gear__price', price !== base && manage ? h('s', 'shop__base', fmtCronos(base)) : null, price !== base && manage ? ' ' : null, fmtCronos(price)));
     const me = playing();
     if (it.sale && me && !(sh.kind === 'jogador' && sh.ownerCharId === me.characterId)) {
       const buy = h('button', 'btn btn--primary btn--sm', 'Comprar');
@@ -8373,8 +8678,8 @@ const FIREBASE_CONFIG = {
     priceIn.type = 'number';
     priceIn.min = '0';
     priceIn.step = '1';
-    priceIn.value = String(price);
-    priceIn.setAttribute('aria-label', 'Preço por unidade de ' + e.name);
+    priceIn.value = String(base);
+    priceIn.setAttribute('aria-label', 'Preço base por unidade de ' + e.name);
     priceIn.addEventListener('change', () => saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { price: Math.max(0, Math.round(num(priceIn.value))) }) : x)) }));
     const ctl = h('div', 'shop__ctl', h('label', 'shop__lab', 'Preço', priceIn));
     if (gm && sh.kind !== 'jogador') {
@@ -8391,10 +8696,12 @@ const FIREBASE_CONFIG = {
       });
       ctl.append(h('label', 'shop__lab', 'Qtd.', qtyIn));
     }
-    const sale = h('button', 'btn btn--ghost btn--sm', it.sale ? 'Pôr no armazém' : 'Pôr à venda');
-    sale.type = 'button';
-    sale.addEventListener('click', () => saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { sale: !x.sale }) : x)) }));
-    ctl.append(sale);
+    if (sh.kind !== 'companhia') { // companhia não tem armazém: o que ela fabrica está sempre à venda
+      const sale = h('button', 'btn btn--ghost btn--sm', it.sale ? 'Pôr no armazém' : 'Pôr à venda');
+      sale.type = 'button';
+      sale.addEventListener('click', () => saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { sale: !x.sale }) : x)) }));
+      ctl.append(sale);
+    }
     const out = h('button', 'btn btn--ghost btn--sm', sh.kind === 'jogador' ? 'Devolver à mochila' : 'Tirar');
     out.type = 'button';
     out.addEventListener('click', () => (sh.kind === 'jogador' ? unstock(sh, it) : saveShop(sh, { items: sh.items.filter((x) => x.uid !== it.uid) })));
@@ -8415,7 +8722,7 @@ const FIREBASE_CONFIG = {
     det.append(h('summary', 'shop__head',
       h('span', 'shop__icon', icon),
       h('span', 'shop__main', h('strong', 'shop__name', sh.name),
-        h('span', 'shop__meta', [shopKindText(sh), plural(forSale.length, 'item à venda', 'itens à venda'), (TRAFFIC.find((t) => t[0] === sh.traffic) || TRAFFIC[0])[1], sh.npcBuyers ? 'NPCs compram' : ''].filter(Boolean).join(' · ')))));
+        h('span', 'shop__meta', [shopKindText(sh), plural(forSale.length, 'item à venda', 'itens à venda'), sh.kind === 'companhia' ? 'estoque da companhia' : (TRAFFIC.find((t) => t[0] === sh.traffic) || TRAFFIC[0])[1], sh.kind !== 'companhia' && sh.npcBuyers ? 'NPCs compram' : '', sh.pricing && sh.kind !== 'jogador' ? 'preços ajustados' : ''].filter(Boolean).join(' · ')))));
     const body = h('div', 'shop__body');
     const shown = manage ? sh.items : forSale;
     if (shown.length) body.append(h('ul', 'rows shop__items', ...shown.map((it) => shopItemRow(sh, it, manage))));
@@ -8433,7 +8740,7 @@ const FIREBASE_CONFIG = {
       stock.addEventListener('click', () => stockFromInventory(sh));
       acts.append(stock);
     }
-    if (gm) {
+    if (gm && sh.kind !== 'companhia') { // companhia não está ligada a jogador: não vende para NPCs
       const traffic = h('select', 'input shop__sel');
       traffic.setAttribute('aria-label', 'Fluxo de pessoas em ' + sh.name);
       TRAFFIC.forEach((t) => { const o = h('option', '', t[1]); o.value = t[0]; traffic.append(o); });
@@ -8462,6 +8769,7 @@ const FIREBASE_CONFIG = {
       acts.append(del);
     }
     if (acts.children.length) body.append(acts);
+    if (gm && sh.kind !== 'jogador') body.append(pricingPanel(sh));
     if ((sh.log || []).length && manage) body.append(h('details', 'shop__log', h('summary', '', 'Vendas e compras (' + sh.log.length + ')'), h('ul', '', ...sh.log.map((l) => h('li', '', l.text)))));
     det.append(body);
     return det;
@@ -8485,7 +8793,13 @@ const FIREBASE_CONFIG = {
     (ITEM_DATA.fabricantes || []).forEach((f) => { const o = h('option', '', f); o.value = f; comp.append(o); });
     const tr = $('#shop-traffic');
     TRAFFIC.forEach((t) => { const o = h('option', '', t[1]); o.value = t[0]; tr.append(o); });
-    const sync = () => { $('#shop-company-field').hidden = kind.value !== 'companhia'; $('#shop-npc-field').hidden = kind.value !== 'npc'; };
+    const sync = () => {
+      const co = kind.value === 'companhia';
+      $('#shop-company-field').hidden = !co;
+      $('#shop-npc-field').hidden = kind.value !== 'npc';
+      $('#shop-traffic-field').hidden = co; // companhia não vende para NPCs
+      $('#shop-buyers-field').hidden = co;
+    };
     kind.addEventListener('change', sync);
     sync();
     $('#shop-new-btn').addEventListener('click', () => {
@@ -8505,7 +8819,7 @@ const FIREBASE_CONFIG = {
         : [];
       try {
         const id = await db.addShop(currentCamp.id, { name, kind: k, company: k === 'companhia' ? comp.value : '', npc: k === 'npc' ? npc : '', ownerUid: '', ownerCharId: '', ownerName: '',
-          traffic: tr.value, npcBuyers: $('#shop-buyers').checked, items, log: [] });
+          traffic: k === 'companhia' ? 'nenhum' : tr.value, npcBuyers: k !== 'companhia' && $('#shop-buyers').checked, items, log: [] });
         shopUi.open.add(id);
         renderShops();
         form.hidden = true;
@@ -8527,9 +8841,68 @@ const FIREBASE_CONFIG = {
     });
   })();
 
+  // Acesso da campanha (só quem criou): pública ou não, e senha opcional
+  function renderAccess() {
+    const box = $('#camp-access');
+    const own = Boolean(currentCamp && currentCamp.isOwner);
+    box.hidden = !own;
+    $('#member-add-mine').hidden = !profile;
+    if (!own) return;
+    $('#access-public').checked = Boolean(currentCamp.public);
+    $('#access-state').textContent = (currentCamp.public ? 'Pública: aparece na lista de campanhas públicas.' : 'Privada: só entra quem tem o ID.') + ' ' + (currentCamp.passHash ? 'Com senha.' : 'Sem senha.');
+    $('#access-pass-clear').hidden = !currentCamp.passHash;
+  }
+  $('#access-public').addEventListener('change', async (ev) => {
+    try {
+      await db.updateCampaign(currentCamp.id, { public: ev.target.checked });
+      currentCamp.public = ev.target.checked;
+      renderAccess();
+      toast(ev.target.checked ? 'Campanha pública.' : 'Campanha privada.');
+    } catch (err) { toast(errorMessage(err)); ev.target.checked = !ev.target.checked; }
+  });
+  $('#access-pass-save').addEventListener('click', async () => {
+    const pw = $('#access-pass').value;
+    if (pw.length < 3) { toast('Use uma senha com pelo menos 3 caracteres.'); $('#access-pass').focus(); return; }
+    try {
+      const hash = await campHash(currentCamp.id, pw);
+      await db.updateCampaign(currentCamp.id, { passHash: hash });
+      currentCamp.passHash = hash;
+      $('#access-pass').value = '';
+      renderAccess();
+      toast('Senha definida. Quem já participa continua entrando.');
+    } catch (err) { toast(errorMessage(err)); }
+  });
+  $('#access-pass-clear').addEventListener('click', async () => {
+    try {
+      await db.updateCampaign(currentCamp.id, { passHash: '' });
+      currentCamp.passHash = '';
+      renderAccess();
+      toast('Senha tirada.');
+    } catch (err) { toast(errorMessage(err)); }
+  });
+  // jogador põe um personagem salvo no perfil direto no grupo
+  $('#member-add-mine').addEventListener('click', async () => {
+    if (!profile) { openLogin(['campaign', currentCamp.id]); return; }
+    const inCamp = new Set(members.map((m) => m.characterId));
+    const list = (await loadChars(profile.chars)).filter((c) => !inCamp.has(c.id));
+    if (!list.length) { toast('Todos os personagens do seu perfil já estão aqui (ou o perfil não tem nenhum).'); return; }
+    const pick = await askChoice('Pôr no grupo', 'Personagem do seu perfil', 'Ele entra nesta campanha agora, como se você usasse o ID de entrada na ficha.', list.map((c) => [c.id, c.name + (c.species ? ' · ' + c.species : '')]), 'Pôr no grupo');
+    if (!pick) return;
+    try {
+      const camp = await db.joinCampaign(currentCamp.id, pick);
+      profileSet('chars', pick, true);
+      profileSet('camps', camp.id, true);
+      toast((list.find((c) => c.id === pick) || {}).name + ' entrou no grupo.');
+      views.campaign(currentCamp.id);
+    } catch (err) { toast(errorMessage(err)); }
+  });
+
   views.campaign = async function showCampaign(id) {
     const camp = await db.getCampaign(id);
     if (!camp) { toast('Não encontramos essa campanha.'); go('campanhas'); return; }
+    // campanha só com perfil: é ele que guarda quem joga e quem mestra
+    if (!profile) { toast('Para abrir uma campanha, entre ou crie um perfil.'); go('campanhas'); openLogin(['campaign', id]); return; }
+    if (!(await passGate(camp))) { go('campanhas'); return; }
     if (profile) {
       profileSet('camps', camp.id, true);
       if (camp.isOwner) profileSet('gm', camp.id, true);
@@ -8550,6 +8923,8 @@ const FIREBASE_CONFIG = {
     try { members = await db.listMembers(id); }
     catch (err) { console.warn(err); members = []; noAccess = true; }
     members.forEach((m) => { if (isMyChar(m.characterId)) m.mine = true; }); // personagens do perfil contam como seus
+    members.forEach((m) => { if (m.mine && !isMyChar(m.characterId)) profileSet('chars', m.characterId, true); }); // e os seus entram no perfil
+    renderAccess();
 
     $('#member-list').replaceChildren(...members.map(memberRow));
     renderXpForm();

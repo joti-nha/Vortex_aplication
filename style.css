@@ -2735,7 +2735,7 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 .teamsdlg__body h3 { margin-top: 0.4rem; }
 .teamsdlg__teams, .teamsdlg__list { display: grid; gap: 0.4rem; }
 .teamsdlg__list { max-height: 40vh; overflow-y: auto; }
-.teamsdlg__team { --team: #9aa4b2; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-left: 4px solid var(--team); border-radius: var(--r-s); background: color-mix(in srgb, var(--team) 10%, transparent); }
+.teamsdlg__team { --team: #9aa4b2; display: grid; grid-template-columns: auto 1fr auto auto auto; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-left: 4px solid var(--team); border-radius: var(--r-s); background: color-mix(in srgb, var(--team) 10%, transparent); }
 .teamsdlg__color { width: 2.4rem; height: 2.2rem; padding: 0; border: 1px solid var(--linha); border-radius: 0.4rem; background: none; cursor: pointer; }
 .teamsdlg__n { font-size: var(--t-s); color: var(--nevoa-2); white-space: nowrap; }
 .teamsdlg__who { display: grid; grid-template-columns: 1fr minmax(9rem, 13rem) auto; align-items: center; gap: 0.5rem; padding: 0.25rem 0; border-bottom: 1px solid var(--linha); }
@@ -2750,7 +2750,9 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 .teambtn { display: flex; align-items: center; gap: 0.55rem; min-height: 2.75rem; padding: 0.3rem 0.8rem; border: 1px solid color-mix(in srgb, var(--team) 60%, transparent); border-left: 5px solid var(--team); border-radius: var(--r-s); background: color-mix(in srgb, var(--team) 12%, transparent); color: var(--nevoa); font: 700 1rem/1.2 var(--fonte-ui); cursor: pointer; text-align: left; }
 .teambtn:hover { background: color-mix(in srgb, var(--team) 24%, transparent); }
 @media (max-width: 520px) {
-  .teamsdlg__team { grid-template-columns: auto 1fr auto; }
+  .teamsdlg__team { display: flex; flex-wrap: wrap; }
+  .teamsdlg__team > input:not([type=color]) { flex: 1 1 calc(100% - 4rem); min-width: 0; }
+  .teamsdlg__team > button { flex: 1 1 auto; }
   .teamsdlg__n { display: none; }
   .teamsdlg__who { grid-template-columns: 1fr; gap: 0.25rem; }
   .teamsdlg__row { flex-wrap: wrap; }
@@ -2763,4 +2765,37 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .ripple, .camp-panel:not([hidden]), .cmd__panel.is-new, .rt-page, .blog__item.is-new, .roll.is-new, .fighter.is-hit, .toast.is-visible, dialog[open], .cell--drop { animation: none !important; }
   .btn:hover:not(:disabled), .btn:active:not(:disabled), .is-dragging { transform: none; }
+}
+
+/* Caixa do time: tocar nela põe alguém no time */
+.arena__side--click { cursor: pointer; transition: background 0.15s ease, box-shadow 0.15s ease; }
+.arena__side--click:hover { background: color-mix(in srgb, var(--team) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--team) 35%, transparent); }
+.arena__side--click .arena__empty { cursor: pointer; }
+.arena__add { margin-left: 0; padding: 0.15rem 0.55rem; border: 1px dashed color-mix(in srgb, var(--team) 60%, transparent); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 0.78rem; cursor: pointer; }
+.arena__add:hover, .arena__add:focus-visible { background: color-mix(in srgb, var(--team) 18%, transparent); }
+.arena__side .arena__label { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.arena__side--foes .arena__label { justify-content: flex-start; }
+.teamsdlg__who--box { grid-template-columns: 1fr auto auto; }
+.teamsdlg__who--box .arena__dot { --team: #9aa4b2; }
+
+/* Acesso à campanha (senha e pública) */
+.access__row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+.access__row .input { flex: 1 1 12rem; min-width: 0; }
+
+/* Preços avançados das lojas */
+.pricing { margin-top: 0.6rem; padding: 0.5rem 0.65rem; border: 1px solid var(--linha); border-radius: var(--r-s); }
+.pricing > summary { cursor: pointer; font-weight: 600; }
+.pricing[open] > summary { margin-bottom: 0.4rem; }
+.pricing__quick, .pricing__foot { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.4rem 0; }
+.pricing__foot .shop__sel { flex: 1 1 10rem; }
+.pricing__set { margin: 0.4rem 0; padding: 0.35rem 0.5rem 0.5rem; border: 1px solid var(--linha); border-radius: var(--r-s); }
+.pricing__set > legend { padding: 0 0.3rem; font-size: 0.8rem; opacity: 0.8; }
+.pricing__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.35rem 0.6rem; }
+.pricing__grid .shop__lab { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+.pricing__grid .shop__lab .shop__num { width: 4.5rem; margin-left: auto; }
+.shop__base { margin-left: 0.3rem; opacity: 0.6; font-size: 0.85em; }
+@media (max-width: 560px) {
+  .teamsdlg__who--box { grid-template-columns: 1fr auto; }
+  .teamsdlg__who--box .arena__dot { display: none; }
+  .pricing__grid { grid-template-columns: 1fr; }
 }
