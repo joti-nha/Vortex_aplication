@@ -2148,6 +2148,7 @@ const FIREBASE_CONFIG = {
   });
 
   views.perfil = async function showPerfil() {
+    renderThemes();
     const on = Boolean(profile);
     $('#perfil-out').hidden = on;
     $('#perfil-body').hidden = !on;
@@ -2928,6 +2929,129 @@ const FIREBASE_CONFIG = {
     finally { btn.disabled = false; }
   });
 
+  /* ---------- Temas secretos ----------
+     Ether: pesquise "elemento 115" nos itens e toque no item escondido que aparece.
+     Claptrap: escreva o nome dele numa busca de itens. Desbloqueados ficam neste aparelho;
+     a troca de tema fica no Perfil. O <head> do index.html aplica o tema antes de desenhar. */
+  const THEME_KEY = 'vortex.themes.v1';
+  const THEMES = [
+    { id: '', name: 'Vortex', text: 'O de sempre: tempestade e lanterna.' },
+    { id: 'ether', name: 'Ether', text: 'Elemento 115: violeta, ciano e energia instável.', hint: 'Dizem que um elemento perdido, de número 115, se esconde entre os itens.' },
+    { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante atende quando chamam o nome dele na busca.' }
+  ];
+  const themeState = (() => {
+    try { const v = JSON.parse(localStorage.getItem(THEME_KEY)) || {}; return { unlocked: Array.isArray(v.unlocked) ? v.unlocked : [], active: v.active || '' }; }
+    catch (e) { return { unlocked: [], active: '' }; }
+  })();
+  const saveThemes = () => { try { localStorage.setItem(THEME_KEY, JSON.stringify(themeState)); } catch (e) { /* sem armazenamento: vale até fechar */ } };
+  function applyTheme(id) {
+    themeState.active = id;
+    if (id) document.documentElement.dataset.theme = id; else delete document.documentElement.dataset.theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--abismo').trim() || '#0f1c26';
+    saveThemes();
+  }
+  applyTheme(themeState.unlocked.indexOf(themeState.active) >= 0 ? themeState.active : '');
+
+  function secretHit(q) {
+    const k = nameKey(q || '');
+    if (/elemento\s*115|element\s*115|^115$/.test(k)) return 'ether';
+    if (/clap\s*trap|cl4p/.test(k)) return 'claptrap';
+    return '';
+  }
+  function secretRow(id) {
+    const t = THEMES.find((x) => x.id === id);
+    const got = themeState.unlocked.indexOf(id) >= 0;
+    const btn = h('button', 'row__open secret secret--' + id,
+      h('span', 'secret__icon', id === 'ether' ? '115' : ''),
+      h('span', 'row__main',
+        h('span', 'row__title', id === 'ether' ? 'Elemento 115' : 'CL4P-TP', ' ', h('span', 'tag', got ? 'Tema ' + t.name : '???')),
+        h('span', 'row__meta', id === 'ether' ? 'Item oculto · energia Ether pura · instável' : 'Unidade robótica de uso geral · fala demais'),
+        h('span', 'row__text', got ? 'Toque para equipar o tema ' + t.name + ' de novo.' : 'Toque para pegar.')));
+    btn.type = 'button';
+    btn.addEventListener('click', () => unlockTheme(id));
+    return h('li', 'row secret-row', btn);
+  }
+
+  function playThemeSound(id) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ac = new AC();
+      const now = ac.currentTime + 0.02;
+      const out = ac.createGain();
+      out.gain.value = 0.2;
+      out.connect(ac.destination);
+      const tone = (type, f0, f1, t0, dur, vol) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f0, now + t0);
+        o.frequency.exponentialRampToValueAtTime(f1, now + t0 + dur);
+        g.gain.setValueAtTime(0.0001, now + t0);
+        g.gain.exponentialRampToValueAtTime(vol, now + t0 + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + t0 + dur);
+        o.connect(g); g.connect(out);
+        o.start(now + t0); o.stop(now + t0 + dur + 0.05);
+      };
+      if (id === 'ether') { // zumbido grave, carga subindo, estalos e um brilho no fim
+        tone('sine', 50, 95, 0, 2.4, 0.9);
+        tone('sawtooth', 90, 1500, 0.15, 1.3, 0.22);
+        tone('triangle', 990, 1980, 1.3, 0.9, 0.45);
+        tone('sine', 1480, 2960, 1.4, 0.8, 0.25);
+        const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 1.4), ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() < 0.015 ? Math.random() * 2 - 1 : 0;
+        const n = ac.createBufferSource(), hp = ac.createBiquadFilter(), ng = ac.createGain();
+        n.buffer = buf; hp.type = 'highpass'; hp.frequency.value = 2500; ng.gain.value = 0.6;
+        n.connect(hp); hp.connect(ng); ng.connect(out);
+        n.start(now + 0.2);
+      } else { // bipes de robô animado
+        [523, 659, 784, 1047, 880, 1319, 1568].forEach((f, i) => tone('square', f, f * 1.03, i * 0.085, 0.075, 0.3));
+        tone('sine', 260, 920, 0.7, 0.22, 0.5);
+        tone('sine', 920, 340, 0.95, 0.25, 0.4);
+      }
+      setTimeout(() => ac.close().catch(() => {}), 3200);
+    } catch (e) { /* sem áudio: só a animação */ }
+  }
+
+  function unlockTheme(id) {
+    const t = THEMES.find((x) => x.id === id);
+    if (!t || document.querySelector('.unlock')) return;
+    const first = themeState.unlocked.indexOf(id) < 0;
+    if (first) themeState.unlocked.push(id);
+    saveThemes();
+    playThemeSound(id);
+    const ov = h('div', 'unlock unlock--' + id,
+      h('div', 'unlock__fx', h('span', 'unlock__orb'), h('span', 'unlock__ring'), h('span', 'unlock__ring unlock__ring--2')),
+      h('div', 'unlock__card',
+        h('p', 'unlock__kicker', first ? 'Tema desbloqueado' : 'Tema equipado'),
+        h('p', 'unlock__name', t.name),
+        h('p', 'unlock__sub', id === 'ether' ? 'Elemento 115 absorvido. A energia Ether toma conta do Vortex.' : 'CL4P-TP online! Pronto para servir, caçador.')));
+    ov.setAttribute('role', 'status');
+    document.body.append(ov);
+    setTimeout(() => applyTheme(id), 900);
+    setTimeout(() => ov.classList.add('is-out'), 2600);
+    setTimeout(() => { ov.remove(); toast('Tema ' + t.name + ' equipado. Troque de tema no Perfil.'); }, 3200);
+  }
+
+  function renderThemes() {
+    $('#theme-list').replaceChildren(...THEMES.map((t) => {
+      const open = !t.id || themeState.unlocked.indexOf(t.id) >= 0;
+      const on = themeState.active === t.id;
+      const card = h('div', 'theme-card theme-card--' + (t.id || 'vortex') + (open ? '' : ' is-locked') + (on ? ' is-on' : ''),
+        h('span', 'theme-card__swatch', h('i'), h('i'), h('i')),
+        h('span', 'theme-card__main', h('strong', '', open ? t.name : '???'), h('span', '', open ? t.text : t.hint)));
+      if (open) {
+        const b = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Em uso' : 'Usar');
+        b.type = 'button';
+        b.disabled = on;
+        b.addEventListener('click', () => { applyTheme(t.id); renderThemes(); toast('Tema ' + t.name + '.'); });
+        card.append(b);
+      } else card.append(h('span', 'theme-card__lock', '🔒'));
+      return card;
+    }));
+  }
+
   /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
   const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'build', 'npc'];
   const ITEM_KINDS = ITEM_DATA.categories.map((c) => c.id).filter((k) => NON_ITEM_KINDS.indexOf(k) < 0);
@@ -2946,7 +3070,8 @@ const FIREBASE_CONFIG = {
     const maker = $('#lib-maker').value;
     if (maker) list = list.filter((e) => (e.values || {}).fabricante === maker);
     list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
-    $('#lib-list').replaceChildren(...list.map((e) => {
+    const secret = secretHit(q);
+    $('#lib-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => {
       const actions = [{ label: 'Usar de base', onClick: () => openForm(e.kind, e.typeId, Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' })) }];
       if (e.mine) {
         actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) });
@@ -2961,7 +3086,7 @@ const FIREBASE_CONFIG = {
       }
       return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
     }));
-    $('#lib-empty').hidden = list.length > 0;
+    $('#lib-empty').hidden = list.length > 0 || Boolean(secret);
     $('#lib-hint').textContent = libSearch.warn
       ? plural(list.length, 'registro', 'registros') + ' do catálogo oficial. O banco compartilhado não abriu: ' + libSearch.warn
       : plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
@@ -3010,8 +3135,9 @@ const FIREBASE_CONFIG = {
     let list = await libSearch(g ? g.kinds : null, q);
     if (seq !== catState.seq) return;
     list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
-    $('#cat-list').replaceChildren(...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
-    $('#cat-empty').hidden = list.length > 0;
+    const secret = secretHit(q);
+    $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
+    $('#cat-empty').hidden = list.length > 0 || Boolean(secret);
     $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
       + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');
   }
