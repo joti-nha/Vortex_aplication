@@ -1985,6 +1985,78 @@ const FIREBASE_CONFIG = {
   const inSearch = $('#search-input');
   let searchSeq = 0;
 
+  /* Claptrap: buscar o nome dele entre os personagens mostra a ficha dele. Abrir desbloqueia o tema.
+     A ficha não salva e o favorito não pega, de propósito. */
+  const CLAP_SAVE = ['Erro ao salvar: a ficha do Claptrap é grande demais para o banco. Ele jura que não é.', 'Salvamento recusado. O Claptrap tentou subir as escadas do servidor.', 'Não salvou. Ele estava falando e a conexão desistiu.', 'O banco de dados pediu um minuto de silêncio. Ainda não acabou.'];
+  const CLAP_FAV = ['Ninguém favorita o Claptrap. Nem ele mesmo conseguiu.', 'A estrela caiu. Ela também não aguentou ouvir ele falar.', 'Favorito recusado: limite de 0 Claptraps por perfil.', 'Ele agradece a intenção. Muito. Por muito tempo.'];
+  const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
+  function claptrapRow() {
+    const a = h('button', 'row__open secret--claptrap-char',
+      h('span', 'token token--personagem clap-token'),
+      h('span', 'row__main', h('span', 'row__title', 'Claptrap'), h('span', 'row__meta', 'Robô · CL4P-TP · Unidade de uso geral')),
+      badge('personagem'));
+    a.type = 'button';
+    a.addEventListener('click', openClaptrap);
+    const star = h('button', 'star', '☆');
+    star.type = 'button';
+    star.setAttribute('aria-label', 'Favoritar: Claptrap');
+    star.addEventListener('click', (ev) => clapFav(ev, star));
+    return h('li', 'row', a, star);
+  }
+  function clapFav(ev, star) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    star.textContent = '★';
+    star.classList.add('star--fall');
+    setTimeout(() => { star.textContent = '☆'; star.classList.remove('star--fall'); }, 700);
+    toast(pickOne(CLAP_FAV));
+  }
+  let clapDlg = null;
+  function openClaptrap() {
+    if (themeState.unlocked.indexOf('claptrap') < 0) { unlockTheme('claptrap'); setTimeout(showClaptrap, 3300); return; }
+    showClaptrap();
+  }
+  function showClaptrap() {
+    if (!clapDlg) {
+      clapDlg = h('dialog', 'dialog dialog--wide clap');
+      clapDlg.setAttribute('aria-labelledby', 'clap-title');
+      document.body.append(clapDlg);
+    }
+    const stat = (label, val, sub) => h('div', 'clap__stat', h('span', 'clap__label', label), h('strong', '', val), h('span', 'clap__sub', sub));
+    const close = h('button', 'btn btn--ghost btn--sm clap__close', 'Fechar');
+    close.type = 'button';
+    close.addEventListener('click', () => closeDialog(clapDlg));
+    const save = h('button', 'btn btn--primary btn--sm', 'Salvar ficha');
+    save.type = 'button';
+    save.addEventListener('click', () => { save.classList.remove('clap--shake'); void save.offsetWidth; save.classList.add('clap--shake'); toast(pickOne(CLAP_SAVE)); });
+    const star = h('button', 'btn btn--ghost btn--sm', '☆ Favoritar');
+    star.type = 'button';
+    star.addEventListener('click', (ev) => { ev.preventDefault(); star.textContent = '★ Favorito'; setTimeout(() => { star.textContent = '☆ Favoritar'; }, 700); toast(pickOne(CLAP_FAV)); });
+    clapDlg.replaceChildren(h('div', 'picker clap__sheet',
+      h('div', 'clap__head',
+        h('span', 'clap__eye', h('i')),
+        h('div', 'clap__id',
+          h('span', 'badge badge--personagem', 'Personagem'),
+          h('h2', 'clap__name', 'Claptrap', h('span', '', ' CL4P-TP')),
+          h('p', 'clap__meta', 'Robô · Origem: linha de montagem · Ficha não salva neste aparelho (nem em nenhum outro)')),
+        close),
+      h('div', 'clap__actions', save, star),
+      h('div', 'clap__stats',
+        stat('Corpo', '–1', 'uma roda só'), stat('Precisão', '+1', 'acerta às vezes'), stat('Essência', '+3', 'fala por três'),
+        stat('Defesa', '6', 'mínima, e olhe lá'), stat('Blindagem', '1/1', 'lata fina'), stat('Deslocamento', '9 m', 'escadas: 0 m')),
+      h('div', 'clap__cols',
+        h('section', '', h('h3', 'sub-title', 'Perícias'), h('ul', 'clap__list',
+          h('li', '', 'Diplomacia +3', h('span', '', ' (ele acha que +10)')), h('li', '', 'Enganação +3'), h('li', '', 'Intimidação +0', h('span', '', ' (ninguém se intimida)')), h('li', '', 'Atletismo –5'))),
+        h('section', '', h('h3', 'sub-title', 'Poderes'), h('ul', 'clap__list',
+          h('li', '', h('strong', '', 'Falar sem parar. '), 'Custo de uso: 0 PE. Sempre ativo, não desliga.'),
+          h('li', '', h('strong', '', 'Dança da vitória. '), 'Usada antes da vitória. Às vezes antes do combate.'),
+          h('li', '', h('strong', '', 'Fraqueza: escadas. '), 'Qualquer degrau encerra o turno dele.'))),
+        h('section', '', h('h3', 'sub-title', 'Inventário'), h('ul', 'clap__list',
+          h('li', '', 'Roda sobressalente ×0'), h('li', '', 'Amigos ×0', h('span', '', ' (procurando)')), h('li', '', 'Capacete do exército, verde')))),
+      h('p', 'field__hint', 'Esta ficha não pode ser salva, editada nem favoritada. O tema Claptrap fica no seu Perfil.')));
+    openDialog(clapDlg);
+  }
+
   async function runSearch() {
     const seq = ++searchSeq;
     const q = inSearch.value;
@@ -2007,9 +2079,10 @@ const FIREBASE_CONFIG = {
       return;
     }
     if (seq !== searchSeq) return; // uma busca mais nova já saiu
-    $('#search-list').replaceChildren(...list.map(searchRow));
-    $('#search-empty').hidden = list.length > 0;
-    $('#search-hint').textContent = plural(list.length, 'ficha encontrada', 'fichas encontradas') + (origin ? ' com a origem ' + origin : '');
+    const clap = /clap\s*trap|cl4p/.test(nameKey(q));
+    $('#search-list').replaceChildren(...(clap ? [claptrapRow()] : []), ...list.map(searchRow));
+    $('#search-empty').hidden = list.length > 0 || clap;
+    $('#search-hint').textContent = plural(list.length + (clap ? 1 : 0), 'ficha encontrada', 'fichas encontradas') + (origin ? ' com a origem ' + origin : '');
   }
   const liveSearch = debounce(runSearch, 300);
   inSearch.addEventListener('input', liveSearch);
@@ -2931,13 +3004,13 @@ const FIREBASE_CONFIG = {
 
   /* ---------- Temas secretos ----------
      Ether: pesquise "elemento 115" nos itens e toque no item escondido que aparece.
-     Claptrap: escreva o nome dele numa busca de itens. Desbloqueados ficam neste aparelho;
+     Claptrap: busque o nome dele entre os personagens e abra a ficha (que não salva). Desbloqueados ficam neste aparelho;
      a troca de tema fica no Perfil. O <head> do index.html aplica o tema antes de desenhar. */
   const THEME_KEY = 'vortex.themes.v1';
   const THEMES = [
     { id: '', name: 'Vortex', text: 'O de sempre: tempestade e lanterna.' },
     { id: 'ether', name: 'Ether', text: 'Elemento 115: violeta, ciano e energia instável.', hint: 'Dizem que um elemento perdido, de número 115, se esconde entre os itens.' },
-    { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante atende quando chamam o nome dele na busca.' }
+    { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante aparece quando alguém busca o nome dele entre os personagens.' }
   ];
   const themeState = (() => {
     try { const v = JSON.parse(localStorage.getItem(THEME_KEY)) || {}; return { unlocked: Array.isArray(v.unlocked) ? v.unlocked : [], active: v.active || '' }; }
@@ -2955,9 +3028,7 @@ const FIREBASE_CONFIG = {
 
   function secretHit(q) {
     const k = nameKey(q || '');
-    if (/elemento\s*115|element\s*115|^115$/.test(k)) return 'ether';
-    if (/clap\s*trap|cl4p/.test(k)) return 'claptrap';
-    return '';
+    return /elemento\s*115|element\s*115|^115$/.test(k) ? 'ether' : '';
   }
   function secretRow(id) {
     const t = THEMES.find((x) => x.id === id);
