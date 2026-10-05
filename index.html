@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -579,15 +579,14 @@
         </div>
       </header>
 
-      <!-- Abas da campanha: Mesa (seu personagem e o registro), Combate (a arena), Lojas e Grupo -->
+      <!-- Abas da campanha: Grupo (quem joga), Combate (seu personagem, a arena e o registro) e Lojas -->
       <div class="sheet-tabs camp-tabs" role="tablist" aria-label="Partes da campanha">
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-mesa" data-ctab="mesa" aria-controls="cpanel-mesa" aria-selected="true">Mesa</button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-combate" data-ctab="combate" aria-controls="cpanel-combate" aria-selected="false" tabindex="-1">Combate <span class="camp-tab__live" id="ctab-live" hidden>ao vivo</span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-grupo" data-ctab="grupo" aria-controls="cpanel-grupo" aria-selected="false" tabindex="-1">Grupo</button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-combate" data-ctab="combate" aria-controls="cpanel-combate" aria-selected="true">Combate <span class="camp-tab__live" id="ctab-live" hidden>ao vivo</span></button>
         <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-lojas" data-ctab="lojas" aria-controls="cpanel-lojas" aria-selected="false" tabindex="-1">Lojas</button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-grupo" data-ctab="grupo" aria-controls="cpanel-grupo" aria-selected="false" tabindex="-1">Grupo <span class="count" id="members-count"></span></button>
       </div>
 
-      <div class="camp-panel" id="cpanel-mesa" role="tabpanel" aria-labelledby="ctab-mesa">
+      <div class="camp-panel" id="cpanel-combate" role="tabpanel" aria-labelledby="ctab-combate">
       <!-- Painel do personagem: quem você joga nesta campanha, com barras, testes e poderes -->
       <section class="block dock" id="dock" aria-labelledby="dock-title" hidden>
         <div class="dock__head">
@@ -609,9 +608,6 @@
           </div>
         </div>
         <div class="dock__bars" id="dock-bars"></div>
-        <p class="dock__fight" id="dock-fight" hidden></p>
-        <div class="dock__powers" id="dock-powers" role="group" aria-label="Poderes de uso" hidden></div>
-        <div class="dock__quick" id="dock-quick" role="group" aria-label="Testes rápidos"></div>
         <div class="test-bar" id="test-bar">
           <label class="field__label" for="test-pick">Teste da ficha (atributo ou perícia)</label>
           <div class="test-bar__row">
@@ -621,18 +617,6 @@
         </div>
       </section>
 
-      <section class="block chat" aria-labelledby="chat-title">
-        <h2 class="block__title" id="chat-title"><button class="help" type="button" data-help="rolagens">Registro da mesa</button></h2>
-
-        <p class="notice" id="chat-notice" hidden></p>
-
-        <ol class="roll-log" id="roll-log" role="log" aria-label="Rolagens da campanha" tabindex="0"></ol>
-        <p class="empty" id="roll-empty">Nenhuma rolagem ainda. Role o primeiro dado.</p>
-      </section>
-
-      </div>
-
-      <div class="camp-panel" id="cpanel-combate" role="tabpanel" aria-labelledby="ctab-combate" hidden>
       <!-- Arena: dois lados, ordem de turnos, menu de comandos e registro, no estilo dos RPGs antigos -->
       <section class="battle" id="battle" aria-labelledby="battle-title">
         <div class="battle__top">
@@ -665,6 +649,14 @@
           </section>
         </div>
       </section>
+      <p class="notice" id="chat-notice" hidden></p>
+      <details class="block chat" id="chat-box">
+        <summary class="chat__sum"><span class="block__title" id="chat-title">Registro completo da mesa</span></summary>
+
+        <ol class="roll-log" id="roll-log" role="log" aria-label="Rolagens da campanha" tabindex="0"></ol>
+        <p class="empty" id="roll-empty">Nenhuma rolagem ainda. Role o primeiro dado.</p>
+      </details>
+
       </div>
 
       <div class="camp-panel" id="cpanel-lojas" role="tabpanel" aria-labelledby="ctab-lojas" hidden>
@@ -955,8 +947,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=25"></script>
-  <script src="items.js?v=25"></script>
-  <script src="app.js?v=25"></script>
+  <script src="regras.js?v=26"></script>
+  <script src="items.js?v=26"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>
