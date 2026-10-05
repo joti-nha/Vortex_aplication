@@ -2799,3 +2799,23 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
   .teamsdlg__who--box .arena__dot { display: none; }
   .pricing__grid { grid-template-columns: 1fr; }
 }
+
+/* Pôr no grupo: banners dos personagens do perfil */
+.pickchar { width: min(40rem, calc(100vw - 2rem)); }
+.pickchar__body { display: grid; gap: 0.6rem; }
+.pickchar__body h2 { margin: 0; }
+.pickchar__list { display: grid; gap: 0.5rem; max-height: min(60vh, 34rem); margin: 0; padding: 0 0.15rem 0 0; overflow-y: auto; list-style: none; }
+.pickchar__card { display: grid; grid-template-columns: 4.5rem 1fr auto; align-items: center; gap: 0.8rem; padding: 0.55rem 0.8rem 0.55rem 0.55rem; border: 1px solid var(--linha-forte); border-left: 4px solid var(--ambar); border-radius: var(--r-s); background: linear-gradient(100deg, rgba(var(--ambar-rgb), 0.12), transparent 60%); cursor: pointer; transition: background 0.15s ease, transform 0.15s ease; }
+.pickchar__card:hover { background: linear-gradient(100deg, rgba(var(--ambar-rgb), 0.22), transparent 70%); transform: translateY(-1px); }
+.pickchar__card.is-here { border-left-color: var(--linha-forte); background: none; opacity: 0.6; cursor: default; transform: none; }
+.pickchar__card[hidden] { display: none; }
+.pickchar__art { display: grid; place-items: center; width: 4.5rem; height: 4.5rem; overflow: hidden; border: 2px solid var(--ambar); border-radius: var(--r-s); background: var(--fundo-2, #162836); color: var(--ambar); font: 700 1.8rem/1 var(--fonte-titulo, serif); }
+.pickchar__art img { width: 100%; height: 100%; object-fit: cover; }
+.pickchar__info { display: grid; gap: 0.1rem; min-width: 0; }
+.pickchar__name { overflow: hidden; font-size: 1.1rem; text-overflow: ellipsis; white-space: nowrap; }
+.pickchar__meta { overflow: hidden; color: var(--nevoa-2); font-size: 0.85rem; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 520px) {
+  .pickchar__card { grid-template-columns: 3.5rem 1fr; }
+  .pickchar__art { width: 3.5rem; height: 3.5rem; font-size: 1.4rem; }
+  .pickchar__card > .btn { grid-column: 1 / -1; }
+}
