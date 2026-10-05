@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=34">
+  <link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -274,6 +274,13 @@
           <p class="empty" id="camp-empty">Nenhuma campanha ainda.</p>
         </section>
 
+        <section class="block" aria-labelledby="pub-title">
+          <h2 class="block__title" id="pub-title">Campanhas públicas</h2>
+          <p class="block__hint">Abertas pelos mestres para qualquer um ver. Com 🔒, pedem senha para entrar.</p>
+          <ul class="rows" id="pub-list"></ul>
+          <p class="empty" id="pub-empty">Nenhuma campanha pública agora.</p>
+        </section>
+
         <section class="block" aria-labelledby="create-camp-title">
           <h2 class="block__title" id="create-camp-title">Criar campanha</h2>
           <div class="create-camp__need" id="create-camp-need" hidden>
@@ -287,6 +294,11 @@
                      placeholder="Ex.: A Queda de Vortex" aria-describedby="campaign-name-error">
               <p class="field__error" id="campaign-name-error" role="alert"></p>
             </div>
+            <div class="field">
+              <label class="field__label" for="campaign-pass">Senha para entrar (opcional)</label>
+              <input class="input" id="campaign-pass" type="password" maxlength="60" autocomplete="new-password" placeholder="Sem senha">
+            </div>
+            <label class="check"><input type="checkbox" id="campaign-public"><span>Pública (aparece na lista de campanhas públicas)</span></label>
             <button class="btn btn--primary" type="submit">Criar campanha</button>
           </form>
           <p class="field__hint">Para entrar em uma campanha com um ID de entrada, abra a ficha do personagem e use o campo "Campanhas" nela.</p>
@@ -685,11 +697,11 @@
               <label class="field__label" for="shop-name">Nome da loja</label>
               <input class="input" id="shop-name" type="text" maxlength="60" autocomplete="off" placeholder="Deixe vazio para usar o nome da companhia ou do NPC">
             </div>
-            <div class="field">
+            <div class="field" id="shop-traffic-field">
               <label class="field__label" for="shop-traffic">Fluxo de pessoas</label>
               <select class="input" id="shop-traffic"></select>
             </div>
-            <label class="check shop-new__check"><input type="checkbox" id="shop-buyers"><span>NPCs compram (vendas nos descansos)</span></label>
+            <label class="check shop-new__check" id="shop-buyers-field"><input type="checkbox" id="shop-buyers"><span>NPCs compram (vendas nos descansos)</span></label>
           </div>
           <div class="shop-new__foot">
             <button class="btn btn--ghost btn--sm" type="button" id="shop-new-cancel">Cancelar</button>
@@ -742,10 +754,22 @@
             <button class="btn btn--primary" type="button" id="rest-long">Descanso longo</button>
           </div>
         </section>
+        <!-- Acesso: só quem criou a campanha vê -->
+        <section class="block access" id="camp-access" aria-labelledby="access-title" hidden>
+          <h2 class="block__title" id="access-title">Acesso à campanha</h2>
+          <p class="block__hint" id="access-state"></p>
+          <label class="check"><input type="checkbox" id="access-public"><span>Pública (aparece na lista de campanhas públicas)</span></label>
+          <div class="access__row">
+            <input class="input" id="access-pass" type="password" maxlength="60" autocomplete="new-password" placeholder="Nova senha para entrar" aria-label="Nova senha da campanha">
+            <button class="btn btn--ghost btn--sm" type="button" id="access-pass-save">Definir senha</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="access-pass-clear" hidden>Tirar senha</button>
+          </div>
+        </section>
         <section class="block" aria-labelledby="members-title">
           <h2 class="block__title" id="members-title"><button class="help" type="button" data-help="candidatos">Candidatos</button></h2>
           <ul class="rows" id="member-list"></ul>
           <p class="empty" id="member-empty">Ninguém entrou ainda. Compartilhe o ID de entrada.</p>
+          <button class="btn btn--ghost btn--sm" type="button" id="member-add-mine" hidden>Pôr um personagem meu no grupo</button>
 
           <form class="xp-give" id="form-xp" novalidate hidden>
             <h3 class="sub-title">Dar XP (mestre)</h3>
@@ -957,7 +981,7 @@
       </div>
       <div class="dialog__actions">
         <button class="btn btn--ghost" type="submit" value="cancel">Cancelar</button>
-        <button class="btn btn--primary" type="submit" value="ok">Adicionar poder</button>
+        <button class="btn btn--primary" type="submit" value="ok" id="choice-ok">Escolher</button>
       </div>
     </form>
   </dialog>
@@ -976,8 +1000,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=34"></script>
-  <script src="items.js?v=34"></script>
-  <script src="app.js?v=34"></script>
+  <script src="regras.js?v=35"></script>
+  <script src="items.js?v=35"></script>
+  <script src="app.js?v=35"></script>
 </body>
 </html>

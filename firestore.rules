@@ -104,13 +104,14 @@ service cloud.firestore {
 
     // ---------- Campanhas ----------
     // O ID do documento é o ID de entrada. Quem tem o ID consegue abrir a campanha;
-    // listar só funciona para o mestre ou para quem já participa.
+    // listar só funciona para o mestre, para quem já participa ou para campanhas públicas.
     match /campaigns/{campaignId} {
       allow get: if signedIn();
 
       allow list: if signedIn()
                   && (resource.data.ownerUid == request.auth.uid
-                      || request.auth.uid in resource.data.memberUids);
+                      || request.auth.uid in resource.data.memberUids
+                      || resource.data.public == true);
 
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
 
@@ -160,6 +161,7 @@ service cloud.firestore {
       // O mestre abre e encerra; quem participa pode avançar o turno e entrar na ordem.
       // tags: condições e estados por lutador ({ id: [{ n, r }] }); out: personagens fora do combate.
       // teams/team/presets: times (nome e cor), o time de cada lutador e os presets salvos.
+      // pteam: o time que cada jogador escolheu para os próprios personagens; squads: times salvos (mestre).
       // Só o mestre muda quem fica fora e os times; as condições também mudam quando a rodada vira (duração).
       match /scene/{docId} {
         allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
@@ -177,11 +179,16 @@ service cloud.firestore {
                                   || (request.resource.data.team is map && request.resource.data.team.size() <= 120))
                               && (!('presets' in request.resource.data)
                                   || (request.resource.data.presets is list && request.resource.data.presets.size() <= 12))
+                              && (!('pteam' in request.resource.data)
+                                  || (request.resource.data.pteam is map && request.resource.data.pteam.size() <= 60))
+                              && (!('squads' in request.resource.data)
+                                  || (request.resource.data.squads is list && request.resource.data.squads.size() <= 20))
                               && (isCampaignOwner(campaignId)
                                   || (request.resource.data.get('out', []) == (resource == null ? [] : resource.data.get('out', []))
                                       && request.resource.data.get('teams', null) == (resource == null ? null : resource.data.get('teams', null))
                                       && request.resource.data.get('team', {}) == (resource == null ? {} : resource.data.get('team', {}))
-                                      && request.resource.data.get('presets', []) == (resource == null ? [] : resource.data.get('presets', []))));
+                                      && request.resource.data.get('presets', []) == (resource == null ? [] : resource.data.get('presets', []))
+                                      && request.resource.data.get('squads', []) == (resource == null ? [] : resource.data.get('squads', []))));
         allow delete: if signedIn() && isCampaignOwner(campaignId);
       }
 
