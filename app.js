@@ -6379,7 +6379,6 @@ const FIREBASE_CONFIG = {
   function setCampTab(name, focus) {
     const tabs = campTabs();
     CAMP_TABS_GM.forEach((k) => { $('#ctab-' + k).hidden = tabs.indexOf(k) < 0; });
-    $('#ctab-gm-note').hidden = tabs.indexOf('bestiario') < 0;
     if (name === 'mestre') name = currentCamp && currentCamp.gm ? 'bestiario' : 'saque'; // a antiga aba única
     if (tabs.indexOf(name) < 0) name = 'combate';
     $$('.camp-tab').forEach((t) => {
