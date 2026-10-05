@@ -2023,6 +2023,9 @@ const FIREBASE_CONFIG = {
       document.body.append(clapDlg);
     }
     const stat = (label, val, sub) => h('div', 'clap__stat', h('span', 'clap__label', label), h('strong', '', val), h('span', 'clap__sub', sub));
+    const portrait = h('img', 'clap__portrait');
+    portrait.src = 'img/claptrap.jpg';
+    portrait.alt = 'Retrato do Claptrap de capacete do exército';
     const close = h('button', 'btn btn--ghost btn--sm clap__close', 'Fechar');
     close.type = 'button';
     close.addEventListener('click', () => closeDialog(clapDlg));
@@ -2034,7 +2037,7 @@ const FIREBASE_CONFIG = {
     star.addEventListener('click', (ev) => { ev.preventDefault(); star.textContent = '★ Favorito'; setTimeout(() => { star.textContent = '☆ Favoritar'; }, 700); toast(pickOne(CLAP_FAV)); });
     clapDlg.replaceChildren(h('div', 'picker clap__sheet',
       h('div', 'clap__head',
-        h('span', 'clap__eye', h('i')),
+        portrait,
         h('div', 'clap__id',
           h('span', 'badge badge--personagem', 'Personagem'),
           h('h2', 'clap__name', 'Claptrap', h('span', '', ' CL4P-TP')),
