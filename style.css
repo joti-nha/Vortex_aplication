@@ -2372,9 +2372,18 @@ body {
 .tslot:focus-visible { outline: 2px solid #ffe27a; outline-offset: 2px; }
 .tslot__name { font: 800 1.05rem/1.2 var(--fonte-titulo); }
 .tslot__sub { font-size: 0.75rem; color: #d7d9e2; }
-.tslot.is-used { border-color: rgba(127, 224, 160, 0.7); background: linear-gradient(180deg, #1f4d36, #143224); }
-.tslot.is-used .tslot__name::after { content: " ✓"; color: #7fe0a0; }
+/* ação usada: ganha a cor do tipo de ação (as mesmas das etiquetas da versão anterior) */
+.tslot { --slot-rgb: 127, 224, 160; --slot-ink: #bdf2cf; }
+.tslot--padrao { --slot-rgb: 255, 140, 90; --slot-ink: #ffc6a8; }
+.tslot--movimento { --slot-rgb: 94, 200, 255; --slot-ink: #b6e6ff; }
+.tslot--bonus { --slot-rgb: 183, 155, 255; --slot-ink: #ddd0ff; }
+.tslot--completa { --slot-rgb: 255, 226, 122; --slot-ink: #ffe9a0; }
+.tslot.is-used { border-color: rgba(var(--slot-rgb), 0.85); background: linear-gradient(180deg, rgba(var(--slot-rgb), 0.42), rgba(var(--slot-rgb), 0.14)), #1a1f3a; box-shadow: 0 0 16px rgba(var(--slot-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+.tslot.is-used .tslot__name { color: var(--slot-ink); }
+.tslot.is-used .tslot__sub { color: #f1f2f6; }
+.tslot.is-used .tslot__name::after { content: " ✓"; color: var(--slot-ink); }
 .tslot.is-off { opacity: 0.45; cursor: not-allowed; }
+.tslot.is-used.is-off { opacity: 1; }
 .aimbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.4rem 0.75rem; padding: 0.6rem 0.8rem; border: 2px solid #ffe27a; border-radius: 10px; background: rgba(255, 226, 122, 0.1); color: var(--nevoa); }
 .aimbar__title { font: 800 1rem/1.2 var(--fonte-titulo); color: #ffe27a; }
 .aimbar__btns { display: flex; flex-wrap: wrap; gap: 0.35rem; }
