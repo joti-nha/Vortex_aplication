@@ -3738,7 +3738,7 @@ const FIREBASE_CONFIG = {
      dinheiro, e o roteiro vira um livrinho com uma folha por UP. Cada folha mostra o que aquele UP dá
      (1 UP para gastar, +1 ponto de perícia nos ímpares, 2 benefícios nos pares) e guarda a escolha.
      O roteiro fica em values.roteiro (JSON) e também é escrito no texto das folhas, que a ficha já sabe aplicar. */
-  const RT_KINDS = [['poder', 'Poder'], ['melhoria', 'Melhoria'], ['doutor', 'Doutor'], ['prof', 'Proficiência'], ['pericias', 'Perícias'], ['guardar', 'Guardar']];
+  const RT_KINDS = [['poder', 'Poder'], ['melhoria', 'Melhoria'], ['prof', 'Proficiência'], ['pericias', 'Perícias'], ['guardar', 'Guardar']];
   const RT_BEN = [['pv', '+5 PV'], ['pe', '+5 PE'], ['pa', '+1 PA']];
   const RT_MAX_UP = 30;
   const rtSkills = () => { const out = []; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => out.push([sk[0], sk[1]]))); return out; };
@@ -3967,31 +3967,37 @@ const FIREBASE_CONFIG = {
     const r = rt.r, p = r.pages[n - 1], led = rtLedger(r)[n - 1];
     const redo = () => renderRoteiro();
     const g = p.gasto;
+    // Doutor é um poder comprado como os outros: aparece em "Poder" (com a perícia escolhida)
+    const kindOf = (x) => (x && x.t === 'doutor' ? 'poder' : x && x.t);
     const kinds = h('div', 'rt-kinds', ...RT_KINDS.map((k) => {
-      const b = h('button', 'rt-kind' + (g && g.t === k[0] ? ' is-on' : ''), k[1]);
+      const on = kindOf(g) === k[0];
+      const b = h('button', 'rt-kind' + (on ? ' is-on' : ''), k[1]);
       b.type = 'button';
       b.dataset.fid = 'rt-kind-' + k[0];
-      b.setAttribute('aria-pressed', String(Boolean(g && g.t === k[0])));
-      b.addEventListener('click', () => { p.gasto = g && g.t === k[0] ? null : { t: k[0] }; if (k[0] === 'pericias') p.gasto.list = {}; redo(); });
+      b.setAttribute('aria-pressed', String(on));
+      b.addEventListener('click', () => { p.gasto = on ? null : { t: k[0] }; if (k[0] === 'pericias') p.gasto.list = {}; redo(); });
       return b;
     }));
     let detail = null;
-    if (g && g.t === 'poder') {
-      const e = g.id ? rtPower(g.id) : null;
-      const pick = h('button', 'btn btn--ghost btn--sm', g.name ? 'Trocar poder' : 'Escolher poder…');
+    if (g && (g.t === 'poder' || g.t === 'doutor')) {
+      const e = g.t === 'doutor' ? rtPower('of-pod-doutor') : g.id ? rtPower(g.id) : null;
+      const pick = h('button', 'btn btn--ghost btn--sm', g.name || g.t === 'doutor' ? 'Trocar poder' : 'Escolher poder…');
       pick.type = 'button';
       pick.dataset.fid = 'rt-power';
       pick.addEventListener('click', async () => {
-        const x = await openPicker({ title: 'Poder da folha ' + n, kinds: ['poder'], chips: ['Poder'], filter: (y) => y.kind === 'poder' && !CHOICE_POWERS[y.id] });
+        const x = await openPicker({ title: 'Poder da folha ' + n, kinds: ['poder'], chips: ['Poder'], filter: (y) => y.kind === 'poder' && (!CHOICE_POWERS[y.id] || y.id === 'of-pod-doutor') });
         if (!x || rt.r !== r) return;
+        if (x.id === 'of-pod-doutor') { p.gasto = { t: 'doutor', skill: '' }; redo(); return; }
         const opts = powerOpts(x);
         p.gasto = { t: 'poder', id: x.id, name: x.name, opt: opts.length ? opts[0].name : '' };
         redo();
       });
-      const opts = e ? powerOpts(e) : [];
+      const opts = e && g.t === 'poder' ? powerOpts(e) : [];
+      const title = g.t === 'doutor' ? (e ? e.name : 'Doutor') : g.name;
       detail = h('div', 'rt-detail',
-        g.name ? h('p', 'rt-pick', h('strong', '', g.name), h('span', '', ' · custa ' + plural(rtCost(g), 'UP', 'UP'))) : null,
+        title ? h('p', 'rt-pick', h('strong', '', title), h('span', '', ' · custa ' + plural(rtCost(g), 'UP', 'UP'))) : null,
         opts.length ? h('div', 'field', h('span', 'field__label', 'Opção'), rtSelect(opts.map((o) => [o.name, o.name + (o.text ? ': ' + o.text : '')]), g.opt, (v) => { g.opt = v; redo(); }, null, 'rt-opt')) : null,
+        g.t === 'doutor' ? h('div', 'field', h('span', 'field__label', 'Perícia (o limite dela sobe para 4)'), rtSelect(rtSkills(), g.skill, (v) => { g.skill = v; redo(); }, 'Escolha a perícia...', 'rt-doutor')) : null,
         pick);
     } else if (g && g.t === 'melhoria') {
       const before = r.pages.slice(0, n - 1).map((x) => x.gasto).filter((x) => x && x.t === 'poder' && x.id);
@@ -4001,8 +4007,6 @@ const FIREBASE_CONFIG = {
       detail = opts.length
         ? h('div', 'rt-detail', rtSelect(opts, g.id ? g.id + '|' + g.name : '', (v) => { const i = v.indexOf('|'); g.id = v.slice(0, i); g.name = v.slice(i + 1); redo(); }, 'Escolha a melhoria...', 'rt-up'))
         : h('p', 'rt-empty', 'Escolha antes, numa folha anterior, um poder que tenha melhorias.');
-    } else if (g && g.t === 'doutor') {
-      detail = h('div', 'rt-detail', rtSelect(rtSkills(), g.skill, (v) => { g.skill = v; redo(); }, 'Perícia do Doutor...', 'rt-doutor'), h('p', 'field__hint', 'O limite da perícia escolhida sobe para 4.'));
     } else if (g && g.t === 'prof') {
       detail = h('div', 'rt-detail', rtSelect(PROFS.map((x) => [x.id, x.label]), g.prof, (v) => { g.prof = v; redo(); }, 'Tipo de arma ou armadura...', 'rt-prof'), h('p', 'field__hint', 'Também dá +1 ponto de perícia.'));
     } else if (g && g.t === 'pericias') {
