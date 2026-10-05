@@ -2106,6 +2106,7 @@ const FIREBASE_CONFIG = {
   formCreateCamp.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const name = cleanName(inCampName.value);
+    if (!profile) { setError(errCampName, inCampName, 'Para criar uma campanha, entre ou crie um perfil.'); openLogin('campanhas'); return; }
     if (name.length < 3) { setError(errCampName, inCampName, 'Dê um nome com pelo menos 3 letras.'); inCampName.focus(); return; }
     try {
       const camp = await db.createCampaign(name);
@@ -2127,8 +2128,12 @@ const FIREBASE_CONFIG = {
     return list.filter((c) => c && !c.gone);
   }
 
+  $('#create-camp-login').addEventListener('click', () => openLogin('campanhas'));
   views.campanhas = async function showCampanhas() {
     setError(errCampName, inCampName, '');
+    // só quem tem perfil cria campanha (o mestre precisa dele para achar a campanha em outro aparelho)
+    $('#create-camp-need').hidden = Boolean(profile);
+    $('#form-create-campaign').hidden = !profile;
     const camps = await db.listMyCampaigns().catch((e) => { toast(errorMessage(e)); return []; });
     camps.push(...await profileCamps(camps.map((c) => c.id)));
     $('#camp-list').replaceChildren(...camps.map((c) => campaignRow(c, c.isOwner
@@ -2151,7 +2156,9 @@ const FIREBASE_CONFIG = {
     $('#login-new').hidden = !on;
     $('#login-submit').textContent = on ? 'Criar perfil' : 'Entrar';
   }
-  function openLogin() {
+  let loginBack = ''; // tela para voltar depois de entrar (senão, o perfil)
+  function openLogin(back) {
+    loginBack = typeof back === 'string' ? back : '';
     formLogin.reset();
     setLoginNew(false);
     setError(errLogin, inLoginCode, '');
@@ -2197,7 +2204,9 @@ const FIREBASE_CONFIG = {
         toast('Perfil criado. Guarde o código ' + code + ' para entrar de outro aparelho.');
       }
       closeDialog(loginDlg);
-      go('perfil');
+      const back = loginBack;
+      loginBack = '';
+      if (back && location.hash.indexOf('#/' + back) === 0 && views[back]) views[back](); else go(back || 'perfil');
     } catch (err) {
       setError(errLogin, inLoginCode, errorMessage(err));
     } finally { btn.disabled = false; }
@@ -6219,25 +6228,31 @@ const FIREBASE_CONFIG = {
   }
 
   // Abas da campanha (Grupo, Combate, Lojas); a última aberta fica guardada por campanha
-  const CAMP_TABS = ['grupo', 'combate', 'lojas'];
+  // Itens e bestiário: aba só do mestre (os outros nem veem o botão)
+  const CAMP_TABS_ALL = ['grupo', 'combate', 'lojas', 'mestre'];
+  const campTabs = () => (currentCamp && currentCamp.gm ? CAMP_TABS_ALL : CAMP_TABS_ALL.slice(0, 3));
   const campTabKey = (id) => 'vortex.campTab.' + id;
   function setCampTab(name, focus) {
-    if (CAMP_TABS.indexOf(name) < 0) name = 'combate'; // a antiga Mesa agora mora no Combate
+    const tabs = campTabs();
+    $('#ctab-mestre').hidden = tabs.indexOf('mestre') < 0;
+    if (tabs.indexOf(name) < 0) name = 'combate'; // a antiga Mesa agora mora no Combate (e a aba do mestre é só dele)
     $$('.camp-tab').forEach((t) => {
       const on = t.dataset.ctab === name;
       t.setAttribute('aria-selected', String(on));
       t.tabIndex = on ? 0 : -1;
       if (on && focus) t.focus();
     });
-    CAMP_TABS.forEach((k) => { $('#cpanel-' + k).hidden = k !== name; });
+    CAMP_TABS_ALL.forEach((k) => { $('#cpanel-' + k).hidden = k !== name; });
+    if (name === 'mestre') renderGmLib();
     if (currentCamp) { try { localStorage.setItem(campTabKey(currentCamp.id), name); } catch (e) { /* sem armazenamento: só agora */ } }
   }
   $$('.camp-tab').forEach((tab) => {
     tab.addEventListener('click', () => setCampTab(tab.dataset.ctab));
     tab.addEventListener('keydown', (ev) => {
       if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
-      const i = CAMP_TABS.indexOf(tab.dataset.ctab);
-      setCampTab(CAMP_TABS[(i + (ev.key === 'ArrowRight' ? 1 : CAMP_TABS.length - 1)) % CAMP_TABS.length], true);
+      const tabs = campTabs();
+      const i = tabs.indexOf(tab.dataset.ctab);
+      setCampTab(tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length], true);
     });
   });
 
@@ -6499,7 +6514,8 @@ const FIREBASE_CONFIG = {
     const out = foes.map((f) => {
       const ls = foeLayers(f);
       const td = tagDef('foe:' + f.id, foeDef(f), foeDefMin(f));
-      return { id: 'foe:' + f.id, foe: f, name: f.name, kind: 'Inimigo', layers: ls, def: td.def, defBase: foeDef(f), defNote: td.note, defRolled: f.def !== undefined && f.def !== null, defMin: foeDefMin(f) };
+      const ally = f.side === 'ally'; // aliado do grupo que não é jogador (o mestre controla)
+      return { id: 'foe:' + f.id, foe: f, side: ally ? 'party' : 'foes', name: f.name, kind: ally ? 'Aliado' : 'Inimigo', layers: ls, def: td.def, defBase: foeDef(f), defNote: td.note, defRolled: f.def !== undefined && f.def !== null, defMin: foeDefMin(f) };
     });
     members.forEach((mb) => {
       if (!mb.sheet || !mb.sheet.attrs) return;
@@ -6509,7 +6525,7 @@ const FIREBASE_CONFIG = {
         const m = compute(c);
         const d = c.sheet.def && currentCamp ? c.sheet.def[currentCamp.id] : null;
         const td = tagDef('chr:' + mb.characterId, charDef(c, m), m.defMin);
-        out.push({ id: 'chr:' + mb.characterId, member: mb, name: mb.name, kind: mb.type === 'criatura' ? 'Criatura' : 'Personagem', layers: charLayers(c), def: td.def, defBase: charDef(c, m), defNote: td.note, defRolled: d !== undefined && d !== null, defMin: m.defMin });
+        out.push({ id: 'chr:' + mb.characterId, member: mb, side: 'party', name: mb.name, kind: mb.type === 'criatura' ? 'Criatura' : 'Personagem', layers: charLayers(c), def: td.def, defBase: charDef(c, m), defNote: td.note, defRolled: d !== undefined && d !== null, defMin: m.defMin });
       } catch (err) { console.warn(err); }
     });
     return out;
@@ -6544,14 +6560,14 @@ const FIREBASE_CONFIG = {
     $('#battle-phase').textContent = on ? 'Rodada ' + scene.round + (scene.name ? ' · ' + scene.name : '') : 'Preparação';
     $('#battle-meta').textContent = on
       ? (cur ? 'Vez de ' + cur.name + (isMineId(cur.id) ? ' (sua)' : '') + '.' : '')
-      : (gm ? 'Monte os dois lados, role as defesas e comece: a iniciativa (2d6 + Precisão + Iniciativa) decide a ordem.' : 'O mestre está preparando a cena. Você já pode ver os lados e rolar a sua defesa.');
+      : (gm ? 'Monte os dois lados (inimigos e aliados), comece o combate e escolha quais jogadores entram. A iniciativa (2d6 + Precisão + Iniciativa) decide a ordem.' : 'O mestre está preparando a cena. Os comandos abrem quando o combate começar e chegar a sua vez.');
     renderBattleGm(gm, on, list);
     renderOrder(gm, on, list);
-    const party = list.filter((x) => !x.foe);
-    const foesIn = list.filter((x) => x.foe);
+    const party = list.filter((x) => x.side === 'party');
+    const foesIn = list.filter((x) => x.side === 'foes');
     const outs = members.filter((mb) => mb.sheet && mb.sheet.attrs && sceneOut().indexOf('chr:' + mb.characterId) >= 0);
     $('#arena-party').replaceChildren(...party.map((x) => fighterCard(x, gm, on)), ...(gm ? outs.map(outCard) : []),
-      ...(party.length || outs.length ? [] : [h('li', 'arena__empty', 'Nenhum personagem vinculado. Os jogadores vinculam pela ficha.')]));
+      ...(party.length || outs.length ? [] : [h('li', 'arena__empty', gm ? 'Ninguém no grupo. Os jogadores vinculam pela ficha; aliados entram por "Adicionar aliado".' : 'Nenhum personagem vinculado. Os jogadores vinculam pela ficha.')]));
     $('#arena-foes').replaceChildren(...foesIn.map((x) => fighterCard(x, gm, on)),
       ...(foesIn.length ? [] : [h('li', 'arena__empty', gm ? 'Nenhum inimigo. Use "Adicionar inimigo".' : 'Nenhum inimigo à vista.')]));
     renderBanner(gm, on, party, foesIn);
@@ -6615,8 +6631,8 @@ const FIREBASE_CONFIG = {
       acts.push(act('Restaurar', () => db.updateFoe(currentCamp.id, x.foe.id, { cur: {}, def: null })));
       acts.push(act('Tirar', async () => { await db.removeFoe(currentCamp.id, x.foe.id); combat.targets.delete(x.id); }, 'fighter__act--bad'));
     }
-    if (!x.foe && gm && !on) acts.push(act('Fora do combate', () => saveOut(x.id, true)));
-    return h('li', 'fighter' + (x.foe ? ' fighter--foe' : '') + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (aimable ? ' is-aimable' : aim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (state ? ' is-down' : ''),
+    if (!x.foe && gm) acts.push(act(on ? 'Tirar do combate' : 'Fora do combate', () => kickOut(x.id), 'fighter__act--bad'));
+    return h('li', 'fighter' + (x.side === 'foes' ? ' fighter--foe' : x.foe ? ' fighter--ally' : '') + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (aimable ? ' is-aimable' : aim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (state ? ' is-down' : ''),
       sel, h('div', 'fighter__bars', ...bars),
       state || chips.length ? h('div', 'fighter__tags', state ? h('span', 'ftag ftag--down', state) : null, ...chips) : null,
       acts.length ? h('div', 'fighter__acts', ...acts) : null);
@@ -6624,7 +6640,14 @@ const FIREBASE_CONFIG = {
   function outCard(mb) {
     const b = h('button', 'fighter__act', 'Entrar no combate');
     b.type = 'button';
-    b.addEventListener('click', () => saveOut('chr:' + mb.characterId, false));
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      const id = 'chr:' + mb.characterId;
+      await saveOut(id, false);
+      // com o combate rolando, entra direto na ordem com a própria iniciativa
+      const x = combatants().find((y) => y.id === id);
+      if (x && sceneOn() && !scene.order.some((o) => o.id === id)) await joinScene(x);
+    });
     return h('li', 'fighter fighter--out', h('div', 'fighter__sel', h('span', 'fighter__pic token token--' + mb.type, mb.name.trim().charAt(0).toUpperCase()),
       h('span', 'fighter__id', h('span', 'fighter__name', mb.name), h('span', 'fighter__def', 'Fora do combate'))), h('div', 'fighter__acts', b));
   }
@@ -6634,6 +6657,21 @@ const FIREBASE_CONFIG = {
     if (out) list.push(id);
     next.out = list;
     if (out) combat.targets.delete(id);
+    await saveScene(next);
+  }
+  // o mestre tira alguém do combate: sai da ordem (se já estava) e fica de fora até ele chamar de volta
+  async function kickOut(id) {
+    const next = sceneBase();
+    const i = Array.isArray(next.order) ? next.order.findIndex((o) => o.id === id) : -1;
+    if (i >= 0) {
+      next.order.splice(i, 1);
+      if (i < next.turn) next.turn -= 1;
+      if (next.turn >= next.order.length) next.turn = 0;
+      if (!next.order.length) next.active = false;
+    }
+    if (id.indexOf('chr:') === 0) next.out = (Array.isArray(next.out) ? next.out : []).filter((x) => x !== id).concat([id]);
+    combat.targets.delete(id);
+    if (battle.aim) endAim();
     await saveScene(next);
   }
   async function saveTags(id, list) {
@@ -6722,7 +6760,8 @@ const FIREBASE_CONFIG = {
       box.replaceChildren(
         gmBtn('◀ Anterior', 'btn--ghost', () => stepTurn(-1)),
         gmBtn('Próximo turno ▶', 'btn--primary', () => stepTurn(1)),
-        gmBtn('Adicionar inimigo', 'btn--ghost', addFoeFlow),
+        gmBtn('Adicionar inimigo', 'btn--ghost', () => addFoeFlow('foe')),
+        gmBtn('Adicionar aliado', 'btn--ghost', () => addFoeFlow('ally')),
         gmBtn('Encerrar', 'btn--danger', endScene));
       return;
     }
@@ -6735,7 +6774,8 @@ const FIREBASE_CONFIG = {
     name.setAttribute('aria-label', 'Nome da cena');
     name.addEventListener('input', () => { battle.name = name.value; });
     box.replaceChildren(
-      gmBtn('Adicionar inimigo', 'btn--ghost', addFoeFlow),
+      gmBtn('Adicionar inimigo', 'btn--ghost', () => addFoeFlow('foe')),
+      gmBtn('Adicionar aliado', 'btn--ghost', () => addFoeFlow('ally')),
       gmBtn('Rolar defesas', 'btn--ghost', rollAllDefenses),
       name,
       gmBtn('Começar combate', 'btn--primary', startScene));
@@ -6747,7 +6787,7 @@ const FIREBASE_CONFIG = {
     const items = scene.order.map((o, i) => {
       const x = list.find((y) => y.id === o.id);
       const down = x ? lifeState(x.layers) : 'fora';
-      const li = h('li', 'ctb__item' + (i === scene.turn ? ' is-now' : '') + (x && x.foe ? ' ctb__item--foe' : '') + (down ? ' is-down' : ''),
+      const li = h('li', 'ctb__item' + (i === scene.turn ? ' is-now' : '') + (x && x.side === 'foes' ? ' ctb__item--foe' : '') + (down ? ' is-down' : ''),
         h('span', 'ctb__init', String(o.init)), h('span', 'ctb__name', o.name));
       li.title = o.name + ' · iniciativa ' + o.init + (down ? ' · ' + down : '');
       if (i === scene.turn) li.setAttribute('aria-current', 'step');
@@ -6755,14 +6795,7 @@ const FIREBASE_CONFIG = {
         const out = h('button', 'ctb__x', '×');
         out.type = 'button';
         out.setAttribute('aria-label', 'Tirar da ordem: ' + o.name);
-        out.addEventListener('click', () => {
-          const next = deep(scene);
-          next.order.splice(i, 1);
-          if (i < next.turn) next.turn -= 1;
-          if (next.turn >= next.order.length) next.turn = 0;
-          if (!next.order.length) next.active = false;
-          saveScene(next);
-        });
+        out.addEventListener('click', () => kickOut(o.id));
         li.append(out);
       }
       return li;
@@ -7043,39 +7076,29 @@ const FIREBASE_CONFIG = {
     return true;
   }
   const living = (list, actor) => list.filter((x) => x.id !== actor.id && !lifeState(x.layers));
-  const alliesOf = (list, actor) => list.filter((x) => Boolean(x.foe) === Boolean(actor.foe));
+  const alliesOf = (list, actor) => list.filter((x) => x.side === actor.side);
 
   function renderCmd(gm, on, list) {
     const box = $('#battle-cmd');
     const mine = list.filter((x) => (x.foe ? gm : x.member.mine));
     const cur = sceneCurrent();
-    const free = !on || gm; // fora da cena (ou para o mestre) dá para escolher quem age
-    const turnKey = on ? scene.round + ':' + scene.turn : 'off';
-    // quem o mestre escolheu vale até a vez mudar; senão age quem está na vez
-    let actor = free && battle.pin.key === turnKey ? mine.find((x) => x.id === battle.pin.id) : null;
-    if (!actor && on && cur) actor = mine.find((x) => x.id === cur.id) || null;
-    if (!actor && free) actor = mine.find((x) => x.id === battle.actor) || mine[0] || null;
+    // os comandos só abrem com o combate rolando, na vez de quem você controla (o mestre: inimigos e aliados)
+    const actor = on && cur ? mine.find((x) => x.id === cur.id) || null : null;
     const title = h('h3', 'ff-window__title', 'Comandos');
+    box.classList.toggle('cmd--wait', !actor);
     if (!actor) {
       if (battle.aim) endAim();
-      box.replaceChildren(title, h('p', 'cmd__wait', !mine.length
-        ? (gm ? 'Adicione inimigos para agir por eles.' : 'Vincule um personagem seu a esta campanha (pela ficha) para agir.')
-        : cur ? 'Aguardando: vez de ' + cur.name + '.' : 'Aguardando o mestre começar.'));
+      battle.view = 'main';
+      box.replaceChildren(title, h('p', 'cmd__wait', !on
+        ? (gm ? 'Comece o combate e escolha quais jogadores entram. Os comandos abrem na vez de cada um.' : 'Os comandos abrem quando o mestre começar o combate e chegar a sua vez.')
+        : !mine.length && !gm ? 'Você não está neste combate. O mestre pode chamar você para entrar.'
+        : cur ? 'Vez de ' + cur.name + '. ' + (gm ? 'Os comandos abrem na vez de um inimigo ou aliado.' : 'Seus comandos aparecem na sua vez.') : 'Aguardando.'));
       return;
     }
     if (battle.actor !== actor.id) { battle.view = 'main'; if (battle.aim) endAim(); }
     battle.actor = actor.id;
     const isTurn = econLive(actor);
-    let who;
-    if (free && mine.length > 1 && !battle.aim) {
-      const sel = h('select', 'input cmd__who');
-      sel.id = 'cmd-who';
-      sel.setAttribute('aria-label', 'Agir como');
-      mine.forEach((x) => { const o = h('option', '', x.name + (on && cur && cur.id === x.id ? ' (na vez)' : '')); o.value = x.id; sel.append(o); });
-      sel.value = actor.id;
-      sel.addEventListener('change', () => { battle.actor = sel.value; battle.pin = { id: sel.value, key: turnKey }; battle.view = 'main'; renderBattle(); });
-      who = sel;
-    } else who = h('strong', 'cmd__name', actor.name);
+    const who = h('strong', 'cmd__name', actor.name);
     const head = h('div', 'cmd__head', title, who, isTurn ? h('span', 'cmd__turn', 'Sua vez') : null);
 
     let body;
@@ -7389,7 +7412,7 @@ const FIREBASE_CONFIG = {
   function healPanel(actor, list) {
     const mb = actor.member;
     const c = sheetOf(mb);
-    const allies = list.filter((x) => !x.foe);
+    const allies = list.filter((x) => x.side === actor.side);
     const hs = battle.heal;
     if (!allies.some((x) => x.id === hs.target)) hs.target = ([...combat.targets].find((id) => allies.some((x) => x.id === id))) || actor.id;
     const tgt = allies.find((x) => x.id === hs.target) || actor;
@@ -7613,13 +7636,21 @@ const FIREBASE_CONFIG = {
     box.scrollTop = box.scrollHeight;
   }
 
-  async function addFoeFlow() {
-    const e = await openPicker({ title: 'Adicionar inimigo da lista aberta', kinds: ['npc'], chips: ['NPC / Inimigo'] });
-    if (!e) return;
+  // side: 'foe' (inimigo) ou 'ally' (aliado do grupo, controlado pelo mestre)
+  async function addFoeFlow(side) {
+    const ally = side === 'ally';
+    const e = await openPicker({ title: ally ? 'Adicionar aliado da lista aberta' : 'Adicionar inimigo da lista aberta', kinds: ['npc'], chips: [ally ? 'NPC / Aliado' : 'NPC / Inimigo'] });
+    if (e) await addFoeEntry(e, side);
+  }
+  async function addFoeEntry(e, side) {
+    const ally = side === 'ally';
     const same = foes.filter((f) => f.npcId === e.id).length;
     try {
-      await db.addFoe(currentCamp.id, { npcId: e.id, name: (e.name + (same ? ' ' + (same + 1) : '')).slice(0, 60), values: deep(e.values || {}), thumb: e.thumb || '', cur: {}, def: null });
-      toast(e.name + ' entrou na arena.');
+      const foe = { npcId: e.id, name: (e.name + (same ? ' ' + (same + 1) : '')).slice(0, 60), values: deep(e.values || {}), thumb: e.thumb || '', cur: {}, def: null };
+      if (ally) foe.side = 'ally';
+      await db.addFoe(currentCamp.id, foe);
+      play('ok');
+      toast(foe.name + (ally ? ' entrou no grupo como aliado.' : ' entrou na arena como inimigo.'));
     } catch (err) { toast(errorMessage(err)); }
   }
   async function rollAllDefenses() {
@@ -7811,9 +7842,58 @@ const FIREBASE_CONFIG = {
     await sceneLog('Iniciativa: ' + x.name, r.detail + ' → entra na ordem com ' + r.init, r.init);
   }
 
+  // antes de começar, o mestre escolhe quais jogadores entram; os outros ficam de fora (ele pode chamar depois)
+  let startDlg = null;
+  function chooseFighters(chars) {
+    return new Promise((resolve) => {
+      if (!startDlg) {
+        startDlg = h('dialog', 'dialog startdlg');
+        startDlg.setAttribute('aria-labelledby', 'startdlg-title');
+        document.body.append(startDlg);
+      }
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (startDlg.open) closeDialog(startDlg); };
+      const out = sceneOut();
+      const boxes = chars.map((mb) => {
+        const c = h('input');
+        c.type = 'checkbox';
+        c.value = 'chr:' + mb.characterId;
+        c.checked = out.indexOf(c.value) < 0;
+        c.dataset.fid = 'start-' + mb.characterId;
+        return h('label', 'check startdlg__opt', c, h('span', '', mb.name));
+      });
+      const npcs = foes.map((f) => f.name + (f.side === 'ally' ? ' (aliado)' : ''));
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      const go = h('button', 'btn btn--primary btn--sm', 'Começar');
+      go.type = 'button';
+      go.dataset.fid = 'start-go';
+      go.addEventListener('click', () => finish(boxes.map((l) => l.querySelector('input')).filter((c) => c.checked).map((c) => c.value)));
+      startDlg.onclose = () => finish(null);
+      startDlg.replaceChildren(h('div', 'startdlg__body',
+        h('h2', '', h('span', '', 'Quem entra no combate?')),
+        h('p', 'field__hint', 'Marque os jogadores que entram. Quem ficar de fora não age; você pode chamar ou tirar alguém a qualquer momento pela arena.'),
+        h('div', 'startdlg__list', ...boxes),
+        npcs.length ? h('p', 'field__hint', 'Também entram: ' + npcs.join(', ') + '.') : null,
+        h('div', 'dialog__actions', cancel, go)));
+      startDlg.querySelector('h2').id = 'startdlg-title';
+      openDialog(startDlg);
+    });
+  }
+
   async function startScene() {
+    const chars = members.filter((mb) => mb.sheet && mb.sheet.attrs);
+    if (chars.length) {
+      const picked = await chooseFighters(chars);
+      if (!picked) return;
+      const ids = chars.map((mb) => 'chr:' + mb.characterId);
+      const pre = sceneBase();
+      pre.out = (Array.isArray(pre.out) ? pre.out : []).filter((id) => ids.indexOf(id) < 0).concat(ids.filter((id) => picked.indexOf(id) < 0));
+      scene = pre; // vale para a lista abaixo; vai salvo junto com a ordem
+    }
     const list = combatants();
-    if (!list.length) { toast('Ninguém na arena. Adicione inimigos ou vincule personagens.'); return; }
+    if (!list.length) { toast('Ninguém na arena. Adicione inimigos ou aliados, ou marque algum jogador.'); return; }
     const rolls = list.map(rollInitiative).sort(byInit);
     const name = battle.name.trim().slice(0, 60);
     const next = sceneBase();
@@ -7848,6 +7928,56 @@ const FIREBASE_CONFIG = {
     await saveScene({ active: false, name: '', round: 0, turn: 0, order: [], out: sceneOut() });
     await sceneLog('Fim da cena', 'Cena encerrada após ' + plural(rounds, 'rodada', 'rodadas') + '.', rounds);
   }
+
+  /* ---------- Itens e bestiário (só o mestre) ----------
+     Busca no bestiário (NPCs e criaturas) para pôr na arena como inimigo ou aliado,
+     e nos itens para dar direto na mochila de um personagem da campanha. */
+  const GMLIB_KINDS = { bestiario: ['npc'], armas: ['arma-melee', 'arma-fogo'], protecao: ['armadura', 'vestivel'], implantes: ['nucleo', 'protese-modulo'], gerais: ['item-geral'] };
+  const GMLIB_MAX = 80;
+  let gmlibSeq = 0;
+  function renderGmLib() {
+    if (!currentCamp || !currentCamp.gm) return;
+    const to = $('#gmlib-to');
+    const keep = to.value;
+    const chars = members.filter((mb) => mb.sheet && mb.sheet.attrs);
+    to.replaceChildren(...chars.map((mb) => { const o = h('option', '', mb.name); o.value = mb.characterId; return o; }));
+    if (chars.some((mb) => mb.characterId === keep)) to.value = keep;
+    runGmLib();
+  }
+  async function runGmLib() {
+    const kind = $('#gmlib-kind').value || 'bestiario';
+    const kinds = GMLIB_KINDS[kind] || GMLIB_KINDS.bestiario;
+    const beast = kind === 'bestiario';
+    const q = $('#gmlib-q').value;
+    const seq = ++gmlibSeq;
+    $('#gmlib-to-field').hidden = beast;
+    let list;
+    let warn = '';
+    try { list = await libSearch(kinds, q); }
+    catch (err) { warn = errorMessage(err); list = BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0 && matchesText(libHay(e), q)); }
+    if (seq !== gmlibSeq) return;
+    list = list.filter((e) => kinds.indexOf(e.kind) >= 0).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
+    const total = list.length;
+    list = list.slice(0, GMLIB_MAX);
+    const noChars = !beast && !$('#gmlib-to').value;
+    $('#gmlib-list').replaceChildren(...list.map((e) => libRow(e, beast
+      ? [{ label: 'Inimigo', cls: 'btn--ghost', onClick: () => addFoeEntry(deep(e), 'foe') }, { label: 'Aliado', cls: 'btn--ghost', onClick: () => addFoeEntry(deep(e), 'ally') }]
+      : noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
+    $('#gmlib-hint').textContent = warn || (!total ? 'Nada encontrado.'
+      : plural(total, 'resultado', 'resultados') + (total > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
+        + (beast ? ' "Inimigo" e "Aliado" põem na arena do Combate.' : noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" põe o item na mochila de quem está escolhido.'));
+  }
+  async function giveItem(e) {
+    const mb = members.find((m) => m.characterId === $('#gmlib-to').value);
+    if (!mb) { toast('Escolha para quem dar o item.'); return; }
+    try {
+      await patchMemberSheet(mb, (s) => { s.inventory.push(Object.assign(invEntryFrom(e), { src: 'mestre' })); });
+      play('ok');
+      toast(e.name + ' foi para a mochila de ' + mb.name + '.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+  $('#gmlib-kind').addEventListener('change', runGmLib);
+  $('#gmlib-q').addEventListener('input', debounce(runGmLib, 250));
 
   /* ---------- Lojas da campanha ----------
      O mestre cria as lojas (de uma companhia, dele ou de um NPC) e escolhe itens, quantidades e preços.

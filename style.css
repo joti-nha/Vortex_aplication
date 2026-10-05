@@ -2305,6 +2305,7 @@ body {
 .fighter--foe { border-color: rgba(224, 72, 74, 0.4); background: linear-gradient(225deg, rgba(224, 72, 74, 0.12), rgba(0, 0, 0, 0.15)); }
 .fighter.is-now { border-color: var(--ambar); box-shadow: 0 0 0 2px rgba(var(--ambar-rgb), 0.5), 0 0 22px rgba(var(--ambar-rgb), 0.35); transform: translateX(6px); }
 .fighter--foe.is-now { transform: translateX(-6px); }
+.fighter--ally { border-color: rgba(90, 170, 120, 0.45); background: linear-gradient(135deg, rgba(90, 170, 120, 0.12), rgba(0, 0, 0, 0.15)); }
 .fighter.is-target { box-shadow: 0 0 0 2px #ff5c5c, 0 0 18px rgba(255, 92, 92, 0.35); }
 .fighter.is-down { filter: grayscale(0.85); opacity: 0.7; }
 .fighter--out { opacity: 0.55; border-style: dashed; }
@@ -2446,6 +2447,7 @@ body {
 .cmd__panel > .btn { justify-self: start; }
 .cmd__note, .cmd__wait { margin: 0; color: #c9d2ff; font-size: var(--t-s); }
 .cmd__wait { font-size: var(--t-m); }
+.cmd--wait { opacity: 0.85; }
 .cmd__powers { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .cmd__duel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
 .blog__list { display: grid; gap: 0.35rem; max-height: 22rem; margin: 0.6rem 0 0; padding: 0; overflow-y: auto; list-style: none; }
@@ -2467,6 +2469,12 @@ body {
 .tagdlg__opt.is-on { border-color: var(--ambar); color: var(--ambar); }
 .tagdlg__row { display: flex; gap: 0.4rem; }
 .tagdlg__row .input { flex: 1; }
+/* Começar combate: o mestre marca quem entra */
+.startdlg { width: min(94vw, 28rem); }
+.startdlg__body { display: grid; gap: 0.75rem; }
+.startdlg__body h2 { margin: 0; }
+.startdlg__list { display: grid; gap: 0.35rem; max-height: 50vh; overflow-y: auto; }
+.startdlg__opt { min-height: 2.5rem; padding: 0.35rem 0.6rem; border: 1px solid var(--linha); border-radius: 0.6rem; background: var(--casco-2); }
 
 @media (max-width: 900px) {
   .battle__bottom { grid-template-columns: 1fr; }
@@ -2702,6 +2710,10 @@ body {
 dialog[open] { animation: dlg-in 0.22s ease-out; }
 @keyframes dlg-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
 .rest__btns { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+/* Itens e bestiário (mestre) */
+.gmlib__bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.6rem; align-items: end; }
+.gmlib__bar .field { margin: 0; }
+.create-camp__need { display: grid; gap: 0.5rem; justify-items: start; }
 /* Ether: brilho instável; Claptrap: tranco de robô */
 :root[data-theme="ether"] .btn--primary:hover:not(:disabled) { box-shadow: 0 0 18px rgba(var(--mare-rgb), 0.55); }
 :root[data-theme="ether"] .ripple { background: radial-gradient(circle, rgba(var(--mare-rgb), 0.5) 0%, rgba(var(--ambar-rgb), 0.2) 45%, transparent 70%); }
