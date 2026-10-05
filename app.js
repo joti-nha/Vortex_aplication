@@ -4441,7 +4441,8 @@ const FIREBASE_CONFIG = {
     const pvCur = getCur(s, 'pv', m.max.pv);
     let state = '';
     if (m.base === 'pv' && m.max.pv > 0 && pvCur <= -m.max.pv) state = 'Morto: chegou a –PV máximo.';
-    else if (lifeCur <= 0) state = m.base === 'pv' ? 'Agonizando: teste de Fortitude (CD 6, +1 a cada tentativa no dia).' : 'Sem resistência.';
+    else if (m.base === 'pv' && m.max.pv > 0 && pvCur < 0) state = 'Morrendo: vida negativa. Teste de Fortitude (CD 6, +1 a cada tentativa no dia); morre em –' + m.max.pv + '.';
+    else if (lifeCur <= 0) state = m.base === 'pv' ? 'Fora de combate: caído com 0 PV. Mais dano deixa a vida negativa (morrendo).' : 'Fora de combate: sem resistência.';
 
     const head = h('div', 'res-head', h('span', 'res-head__label', 'Resistência'), h('span', 'res-head__num', lifeCur + ' / ' + lifeMax));
     const legend = h('div', 'legend', ...life.map((l) => h('span', 'legend__item legend__item--' + l.key, h('span', 'res__dot'), l.label + ' ' + l.cur + '/' + l.max)));
@@ -6484,11 +6485,14 @@ const FIREBASE_CONFIG = {
     return { layers: out, steps };
   }
   const factorText = (k) => (k === 2 ? ' (fraqueza ×2)' : k === 0.5 ? ' (resiste: metade)' : '');
+  // 0 de vida: fora de combate; vida negativa: morrendo; –PV máximo: morto (capítulo Morte e Agonia).
+  // Quem não tem PV (robôs, só escudo e blindagem) fica fora de combate quando tudo zera.
   function lifeState(layers) {
     const pv = layers.find((l) => l.key === 'pv' && l.max > 0);
-    if (pv) return pv.cur <= -pv.max ? 'morto' : pv.cur <= 0 ? 'agonizando' : '';
-    return layers.every((l) => l.cur <= 0) ? 'derrubado' : '';
+    if (pv) return pv.cur <= -pv.max ? 'morto' : pv.cur < 0 ? 'morrendo' : pv.cur === 0 ? 'fora de combate' : '';
+    return layers.some((l) => l.max > 0) && layers.every((l) => l.cur <= 0) ? 'fora de combate' : '';
   }
+  const lifeKey = (st) => (st === 'morto' ? 'morto' : st === 'morrendo' ? 'morrendo' : 'fora');
 
   // Inimigo (instância na campanha) e personagem viram o mesmo formato de alvo
   const foeVals = (f) => f.values || {};
@@ -6514,8 +6518,7 @@ const FIREBASE_CONFIG = {
     const out = foes.map((f) => {
       const ls = foeLayers(f);
       const td = tagDef('foe:' + f.id, foeDef(f), foeDefMin(f));
-      const ally = f.side === 'ally'; // aliado do grupo que não é jogador (o mestre controla)
-      return { id: 'foe:' + f.id, foe: f, side: ally ? 'party' : 'foes', name: f.name, kind: ally ? 'Aliado' : 'Inimigo', layers: ls, def: td.def, defBase: foeDef(f), defNote: td.note, defRolled: f.def !== undefined && f.def !== null, defMin: foeDefMin(f) };
+      return { id: 'foe:' + f.id, foe: f, side: teamIdOf('foe:' + f.id, f), name: f.name, kind: 'NPC', layers: ls, def: td.def, defBase: foeDef(f), defNote: td.note, defRolled: f.def !== undefined && f.def !== null, defMin: foeDefMin(f) };
     });
     members.forEach((mb) => {
       if (!mb.sheet || !mb.sheet.attrs) return;
@@ -6525,7 +6528,7 @@ const FIREBASE_CONFIG = {
         const m = compute(c);
         const d = c.sheet.def && currentCamp ? c.sheet.def[currentCamp.id] : null;
         const td = tagDef('chr:' + mb.characterId, charDef(c, m), m.defMin);
-        out.push({ id: 'chr:' + mb.characterId, member: mb, side: 'party', name: mb.name, kind: mb.type === 'criatura' ? 'Criatura' : 'Personagem', layers: charLayers(c), def: td.def, defBase: charDef(c, m), defNote: td.note, defRolled: d !== undefined && d !== null, defMin: m.defMin });
+        out.push({ id: 'chr:' + mb.characterId, member: mb, side: teamIdOf('chr:' + mb.characterId, null), name: mb.name, kind: mb.type === 'criatura' ? 'Criatura' : 'Personagem', layers: charLayers(c), def: td.def, defBase: charDef(c, m), defNote: td.note, defRolled: d !== undefined && d !== null, defMin: m.defMin });
       } catch (err) { console.warn(err); }
     });
     return out;
@@ -6545,6 +6548,43 @@ const FIREBASE_CONFIG = {
   const sceneOut = () => (scene && Array.isArray(scene.out) ? scene.out : []);
   const sceneBase = () => deep(scene || { active: false, name: '', round: 0, turn: 0, order: [] });
 
+  /* Times: cada lutador fica num time com nome e cor, e todos os times lutam entre si.
+     scene.teams = [{ id, name, color }], scene.team = { idDoLutador: idDoTime },
+     scene.presets = [{ id, name, teams, list }] (times salvos para usar depois; NPCs vão com os números).
+     Sem time escolhido: personagens no primeiro time, NPCs no segundo (aliados antigos, no primeiro). */
+  const TEAM_COLORS = ['#4f8cff', '#e0484a', '#3fae6a', '#e8a33a', '#a463f2', '#1fb5a8', '#e85aa8', '#9aa4b2'];
+  const DEFAULT_TEAMS = [{ id: 't1', name: 'Grupo', color: '#4f8cff' }, { id: 't2', name: 'Inimigos', color: '#e0484a' }];
+  const TEAM_MAX = 8;
+  const PRESET_MAX = 12;
+  const sceneTeams = () => (scene && Array.isArray(scene.teams) && scene.teams.length ? scene.teams : DEFAULT_TEAMS);
+  const scenePresets = () => (scene && Array.isArray(scene.presets) ? scene.presets : []);
+  function teamIdOf(id, foe, teams, map) {
+    const ts = teams || sceneTeams();
+    const t = (map || (scene && scene.team) || {})[id];
+    if (t && ts.some((y) => y.id === t)) return t;
+    return foe && foe.side !== 'ally' ? (ts[1] || ts[0]).id : ts[0].id;
+  }
+  const teamById = (id) => sceneTeams().find((t) => t.id === id) || sceneTeams()[0];
+  async function setTeam(id, teamId) {
+    const next = sceneBase();
+    next.teams = deep(sceneTeams());
+    const keep = combatants().map((x) => x.id).concat(sceneOut());
+    const map = {};
+    Object.keys(next.team || {}).forEach((k) => { if (keep.indexOf(k) >= 0) map[k] = next.team[k]; });
+    map[id] = teamId;
+    next.team = map;
+    await saveScene(next);
+  }
+  // tira um lutador da ordem, acertando de quem é a vez
+  function dropFromOrder(next, id) {
+    const i = Array.isArray(next.order) ? next.order.findIndex((o) => o.id === id) : -1;
+    if (i < 0) return;
+    next.order.splice(i, 1);
+    if (i < next.turn) next.turn -= 1;
+    if (next.turn >= next.order.length) next.turn = 0;
+    if (!next.order.length) next.active = false;
+  }
+
   function renderCombat() { renderBattle(); }
   function renderScene() { renderBattle(); }
   function renderBattle() {
@@ -6560,17 +6600,22 @@ const FIREBASE_CONFIG = {
     $('#battle-phase').textContent = on ? 'Rodada ' + scene.round + (scene.name ? ' · ' + scene.name : '') : 'Preparação';
     $('#battle-meta').textContent = on
       ? (cur ? 'Vez de ' + cur.name + (isMineId(cur.id) ? ' (sua)' : '') + '.' : '')
-      : (gm ? 'Monte os dois lados (inimigos e aliados), comece o combate e escolha quais jogadores entram. A iniciativa (2d6 + Precisão + Iniciativa) decide a ordem.' : 'O mestre está preparando a cena. Os comandos abrem quando o combate começar e chegar a sua vez.');
+      : (gm ? 'Monte os times (nome e cor) e comece o combate dizendo quem luta contra quem. A iniciativa (2d6 + Precisão + Iniciativa) decide a ordem.' : 'O mestre está preparando a cena. Os comandos abrem quando o combate começar e chegar a sua vez.');
     renderBattleGm(gm, on, list);
     renderOrder(gm, on, list);
-    const party = list.filter((x) => x.side === 'party');
-    const foesIn = list.filter((x) => x.side === 'foes');
+    // um bloco por time, com a cor dele; o mestre vê também os times vazios e quem está fora
     const outs = members.filter((mb) => mb.sheet && mb.sheet.attrs && sceneOut().indexOf('chr:' + mb.characterId) >= 0);
-    $('#arena-party').replaceChildren(...party.map((x) => fighterCard(x, gm, on)), ...(gm ? outs.map(outCard) : []),
-      ...(party.length || outs.length ? [] : [h('li', 'arena__empty', gm ? 'Ninguém no grupo. Os jogadores vinculam pela ficha; aliados entram por "Adicionar aliado".' : 'Nenhum personagem vinculado. Os jogadores vinculam pela ficha.')]));
-    $('#arena-foes').replaceChildren(...foesIn.map((x) => fighterCard(x, gm, on)),
-      ...(foesIn.length ? [] : [h('li', 'arena__empty', gm ? 'Nenhum inimigo. Use "Adicionar inimigo".' : 'Nenhum inimigo à vista.')]));
-    renderBanner(gm, on, party, foesIn);
+    const sides = sceneTeams().map((t) => ({ t, list: list.filter((x) => x.side === t.id) })).filter((g) => g.list.length || gm).map((g) => {
+      const ul = h('ul', 'arena__list', ...g.list.map((x) => fighterCard(x, gm, on)), ...(g.list.length ? [] : [h('li', 'arena__empty', 'Ninguém neste time.')]));
+      ul.setAttribute('aria-label', g.t.name);
+      const side = h('div', 'arena__side', h('p', 'arena__label', h('span', 'arena__dot'), g.t.name, h('span', 'arena__count', String(g.list.length))), ul);
+      side.style.setProperty('--team', g.t.color);
+      return side;
+    });
+    if (gm && outs.length) sides.push(h('div', 'arena__side arena__side--out', h('p', 'arena__label', 'Fora do combate'), h('ul', 'arena__list', ...outs.map(outCard))));
+    if (!sides.length) sides.push(h('p', 'arena__empty', 'Ninguém na arena ainda.'));
+    $('#arena').replaceChildren(...sides);
+    renderBanner(gm, on, list);
     renderCmd(gm, on, list);
     if (!renderAimBar(list)) $('#battle-hint').textContent = 'Escolha uma ação nos comandos; quando ela pedir alvo, os alvos possíveis acendem aqui.';
     $('#arena').classList.toggle('arena--aim', Boolean(battle.aim));
@@ -6590,6 +6635,7 @@ const FIREBASE_CONFIG = {
   const hpSeen = {};
   function fighterCard(x, gm, on) {
     const state = lifeState(x.layers);
+    const team = teamById(x.side);
     // tremida e som quando a vida (ou escudo, blindagem) cai desde o último desenho
     const hp = x.layers.reduce((t, l) => t + Math.max(0, l.cur), 0);
     const hit = hpSeen[x.id] !== undefined && hp < hpSeen[x.id];
@@ -6632,10 +6678,21 @@ const FIREBASE_CONFIG = {
       acts.push(act('Tirar', async () => { await db.removeFoe(currentCamp.id, x.foe.id); combat.targets.delete(x.id); }, 'fighter__act--bad'));
     }
     if (!x.foe && gm) acts.push(act(on ? 'Tirar do combate' : 'Fora do combate', () => kickOut(x.id), 'fighter__act--bad'));
-    return h('li', 'fighter' + (x.side === 'foes' ? ' fighter--foe' : x.foe ? ' fighter--ally' : '') + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (aimable ? ' is-aimable' : aim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (state ? ' is-down' : ''),
+    if (gm) { // o mestre troca o time a qualquer hora, antes ou durante o combate
+      const sel = h('select', 'input fighter__team');
+      sel.setAttribute('aria-label', 'Time de ' + x.name);
+      sceneTeams().forEach((t) => { const o = h('option', '', t.name); o.value = t.id; sel.append(o); });
+      sel.value = x.side;
+      sel.addEventListener('change', () => setTeam(x.id, sel.value));
+      acts.unshift(sel);
+    }
+    const card = h('li', 'fighter' + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (aimable ? ' is-aimable' : aim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (state === 'morrendo' ? ' is-dying' : state ? ' is-down' : ''),
       sel, h('div', 'fighter__bars', ...bars),
-      state || chips.length ? h('div', 'fighter__tags', state ? h('span', 'ftag ftag--down', state) : null, ...chips) : null,
+      state || chips.length ? h('div', 'fighter__tags', state ? h('span', 'ftag ftag--down ftag--' + lifeKey(state), state) : null, ...chips) : null,
       acts.length ? h('div', 'fighter__acts', ...acts) : null);
+    card.style.setProperty('--team', team.color);
+    card.title = team.name;
+    return card;
   }
   function outCard(mb) {
     const b = h('button', 'fighter__act', 'Entrar no combate');
@@ -6662,13 +6719,7 @@ const FIREBASE_CONFIG = {
   // o mestre tira alguém do combate: sai da ordem (se já estava) e fica de fora até ele chamar de volta
   async function kickOut(id) {
     const next = sceneBase();
-    const i = Array.isArray(next.order) ? next.order.findIndex((o) => o.id === id) : -1;
-    if (i >= 0) {
-      next.order.splice(i, 1);
-      if (i < next.turn) next.turn -= 1;
-      if (next.turn >= next.order.length) next.turn = 0;
-      if (!next.order.length) next.active = false;
-    }
+    dropFromOrder(next, id);
     if (id.indexOf('chr:') === 0) next.out = (Array.isArray(next.out) ? next.out : []).filter((x) => x !== id).concat([id]);
     combat.targets.delete(id);
     if (battle.aim) endAim();
@@ -6760,8 +6811,8 @@ const FIREBASE_CONFIG = {
       box.replaceChildren(
         gmBtn('◀ Anterior', 'btn--ghost', () => stepTurn(-1)),
         gmBtn('Próximo turno ▶', 'btn--primary', () => stepTurn(1)),
-        gmBtn('Adicionar inimigo', 'btn--ghost', () => addFoeFlow('foe')),
-        gmBtn('Adicionar aliado', 'btn--ghost', () => addFoeFlow('ally')),
+        gmBtn('Adicionar NPC', 'btn--ghost', addFoeFlow),
+        gmBtn('Times', 'btn--ghost', () => openTeams(false)),
         gmBtn('Encerrar', 'btn--danger', endScene));
       return;
     }
@@ -6774,8 +6825,8 @@ const FIREBASE_CONFIG = {
     name.setAttribute('aria-label', 'Nome da cena');
     name.addEventListener('input', () => { battle.name = name.value; });
     box.replaceChildren(
-      gmBtn('Adicionar inimigo', 'btn--ghost', () => addFoeFlow('foe')),
-      gmBtn('Adicionar aliado', 'btn--ghost', () => addFoeFlow('ally')),
+      gmBtn('Adicionar NPC', 'btn--ghost', addFoeFlow),
+      gmBtn('Times', 'btn--ghost', () => openTeams(false)),
       gmBtn('Rolar defesas', 'btn--ghost', rollAllDefenses),
       name,
       gmBtn('Começar combate', 'btn--primary', startScene));
@@ -6787,8 +6838,9 @@ const FIREBASE_CONFIG = {
     const items = scene.order.map((o, i) => {
       const x = list.find((y) => y.id === o.id);
       const down = x ? lifeState(x.layers) : 'fora';
-      const li = h('li', 'ctb__item' + (i === scene.turn ? ' is-now' : '') + (x && x.side === 'foes' ? ' ctb__item--foe' : '') + (down ? ' is-down' : ''),
+      const li = h('li', 'ctb__item' + (i === scene.turn ? ' is-now' : '') + (down ? ' is-down' : ''),
         h('span', 'ctb__init', String(o.init)), h('span', 'ctb__name', o.name));
+      if (x) li.style.setProperty('--team', teamById(x.side).color);
       li.title = o.name + ' · iniciativa ' + o.init + (down ? ' · ' + down : '');
       if (i === scene.turn) li.setAttribute('aria-current', 'step');
       if (gm) {
@@ -6810,14 +6862,19 @@ const FIREBASE_CONFIG = {
     });
     ol.replaceChildren(...items);
   }
-  function renderBanner(gm, on, party, foesIn) {
+  // acaba quando só um time (ou nenhum) ainda tem alguém de pé
+  function renderBanner(gm, on, list) {
     const box = $('#battle-banner');
-    const win = on && foesIn.length > 0 && foesIn.every((x) => lifeState(x.layers));
-    const lose = on && party.length > 0 && party.every((x) => lifeState(x.layers));
-    box.hidden = !win && !lose;
+    const inFight = on ? list.filter((x) => scene.order.some((o) => o.id === x.id)) : [];
+    const teamIds = Array.from(new Set(inFight.map((x) => x.side)));
+    const alive = teamIds.filter((t) => inFight.some((x) => x.side === t && !lifeState(x.layers)));
+    box.hidden = !(on && teamIds.length >= 2 && alive.length <= 1);
     if (box.hidden) return;
-    box.className = 'battle__banner battle__banner--' + (win ? 'win' : 'lose');
-    const kids = [h('strong', 'battle__banner-title', win ? 'Vitória!' : 'Derrota…'), h('span', '', win ? 'Todos os inimigos caíram.' : 'O grupo inteiro caiu.')];
+    const winner = alive.length ? teamById(alive[0]) : null;
+    const players = winner ? inFight.filter((x) => x.side === winner.id && x.member) : [];
+    box.className = 'battle__banner battle__banner--' + (winner ? 'win' : 'lose');
+    box.style.setProperty('--team', winner ? winner.color : '#e0484a');
+    const kids = [h('strong', 'battle__banner-title', winner ? 'Vitória: ' + winner.name + '!' : 'Ninguém de pé…'), h('span', '', winner ? 'Os outros times caíram.' : 'Todos os times caíram.')];
     if (gm) {
       const xp = h('input', 'input');
       xp.type = 'number';
@@ -6826,15 +6883,16 @@ const FIREBASE_CONFIG = {
       xp.inputMode = 'numeric';
       xp.placeholder = 'XP';
       xp.value = battle.xp;
-      xp.setAttribute('aria-label', 'XP para o grupo');
+      xp.setAttribute('aria-label', 'XP para os jogadores do time vencedor');
       xp.addEventListener('input', () => { battle.xp = xp.value; });
-      const give = gmBtn('Dar XP ao grupo', 'btn--primary', async () => {
+      const give = gmBtn('Dar XP a ' + (winner ? winner.name : ''), 'btn--primary', async () => {
         const amount = Math.round(num(xp.value));
         if (amount < 1) { xp.focus(); return; }
-        await giveXp(party.map((x) => x.member), amount);
+        await giveXp(players.map((x) => x.member), amount);
         battle.xp = '';
       });
-      kids.push(h('div', 'battle__banner-acts', win ? xp : null, win ? give : null, gmBtn('Encerrar a cena', 'btn--ghost', endScene)));
+      const can = players.length > 0;
+      kids.push(h('div', 'battle__banner-acts', can ? xp : null, can ? give : null, gmBtn('Encerrar a cena', 'btn--ghost', endScene)));
     }
     box.replaceChildren(...kids);
   }
@@ -7093,6 +7151,14 @@ const FIREBASE_CONFIG = {
         ? (gm ? 'Comece o combate e escolha quais jogadores entram. Os comandos abrem na vez de cada um.' : 'Os comandos abrem quando o mestre começar o combate e chegar a sua vez.')
         : !mine.length && !gm ? 'Você não está neste combate. O mestre pode chamar você para entrar.'
         : cur ? 'Vez de ' + cur.name + '. ' + (gm ? 'Os comandos abrem na vez de um inimigo ou aliado.' : 'Seus comandos aparecem na sua vez.') : 'Aguardando.'));
+      return;
+    }
+    const down = lifeState(actor.layers);
+    if (down) {
+      if (battle.aim) endAim();
+      box.replaceChildren(title, h('p', 'cmd__wait', actor.name + ' está ' + down + '. ' + (down === 'morto' ? 'Não age mais nesta cena.'
+        : down === 'morrendo' ? 'Sem ações: faça o teste de sobrevivência (Fortitude, CD 6, +1 a cada tentativa) e aguarde ajuda.'
+        : 'Sem ações até ser reanimado (teste de Medicina com kit médico, ou cura).')));
       return;
     }
     if (battle.actor !== actor.id) { battle.view = 'main'; if (battle.aim) endAim(); }
@@ -7636,22 +7702,56 @@ const FIREBASE_CONFIG = {
     box.scrollTop = box.scrollHeight;
   }
 
-  // side: 'foe' (inimigo) ou 'ally' (aliado do grupo, controlado pelo mestre)
-  async function addFoeFlow(side) {
-    const ally = side === 'ally';
-    const e = await openPicker({ title: ally ? 'Adicionar aliado da lista aberta' : 'Adicionar inimigo da lista aberta', kinds: ['npc'], chips: [ally ? 'NPC / Aliado' : 'NPC / Inimigo'] });
-    if (e) await addFoeEntry(e, side);
+  // NPC do bestiário entra na arena no time que o mestre escolher
+  async function addFoeFlow() {
+    const e = await openPicker({ title: 'Adicionar NPC da lista aberta', kinds: ['npc'], chips: ['NPC / Criatura'] });
+    if (!e) return;
+    const t = await chooseTeam(e.name);
+    if (t) await addFoeEntry(e, t);
   }
-  async function addFoeEntry(e, side) {
-    const ally = side === 'ally';
+  async function addFoeEntry(e, teamId) {
     const same = foes.filter((f) => f.npcId === e.id).length;
     try {
       const foe = { npcId: e.id, name: (e.name + (same ? ' ' + (same + 1) : '')).slice(0, 60), values: deep(e.values || {}), thumb: e.thumb || '', cur: {}, def: null };
-      if (ally) foe.side = 'ally';
-      await db.addFoe(currentCamp.id, foe);
+      const id = await db.addFoe(currentCamp.id, foe);
+      await setTeam('foe:' + id, teamId);
       play('ok');
-      toast(foe.name + (ally ? ' entrou no grupo como aliado.' : ' entrou na arena como inimigo.'));
+      toast(foe.name + ' entrou na arena no time ' + teamById(teamId).name + '.');
     } catch (err) { toast(errorMessage(err)); }
+  }
+  async function placeFoe(e) {
+    const t = await chooseTeam(e.name);
+    if (t) await addFoeEntry(e, t);
+  }
+  // escolha rápida de time (botões com a cor de cada um)
+  let teamPickDlg = null;
+  function chooseTeam(name) {
+    return new Promise((resolve) => {
+      if (!teamPickDlg) {
+        teamPickDlg = h('dialog', 'dialog startdlg');
+        teamPickDlg.setAttribute('aria-labelledby', 'teampick-title');
+        document.body.append(teamPickDlg);
+      }
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (teamPickDlg.open) closeDialog(teamPickDlg); };
+      const btns = sceneTeams().map((t) => {
+        const b = h('button', 'teambtn', h('span', 'arena__dot'), t.name);
+        b.type = 'button';
+        b.dataset.fid = 'team-' + t.id;
+        b.style.setProperty('--team', t.color);
+        b.addEventListener('click', () => finish(t.id));
+        return b;
+      });
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      teamPickDlg.onclose = () => finish(null);
+      const title = h('h2', '', 'Em qual time ' + name + ' entra?');
+      title.id = 'teampick-title';
+      teamPickDlg.replaceChildren(h('div', 'startdlg__body', title, h('div', 'teambtns', ...btns),
+        h('p', 'field__hint', 'Para criar ou mudar times, use "Times" na barra do combate.'), h('div', 'dialog__actions', cancel)));
+      openDialog(teamPickDlg);
+    });
   }
   async function rollAllDefenses() {
     const list = combatants().filter((x) => (currentCamp.gm ? true : x.member && x.member.mine));
@@ -7842,58 +7942,197 @@ const FIREBASE_CONFIG = {
     await sceneLog('Iniciativa: ' + x.name, r.detail + ' → entra na ordem com ' + r.init, r.init);
   }
 
-  // antes de começar, o mestre escolhe quais jogadores entram; os outros ficam de fora (ele pode chamar depois)
-  let startDlg = null;
-  function chooseFighters(chars) {
-    return new Promise((resolve) => {
-      if (!startDlg) {
-        startDlg = h('dialog', 'dialog startdlg');
-        startDlg.setAttribute('aria-labelledby', 'startdlg-title');
-        document.body.append(startDlg);
-      }
-      let done = false;
-      const finish = (v) => { if (done) return; done = true; resolve(v); if (startDlg.open) closeDialog(startDlg); };
-      const out = sceneOut();
-      const boxes = chars.map((mb) => {
-        const c = h('input');
-        c.type = 'checkbox';
-        c.value = 'chr:' + mb.characterId;
-        c.checked = out.indexOf(c.value) < 0;
-        c.dataset.fid = 'start-' + mb.characterId;
-        return h('label', 'check startdlg__opt', c, h('span', '', mb.name));
+  /* Times e presets: o mestre cria times (nome e cor), põe cada lutador num time (ou deixa jogador de fora)
+     e pode salvar tudo como preset para usar depois. Ao começar o combate é esta mesma tela, perguntando
+     quem luta contra quem. Tudo fica num rascunho até "Salvar" ou "Começar combate". */
+  let teamsDlg = null;
+  function openTeams(start) {
+    if (!teamsDlg) {
+      teamsDlg = h('dialog', 'dialog teamsdlg');
+      teamsDlg.setAttribute('aria-labelledby', 'teamsdlg-title');
+      document.body.append(teamsDlg);
+    }
+    const fighters = foes.map((f) => ({ id: 'foe:' + f.id, name: f.name, foe: f }))
+      .concat(members.filter((mb) => mb.sheet && mb.sheet.attrs).map((mb) => ({ id: 'chr:' + mb.characterId, name: mb.name, member: mb })));
+    const d = { teams: deep(sceneTeams()), map: {}, add: [], preset: '' };
+    const out = sceneOut();
+    fighters.forEach((f) => { d.map[f.id] = !f.foe && out.indexOf(f.id) >= 0 ? 'out' : teamIdOf(f.id, f.foe, d.teams); });
+    const fixTeams = () => { // quem estava num time apagado vai para o primeiro
+      const ok = (t) => t === 'out' || d.teams.some((y) => y.id === t);
+      Object.keys(d.map).forEach((k) => { if (!ok(d.map[k])) d.map[k] = d.teams[0].id; });
+      d.add.forEach((x) => { if (!ok(x.t) || x.t === 'out') x.t = d.teams[0].id; });
+    };
+    const teamSel = (value, canOut, label, onChange) => {
+      const s = h('select', 'input');
+      s.setAttribute('aria-label', label);
+      d.teams.forEach((t) => { const o = h('option', '', t.name || 'Sem nome'); o.value = t.id; s.append(o); });
+      if (canOut) { const o = h('option', '', 'Fora do combate'); o.value = 'out'; s.append(o); }
+      s.value = value;
+      s.addEventListener('change', () => { onChange(s.value); draw(); });
+      return s;
+    };
+    const draw = () => {
+      const teamRows = d.teams.map((t, i) => {
+        const color = h('input', 'teamsdlg__color');
+        color.type = 'color';
+        color.value = t.color;
+        color.setAttribute('aria-label', 'Cor do time ' + t.name);
+        color.addEventListener('input', () => { t.color = color.value; row.style.setProperty('--team', t.color); });
+        const name = h('input', 'input');
+        name.type = 'text';
+        name.maxLength = 30;
+        name.value = t.name;
+        name.dataset.fid = 'team-name-' + i;
+        name.setAttribute('aria-label', 'Nome do time');
+        name.addEventListener('input', () => { // atualiza os nomes nas listas sem redesenhar (não perde o foco)
+          t.name = name.value;
+          teamsDlg.querySelectorAll('option[value="' + t.id + '"]').forEach((o) => { o.textContent = name.value || 'Sem nome'; });
+        });
+        const del = h('button', 'btn btn--ghost btn--sm', 'Apagar');
+        del.type = 'button';
+        del.disabled = d.teams.length <= 1;
+        del.addEventListener('click', () => { d.teams.splice(i, 1); fixTeams(); draw(); });
+        const n = fighters.filter((f) => d.map[f.id] === t.id).length + d.add.filter((x) => x.t === t.id).length;
+        const row = h('div', 'teamsdlg__team', color, name, h('span', 'teamsdlg__n', plural(n, 'lutador', 'lutadores')), del);
+        row.style.setProperty('--team', t.color);
+        return row;
       });
-      const npcs = foes.map((f) => f.name + (f.side === 'ally' ? ' (aliado)' : ''));
+      const addTeam = h('button', 'btn btn--ghost btn--sm', '+ Novo time');
+      addTeam.type = 'button';
+      addTeam.dataset.fid = 'team-add';
+      addTeam.disabled = d.teams.length >= TEAM_MAX;
+      addTeam.addEventListener('click', () => {
+        const color = TEAM_COLORS.find((c) => !d.teams.some((t) => t.color === c)) || TEAM_COLORS[d.teams.length % TEAM_COLORS.length];
+        d.teams.push({ id: 't' + uid().slice(0, 6), name: 'Time ' + (d.teams.length + 1), color });
+        draw();
+      });
+      const who = fighters.map((f) => h('div', 'teamsdlg__who', h('span', 'teamsdlg__name', f.name, f.foe ? h('span', 'teamsdlg__kind', ' NPC') : null),
+        teamSel(d.map[f.id], !f.foe, 'Time de ' + f.name, (v) => { d.map[f.id] = v; })))
+        .concat(d.add.map((x, i) => h('div', 'teamsdlg__who', h('span', 'teamsdlg__name', x.name, h('span', 'teamsdlg__kind', ' NPC novo (do preset)')),
+          teamSel(x.t, false, 'Time de ' + x.name, (v) => { x.t = v; }),
+          (() => { const b = h('button', 'btn btn--ghost btn--sm', '×'); b.type = 'button'; b.setAttribute('aria-label', 'Não trazer ' + x.name); b.addEventListener('click', () => { d.add.splice(i, 1); draw(); }); return b; })())));
+      // presets
+      const pname = h('input', 'input');
+      pname.type = 'text';
+      pname.maxLength = 40;
+      pname.id = 'preset-name';
+      pname.placeholder = 'Nome do preset (ex.: Emboscada no porto)';
+      pname.value = d.preset;
+      pname.addEventListener('input', () => { d.preset = pname.value; });
+      const psave = h('button', 'btn btn--ghost btn--sm', 'Salvar preset');
+      psave.type = 'button';
+      psave.dataset.fid = 'preset-save';
+      psave.addEventListener('click', async () => {
+        const name = cleanName(pname.value).slice(0, 40);
+        if (!name) { pname.focus(); toast('Dê um nome ao preset.'); return; }
+        const preset = { id: uid(), name, teams: deep(d.teams), list: fighters.map((f) => (f.foe
+          ? { k: 'npc', npcId: f.foe.npcId || '', name: f.foe.name, values: deep(f.foe.values || {}), thumb: f.foe.thumb || '', t: d.map[f.id] }
+          : { k: 'chr', id: f.id, t: d.map[f.id] }))
+          .concat(d.add.map((x) => ({ k: 'npc', npcId: x.npcId, name: x.name, values: deep(x.values), thumb: x.thumb, t: x.t }))) };
+        const next = sceneBase();
+        next.presets = [preset].concat(scenePresets().filter((p) => nameKey(p.name) !== nameKey(name))).slice(0, PRESET_MAX);
+        await saveScene(next);
+        d.preset = '';
+        play('ok');
+        toast('Preset "' + name + '" salvo.');
+        draw();
+      });
+      const plist = scenePresets().map((p) => {
+        const load = h('button', 'btn btn--ghost btn--sm', 'Carregar');
+        load.type = 'button';
+        load.dataset.fid = 'preset-load-' + nameKey(p.name);
+        load.addEventListener('click', () => { loadPreset(p); draw(); toast('Preset "' + p.name + '" carregado. Confira e salve, ou comece o combate.'); });
+        const del = h('button', 'btn btn--ghost btn--sm', 'Apagar');
+        del.type = 'button';
+        del.addEventListener('click', async () => {
+          const next = sceneBase();
+          next.presets = scenePresets().filter((y) => y.id !== p.id);
+          await saveScene(next);
+          draw();
+        });
+        const dots = h('span', 'teamsdlg__dots', ...(p.teams || []).map((t) => { const s = h('span', 'arena__dot'); s.style.setProperty('--team', t.color); s.title = t.name; return s; }));
+        return h('li', 'teamsdlg__preset', dots, h('span', 'teamsdlg__name', p.name, h('span', 'teamsdlg__kind', ' ' + plural((p.list || []).filter((x) => x.t !== 'out').length, 'lutador', 'lutadores'))), load, del);
+      });
       const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
       cancel.type = 'button';
-      cancel.addEventListener('click', () => finish(null));
-      const go = h('button', 'btn btn--primary btn--sm', 'Começar');
+      cancel.addEventListener('click', () => closeDialog(teamsDlg));
+      const save = h('button', 'btn btn--ghost btn--sm', 'Salvar times');
+      save.type = 'button';
+      save.dataset.fid = 'teams-save';
+      save.addEventListener('click', () => applyTeams(d, fighters, false));
+      const go = h('button', 'btn btn--primary btn--sm', 'Começar combate');
       go.type = 'button';
       go.dataset.fid = 'start-go';
-      go.addEventListener('click', () => finish(boxes.map((l) => l.querySelector('input')).filter((c) => c.checked).map((c) => c.value)));
-      startDlg.onclose = () => finish(null);
-      startDlg.replaceChildren(h('div', 'startdlg__body',
-        h('h2', '', h('span', '', 'Quem entra no combate?')),
-        h('p', 'field__hint', 'Marque os jogadores que entram. Quem ficar de fora não age; você pode chamar ou tirar alguém a qualquer momento pela arena.'),
-        h('div', 'startdlg__list', ...boxes),
-        npcs.length ? h('p', 'field__hint', 'Também entram: ' + npcs.join(', ') + '.') : null,
-        h('div', 'dialog__actions', cancel, go)));
-      startDlg.querySelector('h2').id = 'startdlg-title';
-      openDialog(startDlg);
-    });
+      go.addEventListener('click', () => applyTeams(d, fighters, true));
+      const title = h('h2', '', start ? 'Quem luta contra quem?' : 'Times');
+      title.id = 'teamsdlg-title';
+      teamsDlg.replaceChildren(h('div', 'teamsdlg__body',
+        title,
+        h('p', 'field__hint', 'Cada time luta contra todos os outros. Dá para mudar os times antes ou durante o combate, e salvar como preset para usar de novo.'),
+        h('h3', 'sub-title', 'Times'), h('div', 'teamsdlg__teams', ...teamRows), h('div', '', addTeam),
+        h('h3', 'sub-title', 'Quem fica em qual time'),
+        who.length ? h('div', 'teamsdlg__list', ...who) : h('p', 'field__hint', 'Ninguém ainda: adicione NPCs ou espere os jogadores vincularem as fichas.'),
+        h('h3', 'sub-title', 'Presets'),
+        h('div', 'teamsdlg__row', pname, psave),
+        plist.length ? h('ul', 'teamsdlg__presets', ...plist) : h('p', 'field__hint', 'Nenhum preset salvo ainda.'),
+        h('div', 'dialog__actions', cancel, save, sceneOn() ? null : go)));
+    };
+    // preset no rascunho: times dele; jogadores voltam para o time salvo; NPCs que não estão na arena entram como novos
+    const loadPreset = (p) => {
+      d.teams = deep(p.teams && p.teams.length ? p.teams : DEFAULT_TEAMS);
+      d.add = [];
+      const used = new Set();
+      (p.list || []).forEach((x) => {
+        if (x.k === 'chr') { if (x.id in d.map) d.map[x.id] = x.t; return; }
+        const f = fighters.find((y) => y.foe && !used.has(y.id) && nameKey(y.name) === nameKey(x.name));
+        if (f) { used.add(f.id); d.map[f.id] = x.t; return; }
+        d.add.push({ npcId: x.npcId, name: x.name, values: deep(x.values || {}), thumb: x.thumb || '', t: x.t });
+      });
+      fixTeams();
+    };
+    draw();
+    openDialog(teamsDlg);
   }
 
-  async function startScene() {
-    const chars = members.filter((mb) => mb.sheet && mb.sheet.attrs);
-    if (chars.length) {
-      const picked = await chooseFighters(chars);
-      if (!picked) return;
-      const ids = chars.map((mb) => 'chr:' + mb.characterId);
-      const pre = sceneBase();
-      pre.out = (Array.isArray(pre.out) ? pre.out : []).filter((id) => ids.indexOf(id) < 0).concat(ids.filter((id) => picked.indexOf(id) < 0));
-      scene = pre; // vale para a lista abaixo; vai salvo junto com a ordem
+  // espera os NPCs recém-criados chegarem na lista (o banco avisa logo depois de gravar)
+  async function waitFoes(ids) {
+    for (let i = 0; i < 30 && !ids.every((id) => foes.some((f) => f.id === id)); i++) await new Promise((r) => setTimeout(r, 100));
+  }
+  async function applyTeams(d, fighters, start) {
+    const teams = d.teams.map((t, i) => ({ id: t.id, name: cleanName(t.name).slice(0, 30) || 'Time ' + (i + 1), color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : TEAM_COLORS[i % TEAM_COLORS.length] }));
+    if (start) {
+      const used = new Set(fighters.map((f) => d.map[f.id]).concat(d.add.map((x) => x.t)).filter((t) => t !== 'out'));
+      if (used.size < 2) { toast('Ponha lutadores em pelo menos dois times para começar.'); return; }
     }
+    closeDialog(teamsDlg);
+    try {
+      const team = {};
+      fighters.forEach((f) => { if (d.map[f.id] !== 'out') team[f.id] = d.map[f.id]; });
+      const fresh = [];
+      for (const x of d.add) {
+        const id = await db.addFoe(currentCamp.id, { npcId: x.npcId, name: x.name.slice(0, 60), values: x.values, thumb: x.thumb, cur: {}, def: null });
+        team['foe:' + id] = x.t;
+        fresh.push(id);
+      }
+      const charIds = fighters.filter((f) => !f.foe).map((f) => f.id);
+      const next = sceneBase();
+      next.teams = teams;
+      next.team = team;
+      next.out = sceneOut().filter((id) => charIds.indexOf(id) < 0).concat(charIds.filter((id) => d.map[id] === 'out'));
+      if (sceneOn()) next.out.forEach((id) => dropFromOrder(next, id));
+      await saveScene(next);
+      if (fresh.length) await waitFoes(fresh);
+      if (start) { await beginScene(); return; }
+      // com o combate rolando, jogador que voltou entra na ordem com a própria iniciativa
+      if (sceneOn()) for (const x of combatants().filter((y) => y.member && !scene.order.some((o) => o.id === y.id))) await joinScene(x);
+      toast('Times salvos.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  async function startScene() { openTeams(true); }
+  async function beginScene() {
     const list = combatants();
-    if (!list.length) { toast('Ninguém na arena. Adicione inimigos ou aliados, ou marque algum jogador.'); return; }
+    if (!list.length) { toast('Ninguém na arena. Adicione NPCs ou ponha algum jogador num time.'); return; }
     const rolls = list.map(rollInitiative).sort(byInit);
     const name = battle.name.trim().slice(0, 60);
     const next = sceneBase();
@@ -7925,12 +8164,13 @@ const FIREBASE_CONFIG = {
     const ok = await askConfirm({ title: 'Encerrar a cena?', text: 'A ordem dos turnos e as condições são apagadas. PV, defesa e inimigos continuam como estão.', ok: 'Encerrar' });
     if (!ok) return;
     const rounds = scene ? scene.round : 0;
-    await saveScene({ active: false, name: '', round: 0, turn: 0, order: [], out: sceneOut() });
+    const keep = sceneBase();
+    await saveScene({ active: false, name: '', round: 0, turn: 0, order: [], out: sceneOut(), teams: keep.teams || null, team: keep.team || {}, presets: keep.presets || [] });
     await sceneLog('Fim da cena', 'Cena encerrada após ' + plural(rounds, 'rodada', 'rodadas') + '.', rounds);
   }
 
   /* ---------- Itens e bestiário (só o mestre) ----------
-     Busca no bestiário (NPCs e criaturas) para pôr na arena como inimigo ou aliado,
+     Busca no bestiário (NPCs e criaturas) para pôr na arena num time,
      e nos itens para dar direto na mochila de um personagem da campanha. */
   const GMLIB_KINDS = { bestiario: ['npc'], armas: ['arma-melee', 'arma-fogo'], protecao: ['armadura', 'vestivel'], implantes: ['nucleo', 'protese-modulo'], gerais: ['item-geral'] };
   const GMLIB_MAX = 80;
@@ -7961,11 +8201,11 @@ const FIREBASE_CONFIG = {
     list = list.slice(0, GMLIB_MAX);
     const noChars = !beast && !$('#gmlib-to').value;
     $('#gmlib-list').replaceChildren(...list.map((e) => libRow(e, beast
-      ? [{ label: 'Inimigo', cls: 'btn--ghost', onClick: () => addFoeEntry(deep(e), 'foe') }, { label: 'Aliado', cls: 'btn--ghost', onClick: () => addFoeEntry(deep(e), 'ally') }]
+      ? [{ label: 'Pôr na arena', cls: 'btn--ghost', onClick: () => placeFoe(deep(e)) }]
       : noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
     $('#gmlib-hint').textContent = warn || (!total ? 'Nada encontrado.'
       : plural(total, 'resultado', 'resultados') + (total > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
-        + (beast ? ' "Inimigo" e "Aliado" põem na arena do Combate.' : noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" põe o item na mochila de quem está escolhido.'));
+        + (beast ? ' "Pôr na arena" pergunta o time e põe no Combate.' : noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" põe o item na mochila de quem está escolhido.'));
   }
   async function giveItem(e) {
     const mb = members.find((m) => m.characterId === $('#gmlib-to').value);
