@@ -5235,7 +5235,7 @@ const FIREBASE_CONFIG = {
         per = perTargetShots(st, maxShots(weapon), targets, isProficient(s, weapon), draw, idp);
         st.shots = per.total;
         fields.push(per.box);
-      } else if (maxShots(weapon) > 1) {
+      } else if (maxShots(weapon) > 1 && !c.aim) {
         st.per = null;
         const nSel = h('select', 'input');
         for (let k = 1; k <= maxShots(weapon); k++) {
@@ -5271,9 +5271,10 @@ const FIREBASE_CONFIG = {
       if (dist && dist.mod) t.mods.push([dist.short, dist.mod]);
       if (st.mod) t.mods.push(['modificador', st.mod]);
       applyDice(t, st);
+      if (c.peek) c.peek(t);
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
       const stowed = c.handsOnly ? all.filter((w) => !handOf(w)).length : 0;
-      const info = [weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
+      const info = [c.aim && maxShots(weapon) > 1 ? 'cadência ' + maxShots(weapon) + ': cada toque num alvo é um disparo' : '', weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
       const go = h('button', 'btn btn--primary btn--sm', (c.btnLabel || 'Atacar') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
       go.disabled = Boolean(per && per.over);
@@ -6427,7 +6428,7 @@ const FIREBASE_CONFIG = {
      Condições ficam na cena (scene.tags: id → [{ n, r }], r = rodadas restantes, 0 = até tirar);
      quem não entra no combate fica em scene.out. */
   const CONDITIONS = ['Atordoado', 'Caído', 'Sangrando', 'Em chamas', 'Envenenado', 'Cego', 'Imobilizado', 'Agarrado', 'Escondido', 'Assustado', 'Lento', 'Inspirado', 'Protegido', 'Concentrado'];
-  const battle = { actor: '', menu: 'acoes', cmd: 'atacar', duel: { mine: '', target: '', theirs: '' }, man: { id: '', target: '' }, heal: { target: '', key: '' }, test: '', advance: '', pin: { id: '', key: '' }, name: '', xp: '' };
+  const battle = { actor: '', menu: 'acoes', cmd: 'atacar', duel: { mine: '', target: '', theirs: '' }, man: { id: '', target: '' }, heal: { target: '', key: '' }, test: '', advance: '', pin: { id: '', key: '' }, view: 'main', slot: '', aim: null, name: '', xp: '' };
   let lastRolls = [];
   const sceneTags = () => (scene && scene.tags) || {};
   const sceneOut = () => (scene && Array.isArray(scene.out) ? scene.out : []);
@@ -6439,7 +6440,7 @@ const FIREBASE_CONFIG = {
     if (!currentCamp) return;
     const gm = Boolean(currentCamp.gm);
     const list = combatants();
-    [...combat.targets].forEach((id) => { if (!list.some((x) => x.id === id)) combat.targets.delete(id); });
+    if (battle.aim) battle.aim.valid = battle.aim.valid.filter((id) => list.some((x) => x.id === id));
     const on = sceneOn();
     const cur = sceneCurrent();
     $('#ctab-live').hidden = !on;
@@ -6459,9 +6460,9 @@ const FIREBASE_CONFIG = {
     $('#arena-foes').replaceChildren(...foesIn.map((x) => fighterCard(x, gm, on)),
       ...(foesIn.length ? [] : [h('li', 'arena__empty', gm ? 'Nenhum inimigo. Use "Adicionar inimigo".' : 'Nenhum inimigo à vista.')]));
     renderBanner(gm, on, party, foesIn);
-    const tg = list.filter((x) => combat.targets.has(x.id));
-    $('#battle-hint').textContent = tg.length ? 'Alvo' + (tg.length > 1 ? 's' : '') + ': ' + tg.map((x) => x.name).join(', ') + '. Toque de novo para desmarcar.' : 'Toque num lutador para marcá-lo como alvo.';
     renderCmd(gm, on, list);
+    if (!renderAimBar(list)) $('#battle-hint').textContent = 'Escolha uma ação nos comandos; quando ela pedir alvo, os alvos possíveis acendem aqui.';
+    $('#arena').classList.toggle('arena--aim', Boolean(battle.aim));
     renderBattleLog();
     renderDock();
   }
@@ -6479,7 +6480,10 @@ const FIREBASE_CONFIG = {
     const tags = sceneTags()[x.id] || [];
     const cur = sceneCurrent();
     const now = Boolean(on && cur && cur.id === x.id);
-    const target = combat.targets.has(x.id);
+    const aim = battle.aim;
+    const aimable = Boolean(aim && aim.valid.indexOf(x.id) >= 0);
+    const shots = aimable ? aim.shots[x.id] || 0 : 0;
+    const target = shots > 0;
     const bars = x.layers.filter((l) => l.max > 0).reverse().map((l) => {
       const fill = h('span', 'fbar__fill');
       fill.style.width = clamp(Math.max(0, l.cur) / l.max * 100, 0, 100).toFixed(1) + '%';
@@ -6487,11 +6491,11 @@ const FIREBASE_CONFIG = {
     });
     const sel = h('button', 'fighter__sel', fighterPic(x),
       h('span', 'fighter__id', h('span', 'fighter__name', x.name), h('span', 'fighter__def', 'Defesa ' + x.def + (x.defNote ? ' (' + x.defNote + ')' : x.defRolled ? '' : ' (mín.)'))),
-      target ? h('span', 'fighter__aim', 'Alvo') : null);
+      target ? h('span', 'fighter__aim', '×' + shots) : aimable ? h('span', 'fighter__aim fighter__aim--can', 'Alvo') : null);
     sel.type = 'button';
-    sel.setAttribute('aria-pressed', String(target));
-    sel.setAttribute('aria-label', (target ? 'Desmarcar alvo: ' : 'Marcar como alvo: ') + x.name);
-    sel.addEventListener('click', () => { if (combat.targets.has(x.id)) combat.targets.delete(x.id); else combat.targets.add(x.id); renderBattle(); });
+    sel.disabled = !aimable;
+    if (aimable) sel.setAttribute('aria-label', aim.label + ': ' + x.name);
+    sel.addEventListener('click', () => aimPick(x));
     const chips = tags.map((t, i) => {
       const label = t.n + (t.r ? ' · ' + plural(t.r, 'rodada', 'rodadas') : '');
       if (!gm) return h('span', 'ftag', label);
@@ -6510,7 +6514,7 @@ const FIREBASE_CONFIG = {
       acts.push(act('Tirar', async () => { await db.removeFoe(currentCamp.id, x.foe.id); combat.targets.delete(x.id); }, 'fighter__act--bad'));
     }
     if (!x.foe && gm && !on) acts.push(act('Fora do combate', () => saveOut(x.id, true)));
-    return h('li', 'fighter' + (x.foe ? ' fighter--foe' : '') + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (state ? ' is-down' : ''),
+    return h('li', 'fighter' + (x.foe ? ' fighter--foe' : '') + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (aimable ? ' is-aimable' : aim ? ' is-dim' : '') + (state ? ' is-down' : ''),
       sel, h('div', 'fighter__bars', ...bars),
       state || chips.length ? h('div', 'fighter__tags', state ? h('span', 'ftag ftag--down', state) : null, ...chips) : null,
       acts.length ? h('div', 'fighter__acts', ...acts) : null);
@@ -6779,53 +6783,6 @@ const FIREBASE_CONFIG = {
   const actLog = (x, label, detail) => rollAs(x, { expr: 'ação', label: label.slice(0, 60), detail: detail.slice(0, 1450), total: 0, flag: '' });
   const rolledShow = (r) => (r.expr === 'ação' ? '✓' : String(r.total));
 
-  // o catálogo de ações de cada menu; when diz quando a ação aparece
-  const MENUS = [['acoes', 'Ações'], ['itens', 'Itens'], ['diversos', 'Diversos']];
-  const ACTIONS = {
-    acoes: [
-      { id: 'atacar', label: 'Atacar', cost: 'padrao' },
-      { id: 'manobra', label: 'Manobra', cost: 'padrao' },
-      { id: 'avancar', label: 'Avançar', cost: 'completa' },
-      { id: 'mirar', label: 'Mirar', cost: 'movimento' },
-      { id: 'mover', label: 'Deslocar-se', cost: 'movimento' },
-      { id: 'perceber', label: 'Perceber', cost: 'movimento' },
-      { id: 'esconder', label: 'Esconder-se', cost: 'padrao' },
-      { id: 'apoiar', label: 'Apoiar equipamento', cost: 'completa' },
-      { id: 'curar', label: 'Curar', cost: 'completa', char: true },
-      { id: 'levantar', label: 'Levantar-se', cost: 'movimento', when: (x) => hasTag(x.id, 'Caído') },
-      { id: 'soltar', label: 'Soltar-se', cost: 'padrao', when: (x) => hasTag(x.id, 'Agarrado') },
-      { id: 'poderes', label: 'Poderes', cost: '', char: true, when: (x) => powerButtons(x.member, sheetOf(x.member)).length > 0 }
-    ],
-    diversos: [
-      { id: 'disputa', label: 'Disputa', cost: '' },
-      { id: 'teste', label: 'Teste da ficha', cost: '' },
-      { id: 'defesa', label: 'Rolar defesa', cost: 'livre' },
-      { id: 'saquear', label: 'Saquear', cost: 'completa' },
-      { id: 'descanso', label: 'Descanso', cost: '', when: () => !sceneOn() },
-      { id: 'passar', label: 'Encerrar turno', cost: '', when: (x, gm) => sceneOn() && (econLive(x) || gm) }
-    ]
-  };
-  const ACTION_TEXT = {
-    atacar: 'Qualquer ataque é uma ação padrão. Só vale o que está nas mãos (ou desarmado); para pegar outra arma, use Itens. Com cadência, divida os disparos entre os alvos marcados.',
-    manobra: 'Teste de Manobra (Corpo + Luta) contra Resistência ou Reflexos do alvo, o melhor dele. Se você vencer, o efeito entra sozinho.',
-    avancar: 'Ação completa: anda em linha reta o dobro do deslocamento e, no fim, faz um ataque corpo a corpo (que não ativa habilidades) ou atropela quem estiver no caminho.',
-    mirar: 'Engaja a mira até o início do seu próximo turno (conta para a acuidade a distâncias longas e alvos cobertos).',
-    mover: 'Usa o seu deslocamento. Dá para trocar a ação padrão por mais um movimento.',
-    perceber: 'Analisar, procurar, investigar: teste de Sentidos.',
-    esconder: 'Precisa de algo que engane os sentidos (fumaça, escuridão, silêncio, camuflagem). Teste de Manha; o resultado vira a dificuldade para te achar.',
-    apoiar: 'Apoia a arma numa cobertura para atirar pelo campo de visão não coberto. Sair da cobertura é ação livre.',
-    curar: 'Teste contra a CD do alvo: 10 se o recurso está abaixo da metade, 6 se não, +2 por condição negativa. Recupera a diferença, mais o bônus do kit (que vale mesmo na falha).',
-    levantar: 'Sai do estado Caído.',
-    soltar: 'Disputa de Atletismo contra a Luta de quem agarra; se vencer, fica livre.',
-    poderes: 'Poderes que gastam PE. O gasto sai da ficha e vai para o registro.',
-    disputa: 'Teste contra teste: cada lado rola o seu; o maior total vence, e falha completa perde.',
-    teste: 'Qualquer teste da ficha, sem gastar ação.',
-    defesa: 'Rola a defesa da cena de novo: 2d6 + Corpo + Resistência. Abaixo da mínima, vale a mínima.',
-    saquear: 'Revistar um corpo ou um lugar: ação completa.',
-    descanso: 'Curto (1 a 4 horas): recupera metade de PV, PE e PA, e cada curto seguido recupera metade do anterior. Longo (8 horas ou mais): recupera tudo e zera a sequência.',
-    passar: 'Encerra o turno e passa a vez.'
-  };
-
   const MANEUVERS = [
     { id: 'derrubar', label: 'Derrubar', tag: 'Caído', text: 'Se vencer, o alvo fica Caído (–2 na defesa até se levantar).' },
     { id: 'empurrar', label: 'Empurrar', text: 'Se vencer, o alvo é empurrado 1,5 m para onde você escolher.' },
@@ -6858,6 +6815,138 @@ const FIREBASE_CONFIG = {
     return { win, r1, r2, text };
   }
 
+  // as ações do turno; cada uma abre a tela com o que dá para fazer com ela
+  const SLOTS = [
+    { id: 'padrao', label: 'Padrão', sub: 'Atacar, manobra, usar item' },
+    { id: 'movimento', label: 'Movimento', sub: 'Andar, mirar, sacar arma' },
+    { id: 'bonus', label: 'Bônus', sub: 'Poderes, sacar pistola' },
+    { id: 'completa', label: 'Completa', sub: 'Avançar, curar, saquear' },
+    { id: 'livre', label: 'Livre', sub: 'Testes, disputa, defesa' }
+  ];
+  /* go: 'now' faz na hora; 'aim' volta para a arena para escolher o alvo; 'cfg' abre as opções antes;
+     'itens' abre o inventário. when diz quando a ação aparece. */
+  const SLOT_ACTIONS = {
+    padrao: [
+      { id: 'atacar', label: 'Atacar', go: 'cfg' },
+      { id: 'manobra', label: 'Manobra', go: 'cfg' },
+      { id: 'usar', label: 'Usar item', go: 'itens', char: true },
+      { id: 'esconder', label: 'Esconder-se', go: 'now' },
+      { id: 'soltar', label: 'Soltar-se', go: 'now', when: (x) => hasTag(x.id, 'Agarrado') }
+    ],
+    movimento: [
+      { id: 'mover', label: 'Deslocar-se', go: 'now' },
+      { id: 'mirar', label: 'Mirar', go: 'now' },
+      { id: 'perceber', label: 'Perceber', go: 'now' },
+      { id: 'sacar', label: 'Sacar ou guardar arma', go: 'itens', char: true },
+      { id: 'levantar', label: 'Levantar-se', go: 'now', when: (x) => hasTag(x.id, 'Caído') }
+    ],
+    bonus: [
+      { id: 'poderes', label: 'Poderes', go: 'cfg', char: true, when: (x) => powerButtons(x.member, sheetOf(x.member)).length > 0 },
+      { id: 'pistola', label: 'Sacar ou guardar pistola', go: 'itens', char: true }
+    ],
+    completa: [
+      { id: 'avancar', label: 'Avançar', go: 'cfg' },
+      { id: 'curar', label: 'Curar', go: 'aim', char: true },
+      { id: 'apoiar', label: 'Apoiar equipamento', go: 'now' },
+      { id: 'saquear', label: 'Saquear', go: 'now' }
+    ],
+    livre: [
+      { id: 'teste', label: 'Teste da ficha', go: 'cfg' },
+      { id: 'disputa', label: 'Disputa', go: 'cfg' },
+      { id: 'defesa', label: 'Rolar defesa', go: 'now' },
+      { id: 'saque', label: 'Item de Saque', go: 'itens', char: true },
+      { id: 'descanso', label: 'Descanso', go: 'cfg', when: () => !sceneOn() },
+      { id: 'passar', label: 'Encerrar turno', go: 'now', when: (x, gm) => sceneOn() && (econLive(x) || gm) }
+    ]
+  };
+  const ACTION_TEXT = {
+    atacar: 'Escolha a arma (só o que está nas mãos, ou desarmado) e depois toque nos alvos. Com cadência, cada toque é um disparo.',
+    manobra: 'Teste de Manobra (Corpo + Luta) contra Resistência ou Reflexos do alvo, o melhor dele. Se você vencer, o efeito entra sozinho.',
+    usar: 'Consumíveis e utilitários: o saque já está incluído na ação.',
+    esconder: 'Precisa de algo que engane os sentidos. Teste de Manha; o resultado vira a dificuldade para te achar.',
+    soltar: 'Disputa de Atletismo contra a Luta de quem agarra.',
+    mover: 'Usa o seu deslocamento. Sem a de movimento, a padrão vira movimento.',
+    mirar: 'Mira engajada até o seu próximo turno.',
+    perceber: 'Analisar, procurar, investigar: teste de Sentidos.',
+    sacar: 'Pegar ou guardar uma arma. Precisa de mão livre; duas mãos precisa das duas.',
+    levantar: 'Sai do estado Caído.',
+    poderes: 'Poderes que gastam PE.',
+    pistola: 'Pistola e revólver se sacam e guardam com a ação bônus.',
+    avancar: 'Anda em linha reta o dobro do deslocamento e, no fim, ataca corpo a corpo (sem ativar habilidades) ou atropela quem estiver no caminho.',
+    curar: 'Escolha quem curar. CD 10 se o recurso está abaixo da metade, 6 se não, +2 por condição negativa.',
+    apoiar: 'Apoia a arma numa cobertura.',
+    saquear: 'Revistar um corpo ou um lugar.',
+    teste: 'Qualquer teste da ficha.',
+    disputa: 'Teste contra teste: escolha o seu teste e depois o adversário na arena.',
+    defesa: 'Rola a defesa da cena de novo (2d6 + Corpo + Resistência).',
+    saque: 'Uma vez por turno, sacar ou guardar um item de Saque sem gastar ações.',
+    descanso: 'Curto: metade de PV, PE e PA, e cada curto seguido recupera metade do anterior. Longo: tudo.',
+    passar: 'Passa a vez.'
+  };
+  const SLOT_LONG = { padrao: 'Ação padrão', movimento: 'Ação de movimento', bonus: 'Ação bônus', completa: 'Ação completa', livre: 'Ações livres' };
+  // custo de cada ação (o do slot, com exceções)
+  const costOfAct = (slot, a) => (a.go === 'itens' ? '' : slot === 'livre' ? (a.id === 'defesa' ? 'livre' : '') : slot);
+  const slotUsed = (x, k) => { if (!econLive(x)) return false; const e = econOf(x.id); return k === 'completa' ? e.padrao && e.movimento : k === 'livre' ? false : e[k]; };
+  const slotWhy = (x, k) => (k === 'livre' ? '' : econWhy(x, k));
+
+  /* Escolha de alvo na arena: battle.aim = { label, valid: [ids], max, shots: { id: n }, pick(x), confirm(shots) }.
+     Com max 1, tocar no alvo já age; com cadência, cada toque soma um disparo naquele alvo. */
+  function startAim(o) {
+    battle.aim = Object.assign({ max: 1, shots: {} }, o);
+    renderBattle();
+    const arena = $('#arena');
+    if (arena && arena.scrollIntoView) arena.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function endAim() { battle.aim = null; combat.targets.clear(); }
+  async function aimPick(x) {
+    const a = battle.aim;
+    if (!a || a.valid.indexOf(x.id) < 0) return;
+    if (a.max <= 1) {
+      endAim();
+      battle.view = 'main';
+      try { await a.pick(x); } catch (err) { toast(errorMessage(err)); }
+      renderBattle();
+      return;
+    }
+    const total = Object.values(a.shots).reduce((t, n) => t + n, 0);
+    if (total >= a.max) { toast('A cadência é ' + a.max + ': todos os disparos já têm alvo. Confirme ou limpe.'); return; }
+    a.shots[x.id] = (a.shots[x.id] || 0) + 1;
+    renderBattle();
+  }
+  function renderAimBar(list) {
+    const box = $('#battle-hint');
+    const a = battle.aim;
+    if (!a) return false;
+    const total = Object.values(a.shots).reduce((t, n) => t + n, 0);
+    const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => { endAim(); renderBattle(); });
+    const kids = [h('strong', 'aimbar__title', a.label), h('span', 'aimbar__txt', a.max > 1
+      ? 'Toque nos alvos destacados: cada toque é um disparo (' + total + ' de ' + a.max + ').' + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '')
+      : 'Toque num dos alvos destacados.')];
+    if (a.max > 1) {
+      const clear = h('button', 'btn btn--ghost btn--sm', 'Limpar');
+      clear.type = 'button';
+      clear.disabled = !total;
+      clear.addEventListener('click', () => { a.shots = {}; renderBattle(); });
+      const ok = h('button', 'btn btn--primary btn--sm', 'Disparar ' + plural(total, 'vez', 'vezes'));
+      ok.type = 'button';
+      ok.disabled = !total;
+      ok.addEventListener('click', async () => {
+        const shots = Object.assign({}, a.shots);
+        endAim();
+        battle.view = 'main';
+        try { await a.confirm(shots); } catch (err) { toast(errorMessage(err)); }
+        renderBattle();
+      });
+      kids.push(h('span', 'aimbar__btns', clear, ok, cancel));
+    } else kids.push(h('span', 'aimbar__btns', cancel));
+    box.replaceChildren(h('div', 'aimbar', ...kids));
+    return true;
+  }
+  const living = (list, actor) => list.filter((x) => x.id !== actor.id && !lifeState(x.layers));
+  const alliesOf = (list, actor) => list.filter((x) => Boolean(x.foe) === Boolean(actor.foe));
+
   function renderCmd(gm, on, list) {
     const box = $('#battle-cmd');
     const mine = list.filter((x) => (x.foe ? gm : x.member.mine));
@@ -6870,190 +6959,245 @@ const FIREBASE_CONFIG = {
     if (!actor && free) actor = mine.find((x) => x.id === battle.actor) || mine[0] || null;
     const title = h('h3', 'ff-window__title', 'Comandos');
     if (!actor) {
+      if (battle.aim) endAim();
       box.replaceChildren(title, h('p', 'cmd__wait', !mine.length
         ? (gm ? 'Adicione inimigos para agir por eles.' : 'Vincule um personagem seu a esta campanha (pela ficha) para agir.')
         : cur ? 'Aguardando: vez de ' + cur.name + '.' : 'Aguardando o mestre começar.'));
       return;
     }
+    if (battle.actor !== actor.id) { battle.view = 'main'; if (battle.aim) endAim(); }
     battle.actor = actor.id;
     const isTurn = econLive(actor);
     let who;
-    if (free && mine.length > 1) {
+    if (free && mine.length > 1 && !battle.aim) {
       const sel = h('select', 'input cmd__who');
       sel.id = 'cmd-who';
       sel.setAttribute('aria-label', 'Agir como');
       mine.forEach((x) => { const o = h('option', '', x.name + (on && cur && cur.id === x.id ? ' (na vez)' : '')); o.value = x.id; sel.append(o); });
       sel.value = actor.id;
-      sel.addEventListener('change', () => { battle.actor = sel.value; battle.pin = { id: sel.value, key: turnKey }; renderBattle(); });
+      sel.addEventListener('change', () => { battle.actor = sel.value; battle.pin = { id: sel.value, key: turnKey }; battle.view = 'main'; renderBattle(); });
       who = sel;
     } else who = h('strong', 'cmd__name', actor.name);
+    const head = h('div', 'cmd__head', title, who, isTurn ? h('span', 'cmd__turn', 'Sua vez') : null);
 
-    // menus e ações que valem para quem age
-    const menus = MENUS.filter((m) => m[0] !== 'itens' || !actor.foe);
-    if (!menus.some((m) => m[0] === battle.menu)) battle.menu = 'acoes';
-    const acts = battle.menu === 'itens' ? [] : ACTIONS[battle.menu].filter((a) => (!a.char || !actor.foe) && (!a.when || a.when(actor, gm)));
-    if (battle.menu !== 'itens' && !acts.some((a) => a.id === battle.cmd)) battle.cmd = acts[0].id;
-    const tabs = h('div', 'cmd__tabs', ...menus.map((m) => {
-      const b = h('button', 'cmd__tab' + (battle.menu === m[0] ? ' is-on' : ''), m[1]);
+    let body;
+    if (battle.aim) {
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => { endAim(); renderBattle(); });
+      body = h('div', 'cmd__panel', h('p', 'cmd__aim', '🎯 ' + battle.aim.label + ': escolha o alvo na arena.'), cancel);
+    } else if (battle.view === 'slot') body = slotView(actor, list, gm);
+    else if (battle.view === 'cfg') body = cfgView(actor, list, gm);
+    else if (battle.view === 'itens' && !actor.foe) body = h('div', 'cmd__panel', backBtn(battle.slot ? 'slot' : 'main'), itemsPanel(actor, list));
+    else body = mainView(actor, gm);
+    box.replaceChildren(head, body);
+  }
+  function backBtn(to) {
+    const b = h('button', 'cmd__back', '◀ Voltar');
+    b.type = 'button';
+    b.dataset.fid = 'cmd-back';
+    b.addEventListener('click', () => { battle.view = to; if (to === 'main') battle.slot = ''; renderBattle(); });
+    return b;
+  }
+
+  // tela principal: as ações do turno em cinza até serem usadas
+  function mainView(actor, gm) {
+    battle.view = 'main';
+    const live = econLive(actor);
+    const slots = SLOTS.map((sl) => {
+      const used = slotUsed(actor, sl.id);
+      const why = slotWhy(actor, sl.id);
+      const b = h('button', 'tslot tslot--' + sl.id + (used ? ' is-used' : '') + (why ? ' is-off' : ''),
+        h('span', 'tslot__name', sl.label), h('span', 'tslot__sub', used ? (sl.id === 'movimento' && !why ? 'Usada · dá com a padrão' : 'Usada') : why ? 'Indisponível' : sl.sub));
       b.type = 'button';
-      b.dataset.fid = 'menu-' + m[0];
-      b.setAttribute('aria-pressed', String(battle.menu === m[0]));
-      b.addEventListener('click', () => { battle.menu = m[0]; battle.cmd = ''; renderBattle(); });
+      b.dataset.fid = 'slot-' + sl.id;
+      if (why) { b.disabled = true; b.title = why; }
+      b.addEventListener('click', () => { battle.slot = sl.id; battle.view = 'slot'; renderBattle(); });
       return b;
-    }));
-    const listEl = battle.menu === 'itens' ? null : h('div', 'cmd__menu', ...acts.map((a) => {
-      const why = econWhy(actor, a.cost);
-      const b = h('button', 'cmd__item' + (battle.cmd === a.id ? ' is-on' : '') + (why ? ' is-spent' : ''), h('span', '', a.label), costChip(a.cost));
+    });
+    const extra = [];
+    if (!actor.foe) {
+      const inv = h('button', 'btn btn--ghost btn--sm', 'Itens');
+      inv.type = 'button';
+      inv.dataset.fid = 'cmd-itens';
+      inv.addEventListener('click', () => { battle.slot = ''; battle.view = 'itens'; renderBattle(); });
+      extra.push(inv);
+    }
+    if (live) {
+      const reset = h('button', 'btn btn--ghost btn--sm', 'Repor ações');
+      reset.type = 'button';
+      reset.title = 'Desfaz o gasto de ações deste turno (para corrigir um engano)';
+      reset.addEventListener('click', () => { delete econ[actor.id]; renderBattle(); });
+      extra.push(reset);
+    }
+    if (sceneOn() && (live || gm)) extra.push(gmBtn('Encerrar turno ▶', 'btn--primary', () => stepTurn(1)));
+    return h('div', 'cmd__panel',
+      h('p', 'cmd__note', live ? 'Toque numa ação do turno para ver o que dá para fazer com ela. As usadas ficam marcadas.' : sceneOn() ? 'Fora da vez: as ações não são contadas (reações e livres valem sempre).' : 'Fora do combate: as ações não são contadas.'),
+      h('div', 'tslots', ...slots),
+      h('div', 'cmd__row', ...extra));
+  }
+
+  // tela de ações de um tipo
+  function slotView(actor, list, gm) {
+    const sl = SLOTS.find((x) => x.id === battle.slot) || SLOTS[0];
+    const acts = SLOT_ACTIONS[sl.id].filter((a) => (!a.char || !actor.foe) && (!a.when || a.when(actor, gm)));
+    const why = slotWhy(actor, sl.id);
+    const items = acts.map((a) => {
+      const b = h('button', 'cmd__item', h('span', 'cmd__item-name', a.label), h('span', 'cmd__item-txt', ACTION_TEXT[a.id] || ''));
       b.type = 'button';
       b.dataset.fid = 'cmd-' + a.id;
-      b.setAttribute('aria-pressed', String(battle.cmd === a.id));
-      if (why) b.title = why;
-      b.addEventListener('click', () => { if (a.id === 'passar') { stepTurn(1); return; } battle.cmd = a.id; renderBattle(); });
-      return b;
-    }));
-
-    const targets = list.filter((x) => combat.targets.has(x.id));
-    let panel;
-    if (battle.menu === 'itens') panel = itemsPanel(actor, list);
-    else {
-      const a = acts.find((y) => y.id === battle.cmd);
-      const why = econWhy(actor, a.cost);
-      const body = actionPanel(a, actor, list, targets, gm);
-      const head = h('div', 'cmd__about', h('strong', '', a.label), costChip(a.cost), h('span', '', ACTION_TEXT[a.id] || ''));
-      if (why) {
-        const fs = h('fieldset', 'cmd__lock', body);
-        fs.disabled = true;
-        panel = h('div', 'cmd__panel', head, h('p', 'cmd__warn', why), fs);
-      } else panel = h('div', 'cmd__panel', head, body);
-    }
-    box.replaceChildren(h('div', 'cmd__head', title, who, isTurn ? h('span', 'cmd__turn', 'Sua vez') : null), econStrip(actor), tabs,
-      h('div', 'cmd__body' + (listEl ? '' : ' cmd__body--wide'), listEl, panel));
-  }
-
-  // o que ainda resta no turno de quem age
-  function econStrip(actor) {
-    if (!econLive(actor)) return h('p', 'econ econ--off', sceneOn() ? 'Fora da vez: só reações e ações livres contam (o mestre pode agir por qualquer um).' : 'Fora do combate: as ações não são contadas.');
-    const e = econOf(actor.id);
-    const pill = (k, used) => h('span', 'econ__pill econ__pill--' + k + (used ? ' is-used' : ''), COST_LABEL[k]);
-    const reset = h('button', 'econ__reset', 'Repor');
-    reset.type = 'button';
-    reset.title = 'Desfaz o gasto de ações deste turno (para corrigir um engano)';
-    reset.addEventListener('click', () => { delete econ[actor.id]; renderBattle(); });
-    return h('div', 'econ', h('span', 'econ__label', 'No turno:'), pill('padrao', e.padrao), pill('movimento', e.movimento), pill('bonus', e.bonus), pill('saque', e.saque),
-      h('span', 'econ__free', 'livres e reações à vontade'), reset);
-  }
-
-  // o corpo de cada ação do menu
-  function actionPanel(a, actor, list, targets, gm) {
-    const id = a.id;
-    const mb = actor.member;
-    const go = (label, fn, cls) => gmBtn(label, cls || 'btn--primary', fn);
-    if (id === 'atacar') return attackPanel(actor, targets, false);
-    if (id === 'manobra') return maneuverPanel(actor, list);
-    if (id === 'avancar') {
-      const others = list.filter((x) => x.id !== actor.id && !lifeState(x.layers));
-      const tgt = others.find((x) => combat.targets.has(x.id)) || null;
-      return h('div', 'cmd__stack',
-        h('div', 'cmd__row',
-          go('Avançar e atacar', async () => {
-            econPay(actor, 'completa');
-            battle.advance = actor.id;
-            battle.cmd = 'atacar';
-            await actLog(actor, 'Avançar', 'Ação completa: corre o dobro do deslocamento em linha reta e ataca corpo a corpo.');
-            renderBattle();
-          }),
-          tgt ? go('Avançar e atropelar ' + tgt.name, () => runManeuver(actor, tgt, { id: 'atropelar', label: 'Atropelar', tag: 'Caído' }, 'completa')) : h('span', 'cmd__note', 'Marque um alvo para atropelar.')));
-    }
-    if (id === 'mirar') return go('Mirar', async () => { const c = econPay(actor, 'movimento'); await addTag(actor.id, 'Mirando', 1); await actLog(actor, 'Mirar', c + ': mira engajada até o próximo turno.'); });
-    if (id === 'apoiar') return go('Apoiar o equipamento', async () => { const c = econPay(actor, 'completa'); await addTag(actor.id, 'Apoiado', 0); await actLog(actor, 'Apoiar equipamento', c + ': arma apoiada na cobertura.'); });
-    if (id === 'mover') return go('Deslocar-se', async () => { const c = econPay(actor, 'movimento'); await actLog(actor, 'Deslocamento', c + '.'); renderBattle(); });
-    if (id === 'levantar') return go('Levantar-se', async () => { const c = econPay(actor, 'movimento'); await dropTag(actor.id, 'Caído'); await actLog(actor, 'Levantar-se', c + ': não está mais caído.'); });
-    if (id === 'saquear') return go('Saquear', async () => { const c = econPay(actor, 'completa'); await actLog(actor, 'Saquear', c + ': revista o lugar ou o corpo; o mestre diz o que acha.'); renderBattle(); });
-    if (id === 'perceber' || id === 'esconder') {
-      const sk = id === 'perceber' ? 'sentidos' : 'manha';
-      const t = sideTest(actor, sk);
-      return go((id === 'perceber' ? 'Perceber' : 'Esconder-se') + ' · ' + t.skillName + ' ' + signed(fixedOf(t)), async () => {
-        const c = econPay(actor, a.cost);
-        const r = rollTest(t);
-        r.label = (id === 'perceber' ? 'Perceber' : 'Esconder-se') + ' (' + t.skillName + ')';
-        r.detail = c + ' · ' + r.detail;
-        if (id === 'esconder' && r.flag !== 'falha') await addTag(actor.id, 'Escondido', 0);
-        await rollAs(actor, r);
+      if (why && a.go !== 'itens') { b.disabled = true; b.title = why; }
+      b.addEventListener('click', async () => {
+        if (a.go === 'itens') { battle.view = 'itens'; renderBattle(); return; }
+        if (a.go === 'cfg') { battle.cmd = a.id; battle.view = 'cfg'; renderBattle(); return; }
+        if (a.go === 'aim') { aimFor(a.id, actor, list); return; }
+        b.disabled = true;
+        try { await doNow(a.id, actor, list, costOfAct(sl.id, a)); } catch (err) { toast(errorMessage(err)); }
+        battle.view = 'main';
+        renderBattle();
       });
+      return b;
+    });
+    return h('div', 'cmd__panel', h('div', 'cmd__row', backBtn('main'), h('strong', 'cmd__slot-title', SLOT_LONG[sl.id])),
+      why ? h('p', 'cmd__warn', why) : null,
+      h('div', 'cmd__menu', ...items));
+  }
+
+  // ações que acontecem na hora, sem alvo
+  async function doNow(id, actor, list, cost) {
+    if (id === 'passar') { stepTurn(1); return; }
+    if (id === 'defesa') { await rollDefense(actor); return; }
+    const c = econPay(actor, cost);
+    if (id === 'mirar') { await addTag(actor.id, 'Mirando', 1); await actLog(actor, 'Mirar', c + ': mira engajada até o próximo turno.'); return; }
+    if (id === 'apoiar') { await addTag(actor.id, 'Apoiado', 0); await actLog(actor, 'Apoiar equipamento', c + ': arma apoiada na cobertura.'); return; }
+    if (id === 'mover') { await actLog(actor, 'Deslocamento', c + '.'); return; }
+    if (id === 'levantar') { await dropTag(actor.id, 'Caído'); await actLog(actor, 'Levantar-se', c + ': não está mais caído.'); return; }
+    if (id === 'saquear') { await actLog(actor, 'Saquear', c + ': revista o lugar ou o corpo; o mestre diz o que acha.'); return; }
+    if (id === 'perceber' || id === 'esconder') {
+      const t = sideTest(actor, id === 'perceber' ? 'sentidos' : 'manha');
+      const r = rollTest(t);
+      r.label = (id === 'perceber' ? 'Perceber' : 'Esconder-se') + ' (' + t.skillName + ')';
+      r.detail = c + ' · ' + r.detail;
+      if (id === 'esconder' && r.flag !== 'falha') await addTag(actor.id, 'Escondido', 0);
+      await rollAs(actor, r);
+      return;
     }
     if (id === 'soltar') {
       const grab = list.find((x) => x.id !== actor.id && hasTag(x.id, 'Agarrando'));
-      return go('Tentar se soltar', async () => {
-        const c = econPay(actor, 'padrao');
-        if (!grab) { await dropTag(actor.id, 'Agarrado'); await actLog(actor, 'Soltar-se', c + ': ninguém segura mais; está livre.'); return; }
-        const res = contest(actor, sideTest(actor, 'atletismo'), grab, sideTest(grab, 'luta'));
-        if (res.win) { await dropTag(actor.id, 'Agarrado'); await dropTag(grab.id, 'Agarrando'); }
-        await rollAs(actor, { expr: res.r1.expr, label: 'Soltar-se de ' + grab.name, total: res.r1.total, flag: res.r1.flag, detail: c + ' · ' + res.text + ' → ' + (res.win ? 'livre' : 'continua agarrado') });
-      });
+      if (!grab) { await dropTag(actor.id, 'Agarrado'); await actLog(actor, 'Soltar-se', c + ': ninguém segura mais; está livre.'); return; }
+      const res = contest(actor, sideTest(actor, 'atletismo'), grab, sideTest(grab, 'luta'));
+      if (res.win) { await dropTag(actor.id, 'Agarrado'); await dropTag(grab.id, 'Agarrando'); }
+      await rollAs(actor, { expr: res.r1.expr, label: 'Soltar-se de ' + grab.name, total: res.r1.total, flag: res.r1.flag, detail: c + ' · ' + res.text + ' → ' + (res.win ? 'livre' : 'continua agarrado') });
     }
-    if (id === 'curar') return healPanel(actor, list);
-    if (id === 'poderes') return h('div', 'cmd__powers', ...powerButtons(mb, sheetOf(mb)));
-    if (id === 'disputa') return duelPanel(actor, list);
-    if (id === 'teste') {
-      const tests = testsOf(actor);
-      if (!tests.some((t) => t.id === battle.test)) battle.test = tests[0].id;
-      const s = h('select', 'input');
-      s.id = 'cmd-test';
-      tests.forEach((t) => { const o = h('option', '', t.label); o.value = t.id; s.append(o); });
-      s.value = battle.test;
-      s.addEventListener('change', () => { battle.test = s.value; });
-      const l = h('label', 'field__label', 'Teste');
-      l.htmlFor = s.id;
-      return h('div', 'cmd__row', h('div', 'field', l, s), go('Rolar', async () => { const t = tests.find((y) => y.id === battle.test); if (t) await rollAs(actor, rollTest(t.make())); }));
-    }
-    if (id === 'defesa') return go('Rolar defesa de ' + actor.name + ' (agora ' + actor.def + ')', () => rollDefense(actor));
-    if (id === 'descanso') {
-      const party = list.filter((x) => !x.foe);
-      const group = gm;
-      const whom = gm ? party.map((x) => x.member) : actor.foe ? [] : [mb];
-      if (!whom.length) return h('p', 'cmd__note', 'Inimigos não descansam por aqui.');
-      return h('div', 'cmd__stack',
-        h('p', 'cmd__note', group ? 'Descansa o grupo todo (' + party.map((x) => x.name).join(', ') + '). Nas lojas com NPCs comprando, o descanso também pode vender o que está à venda.' : 'Descansa ' + actor.name + '.'),
-        h('div', 'cmd__row', go('Descanso curto', () => restMembers(whom, false), 'btn--ghost'), go('Descanso longo', () => restMembers(whom, true))));
-    }
-    return h('p', 'cmd__note', '');
   }
 
-  // Atacar: o que está nas mãos (ou desarmado); avançando, o ataque é só corpo a corpo e já está pago
-  function attackPanel(actor, targets) {
+  // ações que pedem alvo direto
+  function aimFor(id, actor, list) {
+    if (id === 'curar') {
+      const allies = alliesOf(list, actor);
+      startAim({ label: 'Curar', valid: allies.map((x) => x.id), pick: (x) => { battle.heal.target = x.id; battle.heal.key = ''; battle.cmd = 'curar'; battle.view = 'cfg'; } });
+    }
+  }
+
+  // tela de opções de uma ação antes do alvo (ou sem alvo)
+  function cfgView(actor, list, gm) {
+    const id = battle.cmd;
+    const back = backBtn('slot');
+    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', teste: 'Teste da ficha', disputa: 'Disputa', descanso: 'Descanso', poderes: 'Poderes' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
+    let body;
+    if (id === 'atacar') body = attackCfg(actor, list);
+    else if (id === 'manobra') body = maneuverCfg(actor, list);
+    else if (id === 'avancar') {
+      const others = living(list, actor);
+      body = h('div', 'cmd__row',
+        gmBtn('Avançar e atacar', 'btn--primary', async () => {
+          econPay(actor, 'completa');
+          battle.advance = actor.id;
+          battle.cmd = 'atacar';
+          await actLog(actor, 'Avançar', 'Ação completa: corre o dobro do deslocamento em linha reta e ataca corpo a corpo.');
+          renderBattle();
+        }),
+        gmBtn('Avançar e atropelar', 'btn--ghost', async () => {
+          if (!others.length) { toast('Ninguém no caminho.'); return; }
+          startAim({ label: 'Atropelar', valid: others.map((x) => x.id), pick: (x) => runManeuver(actor, x, { id: 'atropelar', label: 'Atropelar', tag: 'Caído' }, 'completa') });
+        }));
+    } else if (id === 'curar') body = healPanel(actor, list);
+    else if (id === 'poderes') body = h('div', 'cmd__powers', ...powerButtons(actor.member, sheetOf(actor.member)));
+    else if (id === 'teste') {
+      const tests = testsOf(actor);
+      if (!tests.some((t) => t.id === battle.test)) battle.test = tests[0].id;
+      body = h('div', 'cmd__row', selField('cmd-test', 'Teste', tests.map((t) => [t.id, t.label]), battle.test, (v) => { battle.test = v; }),
+        gmBtn('Rolar', 'btn--primary', async () => { const t = tests.find((y) => y.id === battle.test); if (t) await rollAs(actor, rollTest(t.make())); battle.view = 'main'; renderBattle(); }));
+    } else if (id === 'disputa') body = duelCfg(actor, list);
+    else if (id === 'descanso') {
+      const party = list.filter((x) => !x.foe);
+      const whom = gm ? party.map((x) => x.member) : actor.foe ? [] : [actor.member];
+      body = !whom.length ? h('p', 'cmd__note', 'Inimigos não descansam por aqui.') : h('div', 'cmd__stack',
+        h('p', 'cmd__note', gm ? 'Descansa o grupo todo (' + party.map((x) => x.name).join(', ') + '). Nas lojas com NPCs comprando, o descanso também pode vender o que está à venda.' : 'Descansa ' + actor.name + '.'),
+        h('div', 'cmd__row', gmBtn('Descanso curto', 'btn--ghost', () => restMembers(whom, false)), gmBtn('Descanso longo', 'btn--primary', () => restMembers(whom, true))));
+    } else body = h('p', 'cmd__note', '');
+    return h('div', 'cmd__panel', back, about, body);
+  }
+  function selField(id, label, opts, val, fn) {
+    const s = h('select', 'input');
+    s.id = id;
+    opts.forEach((o) => { const op = h('option', '', o[1]); op.value = o[0]; s.append(op); });
+    s.value = val;
+    s.addEventListener('change', () => { fn(s.value); renderBattle(); });
+    const l = h('label', 'field__label', label);
+    l.htmlFor = id;
+    return h('div', 'field', l, s);
+  }
+
+  // Atacar: escolhe a arma e as opções; o botão volta para a arena para escolher os alvos
+  function attackCfg(actor, list) {
     const adv = battle.advance === actor.id;
     const cost = adv ? '' : 'padrao';
-    const tl = h('p', 'cmd__note', (adv ? 'Ataque do avanço: corpo a corpo, já pago, não ativa habilidades. ' : '') + (targets.length ? 'Contra: ' + targets.map((x) => x.name + ' (defesa ' + x.def + ')').join(', ') + '. O dano entra sozinho.' : 'Sem alvo: o ataque só rola. Toque num lutador para marcar.'));
-    const done = () => { if (adv) battle.advance = ''; };
+    const valid = living(list, actor);
+    const note = h('p', 'cmd__note', adv ? 'Ataque do avanço: corpo a corpo, já pago, não ativa habilidades.' : 'Depois de escolher, toque nos alvos na arena.');
+    const go = async (who, st, shots, peekBuild) => {
+      combat.targets = new Set(Object.keys(shots));
+      st.per = shots;
+      st.shots = Object.values(shots).reduce((t, n) => t + n, 0);
+      const t = peekBuild();
+      const paid = adv ? 'parte do avanço' : econPay(actor, cost);
+      if (adv) battle.advance = '';
+      await runAttack(who, t, st, h('button'), paid);
+    };
     if (actor.foe) {
       const st = combat.st[actor.id] = combat.st[actor.id] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
       if (adv) st.mode = 'Corpo a corpo';
-      return h('div', 'cmd__stack', tl, foeAttackBuilder(actor.foe, st, () => { const p = adv ? 'parte do avanço' : econPay(actor, cost); done(); return p; }));
+      const v = foeVals(actor.foe);
+      const cad = st.mode === 'Corpo a corpo' ? 1 : clamp(Math.round(num(v.cadencia)) || 1, 1, 20);
+      const peek = () => { let t = null; foeAttackBuilder(actor.foe, st, null, { peek: (x) => { t = x; } }); return t; };
+      return h('div', 'cmd__stack', note, foeAttackBuilder(actor.foe, st, null, { aim: () => {
+        startAim({ label: 'Ataque de ' + actor.name, valid: valid.map((x) => x.id), max: cad,
+          pick: (x) => go({ foe: actor.foe }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ foe: actor.foe }, st, shots, peek) });
+      } }));
     }
     const mb = actor.member;
     const c = sheetOf(mb);
     const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
-    return h('div', 'cmd__stack', tl, attackBuilder(Object.assign({}, c, { handsOnly: true, meleeOnly: adv, btnLabel: targets.length ? 'Atacar os alvos' : 'Atacar', targets: targets.map((x) => ({ id: x.id, name: x.name })) }), st, async (t, b) => {
-      const paid = adv ? 'parte do avanço' : econPay(actor, cost);
-      t.label = t.label.slice(0, 60);
-      done();
-      if (combat.targets.size) { await runAttack({ member: mb, c }, t, st, b, paid); return; }
-      b.disabled = true;
-      const r = rollTest(t);
-      r.detail = paid + ' · ' + r.detail;
-      await campaignRoll(mb, r);
-      b.disabled = false;
-      renderBattle();
+    const base = Object.assign({}, c, { handsOnly: true, meleeOnly: adv });
+    return h('div', 'cmd__stack', note, attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
+      const weapon = weaponsOf(c.sheet).find((w) => w.uid === st.uid) || null;
+      const cad = maxShots(weapon);
+      const peek = () => {
+        let t = null;
+        const targets = combatants().filter((x) => combat.targets.has(x.id)).map((x) => ({ id: x.id, name: x.name }));
+        attackBuilder(Object.assign({}, base, { targets, peek: (x) => { t = x; } }), st, () => {}, 'pk-');
+        return t;
+      };
+      startAim({ label: 'Ataque: ' + (weapon ? weapon.name : 'desarmado'), valid: valid.map((x) => x.id), max: cad,
+        pick: (x) => go({ member: mb, c }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ member: mb, c }, st, shots, peek) });
     }, 'cmd-'));
   }
 
-  function maneuverPanel(actor, list) {
-    const others = list.filter((x) => x.id !== actor.id && !lifeState(x.layers));
+  function maneuverCfg(actor, list) {
+    const others = living(list, actor);
     if (!others.length) return h('p', 'cmd__note', 'Ninguém para manobrar.');
     const d = battle.man;
-    if (!others.some((x) => x.id === d.target)) d.target = ([...combat.targets].find((id) => others.some((x) => x.id === id))) || others[0].id;
     if (!MANEUVERS.some((m) => m.id === d.id)) d.id = MANEUVERS[0].id;
-    const tgt = others.find((x) => x.id === d.target);
     const man = MANEUVERS.find((m) => m.id === d.id);
     const opts = h('div', 'cmd__chips', ...MANEUVERS.map((m) => {
       const b = h('button', 'man__opt' + (m.id === d.id ? ' is-on' : ''), m.label);
@@ -7063,18 +7207,30 @@ const FIREBASE_CONFIG = {
       b.addEventListener('click', () => { d.id = m.id; renderBattle(); });
       return b;
     }));
-    const sel = h('select', 'input');
-    sel.id = 'man-target';
-    others.forEach((x) => { const o = h('option', '', x.name); o.value = x.id; sel.append(o); });
-    sel.value = d.target;
-    sel.addEventListener('change', () => { d.target = sel.value; renderBattle(); });
-    const l = h('label', 'field__label', 'Alvo');
-    l.htmlFor = sel.id;
     const mine = sideTest(actor, 'luta');
-    const theirs = resistPick(tgt)[1];
-    return h('div', 'cmd__stack', opts, h('p', 'cmd__note', man.text),
-      h('div', 'cmd__row', h('div', 'field', l, sel),
-        gmBtn(man.label + ' · Luta ' + signed(fixedOf(mine)) + ' × ' + theirs.skillName + ' ' + signed(fixedOf(theirs)), 'btn--primary', () => runManeuver(actor, tgt, man, 'padrao'))));
+    return h('div', 'cmd__stack', opts, h('p', 'cmd__note', man.text + ' Seu teste: Luta ' + signed(fixedOf(mine)) + '.'),
+      gmBtn('Escolher alvo', 'btn--primary', () => startAim({ label: man.label, valid: others.map((x) => x.id), pick: (x) => runManeuver(actor, x, man, 'padrao') })));
+  }
+
+  // Disputa: escolhe o seu teste; o adversário rola o mesmo teste (ou o melhor que tiver)
+  function duelCfg(actor, list) {
+    const others = list.filter((x) => x.id !== actor.id);
+    if (!others.length) return h('p', 'cmd__note', 'Ninguém para disputar.');
+    const d = battle.duel;
+    const mineT = testsOf(actor);
+    if (!mineT.some((t) => t.id === d.mine)) d.mine = mineT[0].id;
+    return h('div', 'cmd__row', selField('duel-mine', 'Seu teste', mineT.map((t) => [t.id, t.label]), d.mine, (v) => { d.mine = v; }),
+      gmBtn('Escolher adversário', 'btn--primary', () => startAim({ label: 'Disputa', valid: others.map((x) => x.id), pick: async (foe) => {
+        const t1 = mineT.find((t) => t.id === d.mine);
+        const theirT = testsOf(foe);
+        const t2 = theirT.find((t) => t.id === d.mine) || theirT.find((t) => t.id.slice(2) === d.mine.slice(2)) || theirT[0];
+        const r1 = rollTest(t1.make()), r2 = rollTest(t2.make());
+        const s1 = r1.flag === 'falha' ? -1 : r1.total, s2 = r2.flag === 'falha' ? -1 : r2.total;
+        const res = s1 === s2 ? 'empate' : (s1 > s2 ? actor.name : foe.name) + ' vence';
+        await rollAs(actor, { expr: r1.expr, label: ('Disputa: ' + t1.make().label.replace('Teste de ', '') + ' × ' + foe.name).slice(0, 60), total: r1.total, flag: r1.flag,
+          detail: (actor.name + ' ' + r1.detail + ' = ' + r1.total + (r1.flag === 'falha' ? ' (falha completa)' : '') + ' | ' + foe.name + ' (' + t2.make().label.replace('Teste de ', '') + ') ' + r2.detail + ' = ' + r2.total + (r2.flag === 'falha' ? ' (falha completa)' : '') + ' → ' + res).slice(0, 1450) });
+        toast('Disputa: ' + actor.name + ' ' + r1.total + ' × ' + r2.total + ' ' + foe.name + ' → ' + res + '.');
+      } })));
   }
 
   async function runManeuver(actor, tgt, man, cost) {
@@ -7182,6 +7338,7 @@ const FIREBASE_CONFIG = {
         r.label = ('Curar ' + hl.label + ': ' + tgt.name).slice(0, 60);
         r.detail = paid + ' · ' + r.detail + ' contra CD ' + cd + ' → ' + (got ? '+' + got + ' ' + hl.label : 'nada recuperado') + ' · ' + kit.name + left;
         await campaignRoll(mb, r);
+        battle.view = 'main';
         toast(tgt.name + ': ' + (got ? '+' + got + ' ' + hl.label : 'a cura não pegou') + '.');
         renderBattle();
       }));
@@ -7215,7 +7372,7 @@ const FIREBASE_CONFIG = {
     const bag = items.filter((i) => !i.slot);
     const used = held.reduce((t, i) => t + (twoHanded(i) ? 2 : 1), 0);
     const btn = (label, cost, fn, why) => {
-      const b = h('button', 'inv__act', label, costChip(cost));
+      const b = h('button', 'inv__act', label);
       b.type = 'button';
       const block = why || econWhy(actor, cost);
       if (block) { b.disabled = true; b.title = block; }
@@ -7223,10 +7380,16 @@ const FIREBASE_CONFIG = {
       return b;
     };
     const facts = (i) => [i.values.empunhadura, i.values.tipoUso, i.values.dano ? 'dano ' + i.values.dano : '', i.values.cadencia && num(i.values.cadencia) > 1 ? 'cadência ' + i.values.cadencia : '', i.values.bonusRec].filter(Boolean).join(' · ');
-    const allyTarget = () => list.find((x) => !x.foe && combat.targets.has(x.id)) || actor;
+    // com bônus de recuperação, volta para a arena para escolher em quem usar
     const useItem = (i) => async () => {
       const rec = recOf(i);
-      const tgt = allyTarget();
+      if (Object.keys(rec).some((k) => rec[k])) {
+        startAim({ label: 'Usar ' + i.name, valid: alliesOf(list, actor).map((x) => x.id), pick: (x) => applyItem(i, rec, x) });
+        return;
+      }
+      await applyItem(i, rec, actor);
+    };
+    const applyItem = async (i, rec, tgt) => {
       const paid = econPay(actor, 'padrao');
       let left = '';
       await patchMemberSheet(mb, (ss) => { left = spendItem(ss, i.uid); });
@@ -7244,7 +7407,7 @@ const FIREBASE_CONFIG = {
     const row = (i, inHand) => {
       const acts = [];
       if (inHand) {
-        if (isWeapon(i.kind)) acts.push(btn('Atacar', 'padrao', async () => { const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' }; st.uid = i.uid; st.mode = ''; st.shots = 1; battle.menu = 'acoes'; battle.cmd = 'atacar'; }));
+        if (isWeapon(i.kind)) acts.push(btn('Atacar', 'padrao', async () => { const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' }; st.uid = i.uid; st.mode = ''; st.shots = 1; battle.slot = 'padrao'; battle.cmd = 'atacar'; battle.view = 'cfg'; }));
         const cost = drawCost(actor, i);
         acts.push(btn('Guardar', cost, async () => {
           const paid = econPay(actor, cost);
@@ -7278,9 +7441,8 @@ const FIREBASE_CONFIG = {
         h('span', 'inv__main', h('span', 'inv__name', i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '')), h('span', 'inv__facts', facts(i) + uses)),
         h('span', 'inv__acts', ...acts));
     };
-    const target = allyTarget();
     return h('div', 'cmd__panel inv',
-      h('p', 'cmd__note', 'Mãos: ' + used + ' de 2 ocupadas. Arma se pega com ação de movimento (pistola com bônus); itens de Saque, uma vez por turno, de graça. Usar um consumível é ação padrão' + (target.id !== actor.id ? ' e vale para ' + target.name + ' (alvo marcado)' : '') + '.'),
+      h('p', 'cmd__note', 'Mãos: ' + used + ' de 2 ocupadas. Só aparece o que ' + actor.name + ' tem; o que não dá para pegar agora fica apagado.'),
       h('h4', 'inv__title', 'Nas mãos'),
       h('ul', 'inv__list', ...(held.length ? held.map((i) => row(i, true)) : [h('li', 'inv__empty', 'Mãos vazias: ataque desarmado.')])),
       h('h4', 'inv__title', 'Na mochila'),
@@ -7321,44 +7483,6 @@ const FIREBASE_CONFIG = {
     renderBattle();
   }
 
-  // Disputa: teste contra teste (quem age × um alvo); vence o maior total, falha completa perde
-  function duelPanel(actor, list) {
-    const others = list.filter((x) => x.id !== actor.id);
-    const d = battle.duel;
-    if (!others.some((x) => x.id === d.target)) d.target = ([...combat.targets].find((id) => id !== actor.id && others.some((x) => x.id === id))) || (others[0] ? others[0].id : '');
-    const foe = others.find((x) => x.id === d.target);
-    const mineT = testsOf(actor);
-    if (!mineT.some((t) => t.id === d.mine)) d.mine = mineT[0].id;
-    const theirT = foe ? testsOf(foe) : [];
-    if (foe && !theirT.some((t) => t.id === d.theirs)) d.theirs = (theirT.find((t) => t.id === d.mine) || theirT[0]).id;
-    const sel = (opts, val, fn, id, label) => {
-      const s = h('select', 'input');
-      s.id = id;
-      opts.forEach((o) => { const op = h('option', '', o[1]); op.value = o[0]; s.append(op); });
-      s.value = val;
-      s.addEventListener('change', () => { fn(s.value); renderBattle(); });
-      const l = h('label', 'field__label', label);
-      l.htmlFor = id;
-      return h('div', 'field', l, s);
-    };
-    if (!foe) return h('p', 'cmd__note', 'Ninguém para disputar.');
-    const go = gmBtn('Rolar a disputa', 'btn--primary', async () => {
-      const t1 = mineT.find((t) => t.id === d.mine), t2 = theirT.find((t) => t.id === d.theirs);
-      const r1 = rollTest(t1.make()), r2 = rollTest(t2.make());
-      const s1 = r1.flag === 'falha' ? -1 : r1.total, s2 = r2.flag === 'falha' ? -1 : r2.total;
-      const res = s1 === s2 ? 'empate' : (s1 > s2 ? actor.name : foe.name) + ' vence';
-      const r = { expr: r1.expr, label: ('Disputa: ' + t1.make().label.replace('Teste de ', '') + ' × ' + foe.name).slice(0, 60), total: r1.total, flag: r1.flag,
-        detail: (actor.name + ' ' + r1.detail + ' = ' + r1.total + (r1.flag === 'falha' ? ' (falha completa)' : '') + ' | ' + foe.name + ' (' + t2.make().label.replace('Teste de ', '') + ') ' + r2.detail + ' = ' + r2.total + (r2.flag === 'falha' ? ' (falha completa)' : '') + ' → ' + res).slice(0, 1450) };
-      await rollAs(actor, r);
-      toast('Disputa: ' + actor.name + ' ' + r1.total + ' × ' + r2.total + ' ' + foe.name + ' → ' + res + '.');
-    });
-    return h('div', 'cmd__stack',
-      h('div', 'cmd__duel',
-        sel(mineT.map((t) => [t.id, t.label]), d.mine, (v) => { d.mine = v; }, 'duel-mine', 'Teste de ' + actor.name),
-        sel(others.map((x) => [x.id, x.name]), d.target, (v) => { d.target = v; d.theirs = ''; }, 'duel-target', 'Contra'),
-        sel(theirT.map((t) => [t.id, t.label]), d.theirs, (v) => { d.theirs = v; }, 'duel-theirs', 'Teste de ' + foe.name)),
-      go);
-  }
   function renderBattleLog() {
     const list = lastRolls.slice(-8);
     $('#battle-log').replaceChildren(...(list.length ? list.map((r) => h('li', 'blog__item' + (r.flag ? ' blog__item--' + (r.flag === 'falha' ? 'fail' : r.flag) : ''),
@@ -7407,7 +7531,8 @@ const FIREBASE_CONFIG = {
   }
 
   const FOE_MODES = { 'Corpo a corpo': ['corpo', 'luta', 'Corpo', 'Luta'], 'À distância': ['precisao', 'mira', 'Precisão', 'Mira'], 'Tecnológico': ['essencia', 'operacoes', 'Essência', 'Operações'] };
-  function foeAttackBuilder(f, st, before) {
+  function foeAttackBuilder(f, st, before, opts) {
+    opts = opts || {};
     const v = foeVals(f);
     const box = h('div', 'attack');
     const draw = () => {
@@ -7426,7 +7551,7 @@ const FIREBASE_CONFIG = {
         per = perTargetShots(st, cad, targets, true, draw, 'cbf-');
         st.shots = per.total;
         fields.push(per.box);
-      } else if (cad > 1) {
+      } else if (cad > 1 && !opts.aim) {
         st.per = null;
         const nSel = h('select', 'input');
         for (let k = 1; k <= cad; k++) { const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos · –' + shotPenalty(k, true) + ' · dano ×' + k)); o.value = String(k); nSel.append(o); }
@@ -7456,11 +7581,13 @@ const FIREBASE_CONFIG = {
       if (st.mode === 'À distância' && dist && dist.mod) mods.push([dist.short, dist.mod]);
       if (st.mod) mods.push(['modificador', st.mod]);
       const t = applyDice({ label: ('Ataque: ' + (v.arma || st.mode) + (st.shots > 1 ? (per ? ' · ' + st.shots + ' disparos' : ' · dano ×' + st.shots) : '')).slice(0, 60), attrName: md[2], attr: num(v[md[0]]), skillName: md[3], skill: num(v[md[1]]), mods }, st);
+      if (opts.peek) opts.peek(t);
       const fixed = t.attr + t.skill + mods.reduce((a, b) => a + b[1], 0);
-      const go = h('button', 'btn btn--primary btn--sm', 'Atacar os alvos · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
+      const go = h('button', 'btn btn--primary btn--sm', (opts.aim ? 'Escolher alvo' : 'Atacar os alvos') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
       go.disabled = Boolean(per && per.over);
       go.addEventListener('click', () => {
+        if (opts.aim) { opts.aim(t); return; }
         if (!combatants().some((x) => combat.targets.has(x.id))) { toast('Marque pelo menos um alvo na arena.'); return; }
         runAttack({ foe: f }, t, st, go, before ? before() : '');
       });
@@ -7579,6 +7706,8 @@ const FIREBASE_CONFIG = {
 
   function stepTurn(d) {
     if (!sceneOn()) return;
+    if (battle.aim) endAim();
+    battle.view = 'main';
     const next = deep(scene);
     const n = next.order.length;
     next.turn += d;
