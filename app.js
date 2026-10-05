@@ -2418,7 +2418,8 @@ const FIREBASE_CONFIG = {
     ((cat && cat.fields) || []).forEach((f) => {
       seen.add(f.key);
       const val = v[f.key];
-      if (f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
+      if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r) => dl.append(h('dt', '', r[0]), h('dd', 'entry__pre', r[1]))); return; }
+      if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
       dl.append(h('dt', '', f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(val)) : f.key === 'preco' ? priceText(val) : String(val)));
     });
     // campos que não estão no formulário atual (registros antigos) também aparecem
@@ -2893,6 +2894,8 @@ const FIREBASE_CONFIG = {
     grid.replaceChildren();
     cat.fields.forEach((f) => {
       if (f.onlyWithOpts && !(type && type.opts && type.opts[f.optKey])) return; // campo que só existe em alguns tipos
+      if (f.hidden) return; // escrito por outro campo (o roteiro da build)
+      if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
         if (isName) d.name = v; else d.values[f.key] = v;
@@ -3617,6 +3620,390 @@ const FIREBASE_CONFIG = {
     let v = t[0][1];
     t.forEach((r) => { if (up >= r[0]) v = r[1]; });
     return v;
+  }
+
+  /* ---------- Roteiro da build (modo avançado) ----------
+     A build tem o nível 0 (a distribuição inicial) e, se quiser, um roteiro: escolha quantos UP e quanto
+     dinheiro, e o roteiro vira um livrinho com uma folha por UP. Cada folha mostra o que aquele UP dá
+     (1 UP para gastar, +1 ponto de perícia nos ímpares, 2 benefícios nos pares) e guarda a escolha.
+     O roteiro fica em values.roteiro (JSON) e também é escrito no texto das folhas, que a ficha já sabe aplicar. */
+  const RT_KINDS = [['poder', 'Poder'], ['melhoria', 'Melhoria'], ['doutor', 'Doutor'], ['prof', 'Proficiência'], ['pericias', 'Perícias'], ['guardar', 'Guardar']];
+  const RT_BEN = [['pv', '+5 PV'], ['pe', '+5 PE'], ['pa', '+1 PA']];
+  const RT_MAX_UP = 30;
+  const rtSkills = () => { const out = []; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => out.push([sk[0], sk[1]]))); return out; };
+  const rtPage = () => ({ gasto: null, ben: ['', ''], per: '', nota: '' });
+  const rtNew = (up, money) => ({ v: 1, up, dinheiro: money, itens: [], pages: Array.from({ length: up }, rtPage) });
+  function rtRead(values) { // JSON salvo, ou o texto antigo das folhas convertido
+    const v = values || {};
+    try {
+      const r = JSON.parse(v.roteiro || '');
+      if (r && Array.isArray(r.pages)) {
+        r.pages = r.pages.map((p) => Object.assign(rtPage(), p, { ben: Array.isArray(p && p.ben) ? p.ben.slice(0, 2).concat(['', '']).slice(0, 2) : ['', ''] }));
+        r.itens = Array.isArray(r.itens) ? r.itens : [];
+        r.up = r.pages.length;
+        r.dinheiro = num(r.dinheiro);
+        return r;
+      }
+    } catch (e) { /* sem roteiro salvo */ }
+    const pages = guidePages(v);
+    if (!pages.length) return null;
+    const r = rtNew(Math.min(RT_MAX_UP, pages[pages.length - 1].n), num(v.dinheiro) || startMoney(0));
+    pages.forEach((pg) => {
+      const p = r.pages[pg.n - 1];
+      if (!p) return;
+      const notes = [];
+      pg.acts.forEach((a) => {
+        if (p.gasto) { notes.push(a.text); return; }
+        if (a.type === 'poder') { const e = findPower(a.name); if (e) p.gasto = { t: 'poder', id: e.id, name: e.name, opt: a.opt || '' }; else notes.push(a.text); }
+        else if (a.type === 'melhoria') { const e = guidePowers().find((x) => powerUps(x).some((u) => nameKey(u.name) === nameKey(a.name))); if (e) p.gasto = { t: 'melhoria', id: e.id, name: a.name }; else notes.push(a.text); }
+        else if (a.type === 'doutor' && a.id) p.gasto = { t: 'doutor', skill: a.id };
+        else if (a.type === 'prof' && a.id) p.gasto = { t: 'prof', prof: a.id };
+        else if (a.type === 'pericias' && a.list.length) { const list = {}; a.list.forEach((x) => { list[x[0]] = (list[x[0]] || 0) + x[1]; }); p.gasto = { t: 'pericias', list }; }
+        else if (a.type === 'nota' && /guard/i.test(a.text)) p.gasto = { t: 'guardar' };
+        else notes.push(a.text);
+      });
+      p.nota = notes.join('; ');
+    });
+    const ben = guideList(v.beneficios).map((x) => (/pv/i.test(x) ? 'pv' : /pe/i.test(x) ? 'pe' : /pa/i.test(x) ? 'pa' : '')).filter(Boolean);
+    r.pages.forEach((p, i) => { if ((i + 1) % 2 === 0) p.ben = [ben.shift() || '', ben.shift() || '']; });
+    const sk = guideList(v.periciasUp).map(skillIdOf).filter(Boolean);
+    r.pages.forEach((p, i) => { if ((i + 1) % 2 === 1) p.per = sk.shift() || ''; });
+    r.itens = String(v.itens || '').split('\n').map((x) => x.trim()).filter(Boolean).map((name) => ({ id: '', name, price: 0 }));
+    return r;
+  }
+  const rtPower = (id) => guidePowers().find((e) => e.id === id) || BUILTINS.find((e) => e.id === id) || null;
+  function rtCost(g) { // UP que a escolha gasta
+    if (!g) return 0;
+    if (g.t === 'poder') { const e = rtPower(g.id); return e ? Math.max(0, num(e.values && e.values.custo)) : 1; }
+    if (g.t === 'melhoria') { const e = rtPower(g.id); const u = e ? powerUps(e).find((x) => x.name === g.name) : null; return u && u.cost !== '' ? num(u.cost) : 1; }
+    return g.t === 'guardar' ? 0 : 1;
+  }
+  function rtText(g) { // a linha da folha, no formato que a ficha aplica
+    if (!g) return '';
+    if (g.t === 'poder') return g.name ? 'Poder: ' + g.name + (g.opt ? ' (' + g.opt + ')' : '') : '';
+    if (g.t === 'melhoria') return g.name ? 'Melhoria: ' + g.name : '';
+    if (g.t === 'doutor') return g.skill ? 'Doutor: ' + skillLabel(g.skill) : '';
+    if (g.t === 'prof') return g.prof ? 'Proficiência: ' + profLabel(g.prof) : '';
+    if (g.t === 'pericias') { const k = Object.keys(g.list || {}).filter((x) => g.list[x] > 0); return k.length ? 'Perícias: ' + k.map((x) => skillLabel(x) + ' +' + g.list[x]).join(', ') : ''; }
+    if (g.t === 'guardar') return 'Guardar este UP';
+    return '';
+  }
+  // saldo de UP folha a folha: quanto há para gastar em cada uma e onde falta
+  function rtLedger(r) {
+    let bank = 0;
+    return r.pages.map((p) => {
+      bank += 1;
+      const have = bank;
+      const cost = rtCost(p.gasto);
+      bank -= cost;
+      return { have, cost, short: cost > have, left: bank };
+    });
+  }
+  const rtItemsTotal = (r) => r.itens.reduce((t, x) => t + num(x.price), 0);
+  function rtProblems(r) {
+    const out = [];
+    rtLedger(r).forEach((l, i) => { if (l.short) out.push('Folha ' + (i + 1) + ': custa ' + l.cost + ' UP e só há ' + l.have + '. Guarde UP nas folhas antes.'); });
+    if (rtItemsTotal(r) > r.dinheiro) out.push('Os itens passam do dinheiro em ' + fmtCronos(rtItemsTotal(r) - r.dinheiro) + ' Cronos.');
+    return out;
+  }
+  const rtFilled = (p, n) => Boolean(rtText(p.gasto)) && (n % 2 ? Boolean(p.per) : p.ben.every(Boolean));
+  // grava o roteiro nos campos que a ficha e a distribuição inicial já leem
+  function rtWrite(values, r) {
+    if (!r) { values.roteiro = ''; values.folhas = ''; values.beneficios = ''; values.periciasUp = ''; values.itens = ''; values.dinheiro = ''; values.tipo = 'Entrada'; return; }
+    values.roteiro = JSON.stringify(Object.assign({}, r, { setup: undefined }));
+    values.folhas = r.pages.map((p, i) => {
+      const parts = [rtText(p.gasto), p.nota.trim()].filter(Boolean);
+      return parts.length ? (i + 1) + ' | ' + parts.join('; ') : '';
+    }).filter(Boolean).join('\n');
+    values.beneficios = r.pages.filter((p, i) => (i + 1) % 2 === 0).map((p) => p.ben).flat().filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', ');
+    values.periciasUp = r.pages.filter((p, i) => (i + 1) % 2 === 1 && p.per).map((p) => skillLabel(p.per)).join(', ');
+    values.itens = r.itens.map((x) => x.name).join('\n');
+    values.dinheiro = String(r.dinheiro);
+    values.tipo = 'Guiada';
+  }
+
+  function rtEntryRows(v) { // o roteiro na ficha do catálogo
+    const r = rtRead(v);
+    if (!r) return [];
+    const rows = [['Roteiro', plural(r.up, 'folha', 'folhas') + ' · ' + fmtCronos(r.dinheiro) + ' Cronos para itens']];
+    if (r.itens.length) rows.push(['Itens', r.itens.map((x) => x.name).join(', ')]);
+    const lines = r.pages.map((p, i) => {
+      const n = i + 1;
+      const parts = [rtText(p.gasto), n % 2 ? (p.per ? 'ponto em ' + skillLabel(p.per) : '') : p.ben.filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', '), p.nota].filter(Boolean);
+      return parts.length ? 'UP ' + n + ': ' + parts.join(' · ') : '';
+    }).filter(Boolean);
+    if (lines.length) rows.push(['Folhas', lines.join('\n')]);
+    return rows;
+  }
+
+  // campo do formulário da build: resumo do roteiro e o botão que abre o modo avançado
+  function roteiroField(d, onDone) {
+    const box = h('div', 'rt-field');
+    const paint = () => {
+      const r = rtRead(d.values);
+      const open = h('button', 'btn ' + (r ? 'btn--ghost' : 'btn--primary') + ' btn--sm', r ? 'Abrir o roteiro' : 'Criar roteiro (modo avançado)');
+      open.type = 'button';
+      open.dataset.fid = 'rt-open';
+      open.addEventListener('click', () => openRoteiro(d, () => { paint(); if (onDone) onDone(); }));
+      if (!r) { box.replaceChildren(h('p', 'field__hint', 'Sem roteiro, a build é só o nível 0 (de entrada). Com roteiro, ela vira guiada: um livrinho com o que pegar a cada UP, e a ficha de quem segue se atualiza sozinha.'), open); return; }
+      const filled = r.pages.filter((p, i) => rtFilled(p, i + 1)).length;
+      const probs = rtProblems(r);
+      box.replaceChildren(
+        h('div', 'rt-field__sum',
+          h('span', 'rt-chip', plural(r.up, 'folha', 'folhas')), h('span', 'rt-chip', fmtCronos(r.dinheiro) + ' Cronos'),
+          h('span', 'rt-chip', plural(r.itens.length, 'item', 'itens')), h('span', 'rt-chip' + (filled === r.up ? ' rt-chip--ok' : ''), filled + ' de ' + r.up + ' preenchidas')),
+        probs.length ? h('p', 'field__error', probs[0]) : null,
+        open);
+    };
+    paint();
+    return box;
+  }
+
+  const rt = { dlg: null, d: null, r: null, page: 0, done: null };
+  function openRoteiro(d, done) {
+    if (!rt.dlg) {
+      rt.dlg = h('dialog', 'dialog dialog--wide rt');
+      rt.dlg.setAttribute('aria-labelledby', 'rt-title');
+      document.body.append(rt.dlg);
+    }
+    rt.d = d;
+    rt.r = rtRead(d.values);
+    rt.page = 0;
+    rt.done = done;
+    renderRoteiro();
+    openDialog(rt.dlg);
+  }
+  function rtClose(save) {
+    if (save) {
+      const probs = rtProblems(rt.r);
+      rtWrite(rt.d.values, rt.r);
+      toast(probs.length ? 'Roteiro guardado com ' + plural(probs.length, 'aviso', 'avisos') + '. Salve a build para ir ao banco.' : 'Roteiro guardado. Salve a build para ir ao banco.');
+    }
+    closeDialog(rt.dlg);
+    if (save && rt.done) rt.done();
+  }
+  function rtStart(body) { // antes de tudo: UP e dinheiro
+    const up = h('input', 'input input--lg');
+    up.type = 'number'; up.min = '1'; up.max = String(RT_MAX_UP); up.step = '1'; up.id = 'rt-up'; up.inputMode = 'numeric';
+    up.value = rt.r ? String(rt.r.up) : '10';
+    const money = h('input', 'input input--lg');
+    money.type = 'number'; money.min = '0'; money.step = '100'; money.id = 'rt-money'; money.inputMode = 'numeric';
+    money.value = String(rt.r ? rt.r.dinheiro : startMoney(0));
+    const table = h('p', 'field__hint');
+    const paintTable = () => { table.textContent = 'Tabela de dinheiro inicial: quem começa com 0 UP tem ' + fmtCronos(startMoney(0)) + ' Cronos, com ' + clamp(Math.round(num(up.value)), 1, RT_MAX_UP) + ' UP tem ' + fmtCronos(startMoney(clamp(Math.round(num(up.value)), 1, RT_MAX_UP))) + '. Use o valor que fizer sentido para a build.'; };
+    paintTable();
+    up.addEventListener('input', paintTable);
+    const go = h('button', 'btn btn--primary', rt.r ? 'Atualizar o livro' : 'Criar o livro');
+    go.type = 'button';
+    go.dataset.fid = 'rt-make';
+    go.addEventListener('click', () => {
+      const n = clamp(Math.round(num(up.value)), 1, RT_MAX_UP);
+      const m = Math.max(0, Math.round(num(money.value)));
+      if (!rt.r) rt.r = rtNew(n, m);
+      else {
+        rt.r.pages = rt.r.pages.slice(0, n).concat(Array.from({ length: Math.max(0, n - rt.r.pages.length) }, rtPage));
+        rt.r.up = n;
+        rt.r.dinheiro = m;
+      }
+      rt.r.setup = false;
+      rt.page = 1;
+      renderRoteiro();
+    });
+    const lab = (inp, text) => { const l = h('label', 'field__label', text); l.htmlFor = inp.id; return l; };
+    body.append(h('div', 'rt-start',
+      h('p', 'rt-start__lead', 'Antes de tudo: até quantos UP vai o roteiro e com quanto dinheiro a build compra os itens. Cada UP vira uma folha do livro.'),
+      h('div', 'rt-start__grid', h('div', 'field', lab(up, 'UP do roteiro (folhas)'), up), h('div', 'field', lab(money, 'Dinheiro para itens (Cronos)'), money)),
+      table, h('div', 'rt-start__go', go)));
+  }
+  function rtSelect(opts, value, onChange, blank, fid) {
+    const sel = h('select', 'input');
+    const b = h('option', '', blank || 'Escolha...');
+    b.value = '';
+    sel.append(b, ...opts.map((o) => { const op = h('option', '', o[1]); op.value = o[0]; return op; }));
+    sel.value = value || '';
+    if (fid) sel.dataset.fid = fid;
+    sel.addEventListener('change', () => onChange(sel.value));
+    return sel;
+  }
+  function rtItemsPage() {
+    const r = rt.r;
+    const total = rtItemsTotal(r);
+    const add = h('button', 'btn btn--primary btn--sm', '+ Item do catálogo');
+    add.type = 'button';
+    add.dataset.fid = 'rt-item-add';
+    add.addEventListener('click', async () => {
+      const e = await openPicker({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
+        { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+        { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+      if (!e || rt.r !== r) return;
+      r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) });
+      renderRoteiro();
+    });
+    return h('article', 'guide__page rt-page rt-page--itens',
+      h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', '0')),
+      h('p', 'guide__state', 'Itens: comprados com o dinheiro do roteiro na distribuição inicial'),
+      h('div', 'rt-money' + (total > r.dinheiro ? ' is-over' : ''), h('span', '', 'Gasto'), h('strong', '', fmtCronos(total) + ' de ' + fmtCronos(r.dinheiro)), h('span', '', 'Cronos')),
+      r.itens.length ? h('ul', 'rt-items', ...r.itens.map((x, i) => {
+        const del = h('button', 'icon-btn', '×');
+        del.type = 'button';
+        del.setAttribute('aria-label', 'Tirar ' + x.name);
+        del.addEventListener('click', () => { r.itens.splice(i, 1); renderRoteiro(); });
+        return h('li', '', h('span', 'rt-items__name', x.name), h('span', 'rt-items__price', x.price ? fmtCronos(x.price) : '—'), del);
+      })) : h('p', 'rt-empty', 'Nenhum item ainda.'),
+      add);
+  }
+  function rtUpPage(n) {
+    const r = rt.r, p = r.pages[n - 1], led = rtLedger(r)[n - 1];
+    const redo = () => renderRoteiro();
+    const g = p.gasto;
+    const kinds = h('div', 'rt-kinds', ...RT_KINDS.map((k) => {
+      const b = h('button', 'rt-kind' + (g && g.t === k[0] ? ' is-on' : ''), k[1]);
+      b.type = 'button';
+      b.dataset.fid = 'rt-kind-' + k[0];
+      b.setAttribute('aria-pressed', String(Boolean(g && g.t === k[0])));
+      b.addEventListener('click', () => { p.gasto = g && g.t === k[0] ? null : { t: k[0] }; if (k[0] === 'pericias') p.gasto.list = {}; redo(); });
+      return b;
+    }));
+    let detail = null;
+    if (g && g.t === 'poder') {
+      const e = g.id ? rtPower(g.id) : null;
+      const pick = h('button', 'btn btn--ghost btn--sm', g.name ? 'Trocar poder' : 'Escolher poder…');
+      pick.type = 'button';
+      pick.dataset.fid = 'rt-power';
+      pick.addEventListener('click', async () => {
+        const x = await openPicker({ title: 'Poder da folha ' + n, kinds: ['poder'], chips: ['Poder'], filter: (y) => y.kind === 'poder' && !CHOICE_POWERS[y.id] });
+        if (!x || rt.r !== r) return;
+        const opts = powerOpts(x);
+        p.gasto = { t: 'poder', id: x.id, name: x.name, opt: opts.length ? opts[0].name : '' };
+        redo();
+      });
+      const opts = e ? powerOpts(e) : [];
+      detail = h('div', 'rt-detail',
+        g.name ? h('p', 'rt-pick', h('strong', '', g.name), h('span', '', ' · custa ' + plural(rtCost(g), 'UP', 'UP'))) : null,
+        opts.length ? h('div', 'field', h('span', 'field__label', 'Opção'), rtSelect(opts.map((o) => [o.name, o.name + (o.text ? ': ' + o.text : '')]), g.opt, (v) => { g.opt = v; redo(); }, null, 'rt-opt')) : null,
+        pick);
+    } else if (g && g.t === 'melhoria') {
+      const before = r.pages.slice(0, n - 1).map((x) => x.gasto).filter((x) => x && x.t === 'poder' && x.id);
+      const seen = {};
+      const opts = [];
+      before.forEach((x) => { if (seen[x.id]) return; seen[x.id] = 1; const e = rtPower(x.id); if (e) powerUps(e).forEach((u) => opts.push([x.id + '|' + u.name, e.name + ' · ' + u.name + ' (' + (u.cost === '' ? 1 : num(u.cost)) + ' UP)'])); });
+      detail = opts.length
+        ? h('div', 'rt-detail', rtSelect(opts, g.id ? g.id + '|' + g.name : '', (v) => { const i = v.indexOf('|'); g.id = v.slice(0, i); g.name = v.slice(i + 1); redo(); }, 'Escolha a melhoria...', 'rt-up'))
+        : h('p', 'rt-empty', 'Escolha antes, numa folha anterior, um poder que tenha melhorias.');
+    } else if (g && g.t === 'doutor') {
+      detail = h('div', 'rt-detail', rtSelect(rtSkills(), g.skill, (v) => { g.skill = v; redo(); }, 'Perícia do Doutor...', 'rt-doutor'), h('p', 'field__hint', 'O limite da perícia escolhida sobe para 4.'));
+    } else if (g && g.t === 'prof') {
+      detail = h('div', 'rt-detail', rtSelect(PROFS.map((x) => [x.id, x.label]), g.prof, (v) => { g.prof = v; redo(); }, 'Tipo de arma ou armadura...', 'rt-prof'), h('p', 'field__hint', 'Também dá +1 ponto de perícia.'));
+    } else if (g && g.t === 'pericias') {
+      g.list = g.list || {};
+      const used = Object.keys(g.list).reduce((t, k) => t + num(g.list[k]), 0);
+      const slots = [];
+      Object.keys(g.list).forEach((k) => { for (let i = 0; i < g.list[k]; i++) slots.push(k); });
+      while (slots.length < 3) slots.push('');
+      detail = h('div', 'rt-detail',
+        h('p', 'field__hint', '1 UP em perícias = 3 pontos. Marcados: ' + used + ' de 3.'),
+        h('div', 'rt-three', ...slots.slice(0, 3).map((v, i) => rtSelect(rtSkills(), v, (nv) => {
+          const next = slots.slice(0, 3);
+          next[i] = nv;
+          g.list = {};
+          next.filter(Boolean).forEach((k) => { g.list[k] = (g.list[k] || 0) + 1; });
+          redo();
+        }, '+1 em...', 'rt-per-' + i))));
+    } else if (g && g.t === 'guardar') {
+      detail = h('p', 'rt-empty', 'Este UP fica guardado para um poder ou melhoria mais cara numa folha seguinte.');
+    }
+    const res = h('div', 'rt-res',
+      h('span', 'rt-chip rt-chip--up', '1 UP' + (led.have > 1 ? ' (+' + (led.have - 1) + ' guardado' + (led.have > 2 ? 's' : '') + ')' : '')),
+      n % 2 ? h('span', 'rt-chip', '+1 ponto de perícia') : h('span', 'rt-chip', '2 benefícios'));
+    const extra = n % 2
+      ? h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Ponto de perícia'), rtSelect(rtSkills(), p.per, (v) => { p.per = v; redo(); }, 'Perícia que ganha +1...', 'rt-ponto'))
+      : h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Benefícios'), h('div', 'rt-bens', ...[0, 1].map((i) => h('div', 'rt-ben', h('span', 'rt-ben__label', (i + 1) + 'º benefício'), ...RT_BEN.map((b) => {
+        const x = h('button', 'rt-kind' + (p.ben[i] === b[0] ? ' is-on' : ''), b[1]);
+        x.type = 'button';
+        x.dataset.fid = 'rt-ben-' + i + '-' + b[0];
+        x.setAttribute('aria-pressed', String(p.ben[i] === b[0]));
+        x.addEventListener('click', () => { p.ben[i] = p.ben[i] === b[0] ? '' : b[0]; redo(); });
+        return x;
+      })))));
+    const nota = h('input', 'input');
+    nota.type = 'text';
+    nota.maxLength = 120;
+    nota.placeholder = 'Lembrete (opcional): ex. comprar munição extra';
+    nota.value = p.nota;
+    nota.dataset.fid = 'rt-nota';
+    nota.addEventListener('input', () => { p.nota = nota.value; });
+    return h('article', 'guide__page rt-page' + (rtFilled(p, n) ? ' is-done' : '') + (led.short ? ' is-bad' : ''),
+      h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', String(n))),
+      res,
+      h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Gastar o UP'), kinds, detail,
+        led.short ? h('p', 'field__error', 'Custa ' + led.cost + ' UP e só há ' + led.have + ' aqui. Use "Guardar" em folhas antes.') : null),
+      extra,
+      h('div', 'rt-sec', nota));
+  }
+  function renderRoteiro() {
+    const r = rt.r, d = rt.d;
+    const close = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+    close.type = 'button';
+    close.addEventListener('click', () => rtClose(false));
+    const save = h('button', 'btn btn--primary btn--sm', 'Guardar roteiro');
+    save.type = 'button';
+    save.dataset.fid = 'rt-save';
+    save.disabled = !r || r.setup === true;
+    save.addEventListener('click', () => rtClose(true));
+    const body = h('div', 'rt__body');
+    const head = h('div', 'rt__head',
+      h('div', 'guide__name', h('span', 'guide__kicker', 'Roteiro · modo avançado'), h('strong', '', d.name || 'Build sem nome')),
+      h('div', 'guide__acts', close, save));
+    if (!r || r.setup) {
+      rtStart(body);
+      rt.dlg.replaceChildren(h('div', 'picker rt__sheet', head, body));
+      setTimeout(() => { const x = rt.dlg.querySelector('#rt-up'); if (x) x.focus(); }, 0);
+      return;
+    }
+    rt.page = clamp(rt.page, 0, r.up);
+    const settings = h('button', 'btn btn--ghost btn--sm', 'UP e dinheiro');
+    settings.type = 'button';
+    settings.dataset.fid = 'rt-settings';
+    settings.addEventListener('click', () => { r.setup = true; renderRoteiro(); });
+    const clear = h('button', 'btn btn--ghost btn--sm', 'Apagar roteiro');
+    clear.type = 'button';
+    clear.addEventListener('click', async () => {
+      const ok = await askConfirm({ title: 'Apagar o roteiro?', text: 'A build volta a ser só o nível 0. Isso só vale quando você salvar a build.', ok: 'Apagar' });
+      if (!ok) return;
+      rtWrite(d.values, null);
+      closeDialog(rt.dlg);
+      if (rt.done) rt.done();
+    });
+    const turn = (dd, label) => {
+      const b = h('button', 'guide__turn', label);
+      b.type = 'button';
+      b.dataset.fid = dd < 0 ? 'rt-prev' : 'rt-next';
+      b.disabled = dd < 0 ? rt.page <= 0 : rt.page >= r.up;
+      b.setAttribute('aria-label', dd < 0 ? 'Folha anterior' : 'Próxima folha');
+      b.addEventListener('click', () => { rt.page += dd; renderRoteiro(); });
+      return b;
+    };
+    const led = rtLedger(r);
+    const marks = h('div', 'guide__marks rt-marks', ...[0].concat(r.pages.map((p, i) => i + 1)).map((n) => {
+      const ok = n === 0 ? r.itens.length > 0 : rtFilled(r.pages[n - 1], n);
+      const bad = n === 0 ? rtItemsTotal(r) > r.dinheiro : led[n - 1].short;
+      const b = h('button', 'guide__mark' + (ok ? ' is-done' : '') + (bad ? ' is-bad' : '') + (n === rt.page ? ' is-on' : ''), n === 0 ? 'Itens' : String(n));
+      b.type = 'button';
+      b.setAttribute('aria-label', n === 0 ? 'Folha dos itens' : 'Folha ' + n);
+      b.addEventListener('click', () => { rt.page = n; renderRoteiro(); });
+      return b;
+    }));
+    const probs = rtProblems(r);
+    body.append(
+      h('div', 'rt__bar', h('span', 'rt-chip', plural(r.up, 'UP', 'UP')), h('span', 'rt-chip', fmtCronos(r.dinheiro) + ' Cronos'),
+        h('span', 'rt-chip' + (probs.length ? ' rt-chip--bad' : ' rt-chip--ok'), probs.length ? plural(probs.length, 'aviso', 'avisos') : 'Tudo certo'), settings, clear),
+      marks,
+      h('div', 'guide__book rt-book', turn(-1, '‹'), h('div', 'guide__spread rt-spread', rt.page === 0 ? rtItemsPage() : rtUpPage(rt.page)), turn(1, '›')),
+      h('p', 'field__hint', 'Quem segue esta build recebe cada folha quando ganha o UP dela, até parar a atualização automática na ficha.'));
+    const keep = rt.dlg.querySelector('.rt__sheet');
+    const top = keep ? keep.scrollTop : 0;
+    rt.dlg.replaceChildren(h('div', 'picker rt__sheet', head, body));
+    rt.dlg.querySelector('.rt__sheet').scrollTop = top;
   }
 
   // valor atual de um recurso: sem registro = cheio (assim acompanha o máximo quando ele muda)
@@ -5207,7 +5594,8 @@ const FIREBASE_CONFIG = {
     const origin = originOf(wz.origin);
     const g = gearFor(origin);
     const startUp = previewSheet().upTotal;
-    if (g.budgetAuto) g.budget = startMoney(startUp);
+    const guideMoney = wz.guide ? num((wz.guide.values || {}).dinheiro) : 0; // o roteiro da build diz quanto dinheiro
+    if (g.budgetAuto) g.budget = guideMoney || startMoney(startUp);
     const gi = wz.guide ? String((wz.guide.values || {}).itens || '').split('\n').map((x) => x.trim()).filter(Boolean) : [];
     if (gi.length && g.guideFilled !== wz.guide.id + wz.guide.name) {
       if (g.guideFilled === '') g.mode = 'preco';
@@ -5355,7 +5743,8 @@ const FIREBASE_CONFIG = {
     box.open = c.open;
     box.addEventListener('toggle', () => { c.open = box.open; });
     const grid = h('div', 'fields-grid');
-    cat.fields.filter((f) => f.key !== 'lore').forEach((f) => {
+    cat.fields.filter((f) => f.key !== 'lore' && !f.hidden).forEach((f) => {
+      if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, null, isName ? d.name : d.values[f.key], (v) => { if (isName) d.name = v; else d.values[f.key] = v; });
       const fid = 'wzc-' + kind + '-' + f.key;
