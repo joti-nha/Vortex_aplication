@@ -234,6 +234,11 @@ const FIREBASE_CONFIG = {
     const shopListeners = {};
     const shopsOf = (campaignId) => Object.values((read().shops || {})[campaignId] || {}).map(clone).sort((a, b) => a.createdAt - b.createdAt);
     function notifyShops(campaignId) { (shopListeners[campaignId] || new Set()).forEach((cb) => cb(shopsOf(campaignId))); }
+    // saque, armazéns e derrotados: uma coleção por campanha, com o mesmo formato
+    const colListeners = {};
+    const colOf = (campaignId, col) => Object.values(((read().cols || {})[col] || {})[campaignId] || {}).map(clone).sort((a, b) => a.createdAt - b.createdAt);
+    function notifyCol(campaignId, col) { (colListeners[col + ':' + campaignId] || new Set()).forEach((cb) => cb(colOf(campaignId, col))); }
+    function colBox(d, campaignId, col) { d.cols = d.cols || {}; d.cols[col] = d.cols[col] || {}; return (d.cols[col][campaignId] = d.cols[col][campaignId] || {}); }
     function rollsOf(campaignId) {
       try { return JSON.parse(localStorage.getItem(ROLLS + campaignId)) || []; } catch (e) { return []; }
     }
@@ -530,6 +535,37 @@ const FIREBASE_CONFIG = {
         (shopListeners[campaignId] = shopListeners[campaignId] || new Set()).add(callback);
         callback(shopsOf(campaignId));
         return () => shopListeners[campaignId].delete(callback);
+      },
+
+      // ---------- Saque, armazéns e derrotados ----------
+      async addDoc(campaignId, col, data, id) {
+        const d = read();
+        const box = colBox(d, campaignId, col);
+        id = id || uid();
+        box[id] = Object.assign(clone(data), { id, createdAt: (box[id] && box[id].createdAt) || Date.now() });
+        write(d);
+        notifyCol(campaignId, col);
+        return id;
+      },
+      async updateDoc(campaignId, col, id, patch) {
+        const d = read();
+        const box = colBox(d, campaignId, col);
+        if (!box[id]) throw new UserError('Isso não existe mais.');
+        Object.assign(box[id], clone(patch));
+        write(d);
+        notifyCol(campaignId, col);
+      },
+      async removeDoc(campaignId, col, id) {
+        const d = read();
+        delete colBox(d, campaignId, col)[id];
+        write(d);
+        notifyCol(campaignId, col);
+      },
+      subscribeCol(campaignId, col, callback) {
+        const k = col + ':' + campaignId;
+        (colListeners[k] = colListeners[k] || new Set()).add(callback);
+        callback(colOf(campaignId, col));
+        return () => colListeners[k].delete(callback);
       }
     };
   })();
@@ -913,6 +949,25 @@ const FIREBASE_CONFIG = {
       },
       subscribeShops(campaignId, callback, onError) {
         return camps().doc(campaignId).collection('shops').onSnapshot(
+          (snap) => callback(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))),
+          (err) => { if (onError) onError(err); }
+        );
+      },
+
+      // ---------- Saque (loot), armazéns (vaults) e derrotados (fallen) ----------
+      async addDoc(campaignId, col, data, id) {
+        const ref = id ? camps().doc(campaignId).collection(col).doc(id) : camps().doc(campaignId).collection(col).doc();
+        await ref.set(Object.assign(deep(data), { createdAt: Date.now() }));
+        return ref.id;
+      },
+      async updateDoc(campaignId, col, id, patch) {
+        await camps().doc(campaignId).collection(col).doc(id).update(deep(patch));
+      },
+      async removeDoc(campaignId, col, id) {
+        await camps().doc(campaignId).collection(col).doc(id).delete();
+      },
+      subscribeCol(campaignId, col, callback, onError) {
+        return camps().doc(campaignId).collection(col).onSnapshot(
           (snap) => callback(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))),
           (err) => { if (onError) onError(err); }
         );
@@ -6312,9 +6367,9 @@ const FIREBASE_CONFIG = {
   }
 
   // Abas da campanha (Grupo, Combate, Lojas); a última aberta fica guardada por campanha
-  // Itens e bestiário: aba só do mestre (os outros nem veem o botão)
+  // 4ª aba: o mestre vê Itens e bestiário; o jogador vê Saque e armazém
   const CAMP_TABS_ALL = ['grupo', 'combate', 'lojas', 'mestre'];
-  const campTabs = () => (currentCamp && currentCamp.gm ? CAMP_TABS_ALL : CAMP_TABS_ALL.slice(0, 3));
+  const campTabs = () => CAMP_TABS_ALL; // a 4ª aba: Itens e bestiário (mestre) ou Saque e armazém (jogador)
   const campTabKey = (id) => 'vortex.campTab.' + id;
   function setCampTab(name, focus) {
     const tabs = campTabs();
@@ -6357,7 +6412,7 @@ const FIREBASE_CONFIG = {
     });
     if (keep && $('option[value="' + CSS.escape(keep) + '"]', testPick)) testPick.value = keep;
   }
-  speakerEl.addEventListener('change', () => { lastCharacterId = speakerEl.value; renderTestPick(); renderDock(); renderShops(); });
+  speakerEl.addEventListener('change', () => { lastCharacterId = speakerEl.value; renderTestPick(); renderDock(); renderShops(); renderLoot(); renderVaults(); });
 
   /* ---------- Painel do personagem (estilo barra de ações de RPG) ----------
      O personagem escolhido fica no topo da campanha: retrato, barras de recurso
@@ -8404,13 +8459,16 @@ const FIREBASE_CONFIG = {
     await sceneLog('Fim da cena', 'Cena encerrada após ' + plural(rounds, 'rodada', 'rodadas') + '.', rounds);
   }
 
-  /* ---------- Itens e bestiário (só o mestre) ----------
-     Busca no bestiário (NPCs e criaturas) para pôr na arena num time,
-     e nos itens para dar direto na mochila de um personagem da campanha. */
+  /* ---------- Bestiário e itens (só o mestre) ----------
+     Bestiário como uma revista de monstros (uma página por criatura), para pôr na arena num time;
+     itens para dar direto na mochila de um personagem da campanha. */
   const GMLIB_KINDS = { bestiario: ['npc'], armas: ['arma-melee', 'arma-fogo'], protecao: ['armadura', 'vestivel'], implantes: ['nucleo', 'protese-modulo'], gerais: ['item-geral'] };
   const GMLIB_MAX = 80;
+  const NPC_CAT_COLOR = { 'Comum': '#7fa6bf', 'Maior': '#c58b3a', 'Chefão': '#d0453f' };
   let gmlibSeq = 0;
+  let gmlibCat = '';
   function renderGmLib() {
+    renderLootTab();
     if (!currentCamp || !currentCamp.gm) return;
     const to = $('#gmlib-to');
     const keep = to.value;
@@ -8432,15 +8490,68 @@ const FIREBASE_CONFIG = {
     catch (err) { warn = errorMessage(err); list = BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0 && matchesText(libHay(e), q)); }
     if (seq !== gmlibSeq) return;
     list = list.filter((e) => kinds.indexOf(e.kind) >= 0).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
+    // categorias da revista (Comum, Maior, Chefão…)
+    const cats = beast ? Array.from(new Set(list.map((e) => (e.values && e.values.categoria) || 'Comum'))) : [];
+    if (gmlibCat && cats.indexOf(gmlibCat) < 0) gmlibCat = '';
+    $('#gmlib-cats').replaceChildren(...(cats.length > 1 ? [''].concat(cats) : []).map((c) => {
+      const b = h('button', 'check--pill mag__chip' + (gmlibCat === c ? ' is-on' : ''), c || 'Todas');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(gmlibCat === c));
+      if (c) b.style.setProperty('--cat', NPC_CAT_COLOR[c] || 'var(--ambar)');
+      b.addEventListener('click', () => { gmlibCat = c; runGmLib(); });
+      return b;
+    }));
+    if (beast && gmlibCat) list = list.filter((e) => ((e.values && e.values.categoria) || 'Comum') === gmlibCat);
     const total = list.length;
     list = list.slice(0, GMLIB_MAX);
     const noChars = !beast && !$('#gmlib-to').value;
-    $('#gmlib-list').replaceChildren(...list.map((e) => libRow(e, beast
-      ? [{ label: 'Pôr na arena', cls: 'btn--ghost', onClick: () => placeFoe(deep(e)) }]
-      : noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
+    $('#gmlib-mag').hidden = !beast;
+    $('#gmlib-list').hidden = beast;
+    if (beast) { $('#gmlib-mag').replaceChildren(...list.map(magPage)); $('#gmlib-list').replaceChildren(); }
+    else {
+      $('#gmlib-mag').replaceChildren();
+      $('#gmlib-list').replaceChildren(...list.map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
+    }
     $('#gmlib-hint').textContent = warn || (!total ? 'Nada encontrado.'
-      : plural(total, 'resultado', 'resultados') + (total > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
+      : plural(total, beast ? 'criatura' : 'resultado', beast ? 'criaturas' : 'resultados') + (total > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
         + (beast ? ' "Pôr na arena" pergunta o time e põe no Combate.' : noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" põe o item na mochila de quem está escolhido.'));
+  }
+  // uma página da revista: capa, categoria, camadas, atributos, ataque, saque e quantas vezes já caiu
+  function magPage(e) {
+    const v = e.values || {};
+    const cat = v.categoria || 'Comum';
+    const cover = h('div', 'mag__cover');
+    const pic = e.image || e.thumb;
+    if (pic) { const img = h('img'); img.src = pic; img.alt = ''; img.loading = 'lazy'; cover.append(img); }
+    else cover.append(h('span', 'mag__mono', (e.name || '?').trim().charAt(0).toUpperCase()));
+    cover.append(h('span', 'mag__cat', cat), num(v.up) ? h('span', 'mag__up', 'UP ' + num(v.up)) : null);
+    const pill = (k, n) => h('span', 'mag__pill mag__pill--' + k, h('b', '', String(n)), ' ' + ({ pv: 'PV', escudo: 'Escudo', blindagem: 'Blind.', def: 'Defesa' })[k]);
+    const layers = ['escudo', 'blindagem', 'pv'].filter((k) => num(v[k])).map((k) => pill(k, num(v[k])));
+    layers.push(pill('def', num(v.armadura || ARMOR_BASE) + num(v.corpo) + num(v.resistencia)));
+    const stat = (k, label) => h('span', 'mag__stat', h('small', '', label), h('b', '', signed(num(v[k]))));
+    const atk = [v.ataque, v.arma, v.dano, num(v.cadencia) > 1 ? num(v.cadencia) + ' disparos' : '', v.efetivo ? 'efetivo contra ' + v.efetivo : ''].filter(Boolean).join(' · ');
+    const drops = parseDrops(v.saque).map((d) => (d.qty > 1 ? d.qty + '× ' : '') + d.name).concat(num(v.cronos) ? [fmtCronos(num(v.cronos)) + ' Cronos'] : []);
+    const kills = fallen.filter((f) => (f.npcId && f.npcId === e.id) || nameKey(f.name) === nameKey(e.name)).length;
+    const arena = h('button', 'btn btn--primary btn--sm', 'Pôr na arena');
+    arena.type = 'button';
+    arena.setAttribute('aria-label', 'Pôr ' + e.name + ' na arena');
+    arena.addEventListener('click', () => placeFoe(deep(e)));
+    const read = h('button', 'btn btn--ghost btn--sm', 'Ficha completa');
+    read.type = 'button';
+    read.addEventListener('click', () => openEntry(e));
+    const page = h('article', 'mag__page', cover,
+      h('div', 'mag__body',
+        h('p', 'mag__kicker', 'Ameaça' + (e.oficial ? ' · oficial' : '') + (kills ? ' · derrotado ' + (kills === 1 ? '1 vez' : kills + ' vezes') : '')),
+        h('h3', 'mag__title', e.name),
+        h('div', 'mag__pills', ...layers),
+        h('div', 'mag__stats', stat('corpo', 'Corpo'), stat('precisao', 'Precisão'), stat('essencia', 'Essência'), stat('luta', 'Luta'), stat('mira', 'Mira'), stat('resistencia', 'Resist.')),
+        atk ? h('p', 'mag__atk', h('b', '', 'Ataque '), atk) : null,
+        v.descricao ? h('p', 'mag__desc', v.descricao) : null,
+        v.lore ? h('blockquote', 'mag__lore', v.lore) : null,
+        h('p', 'mag__drops', h('b', '', 'Deixa ao cair '), drops.length ? drops.join(', ') : 'nada anotado (edite o campo Saque na Oficina)'),
+        h('div', 'mag__foot', read, arena)));
+    page.style.setProperty('--cat', NPC_CAT_COLOR[cat] || 'var(--ambar)');
+    return page;
   }
   async function giveItem(e) {
     const mb = members.find((m) => m.characterId === $('#gmlib-to').value);
@@ -8453,6 +8564,567 @@ const FIREBASE_CONFIG = {
   }
   $('#gmlib-kind').addEventListener('change', runGmLib);
   $('#gmlib-q').addEventListener('input', debounce(runGmLib, 250));
+
+  /* ---------- Saque, armazéns e monstros derrotados ----------
+     loot: listas de saque que o mestre entrega ao grupo (todos ou só alguns personagens pegam).
+     vaults: armazéns do grupo ou de um personagem, com espaços e carga; o mestre cria ou aprova e abre o acesso.
+     fallen: histórico do mestre com quem caiu no combate; um clique deixa o saque da criatura nos drops. */
+  let loot = [];
+  let vaults = [];
+  let fallen = [];
+  const LOOT_SRC = { npc: ['💀', 'Corpo'], bau: ['🧰', 'Baú'], caixa: ['📦', 'Caixa'], item: ['🎒', 'Item'], outro: ['✨', 'Outro'] };
+  const VAULT_SLOTS_MAX = 120;
+  const lootSel = {}; // lista -> uid do item escolhido na grade
+  const charName = (id) => { const mb = members.find((m) => m.characterId === id); return mb ? mb.name : 'alguém que saiu'; };
+  const lootFor = (l, charId) => !(l.who || []).length || (l.who || []).indexOf(charId) >= 0;
+  const lootEmpty = (l) => !(l.items || []).length && !num(l.cronos);
+  const vaultOwnerOk = (v) => !v.ownerCharId || members.some((m) => m.mine && m.characterId === v.ownerCharId);
+  const vaultUsable = (v) => Boolean(currentCamp && (currentCamp.gm || (v.approved && v.open && vaultOwnerOk(v))));
+  const vaultCarga = (v) => (v.items || []).reduce((t, x) => t + parseCarga((x.values || {}).carga) * (x.qty || 1), 0);
+  function vaultFits(v, it) {
+    if ((v.items || []).length + 1 > num(v.slots)) return v.name + ' não tem espaço livre (' + num(v.slots) + ' espaços).';
+    const add = parseCarga((it.values || {}).carga) * (it.qty || 1);
+    if (num(v.carga) > 0 && vaultCarga(v) + add > num(v.carga) + 1e-9) return v.name + ' não aguenta essa carga (' + fmtNum(vaultCarga(v)) + ' de ' + fmtNum(num(v.carga)) + ').';
+    return '';
+  }
+  async function saveCol(col, id, patch) {
+    try { await db.updateDoc(currentCamp.id, col, id, patch); return true; }
+    catch (err) { toast(errorMessage(err)); return false; }
+  }
+
+  // "Pistola improvisada", "Kit médico x2" ou "2x Sucata": vira { name, qty }
+  function parseDrops(text) {
+    return String(text || '').split(/\n|;/).map((l) => l.trim()).filter(Boolean).map((l) => {
+      let m = l.match(/^(.*?)\s*[x×]\s*(\d+)$/i);
+      if (m) return { name: m[1].trim(), qty: clamp(num(m[2]), 1, 99) };
+      m = l.match(/^(\d+)\s*[x×]?\s+(.*)$/i);
+      if (m) return { name: m[2].trim(), qty: clamp(num(m[1]), 1, 99) };
+      return { name: l, qty: 1 };
+    }).filter((d) => d.name).slice(0, 30);
+  }
+  // acha o item pelo nome no banco; se não existir, vira um item geral com esse nome
+  async function dropEntry(d, from) {
+    let found = null;
+    try { found = (await libSearch(INVENTORY_KINDS, d.name)).find((e) => nameKey(e.name) === nameKey(d.name)); } catch (err) { /* sem banco: usa os prontos */ }
+    found = found || BUILTINS.find((e) => INVENTORY_KINDS.indexOf(e.kind) >= 0 && nameKey(e.name) === nameKey(d.name));
+    const base = found ? deep(found) : { kind: 'item-geral', name: d.name.slice(0, 80), values: { raridade: 'Comum', carga: '1', efeito: 'Saque de ' + from + '.' } };
+    return Object.assign(invEntryFrom(base), { qty: d.qty, src: 'saque' });
+  }
+
+  function renderLootTab() {
+    if (!currentCamp) return;
+    const gm = Boolean(currentCamp.gm);
+    $('#ctab-mestre').textContent = gm ? 'Itens e bestiário' : 'Saque e armazém';
+    $('#gmlib-block').hidden = !gm;
+    $('#loot-new').hidden = !gm;
+    renderFallen();
+    renderLoot();
+    renderVaults();
+  }
+
+  /* ---- Monstros derrotados (só o mestre) ---- */
+  const fallenSeen = new Set();
+  let fallenReady = false; // só registra depois de ler o histórico (senão regrava quem já estava lá)
+  function trackFallen(list) {
+    if (!currentCamp || !currentCamp.gm || !fallenReady) return;
+    list.forEach((f) => {
+      const st = lifeState(foeLayers(f));
+      if ((st !== 'morto' && st !== 'fora de combate') || fallenSeen.has(f.id) || fallen.some((x) => x.id === f.id)) return;
+      fallenSeen.add(f.id);
+      db.addDoc(currentCamp.id, 'fallen', { foeId: f.id, npcId: f.npcId || '', name: f.name, values: deep(f.values || {}), thumb: f.thumb || '',
+        scene: (scene && scene.name) || '', state: st, lootId: '' }, f.id).catch((err) => console.warn(err));
+    });
+  }
+  function renderFallen() {
+    const gm = Boolean(currentCamp && currentCamp.gm);
+    $('#fallen-block').hidden = !gm || !fallen.length;
+    if (!gm) return;
+    const list = fallen.slice().reverse();
+    $('#fallen-all').hidden = !list.some((f) => !f.lootId);
+    $('#fallen-clear').hidden = !list.length;
+    $('#fallen-list').replaceChildren(...list.map((f) => {
+      const v = f.values || {};
+      const drops = parseDrops(v.saque);
+      const has = drops.length || num(v.cronos);
+      const btn = h('button', 'btn btn--sm ' + (f.lootId ? 'btn--ghost' : 'btn--primary'), f.lootId ? 'Tirar dos drops' : 'Deixar nos drops');
+      btn.type = 'button';
+      btn.dataset.fid = 'fallen-drop-' + f.id;
+      btn.disabled = !f.lootId && !has;
+      btn.addEventListener('click', () => (f.lootId ? undropFallen(f) : dropFallen(f)));
+      const del = h('button', 'btn btn--ghost btn--sm', 'Apagar');
+      del.type = 'button';
+      del.setAttribute('aria-label', 'Apagar ' + f.name + ' do histórico');
+      del.addEventListener('click', () => db.removeDoc(currentCamp.id, 'fallen', f.id).catch((err) => toast(errorMessage(err))));
+      const when = [f.state === 'morto' ? 'morto' : 'fora de combate', f.scene ? 'em ' + f.scene : '', f.createdAt ? formatTime(f.createdAt) : ''].filter(Boolean).join(' · ');
+      const what = has ? 'Deixa: ' + drops.map((d) => (d.qty > 1 ? d.qty + '× ' : '') + d.name).concat(num(v.cronos) ? [fmtCronos(num(v.cronos)) + ' Cronos'] : []).join(', ') : 'Sem saque anotado no bestiário.';
+      return h('li', 'row fallen__row' + (f.lootId ? ' is-dropped' : ''), h('span', 'row__open row__open--static', avatar(f.name, 'criatura', f.thumb),
+        h('span', 'row__main', h('span', 'row__title', f.name, f.lootId ? h('span', 'tag tag--on', 'nos drops') : null), h('span', 'row__meta', when), h('span', 'row__meta', what))), btn, del);
+    }));
+  }
+  async function dropFallen(f) {
+    const v = f.values || {};
+    const items = await Promise.all(parseDrops(v.saque).map((d) => dropEntry(d, f.name)));
+    try {
+      const id = await db.addDoc(currentCamp.id, 'loot', { name: 'Corpo de ' + f.name, src: { kind: 'npc', name: f.name, thumb: f.thumb || '' }, items, cronos: num(v.cronos), who: [], fallenId: f.id, log: [] });
+      await db.updateDoc(currentCamp.id, 'fallen', f.id, { lootId: id });
+      play('ok');
+      toast('O saque de ' + f.name + ' está nos drops do grupo.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+  async function undropFallen(f) {
+    try {
+      if (loot.some((l) => l.id === f.lootId)) await db.removeDoc(currentCamp.id, 'loot', f.lootId);
+      await db.updateDoc(currentCamp.id, 'fallen', f.id, { lootId: '' });
+      toast('O saque de ' + f.name + ' saiu dos drops.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+  $('#fallen-all').addEventListener('click', async () => {
+    const todo = fallen.filter((f) => !f.lootId && (parseDrops((f.values || {}).saque).length || num((f.values || {}).cronos)));
+    for (const f of todo) await dropFallen(f); // eslint-disable-line no-await-in-loop
+  });
+  $('#fallen-clear').addEventListener('click', async () => {
+    if (!(await askConfirm({ title: 'Limpar histórico', text: 'Apaga a lista de monstros derrotados. O saque que já está nos drops continua lá.', ok: 'Limpar' }))) return;
+    for (const f of fallen.slice()) await db.removeDoc(currentCamp.id, 'fallen', f.id).catch(() => {}); // eslint-disable-line no-await-in-loop
+  });
+
+  /* ---- Grade de itens (saque e armazém): como o inventário de um inimigo ou de um baú ---- */
+  function lootGrid(items, slots, selUid, onPick) {
+    const cells = items.map((x) => {
+      const cell = h('div', 'cell cell--full' + (x.uid === selUid ? ' is-picked' : ''));
+      const color = rarColor((x.values || {}).raridade);
+      if (color) cell.style.setProperty('--rar', color);
+      const face = h('button', 'cell__face', entryIcon(x), (x.qty || 1) > 1 ? h('span', 'cell__qty', '×' + x.qty) : null, h('span', 'cell__label', x.name));
+      face.type = 'button';
+      face.dataset.fid = 'lootcell-' + x.uid;
+      face.setAttribute('aria-pressed', String(x.uid === selUid));
+      face.setAttribute('aria-label', x.name + ((x.qty || 1) > 1 ? ' ×' + x.qty : '') + '. Ver e pegar.');
+      face.addEventListener('click', () => onPick(x.uid === selUid ? '' : x.uid));
+      cell.append(face);
+      return cell;
+    });
+    const free = Math.max(0, Math.min(slots, VAULT_SLOTS_MAX) - items.length);
+    for (let k = 0; k < free; k++) cells.push(h('div', 'cell cell--empty'));
+    const row = 8;
+    const pad = (row - (cells.length % row)) % row;
+    for (let k = 0; k < pad && cells.length < row; k++) cells.push(h('div', 'cell cell--locked'));
+    return h('div', 'bag lootbox__grid', ...cells);
+  }
+  function pickPanel(it, actions) {
+    if (!it) return h('p', 'lootbox__pick lootbox__pick--none', 'Toque num item da grade para ver o que é.');
+    const btns = actions.filter(Boolean).map((a) => {
+      const b = h('button', 'btn btn--sm ' + (a.cls || 'btn--ghost'), a.label);
+      b.type = 'button';
+      if (a.fid) b.dataset.fid = a.fid;
+      b.disabled = Boolean(a.off);
+      b.addEventListener('click', a.on);
+      return b;
+    });
+    return h('div', 'lootbox__pick', entryIcon(it), h('span', 'lootbox__pickmain', h('strong', '', it.name, (it.qty || 1) > 1 ? ' ×' + it.qty : ''), h('span', 'row__meta', entryMeta(it))), h('span', 'lootbox__pickbtns', ...btns));
+  }
+
+  /* ---- Saque ---- */
+  function renderLoot() {
+    const gm = Boolean(currentCamp && currentCamp.gm);
+    const me = playing();
+    const mine = members.filter((m) => m.mine && m.sheet && m.sheet.attrs);
+    const list = gm ? loot : loot.filter((l) => !lootEmpty(l) && mine.some((m) => lootFor(l, m.characterId)));
+    $('#loot-hint').textContent = gm
+      ? (loot.length ? 'Os jogadores veem estas listas na aba "Saque e armazém" e pegam o que é deles. "Quem pega" define se é o grupo todo ou só alguns.' : 'Nenhuma lista de saque. Crie uma ou deixe os drops de um monstro derrotado.')
+      : (list.length ? 'Pegue com o personagem escolhido em "Jogando como"' + (me ? ' (' + me.name + ')' : '') + '. Dá também para guardar direto num armazém.' : 'Nada para pegar agora. Quando o mestre deixar um saque para vocês, ele aparece aqui.');
+    $('#loot-list').replaceChildren(...list.map((l) => lootCard(l, gm, me)));
+  }
+  function lootCard(l, gm, me) {
+    const items = l.items || [];
+    const src = LOOT_SRC[(l.src && l.src.kind) || 'outro'] || LOOT_SRC.outro;
+    const art = h('span', 'lootbox__art');
+    if (l.src && l.src.thumb) { const img = h('img'); img.src = l.src.thumb; img.alt = ''; art.append(img); }
+    else art.textContent = src[0];
+    const who = (l.who || []).length ? 'Só para ' + l.who.map(charName).join(', ') : 'Para o grupo todo';
+    const can = me && lootFor(l, me.characterId);
+    const sel = items.find((x) => x.uid === lootSel[l.id]) || null;
+    const redraw = () => renderLoot();
+    const pickTo = (uid) => { lootSel[l.id] = uid; redraw(); };
+    const usable = vaults.filter(vaultUsable);
+    const acts = gm
+      ? [{ label: 'Tirar da lista', fid: 'loot-del-item', on: () => dropLootItem(l, sel) }]
+      : [{ label: can ? 'Pegar' : 'Não é para ' + (me ? me.name : 'você'), cls: 'btn--primary', fid: 'loot-take', off: !can, on: () => takeLoot(l, sel, me) },
+        usable.length ? { label: 'Guardar no armazém', fid: 'loot-stash', off: !can, on: () => stashLoot(l, sel, usable) } : null];
+    const foot = [];
+    const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; if (fid) b.dataset.fid = fid; b.addEventListener('click', fn); foot.push(b); return b; };
+    if (gm) {
+      btn('+ Item', 'btn--ghost', () => addLootItem(l), 'loot-add-' + l.id);
+      btn('+ Cronos', 'btn--ghost', () => setLootCronos(l));
+      btn('Quem pega', 'btn--ghost', async () => { const w = await askWho(l.who || [], 'Quem pode pegar: ' + l.name); if (w) saveCol('loot', l.id, { who: w }); }, 'loot-who-' + l.id);
+      btn('Apagar lista', 'btn--ghost', () => removeLoot(l));
+    } else {
+      if (items.length && can) btn('Pegar tudo', 'btn--primary', () => takeAll(l, me), 'loot-all-' + l.id);
+      if (num(l.cronos) && can) btn('Pegar ' + fmtCronos(num(l.cronos)) + ' Cronos', 'btn--ghost', () => takeCronos(l, me), 'loot-cronos-' + l.id);
+    }
+    const log = (l.log || []).slice(0, 3).map((x) => h('li', '', x.text));
+    const card = h('article', 'lootbox' + (lootEmpty(l) ? ' is-empty' : ''),
+      h('header', 'lootbox__head', art, h('span', 'lootbox__title', h('strong', '', l.name), h('span', 'row__meta', src[1] + (l.src && l.src.name && l.src.name !== l.name ? ': ' + l.src.name : '') + ' · ' + who)),
+        num(l.cronos) ? h('span', 'tag tag--on', fmtCronos(num(l.cronos)) + ' Cronos') : null),
+      items.length ? lootGrid(items, 0, lootSel[l.id], pickTo) : h('p', 'field__hint', lootEmpty(l) ? 'Vazia: já pegaram tudo.' : 'Sem itens, só Cronos.'),
+      items.length ? pickPanel(sel, acts) : null,
+      foot.length ? h('div', 'lootbox__foot', ...foot) : null,
+      log.length ? h('ul', 'lootbox__log', ...log) : null);
+    card.dataset.fid = 'loot-' + l.id;
+    return card;
+  }
+  const lootLog = (l, text) => [{ t: Date.now(), text }].concat(l.log || []).slice(0, 10);
+  const freshLoot = (l) => loot.find((x) => x.id === l.id) || l;
+  async function takeLoot(l, it, me) {
+    if (!it || !me) return;
+    const cur = freshLoot(l);
+    if (!(cur.items || []).some((x) => x.uid === it.uid)) { toast('Alguém já pegou esse item.'); return; }
+    if (!(await saveCol('loot', l.id, { items: cur.items.filter((x) => x.uid !== it.uid), log: lootLog(cur, me.name + ' pegou ' + it.name + '.') }))) return;
+    try {
+      await patchMemberSheet(me, (s) => { s.inventory.push(Object.assign(deep(it), { uid: uid(), slot: '', src: 'saque' })); });
+      lootSel[l.id] = '';
+      play('ok');
+      toast(it.name + ' foi para a mochila de ' + me.name + '.');
+    } catch (err) {
+      await saveCol('loot', l.id, { items: (freshLoot(l).items || []).concat([it]) }); // devolve
+      toast(errorMessage(err));
+    }
+  }
+  async function takeAll(l, me) {
+    const cur = freshLoot(l);
+    const items = cur.items || [];
+    if (!items.length || !me) return;
+    const cr = num(cur.cronos);
+    if (!(await saveCol('loot', l.id, { items: [], cronos: 0, log: lootLog(cur, me.name + ' pegou tudo.') }))) return;
+    try {
+      await patchMemberSheet(me, (s) => {
+        items.forEach((it) => s.inventory.push(Object.assign(deep(it), { uid: uid(), slot: '', src: 'saque' })));
+        if (cr) { s.money = Object.assign({}, s.money); s.money[currentCamp.id] = num(s.money[currentCamp.id]) + cr; }
+      });
+      play('ok');
+      toast(me.name + ' pegou ' + plural(items.length, 'item', 'itens') + (cr ? ' e ' + fmtCronos(cr) + ' Cronos' : '') + '.');
+    } catch (err) { await saveCol('loot', l.id, { items, cronos: cr }); toast(errorMessage(err)); }
+  }
+  async function takeCronos(l, me) {
+    const cur = freshLoot(l);
+    const cr = num(cur.cronos);
+    if (!cr || !me) return;
+    if (!(await saveCol('loot', l.id, { cronos: 0, log: lootLog(cur, me.name + ' pegou ' + fmtCronos(cr) + ' Cronos.') }))) return;
+    try {
+      await patchMemberSheet(me, (s) => { s.money = Object.assign({}, s.money); s.money[currentCamp.id] = num(s.money[currentCamp.id]) + cr; });
+      toast(me.name + ' pegou ' + fmtCronos(cr) + ' Cronos.');
+    } catch (err) { await saveCol('loot', l.id, { cronos: cr }); toast(errorMessage(err)); }
+  }
+  async function stashLoot(l, it, usable) {
+    if (!it) return;
+    const id = usable.length === 1 ? usable[0].id : await askChoice('Guardar ' + it.name, 'Armazém', 'O item sai do saque e vai direto para o armazém.', usable.map((v) => [v.id, v.name + ' (' + (v.items || []).length + '/' + num(v.slots) + ')']), 'Guardar');
+    const v = vaults.find((x) => x.id === id);
+    if (!v) return;
+    const cur = freshLoot(l);
+    if (!(cur.items || []).some((x) => x.uid === it.uid)) { toast('Alguém já pegou esse item.'); return; }
+    const full = vaultFits(v, it);
+    if (full) { toast(full); return; }
+    const who = playing();
+    if (!(await saveCol('vaults', v.id, { items: (v.items || []).concat([Object.assign(deep(it), { slot: '' })]), log: lootLog(v, (who ? who.name : 'Alguém') + ' guardou ' + it.name + '.') }))) return;
+    await saveCol('loot', l.id, { items: cur.items.filter((x) => x.uid !== it.uid), log: lootLog(cur, (who ? who.name : 'Alguém') + ' guardou ' + it.name + ' em ' + v.name + '.') });
+    lootSel[l.id] = '';
+    toast(it.name + ' foi para ' + v.name + '.');
+  }
+  async function addLootItem(l) {
+    const e = await openPicker({ title: 'Item para ' + l.name, kinds: INVENTORY_KINDS, chips: ['Saque'] });
+    if (!e) return;
+    const cur = freshLoot(l);
+    if ((cur.items || []).length >= 60) { toast('Uma lista de saque guarda até 60 itens.'); return; }
+    await saveCol('loot', l.id, { items: (cur.items || []).concat([Object.assign(invEntryFrom(e), { src: 'saque' })]) });
+  }
+  async function dropLootItem(l, it) {
+    if (!it) return;
+    const cur = freshLoot(l);
+    await saveCol('loot', l.id, { items: (cur.items || []).filter((x) => x.uid !== it.uid) });
+    lootSel[l.id] = '';
+  }
+  let numDlg = null;
+  function askNumber(titleText, label, value) {
+    if (!numDlg) { numDlg = h('dialog', 'dialog startdlg'); numDlg.setAttribute('aria-labelledby', 'num-title'); document.body.append(numDlg); }
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (numDlg.open) closeDialog(numDlg); };
+      const inp = h('input', 'input');
+      inp.type = 'number';
+      inp.min = '0';
+      inp.step = '1';
+      inp.id = 'num-input';
+      inp.value = String(value);
+      const lab = h('label', 'field__label', label);
+      lab.htmlFor = inp.id;
+      const ok = h('button', 'btn btn--primary btn--sm', 'Salvar');
+      ok.type = 'submit';
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      const form = h('form', 'startdlg__body', h('h2', '', titleText), lab, inp, h('div', 'dialog__actions', cancel, ok));
+      form.querySelector('h2').id = 'num-title';
+      form.addEventListener('submit', (ev) => { ev.preventDefault(); finish(Math.max(0, Math.round(num(inp.value)))); });
+      numDlg.onclose = () => { if (!numDlg.open) finish(null); };
+      numDlg.replaceChildren(form);
+      openDialog(numDlg);
+      inp.select();
+    });
+  }
+  async function setLootCronos(l) {
+    const n = await askNumber('Cronos em ' + l.name, 'Cronos que o grupo pega nesta lista', num(freshLoot(l).cronos));
+    if (n !== null) await saveCol('loot', l.id, { cronos: n });
+  }
+  async function removeLoot(l) {
+    if (!lootEmpty(l) && !(await askConfirm({ title: 'Apagar ' + l.name, text: 'O que ainda está na lista some para todos.', ok: 'Apagar' }))) return;
+    try {
+      await db.removeDoc(currentCamp.id, 'loot', l.id);
+      if (l.fallenId && fallen.some((f) => f.id === l.fallenId)) await db.updateDoc(currentCamp.id, 'fallen', l.fallenId, { lootId: '' });
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  // quem pode pegar: o grupo todo ou só alguns personagens
+  let whoDlg = null;
+  function askWho(current, titleText) {
+    if (!whoDlg) { whoDlg = h('dialog', 'dialog startdlg'); whoDlg.setAttribute('aria-labelledby', 'who-title'); document.body.append(whoDlg); }
+    const chars = members.filter((m) => m.sheet && m.sheet.attrs);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (whoDlg.open) closeDialog(whoDlg); };
+      const all = h('input');
+      all.type = 'checkbox';
+      all.id = 'who-all';
+      all.checked = !current.length;
+      const boxes = chars.map((m) => {
+        const c = h('input');
+        c.type = 'checkbox';
+        c.value = m.characterId;
+        c.checked = current.indexOf(m.characterId) >= 0;
+        c.disabled = all.checked;
+        return h('label', 'check', c, h('span', '', m.name));
+      });
+      all.addEventListener('change', () => boxes.forEach((b) => { b.firstChild.disabled = all.checked; }));
+      const ok = h('button', 'btn btn--primary btn--sm', 'Salvar');
+      ok.type = 'submit';
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      const form = h('form', 'startdlg__body', h('h2', '', titleText), h('label', 'check', all, h('span', '', 'O grupo todo')),
+        h('p', 'field__hint', 'Ou marque só quem pode pegar:'), h('div', 'who__list', ...boxes), h('div', 'dialog__actions', cancel, ok));
+      form.querySelector('h2').id = 'who-title';
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const pick = all.checked ? [] : boxes.map((b) => b.firstChild).filter((c) => c.checked).map((c) => c.value);
+        if (!all.checked && !pick.length) { toast('Marque alguém ou "O grupo todo".'); return; }
+        finish(pick);
+      });
+      whoDlg.onclose = () => { if (!whoDlg.open) finish(null); };
+      whoDlg.replaceChildren(form);
+      openDialog(whoDlg);
+    });
+  }
+
+  // nova lista de saque: nome, de onde vem, quem pega e Cronos; os itens entram depois pelo "+ Item"
+  let lootDlg = null;
+  $('#loot-new').addEventListener('click', () => {
+    if (!lootDlg) { lootDlg = h('dialog', 'dialog startdlg'); lootDlg.setAttribute('aria-labelledby', 'lootnew-title'); document.body.append(lootDlg); }
+    const name = h('input', 'input');
+    name.id = 'lootnew-name';
+    name.maxLength = 60;
+    name.placeholder = 'Ex.: Baú do laboratório';
+    const kind = h('select', 'input');
+    kind.id = 'lootnew-kind';
+    Object.keys(LOOT_SRC).forEach((k) => { const o = h('option', '', LOOT_SRC[k][0] + ' ' + LOOT_SRC[k][1]); o.value = k; kind.append(o); });
+    kind.value = 'bau';
+    const cr = h('input', 'input');
+    cr.id = 'lootnew-cronos';
+    cr.type = 'number';
+    cr.min = '0';
+    cr.value = '0';
+    let who = [];
+    const whoBtn = h('button', 'btn btn--ghost btn--sm', 'Quem pega: o grupo todo');
+    whoBtn.type = 'button';
+    whoBtn.addEventListener('click', async () => {
+      const w = await askWho(who, 'Quem pode pegar');
+      if (w) { who = w; whoBtn.textContent = 'Quem pega: ' + (w.length ? w.map(charName).join(', ') : 'o grupo todo'); }
+      openDialog(lootDlg);
+    });
+    const lab = (t, el) => { const l = h('label', 'field__label', t); l.htmlFor = el.id; return h('div', 'field', l, el); };
+    const ok = h('button', 'btn btn--primary btn--sm', 'Criar e pôr itens');
+    ok.type = 'submit';
+    ok.dataset.fid = 'lootnew-ok';
+    const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => closeDialog(lootDlg));
+    const form = h('form', 'startdlg__body', h('h2', '', 'Nova lista de saque'),
+      h('p', 'field__hint', 'O grupo vê a lista como o inventário de onde o saque veio (um corpo, um baú, uma caixa).'),
+      lab('Nome', name), lab('De onde vem', kind), lab('Cronos', cr), whoBtn, h('div', 'dialog__actions', cancel, ok));
+    form.querySelector('h2').id = 'lootnew-title';
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const n = cleanName(name.value).slice(0, 60) || LOOT_SRC[kind.value][1];
+      closeDialog(lootDlg);
+      try {
+        const id = await db.addDoc(currentCamp.id, 'loot', { name: n, src: { kind: kind.value, name: n, thumb: '' }, items: [], cronos: Math.max(0, Math.round(num(cr.value))), who, fallenId: '', log: [] });
+        const l = loot.find((x) => x.id === id) || { id, name: n, items: [] };
+        addLootItem(l);
+      } catch (err) { toast(errorMessage(err)); }
+    });
+    lootDlg.replaceChildren(form);
+    openDialog(lootDlg);
+    name.focus();
+  });
+
+  /* ---- Armazéns ---- */
+  function renderVaults() {
+    const gm = Boolean(currentCamp && currentCamp.gm);
+    const mine = members.filter((m) => m.mine && m.sheet && m.sheet.attrs);
+    const list = gm ? vaults : vaults.filter((v) => vaultOwnerOk(v) || (!v.ownerCharId));
+    $('#vault-new').hidden = !gm && !mine.length;
+    $('#vault-new').textContent = gm ? 'Novo armazém' : 'Pedir um armazém';
+    $('#vault-hint').textContent = gm
+      ? 'O armazém do grupo ou de um personagem guarda itens fora da mochila. Você define os espaços e a carga, e quando os jogadores têm acesso. Pedidos de jogadores esperam a sua aprovação.'
+      : (list.length ? 'Você mexe num armazém quando o mestre libera o acesso.' : 'Nenhum armazém ainda. Peça um ao mestre; ele aprova e diz quando vocês têm acesso.');
+    $('#vault-list').replaceChildren(...list.map((v) => vaultCard(v, gm)));
+  }
+  function vaultCard(v, gm) {
+    const items = v.items || [];
+    const usable = vaultUsable(v);
+    const state = !v.approved ? ['Aguardando o mestre', 'tag--foe'] : v.open ? ['Acesso liberado', 'tag--on'] : ['Fechado pelo mestre', ''];
+    const sel = items.find((x) => x.uid === lootSel['v' + v.id]) || null;
+    const pickTo = (uid) => { lootSel['v' + v.id] = uid; renderVaults(); };
+    const me = playing();
+    const cap = (v.items || []).length + '/' + num(v.slots) + ' espaços' + (num(v.carga) > 0 ? ' · carga ' + fmtNum(vaultCarga(v)) + '/' + fmtNum(num(v.carga)) : '');
+    const foot = [];
+    const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; if (fid) b.dataset.fid = fid; b.addEventListener('click', fn); foot.push(b); return b; };
+    if (gm) {
+      if (!v.approved) {
+        btn('Aprovar', 'btn--primary', () => saveCol('vaults', v.id, { approved: true, open: true }), 'vault-approve-' + v.id);
+        btn('Recusar', 'btn--ghost', () => db.removeDoc(currentCamp.id, 'vaults', v.id).catch((err) => toast(errorMessage(err))));
+      } else {
+        btn(v.open ? 'Fechar acesso' : 'Liberar acesso', v.open ? 'btn--ghost' : 'btn--primary', () => saveCol('vaults', v.id, { open: !v.open }), 'vault-open-' + v.id);
+        btn('+ Item', 'btn--ghost', () => vaultAddItem(v));
+      }
+      btn('Capacidade', 'btn--ghost', () => vaultForm(v));
+      btn('Apagar', 'btn--ghost', async () => { if (await askConfirm({ title: 'Apagar ' + v.name, text: items.length ? 'Os ' + items.length + ' itens guardados somem junto.' : 'O armazém está vazio.', ok: 'Apagar' })) db.removeDoc(currentCamp.id, 'vaults', v.id).catch((err) => toast(errorMessage(err))); });
+    } else if (usable) {
+      btn('Guardar da mochila', 'btn--primary', () => vaultDeposit(v), 'vault-put-' + v.id);
+    } else if (!v.approved && v.createdBy === db.uid) {
+      btn('Cancelar pedido', 'btn--ghost', () => db.removeDoc(currentCamp.id, 'vaults', v.id).catch((err) => toast(errorMessage(err))));
+    }
+    const acts = usable ? [{ label: me || gm ? 'Tirar para a mochila' + (me ? ' de ' + me.name : '') : 'Tirar', cls: 'btn--primary', fid: 'vault-take', off: !me, on: () => vaultWithdraw(v, sel, me) },
+      gm ? { label: 'Jogar fora', on: () => saveCol('vaults', v.id, { items: items.filter((x) => x.uid !== sel.uid) }) } : null] : [];
+    const art = h('span', 'lootbox__art', v.ownerCharId ? '🎒' : '🏚️');
+    const card = h('article', 'lootbox vaultbox' + (usable ? '' : ' is-locked'),
+      h('header', 'lootbox__head', art, h('span', 'lootbox__title', h('strong', '', v.name), h('span', 'row__meta', (v.ownerCharId ? 'De ' + charName(v.ownerCharId) : 'Do grupo') + ' · ' + cap)), h('span', 'tag ' + state[1], state[0])),
+      usable || gm ? lootGrid(items, num(v.slots), lootSel['v' + v.id], pickTo) : h('p', 'field__hint', !v.approved ? 'O mestre ainda vai aprovar este armazém.' : 'O mestre fechou o acesso por enquanto.'),
+      (usable || gm) && items.length ? pickPanel(sel, acts) : null,
+      foot.length ? h('div', 'lootbox__foot', ...foot) : null);
+    card.dataset.fid = 'vault-' + v.id;
+    return card;
+  }
+  async function vaultDeposit(v) {
+    const me = playing();
+    if (!me) { toast('Escolha um personagem seu em "Jogando como".'); return; }
+    const bag = (me.sheet.inventory || []).filter((x) => !x.slot);
+    if (!bag.length) { toast('A mochila de ' + me.name + ' está vazia.'); return; }
+    const u = await askChoice('Guardar em ' + v.name, 'Item da mochila de ' + me.name, (v.items || []).length + ' de ' + num(v.slots) + ' espaços usados.', bag.map((x) => [x.uid, x.name + ((x.qty || 1) > 1 ? ' ×' + x.qty : '')]), 'Guardar');
+    const it = bag.find((x) => x.uid === u);
+    if (!it) return;
+    const cur = vaults.find((x) => x.id === v.id) || v;
+    const full = vaultFits(cur, it);
+    if (full) { toast(full); return; }
+    if (!(await saveCol('vaults', v.id, { items: (cur.items || []).concat([Object.assign(deep(it), { slot: '' })]), log: lootLog(cur, me.name + ' guardou ' + it.name + '.') }))) return;
+    try {
+      await patchMemberSheet(me, (s) => { s.inventory = s.inventory.filter((x) => x.uid !== it.uid); });
+      toast(it.name + ' foi para ' + v.name + '.');
+    } catch (err) {
+      await saveCol('vaults', v.id, { items: ((vaults.find((x) => x.id === v.id) || v).items || []).filter((x) => x.uid !== it.uid) });
+      toast(errorMessage(err));
+    }
+  }
+  async function vaultWithdraw(v, it, me) {
+    if (!it || !me) return;
+    const cur = vaults.find((x) => x.id === v.id) || v;
+    if (!(cur.items || []).some((x) => x.uid === it.uid)) { toast('Esse item já saiu do armazém.'); return; }
+    if (!(await saveCol('vaults', v.id, { items: cur.items.filter((x) => x.uid !== it.uid), log: lootLog(cur, me.name + ' tirou ' + it.name + '.') }))) return;
+    try {
+      await patchMemberSheet(me, (s) => { s.inventory.push(Object.assign(deep(it), { slot: '' })); });
+      lootSel['v' + v.id] = '';
+      toast(it.name + ' foi para a mochila de ' + me.name + '.');
+    } catch (err) { await saveCol('vaults', v.id, { items: ((vaults.find((x) => x.id === v.id) || v).items || []).concat([it]) }); toast(errorMessage(err)); }
+  }
+  async function vaultAddItem(v) {
+    const e = await openPicker({ title: 'Item para ' + v.name, kinds: INVENTORY_KINDS, chips: ['Armazém'] });
+    if (!e) return;
+    const cur = vaults.find((x) => x.id === v.id) || v;
+    const it = invEntryFrom(e);
+    const full = vaultFits(cur, it);
+    if (full) { toast(full); return; }
+    await saveCol('vaults', v.id, { items: (cur.items || []).concat([it]) });
+  }
+  // criar (mestre), pedir (jogador) ou mudar a capacidade
+  let vaultDlg = null;
+  function vaultForm(v) {
+    const gm = Boolean(currentCamp.gm);
+    if (!vaultDlg) { vaultDlg = h('dialog', 'dialog startdlg'); vaultDlg.setAttribute('aria-labelledby', 'vaultf-title'); document.body.append(vaultDlg); }
+    const name = h('input', 'input');
+    name.id = 'vaultf-name';
+    name.maxLength = 60;
+    name.value = v ? v.name : '';
+    name.placeholder = 'Ex.: Depósito do esconderijo';
+    const owner = h('select', 'input');
+    owner.id = 'vaultf-owner';
+    const opts = [['', 'Do grupo']].concat(members.filter((m) => m.sheet && m.sheet.attrs && (gm || m.mine)).map((m) => [m.characterId, 'De ' + m.name]));
+    opts.forEach((o) => { const el = h('option', '', o[1]); el.value = o[0]; owner.append(el); });
+    owner.value = v ? v.ownerCharId || '' : '';
+    owner.disabled = Boolean(v);
+    const slots = h('input', 'input');
+    slots.id = 'vaultf-slots';
+    slots.type = 'number';
+    slots.min = '1';
+    slots.max = String(VAULT_SLOTS_MAX);
+    slots.value = String(v ? num(v.slots) : 20);
+    const carga = h('input', 'input');
+    carga.id = 'vaultf-carga';
+    carga.type = 'number';
+    carga.min = '0';
+    carga.step = '0.5';
+    carga.value = String(v ? num(v.carga) : 0);
+    const lab = (t, el) => { const l = h('label', 'field__label', t); l.htmlFor = el.id; return h('div', 'field', l, el); };
+    const ok = h('button', 'btn btn--primary btn--sm', v ? 'Salvar' : gm ? 'Criar armazém' : 'Pedir ao mestre');
+    ok.type = 'submit';
+    ok.dataset.fid = 'vaultf-ok';
+    const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => closeDialog(vaultDlg));
+    const form = h('form', 'startdlg__body', h('h2', '', v ? 'Capacidade de ' + v.name : gm ? 'Novo armazém' : 'Pedir um armazém'),
+      h('p', 'field__hint', gm ? 'Cada item ocupa um espaço (com a quantidade junta). Carga 0 é sem limite de carga.' : 'O mestre aprova o pedido e decide quando vocês têm acesso. Cada item ocupa um espaço; carga 0 é sem limite.'),
+      lab('Nome', name), lab('Dono', owner), h('div', 'fields-grid', lab('Espaços', slots), lab('Carga máxima', carga)), h('div', 'dialog__actions', cancel, ok));
+    form.querySelector('h2').id = 'vaultf-title';
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const n = cleanName(name.value).slice(0, 60);
+      if (!n) { toast('Dê um nome ao armazém.'); name.focus(); return; }
+      const sl = clamp(Math.round(num(slots.value)) || 1, 1, VAULT_SLOTS_MAX);
+      const cg = Math.max(0, num(carga.value));
+      if (v && (v.items || []).length > sl) { toast('Já há ' + v.items.length + ' itens guardados: use pelo menos esse número de espaços.'); return; }
+      closeDialog(vaultDlg);
+      try {
+        if (v) await db.updateDoc(currentCamp.id, 'vaults', v.id, { name: n, slots: sl, carga: cg });
+        else {
+          const oc = owner.value;
+          await db.addDoc(currentCamp.id, 'vaults', { name: n, ownerCharId: oc, ownerName: oc ? charName(oc) : '', slots: sl, carga: cg, items: [], approved: gm, open: gm, createdBy: db.uid, log: [] });
+          toast(gm ? n + ' criado.' : 'Pedido enviado. O mestre aprova e libera o acesso.');
+        }
+      } catch (err) { toast(errorMessage(err)); }
+    });
+    vaultDlg.replaceChildren(form);
+    openDialog(vaultDlg);
+    name.focus();
+  }
+  $('#vault-new').addEventListener('click', () => {
+    if (!currentCamp.gm && !playing()) { toast('Escolha um personagem seu em "Jogando como".'); return; }
+    vaultForm(null);
+  });
 
   /* ---------- Lojas da campanha ----------
      O mestre cria as lojas (de uma companhia, dele ou de um NPC) e escolhe itens, quantidades e preços.
@@ -9022,10 +9694,20 @@ const FIREBASE_CONFIG = {
     if (noAccess && !camp.gm) { renderRolls([]); return; }
     renderShops();
     renderCombat();
-    const stopFoes = db.subscribeFoes(id, (list) => { foes = list; renderCombat(); }, (err) => console.warn(err));
+    loot = [];
+    vaults = [];
+    fallen = [];
+    fallenSeen.clear();
+    fallenReady = false;
+    renderLootTab();
+    const stopFoes = db.subscribeFoes(id, (list) => { foes = list; trackFallen(list); renderCombat(); }, (err) => console.warn(err));
+    const here = (fn) => (list) => { if (currentCamp && currentCamp.id === id) fn(list); };
+    const stopLoot = db.subscribeCol(id, 'loot', here((list) => { loot = list; renderLoot(); }), (err) => console.warn(err));
+    const stopVaults = db.subscribeCol(id, 'vaults', here((list) => { vaults = list; renderVaults(); renderLoot(); }), (err) => console.warn(err));
+    const stopFallen = camp.gm ? db.subscribeCol(id, 'fallen', here((list) => { fallen = list; if (!fallenReady) { fallenReady = true; trackFallen(foes); } renderFallen(); if (!$('#cpanel-mestre').hidden && $('#gmlib-kind').value === 'bestiario') runGmLib(); }), (err) => console.warn(err)) : null;
     const stopScene = db.subscribeScene(id, (sc) => { if (currentCamp && currentCamp.id === id) { scene = sc; renderScene(); renderDock(); } }, (err) => console.warn(err));
     const stopShops = db.subscribeShops(id, (list) => { if (currentCamp && currentCamp.id === id) { shops = list; renderShops(); } }, (err) => console.warn(err));
-    const stopAll = (more) => () => { [stopFoes, stopScene, stopShops].concat(more || []).forEach((fn) => { if (typeof fn === 'function') fn(); }); };
+    const stopAll = (more) => () => { [stopFoes, stopScene, stopShops, stopLoot, stopVaults, stopFallen].concat(more || []).forEach((fn) => { if (typeof fn === 'function') fn(); }); };
     if (noAccess) { renderRolls([]); onLeave = stopAll(); return; }
     const stop = db.subscribeRolls(id, renderRolls, (err) => toast(errorMessage(err)));
     onLeave = stopAll([stop]);

@@ -209,6 +209,48 @@ service cloud.firestore {
         allow delete: if signedIn() && (isCampaignOwner(campaignId) || resource.data.ownerUid == request.auth.uid);
       }
 
+      // ---------- Saque: listas que o mestre entrega ao grupo ----------
+      // Só o mestre cria, apaga e muda nome, origem e quem pega; quem participa só tira itens e Cronos (e anota no registro).
+      match /loot/{lootId} {
+        allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
+        allow create, delete: if signedIn() && isCampaignOwner(campaignId);
+        allow update: if signedIn()
+                      && request.resource.data.items is list && request.resource.data.items.size() <= 60
+                      && (isCampaignOwner(campaignId)
+                          || (isCampaignMember(campaignId)
+                              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items', 'cronos', 'log'])
+                              && request.resource.data.get('cronos', 0) <= resource.data.get('cronos', 0)));
+      }
+
+      // ---------- Armazéns do grupo ou de um personagem ----------
+      // O mestre cria (já aprovado) ou aprova o pedido de um jogador, define espaços e carga e libera o acesso.
+      // Quem participa só mexe nos itens de um armazém aprovado e liberado.
+      match /vaults/{vaultId} {
+        allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
+        allow create: if signedIn()
+                      && request.resource.data.items is list && request.resource.data.items.size() <= 120
+                      && (isCampaignOwner(campaignId)
+                          || (isCampaignMember(campaignId)
+                              && request.resource.data.approved == false
+                              && request.resource.data.open == false
+                              && request.resource.data.createdBy == request.auth.uid
+                              && request.resource.data.items.size() == 0));
+        allow update: if signedIn()
+                      && request.resource.data.items is list && request.resource.data.items.size() <= 120
+                      && (isCampaignOwner(campaignId)
+                          || (isCampaignMember(campaignId)
+                              && resource.data.approved == true && resource.data.open == true
+                              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items', 'log'])
+                              && request.resource.data.items.size() <= resource.data.slots));
+        allow delete: if signedIn() && (isCampaignOwner(campaignId)
+                      || (resource.data.approved == false && resource.data.createdBy == request.auth.uid));
+      }
+
+      // ---------- Monstros derrotados: histórico só do mestre ----------
+      match /fallen/{fallenId} {
+        allow read, write: if signedIn() && isCampaignOwner(campaignId);
+      }
+
       // ---------- Chat de dados (rolagens não podem ser editadas) ----------
       // O mestre também rola (pelos inimigos), mesmo sem personagem na campanha.
       match /rolls/{rollId} {
