@@ -2184,3 +2184,36 @@ body {
   .guide__page + .guide__page { display: none; }
   .guide__turn { width: 2.25rem; }
 }
+
+/* ---------- 14. LOJAS DA CAMPANHA ---------- */
+.shops__gm { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.shop-new { margin: 0 0 1rem; padding: 1rem; border: 1px solid var(--linha); border-radius: var(--r-s); background: var(--casco-2); }
+.shop-new__check { align-self: end; min-height: 44px; }
+.shop-new__foot { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
+.shops__list { display: grid; gap: 0.75rem; }
+.shop { border: 1px solid var(--linha); border-radius: var(--r-s); background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent); }
+.shop[open] { border-color: var(--linha-forte); }
+.shop__head { display: flex; align-items: center; gap: 0.75rem; min-height: 56px; padding: 0.6rem 0.9rem; cursor: pointer; list-style: none; }
+.shop__head::-webkit-details-marker { display: none; }
+.shop__head::after { content: "▾"; margin-left: auto; color: var(--nevoa-2); transition: transform 0.15s; }
+.shop[open] > .shop__head::after { transform: rotate(180deg); }
+.shop__icon { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; flex: none; border-radius: 8px; background: var(--casco-2); font-size: 1.25rem; }
+.shop--companhia .shop__icon { box-shadow: inset 0 0 0 1px var(--mare); }
+.shop--jogador .shop__icon { box-shadow: inset 0 0 0 1px var(--ambar); }
+.shop__main { display: grid; min-width: 0; }
+.shop__name { font: 700 var(--t-m)/1.25 var(--fonte-titulo); }
+.shop__meta { font-size: var(--t-s); color: var(--nevoa-2); }
+.shop__body { display: grid; gap: 0.75rem; padding: 0 0.9rem 0.9rem; }
+.shop__item { flex-wrap: wrap; }
+.shop__item--off { opacity: 0.75; }
+.shop__stock { margin-left: 0.25rem; }
+.shop__ctl { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem; flex-basis: 100%; padding-left: 3.25rem; }
+.shop__lab { display: grid; gap: 0.15rem; font-size: 0.75rem; font-weight: 700; color: var(--nevoa-2); }
+.shop__num { width: 6.5rem; min-height: 38px; padding: 0.3rem 0.5rem; }
+.shop__sel { width: auto; min-height: 38px; padding: 0.3rem 0.5rem; }
+.shop__acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.shop__log { font-size: var(--t-s); color: var(--nevoa-2); }
+.shop__log summary { cursor: pointer; min-height: 32px; }
+.shop__log ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
+@media (max-width: 640px) { .shop__ctl { padding-left: 0; } }
+.row__title .tag + .tag { margin-left: 0.3rem; }

@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -663,6 +663,56 @@
         </div>
       </section>
 
+      <section class="block shops" id="shop-block" aria-labelledby="shop-title" hidden>
+        <div class="block__head">
+          <h2 class="block__title" id="shop-title">Lojas</h2>
+          <div class="shops__gm" id="shop-gm" hidden>
+            <button class="btn btn--primary btn--sm" type="button" id="shop-new-btn">Nova loja</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="shop-rest-short" title="Com fluxo de pessoas e NPCs comprando, itens à venda podem ser vendidos">Descanso curto</button>
+            <button class="btn btn--ghost btn--sm" type="button" id="shop-rest-long" title="Mais tempo, mais chances de venda">Descanso longo</button>
+          </div>
+          <button class="btn btn--ghost btn--sm" type="button" id="shop-open-mine" hidden>Abrir minha loja</button>
+        </div>
+        <p class="block__hint" id="shop-wallet"></p>
+        <form class="shop-new" id="shop-new" novalidate hidden>
+          <h3 class="sub-title">Nova loja (mestre)</h3>
+          <div class="fields-grid">
+            <div class="field">
+              <label class="field__label" for="shop-kind">Tipo</label>
+              <select class="input" id="shop-kind">
+                <option value="companhia">De uma companhia (estoque infinito)</option>
+                <option value="mestre">Do mestre</option>
+                <option value="npc">De um NPC</option>
+              </select>
+            </div>
+            <div class="field" id="shop-company-field">
+              <label class="field__label" for="shop-company">Companhia</label>
+              <select class="input" id="shop-company"></select>
+            </div>
+            <div class="field" id="shop-npc-field" hidden>
+              <label class="field__label" for="shop-npc">NPC</label>
+              <input class="input" id="shop-npc" type="text" maxlength="60" autocomplete="off" list="shop-npc-list" placeholder="Ex.: Velho Kaz">
+              <datalist id="shop-npc-list"></datalist>
+            </div>
+            <div class="field">
+              <label class="field__label" for="shop-name">Nome da loja</label>
+              <input class="input" id="shop-name" type="text" maxlength="60" autocomplete="off" placeholder="Deixe vazio para usar o nome da companhia ou do NPC">
+            </div>
+            <div class="field">
+              <label class="field__label" for="shop-traffic">Fluxo de pessoas</label>
+              <select class="input" id="shop-traffic"></select>
+            </div>
+            <label class="check shop-new__check"><input type="checkbox" id="shop-buyers"><span>NPCs compram (vendas nos descansos)</span></label>
+          </div>
+          <div class="shop-new__foot">
+            <button class="btn btn--ghost btn--sm" type="button" id="shop-new-cancel">Cancelar</button>
+            <button class="btn btn--primary btn--sm" type="submit">Criar loja</button>
+          </div>
+        </form>
+        <div class="shops__list" id="shop-list"></div>
+        <p class="empty" id="shop-empty">Nenhuma loja ainda. O mestre cria as lojas das companhias, as dele e as de NPCs; um jogador pode abrir a própria.</p>
+      </section>
+
       <div class="two-col two-col--chat">
         <section class="block chat" aria-labelledby="chat-title">
           <h2 class="block__title" id="chat-title"><button class="help" type="button" data-help="rolagens">Registro da mesa</button></h2>
@@ -909,8 +959,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=19"></script>
-  <script src="items.js?v=19"></script>
-  <script src="app.js?v=19"></script>
+  <script src="regras.js?v=20"></script>
+  <script src="items.js?v=20"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

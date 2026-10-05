@@ -231,6 +231,9 @@ const FIREBASE_CONFIG = {
     const sceneListeners = {};
     const foesOf = (campaignId) => Object.values((read().foes || {})[campaignId] || {}).map(clone).sort((a, b) => a.createdAt - b.createdAt);
     function notifyFoes(campaignId) { (foeListeners[campaignId] || new Set()).forEach((cb) => cb(foesOf(campaignId))); }
+    const shopListeners = {};
+    const shopsOf = (campaignId) => Object.values((read().shops || {})[campaignId] || {}).map(clone).sort((a, b) => a.createdAt - b.createdAt);
+    function notifyShops(campaignId) { (shopListeners[campaignId] || new Set()).forEach((cb) => cb(shopsOf(campaignId))); }
     function rollsOf(campaignId) {
       try { return JSON.parse(localStorage.getItem(ROLLS + campaignId)) || []; } catch (e) { return []; }
     }
@@ -251,6 +254,7 @@ const FIREBASE_CONFIG = {
 
     return {
       mode: 'local',
+      uid: ME,
 
       async nameTaken(kind, name, exceptId) {
         const d = read();
@@ -484,6 +488,37 @@ const FIREBASE_CONFIG = {
         (sceneListeners[campaignId] = sceneListeners[campaignId] || new Set()).add(callback);
         callback(clone((read().scenes || {})[campaignId] || null));
         return () => sceneListeners[campaignId].delete(callback);
+      },
+
+      // ---------- Lojas da campanha ----------
+      async addShop(campaignId, shop) {
+        const d = read();
+        d.shops = d.shops || {};
+        const box = d.shops[campaignId] = d.shops[campaignId] || {};
+        const id = uid();
+        box[id] = Object.assign(clone(shop), { id, createdAt: Date.now() });
+        write(d);
+        notifyShops(campaignId);
+        return id;
+      },
+      async updateShop(campaignId, id, patch) {
+        const d = read();
+        const box = (d.shops || {})[campaignId] || {};
+        if (!box[id]) throw new UserError('Essa loja não existe mais.');
+        Object.assign(box[id], clone(patch));
+        write(d);
+        notifyShops(campaignId);
+      },
+      async removeShop(campaignId, id) {
+        const d = read();
+        if (d.shops && d.shops[campaignId]) delete d.shops[campaignId][id];
+        write(d);
+        notifyShops(campaignId);
+      },
+      subscribeShops(campaignId, callback) {
+        (shopListeners[campaignId] = shopListeners[campaignId] || new Set()).add(callback);
+        callback(shopsOf(campaignId));
+        return () => shopListeners[campaignId].delete(callback);
       }
     };
   })();
@@ -532,6 +567,7 @@ const FIREBASE_CONFIG = {
 
     const db = {
       mode: 'firebase',
+      uid: me,
 
       async nameTaken(kind, name, exceptId) {
         const s = await nameDoc(kind, name).get();
@@ -841,6 +877,25 @@ const FIREBASE_CONFIG = {
       subscribeScene(campaignId, callback, onError) {
         return camps().doc(campaignId).collection('scene').doc('state').onSnapshot(
           (snap) => callback(snap.exists ? snap.data() : null),
+          (err) => { if (onError) onError(err); }
+        );
+      },
+
+      // ---------- Lojas da campanha ----------
+      async addShop(campaignId, shop) {
+        const ref = camps().doc(campaignId).collection('shops').doc();
+        await ref.set(Object.assign(deep(shop), { createdAt: Date.now() }));
+        return ref.id;
+      },
+      async updateShop(campaignId, id, patch) {
+        await camps().doc(campaignId).collection('shops').doc(id).update(deep(patch));
+      },
+      async removeShop(campaignId, id) {
+        await camps().doc(campaignId).collection('shops').doc(id).delete();
+      },
+      subscribeShops(campaignId, callback, onError) {
+        return camps().doc(campaignId).collection('shops').onSnapshot(
+          (snap) => callback(snap.docs.map((d) => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))),
           (err) => { if (onError) onError(err); }
         );
       }
@@ -1729,6 +1784,7 @@ const FIREBASE_CONFIG = {
           });
           toast((sign > 0 ? '+' : '–') + fmtCronos(v) + ' Cronos para ' + m.name + '.');
           fillMemberPanel(m, panel);
+          renderShops();
         } catch (err) { toast(errorMessage(err)); b.disabled = false; }
       });
       return b;
@@ -5492,7 +5548,7 @@ const FIREBASE_CONFIG = {
     });
     if (keep && $('option[value="' + CSS.escape(keep) + '"]', testPick)) testPick.value = keep;
   }
-  speakerEl.addEventListener('change', () => { lastCharacterId = speakerEl.value; renderTestPick(); renderDock(); });
+  speakerEl.addEventListener('change', () => { lastCharacterId = speakerEl.value; renderTestPick(); renderDock(); renderShops(); });
 
   /* ---------- Painel do personagem (estilo barra de ações de RPG) ----------
      O personagem escolhido fica no topo da campanha: retrato, barras de recurso
@@ -6131,6 +6187,316 @@ const FIREBASE_CONFIG = {
     await sceneLog('Fim da cena', 'Cena encerrada após ' + plural(rounds, 'rodada', 'rodadas') + '.', rounds);
   });
 
+  /* ---------- Lojas da campanha ----------
+     O mestre cria as lojas (de uma companhia, dele ou de um NPC) e escolhe itens, quantidades e preços.
+     Loja de companhia tem estoque infinito do que a companhia fabrica. Um jogador pode abrir a própria loja
+     e abastecer com a mochila do personagem: os itens ficam no armazém ou à venda, com o preço por unidade dele.
+     Com fluxo de pessoas e NPCs comprando, cada descanso que o mestre passa pode vender o que está à venda.
+     A chance cai com a raridade e com o preço acima do catálogo, e é baixa de propósito: o estoque demora a esvaziar. */
+  let shops = [];
+  const shopUi = { open: new Set(), busy: false };
+  const TRAFFIC = [['nenhum', 'Sem fluxo de pessoas'], ['baixo', 'Fluxo baixo'], ['medio', 'Fluxo médio'], ['alto', 'Fluxo alto']];
+  const TRAFFIC_P = { baixo: 0.04, medio: 0.08, alto: 0.14 };   // chance por tentativa, item comum no preço do catálogo
+  const TRAFFIC_TRIES = { baixo: 1, medio: 2, alto: 3 };          // tentativas por item num descanso curto (longo: o dobro)
+  const RARITY_P = { 'Comum': 1, 'Incomum': 0.75, 'Rara': 0.5, 'Epica': 0.3, 'Épica': 0.3, 'Lendária': 0.15 };
+  const playing = () => members.find((m) => m.mine && m.characterId === speakerEl.value) || null;
+  const moneyOf = (m) => num(m && m.sheet && m.sheet.money ? m.sheet.money[currentCamp.id] : 0);
+  const isShopOwner = (sh) => sh.kind === 'jogador' && sh.ownerUid === db.uid;
+  const shopKindText = (sh) => (sh.kind === 'companhia' ? 'Companhia ' + sh.company : sh.kind === 'npc' ? 'NPC: ' + sh.npc : sh.kind === 'jogador' ? 'Loja de jogador (' + sh.ownerName + ')' : 'Do mestre');
+  const catalogPrice = (entry) => priceOf(BUILTINS.find((e) => e.id && e.id === entry.id) || entry);
+  const shopLog = (sh, text) => [{ t: Date.now(), text }].concat(sh.log || []).slice(0, 20);
+  const stockText = (it) => (it.qty === null || it.qty === undefined ? '∞' : '×' + it.qty);
+  async function saveShop(sh, patch) {
+    try { await db.updateShop(currentCamp.id, sh.id, patch); return true; }
+    catch (err) { toast(errorMessage(err)); return false; }
+  }
+  async function payMember(characterId, amount) { // dinheiro de venda para o dono da loja
+    const owner = members.find((m) => m.characterId === characterId);
+    if (!owner || !amount) return;
+    await patchMemberSheet(owner, (s) => { s.money = Object.assign({}, s.money); s.money[currentCamp.id] = num(s.money[currentCamp.id]) + amount; });
+  }
+
+  async function buyFromShop(sh, it) {
+    const me = playing();
+    if (!me) { toast('Escolha um personagem seu para comprar.'); return; }
+    const price = Math.max(0, Math.round(num(it.price)));
+    if (moneyOf(me) < price) { toast(me.name + ' tem ' + fmtCronos(moneyOf(me)) + ' Cronos nesta campanha; ' + it.entry.name + ' custa ' + fmtCronos(price) + '.'); return; }
+    const fresh = shops.find((x) => x.id === sh.id);
+    const cur = fresh && fresh.items.find((x) => x.uid === it.uid);
+    if (!cur || !cur.sale || (cur.qty !== null && cur.qty !== undefined && cur.qty < 1)) { toast('Esse item acabou.'); return; }
+    const camp = currentCamp.id;
+    try {
+      await patchMemberSheet(me, (s) => {
+        if (num((s.money || {})[camp]) < price) throw new UserError('Dinheiro insuficiente.');
+        s.money = Object.assign({}, s.money);
+        s.money[camp] = num(s.money[camp]) - price;
+        s.inventory.push(Object.assign(invEntryFrom(cur.entry), { src: 'loja' }));
+      });
+      const items = fresh.items.map((x) => (x.uid === cur.uid && x.qty !== null && x.qty !== undefined ? Object.assign({}, x, { qty: x.qty - 1 }) : x))
+        .filter((x) => x.qty === null || x.qty === undefined || x.qty > 0);
+      await db.updateShop(camp, sh.id, { items, log: shopLog(fresh, me.name + ' comprou ' + cur.entry.name + ' por ' + fmtCronos(price) + ' Cronos.') });
+      if (sh.kind === 'jogador' && sh.ownerCharId !== me.characterId) await payMember(sh.ownerCharId, price);
+      toast(me.name + ' comprou ' + cur.entry.name + '. Já está na mochila.');
+      renderDock();
+      renderShops();
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  async function stockFromInventory(sh) {
+    const me = members.find((m) => m.characterId === sh.ownerCharId) || playing();
+    if (!me || !me.sheet) return;
+    const inv = (me.sheet.inventory || []).filter((i) => !i.slot);
+    if (!inv.length) { toast('Nada na mochila de ' + me.name + ' para pôr na loja. Itens equipados não entram.'); return; }
+    const pick = await askChoice('Abastecer ' + sh.name, 'Item da mochila de ' + me.name, 'Vai para o armazém da loja. Depois marque "À venda" e o preço por unidade.', inv.map((i) => [i.uid, i.name + (num(i.qty) > 1 ? ' ×' + i.qty : '')]));
+    if (!pick) return;
+    let moved = null;
+    try {
+      await patchMemberSheet(me, (s) => {
+        const k = s.inventory.findIndex((i) => i.uid === pick && !i.slot);
+        if (k < 0) throw new UserError('Esse item não está mais na mochila.');
+        moved = s.inventory.splice(k, 1)[0];
+      });
+      const fresh = shops.find((x) => x.id === sh.id) || sh;
+      await saveShop(fresh, { items: fresh.items.concat([{ uid: uid(), entry: slotSnap(moved), qty: Math.max(1, num(moved.qty) || 1), price: priceOf(moved), sale: false }]) });
+      toast(moved.name + ' foi para o armazém de ' + sh.name + '.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  async function unstock(sh, it) { // dono tira do armazém de volta para a mochila
+    const owner = members.find((m) => m.characterId === sh.ownerCharId);
+    if (!owner) { toast('O personagem dono da loja não está nesta campanha.'); return; }
+    try {
+      const fresh = shops.find((x) => x.id === sh.id) || sh;
+      if (!fresh.items.some((x) => x.uid === it.uid)) return;
+      await saveShop(fresh, { items: fresh.items.filter((x) => x.uid !== it.uid) });
+      await patchMemberSheet(owner, (s) => { s.inventory.push(Object.assign(invEntryFrom(it.entry), { qty: Math.max(1, num(it.qty) || 1) })); });
+      toast(it.entry.name + ' voltou para a mochila de ' + owner.name + '.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+
+  async function addBankItem(sh) {
+    const e = await openPicker({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
+      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    if (!e) return;
+    const fresh = shops.find((x) => x.id === sh.id) || sh;
+    await saveShop(fresh, { items: fresh.items.concat([{ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }]) });
+  }
+
+  // Descanso passado pelo mestre: NPCs podem comprar o que está à venda nas lojas com fluxo
+  async function shopRest(long) {
+    if (shopUi.busy) return;
+    shopUi.busy = true;
+    const sold = [];
+    try {
+      for (const sh of shops.slice()) {
+        if (!sh.npcBuyers || !TRAFFIC_P[sh.traffic]) continue;
+        let income = 0;
+        const lines = [];
+        const items = sh.items.map((x) => Object.assign({}, x));
+        items.forEach((it) => {
+          if (!it.sale || it.qty === null || it.qty === undefined || it.qty < 1) return; // estoque infinito não acaba
+          const base = catalogPrice(it.entry) || num(it.price) || 1;
+          const ratio = Math.max(0.25, num(it.price) / base);
+          const p = Math.min(0.5, TRAFFIC_P[sh.traffic] * (RARITY_P[(it.entry.values || {}).raridade] || 0.7) / (ratio * ratio));
+          const tries = Math.min(it.qty, TRAFFIC_TRIES[sh.traffic] * (long ? 2 : 1));
+          let n = 0;
+          for (let k = 0; k < tries; k++) if (Math.random() < p) n += 1;
+          if (!n) return;
+          it.qty -= n;
+          income += n * Math.max(0, Math.round(num(it.price)));
+          lines.push(n + '× ' + it.entry.name);
+        });
+        if (!lines.length) continue;
+        await db.updateShop(currentCamp.id, sh.id, { items: items.filter((x) => x.qty === null || x.qty === undefined || x.qty > 0),
+          log: shopLog(sh, 'Descanso ' + (long ? 'longo' : 'curto') + ': NPCs compraram ' + lines.join(', ') + (income ? ' (' + fmtCronos(income) + ' Cronos).' : '.')) });
+        if (sh.kind === 'jogador') await payMember(sh.ownerCharId, income);
+        sold.push(sh.name + ': ' + lines.join(', '));
+      }
+      toast(sold.length ? 'Vendas no descanso ' + (long ? 'longo' : 'curto') + ': ' + sold.join(' · ') + '.' : 'Descanso ' + (long ? 'longo' : 'curto') + ': nenhum NPC comprou nada desta vez.');
+    } catch (err) { toast(errorMessage(err)); }
+    finally { shopUi.busy = false; renderShops(); }
+  }
+
+  function shopItemRow(sh, it, manage) {
+    const e = it.entry;
+    const v = e.values || {};
+    const price = Math.max(0, Math.round(num(it.price)));
+    const main = h('span', 'row__main', h('span', 'row__title', e.name, ' ', h('span', 'tag shop__stock', stockText(it)), manage ? h('span', 'tag' + (it.sale ? ' tag--on' : ''), it.sale ? 'À venda' : 'No armazém') : null),
+      h('span', 'row__meta', [kindTitle(e.kind), e.typeTitle, v.raridade, v.fabricante].filter(Boolean).join(' · ')));
+    const row = h('li', 'row shop__item' + (it.sale ? '' : ' shop__item--off'), h('span', 'row__open row__open--static', entryIcon(e), main), h('strong', 'gear__price', fmtCronos(price)));
+    const me = playing();
+    if (it.sale && me && !(sh.kind === 'jogador' && sh.ownerCharId === me.characterId)) {
+      const buy = h('button', 'btn btn--primary btn--sm', 'Comprar');
+      buy.type = 'button';
+      buy.disabled = moneyOf(me) < price;
+      buy.title = buy.disabled ? 'Dinheiro insuficiente' : '';
+      buy.setAttribute('aria-label', 'Comprar ' + e.name + ' por ' + fmtCronos(price) + ' Cronos');
+      buy.addEventListener('click', () => { buy.disabled = true; buyFromShop(sh, it); });
+      row.append(buy);
+    }
+    if (!manage) return row;
+    const gm = currentCamp.gm;
+    const priceIn = h('input', 'input shop__num');
+    priceIn.type = 'number';
+    priceIn.min = '0';
+    priceIn.step = '1';
+    priceIn.value = String(price);
+    priceIn.setAttribute('aria-label', 'Preço por unidade de ' + e.name);
+    priceIn.addEventListener('change', () => saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { price: Math.max(0, Math.round(num(priceIn.value))) }) : x)) }));
+    const ctl = h('div', 'shop__ctl', h('label', 'shop__lab', 'Preço', priceIn));
+    if (gm && sh.kind !== 'jogador') {
+      const qtyIn = h('input', 'input shop__num');
+      qtyIn.type = 'number';
+      qtyIn.min = '0';
+      qtyIn.step = '1';
+      qtyIn.placeholder = '∞';
+      qtyIn.value = it.qty === null || it.qty === undefined ? '' : String(it.qty);
+      qtyIn.setAttribute('aria-label', 'Quantidade de ' + e.name + ' (vazio = infinito)');
+      qtyIn.addEventListener('change', () => {
+        const q = qtyIn.value.trim() === '' ? null : Math.max(0, Math.round(num(qtyIn.value)));
+        saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { qty: q }) : x)).filter((x) => x.qty === null || x.qty === undefined || x.qty > 0) });
+      });
+      ctl.append(h('label', 'shop__lab', 'Qtd.', qtyIn));
+    }
+    const sale = h('button', 'btn btn--ghost btn--sm', it.sale ? 'Pôr no armazém' : 'Pôr à venda');
+    sale.type = 'button';
+    sale.addEventListener('click', () => saveShop(sh, { items: sh.items.map((x) => (x.uid === it.uid ? Object.assign({}, x, { sale: !x.sale }) : x)) }));
+    ctl.append(sale);
+    const out = h('button', 'btn btn--ghost btn--sm', sh.kind === 'jogador' ? 'Devolver à mochila' : 'Tirar');
+    out.type = 'button';
+    out.addEventListener('click', () => (sh.kind === 'jogador' ? unstock(sh, it) : saveShop(sh, { items: sh.items.filter((x) => x.uid !== it.uid) })));
+    ctl.append(out);
+    row.append(ctl);
+    return row;
+  }
+
+  function shopCard(sh) {
+    const gm = currentCamp.gm;
+    const owner = isShopOwner(sh);
+    const manage = gm || owner;
+    const forSale = sh.items.filter((i) => i.sale);
+    const det = h('details', 'shop shop--' + sh.kind);
+    det.open = shopUi.open.has(sh.id);
+    det.addEventListener('toggle', () => { if (det.open) shopUi.open.add(sh.id); else shopUi.open.delete(sh.id); });
+    const icon = { companhia: '🏭', npc: '🧑‍🔧', jogador: '🎒', mestre: '🏪' }[sh.kind] || '🏪';
+    det.append(h('summary', 'shop__head',
+      h('span', 'shop__icon', icon),
+      h('span', 'shop__main', h('strong', 'shop__name', sh.name),
+        h('span', 'shop__meta', [shopKindText(sh), plural(forSale.length, 'item à venda', 'itens à venda'), (TRAFFIC.find((t) => t[0] === sh.traffic) || TRAFFIC[0])[1], sh.npcBuyers ? 'NPCs compram' : ''].filter(Boolean).join(' · ')))));
+    const body = h('div', 'shop__body');
+    const shown = manage ? sh.items : forSale;
+    if (shown.length) body.append(h('ul', 'rows shop__items', ...shown.map((it) => shopItemRow(sh, it, manage))));
+    else body.append(h('p', 'empty', manage ? 'Loja vazia. ' + (owner ? 'Abasteça com itens da mochila.' : 'Adicione itens do banco.') : 'Nada à venda agora.'));
+    const acts = h('div', 'shop__acts');
+    if (gm) {
+      const add = h('button', 'btn btn--ghost btn--sm', 'Adicionar item do banco');
+      add.type = 'button';
+      add.addEventListener('click', () => addBankItem(sh));
+      acts.append(add);
+    }
+    if (owner) {
+      const stock = h('button', 'btn btn--primary btn--sm', 'Abastecer da mochila');
+      stock.type = 'button';
+      stock.addEventListener('click', () => stockFromInventory(sh));
+      acts.append(stock);
+    }
+    if (gm) {
+      const traffic = h('select', 'input shop__sel');
+      traffic.setAttribute('aria-label', 'Fluxo de pessoas em ' + sh.name);
+      TRAFFIC.forEach((t) => { const o = h('option', '', t[1]); o.value = t[0]; traffic.append(o); });
+      traffic.value = sh.traffic || 'nenhum';
+      traffic.addEventListener('change', () => saveShop(sh, { traffic: traffic.value }));
+      const buyers = h('input');
+      buyers.type = 'checkbox';
+      buyers.checked = Boolean(sh.npcBuyers);
+      buyers.addEventListener('change', () => saveShop(sh, { npcBuyers: buyers.checked }));
+      acts.append(traffic, h('label', 'check', buyers, h('span', '', 'NPCs compram')));
+    }
+    if (gm || owner) {
+      const del = h('button', 'btn btn--danger btn--sm', owner && !gm ? 'Fechar minha loja' : 'Excluir loja');
+      del.type = 'button';
+      del.addEventListener('click', async () => {
+        const ok = await askConfirm({ title: (owner && !gm ? 'Fechar ' : 'Excluir ') + sh.name + '?', text: sh.kind === 'jogador' ? 'Os itens da loja voltam para a mochila de ' + sh.ownerName + '.' : 'A loja e o estoque somem da campanha.', ok: owner && !gm ? 'Fechar' : 'Excluir' });
+        if (!ok) return;
+        try {
+          if (sh.kind === 'jogador' && sh.items.length) {
+            const o = members.find((m) => m.characterId === sh.ownerCharId);
+            if (o) await patchMemberSheet(o, (s) => { sh.items.forEach((it) => s.inventory.push(Object.assign(invEntryFrom(it.entry), { qty: Math.max(1, num(it.qty) || 1) }))); });
+          }
+          await db.removeShop(currentCamp.id, sh.id);
+        } catch (err) { toast(errorMessage(err)); }
+      });
+      acts.append(del);
+    }
+    if (acts.children.length) body.append(acts);
+    if ((sh.log || []).length && manage) body.append(h('details', 'shop__log', h('summary', '', 'Vendas e compras (' + sh.log.length + ')'), h('ul', '', ...sh.log.map((l) => h('li', '', l.text)))));
+    det.append(body);
+    return det;
+  }
+
+  function renderShops() {
+    if (!currentCamp) return;
+    const gm = currentCamp.gm;
+    const me = playing();
+    $('#shop-gm').hidden = !gm;
+    $('#shop-open-mine').hidden = !me || shops.some((sh) => sh.kind === 'jogador' && sh.ownerCharId === me.characterId);
+    $('#shop-wallet').textContent = me ? me.name + ' tem ' + fmtCronos(moneyOf(me)) + ' Cronos nesta campanha.' : gm ? 'Você é o mestre: crie lojas, ponha itens e preços, e passe os descansos para os NPCs comprarem.' : '';
+    $('#shop-list').replaceChildren(...shops.map(shopCard));
+    $('#shop-empty').hidden = shops.length > 0;
+  }
+
+  (function shopForm() {
+    const form = $('#shop-new');
+    const kind = $('#shop-kind');
+    const comp = $('#shop-company');
+    (ITEM_DATA.fabricantes || []).forEach((f) => { const o = h('option', '', f); o.value = f; comp.append(o); });
+    const tr = $('#shop-traffic');
+    TRAFFIC.forEach((t) => { const o = h('option', '', t[1]); o.value = t[0]; tr.append(o); });
+    const sync = () => { $('#shop-company-field').hidden = kind.value !== 'companhia'; $('#shop-npc-field').hidden = kind.value !== 'npc'; };
+    kind.addEventListener('change', sync);
+    sync();
+    $('#shop-new-btn').addEventListener('click', () => {
+      form.hidden = !form.hidden;
+      $('#shop-npc-list').replaceChildren(...foes.map((f) => { const o = h('option'); o.value = f.name; return o; }));
+      if (!form.hidden) kind.focus();
+    });
+    $('#shop-new-cancel').addEventListener('click', () => { form.hidden = true; });
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const k = kind.value;
+      const npc = cleanName($('#shop-npc').value).slice(0, 60);
+      if (k === 'npc' && !npc) { toast('Diga de qual NPC é a loja.'); $('#shop-npc').focus(); return; }
+      const name = cleanName($('#shop-name').value).slice(0, 60) || (k === 'companhia' ? comp.value : k === 'npc' ? 'Loja de ' + npc : 'Loja do mestre');
+      const items = k === 'companhia'
+        ? BUILTINS.filter((e) => (e.values || {}).fabricante === comp.value && priceOf(e) > 0).map((e) => ({ uid: uid(), entry: slotSnap(e), qty: null, price: priceOf(e), sale: true }))
+        : [];
+      try {
+        const id = await db.addShop(currentCamp.id, { name, kind: k, company: k === 'companhia' ? comp.value : '', npc: k === 'npc' ? npc : '', ownerUid: '', ownerCharId: '', ownerName: '',
+          traffic: tr.value, npcBuyers: $('#shop-buyers').checked, items, log: [] });
+        shopUi.open.add(id);
+        renderShops();
+        form.hidden = true;
+        form.reset();
+        sync();
+        toast(name + ' abriu' + (items.length ? ' com ' + plural(items.length, 'item', 'itens') + ' da ' + comp.value + ', estoque infinito.' : '. Adicione itens do banco.'));
+      } catch (err) { toast(errorMessage(err)); }
+    });
+    $('#shop-open-mine').addEventListener('click', async () => {
+      const me = playing();
+      if (!me) return;
+      try {
+        const id = await db.addShop(currentCamp.id, { name: 'Loja de ' + me.name, kind: 'jogador', company: '', npc: '', ownerUid: db.uid, ownerCharId: me.characterId, ownerName: me.name,
+          traffic: 'nenhum', npcBuyers: false, items: [], log: [] });
+        shopUi.open.add(id);
+        renderShops();
+        toast('Loja de ' + me.name + ' aberta. Abasteça com itens da mochila; o mestre define o fluxo de pessoas.');
+      } catch (err) { toast(errorMessage(err)); }
+    });
+    $('#shop-rest-short').addEventListener('click', () => shopRest(false));
+    $('#shop-rest-long').addEventListener('click', () => shopRest(true));
+  })();
+
   views.campaign = async function showCampaign(id) {
     const camp = await db.getCampaign(id);
     if (!camp) { toast('Não encontramos essa campanha.'); go('campanhas'); return; }
@@ -6181,13 +6547,18 @@ const FIREBASE_CONFIG = {
 
     foes = [];
     scene = null;
+    shops = [];
     combat.targets.clear();
     $('#combat-block').hidden = noAccess && !camp.gm;
+    $('#shop-block').hidden = noAccess && !camp.gm;
+    $('#shop-new').hidden = true;
     if (noAccess && !camp.gm) { renderRolls([]); return; }
+    renderShops();
     renderCombat();
     const stopFoes = db.subscribeFoes(id, (list) => { foes = list; renderCombat(); }, (err) => console.warn(err));
     const stopScene = db.subscribeScene(id, (sc) => { if (currentCamp && currentCamp.id === id) { scene = sc; renderScene(); renderDock(); } }, (err) => console.warn(err));
-    const stopAll = (more) => () => { [stopFoes, stopScene].concat(more || []).forEach((fn) => { if (typeof fn === 'function') fn(); }); };
+    const stopShops = db.subscribeShops(id, (list) => { if (currentCamp && currentCamp.id === id) { shops = list; renderShops(); } }, (err) => console.warn(err));
+    const stopAll = (more) => () => { [stopFoes, stopScene, stopShops].concat(more || []).forEach((fn) => { if (typeof fn === 'function') fn(); }); };
     if (noAccess) { renderRolls([]); onLeave = stopAll(); return; }
     const stop = db.subscribeRolls(id, renderRolls, (err) => toast(errorMessage(err)));
     onLeave = stopAll([stop]);
