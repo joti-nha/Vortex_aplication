@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=38">
+  <link rel="stylesheet" href="style.css?v=39">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -596,13 +596,12 @@
            Grupo, Combate, Lojas e Saque para todos; Bestiário e Itens só para o mestre. -->
       <div class="camp-layout">
       <nav class="sheet-tabs camp-tabs" role="tablist" aria-label="Partes da campanha">
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-grupo" data-ctab="grupo" aria-controls="cpanel-grupo" aria-selected="false" tabindex="-1"><span class="camp-tab__icon" aria-hidden="true">👥</span><span class="camp-tab__label">Grupo</span><span class="camp-tab__badge" id="ctab-grupo-n" hidden></span></button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-combate" data-ctab="combate" aria-controls="cpanel-combate" aria-selected="true"><span class="camp-tab__icon" aria-hidden="true">⚔️</span><span class="camp-tab__label">Combate</span><span class="camp-tab__live" id="ctab-live" hidden>ao vivo</span></button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-lojas" data-ctab="lojas" aria-controls="cpanel-lojas" aria-selected="false" tabindex="-1"><span class="camp-tab__icon" aria-hidden="true">🏪</span><span class="camp-tab__label">Lojas</span></button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-saque" data-ctab="saque" aria-controls="cpanel-saque" aria-selected="false" tabindex="-1"><span class="camp-tab__icon" aria-hidden="true">🎁</span><span class="camp-tab__label">Saque e armazém</span><span class="camp-tab__badge" id="ctab-saque-n" hidden></span></button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-bestiario" data-ctab="bestiario" aria-controls="cpanel-bestiario" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__icon" aria-hidden="true">📖</span><span class="camp-tab__label">Bestiário</span><span class="camp-tab__badge camp-tab__badge--hot" id="ctab-bestiario-n" hidden></span></button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-itens" data-ctab="itens" aria-controls="cpanel-itens" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__icon" aria-hidden="true">🎒</span><span class="camp-tab__label">Itens</span></button>
-        <p class="camp-tabs__gm" id="ctab-gm-note" hidden>Bestiário e Itens: só o mestre vê.</p>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-grupo" data-ctab="grupo" aria-controls="cpanel-grupo" aria-selected="false" tabindex="-1"><span class="camp-tab__label">Grupo</span><span class="camp-tab__badge" id="ctab-grupo-n" hidden></span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-combate" data-ctab="combate" aria-controls="cpanel-combate" aria-selected="true"><span class="camp-tab__label">Combate</span><span class="camp-tab__live" id="ctab-live" hidden>ao vivo</span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-lojas" data-ctab="lojas" aria-controls="cpanel-lojas" aria-selected="false" tabindex="-1"><span class="camp-tab__label">Lojas</span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-saque" data-ctab="saque" aria-controls="cpanel-saque" aria-selected="false" tabindex="-1"><span class="camp-tab__label">Saque e armazém</span><span class="camp-tab__badge" id="ctab-saque-n" hidden></span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-bestiario" data-ctab="bestiario" aria-controls="cpanel-bestiario" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__label">Bestiário</span><span class="camp-tab__badge camp-tab__badge--hot" id="ctab-bestiario-n" hidden></span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-itens" data-ctab="itens" aria-controls="cpanel-itens" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__label">Itens</span></button>
       </nav>
       <div class="camp-main">
 
@@ -783,10 +782,6 @@
             <div class="field">
               <label class="field__label" for="gmlib-q">Buscar</label>
               <input class="input" id="gmlib-q" type="search" autocomplete="off" placeholder="Nome ou parte dele">
-            </div>
-            <div class="field" id="gmlib-to-field">
-              <label class="field__label" for="gmlib-to">Dar para</label>
-              <select class="input" id="gmlib-to"></select>
             </div>
           </div>
           <p class="block__hint" id="gmlib-hint" role="status"></p>
@@ -1052,8 +1047,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=38"></script>
-  <script src="items.js?v=38"></script>
-  <script src="app.js?v=38"></script>
+  <script src="regras.js?v=39"></script>
+  <script src="items.js?v=39"></script>
+  <script src="pixelart.js?v=39"></script>
+  <script src="app.js?v=39"></script>
 </body>
 </html>
