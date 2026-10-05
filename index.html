@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=37">
+  <link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -592,13 +592,19 @@
         </div>
       </header>
 
-      <!-- Abas da campanha: Grupo (quem joga), Combate (seu personagem, a arena e o registro) e Lojas -->
-      <div class="sheet-tabs camp-tabs" role="tablist" aria-label="Partes da campanha">
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-grupo" data-ctab="grupo" aria-controls="cpanel-grupo" aria-selected="false" tabindex="-1">Grupo</button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-combate" data-ctab="combate" aria-controls="cpanel-combate" aria-selected="true">Combate <span class="camp-tab__live" id="ctab-live" hidden>ao vivo</span></button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-lojas" data-ctab="lojas" aria-controls="cpanel-lojas" aria-selected="false" tabindex="-1">Lojas</button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-mestre" data-ctab="mestre" aria-controls="cpanel-mestre" aria-selected="false" tabindex="-1" hidden>Itens e bestiário</button>
-      </div>
+      <!-- Campanha: abas numa coluna à esquerda (tela larga) ou numa faixa que rola (celular).
+           Grupo, Combate, Lojas e Saque para todos; Bestiário e Itens só para o mestre. -->
+      <div class="camp-layout">
+      <nav class="sheet-tabs camp-tabs" role="tablist" aria-label="Partes da campanha">
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-grupo" data-ctab="grupo" aria-controls="cpanel-grupo" aria-selected="false" tabindex="-1"><span class="camp-tab__icon" aria-hidden="true">👥</span><span class="camp-tab__label">Grupo</span><span class="camp-tab__badge" id="ctab-grupo-n" hidden></span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-combate" data-ctab="combate" aria-controls="cpanel-combate" aria-selected="true"><span class="camp-tab__icon" aria-hidden="true">⚔️</span><span class="camp-tab__label">Combate</span><span class="camp-tab__live" id="ctab-live" hidden>ao vivo</span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-lojas" data-ctab="lojas" aria-controls="cpanel-lojas" aria-selected="false" tabindex="-1"><span class="camp-tab__icon" aria-hidden="true">🏪</span><span class="camp-tab__label">Lojas</span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-saque" data-ctab="saque" aria-controls="cpanel-saque" aria-selected="false" tabindex="-1"><span class="camp-tab__icon" aria-hidden="true">🎁</span><span class="camp-tab__label">Saque e armazém</span><span class="camp-tab__badge" id="ctab-saque-n" hidden></span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-bestiario" data-ctab="bestiario" aria-controls="cpanel-bestiario" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__icon" aria-hidden="true">📖</span><span class="camp-tab__label">Bestiário</span><span class="camp-tab__badge camp-tab__badge--hot" id="ctab-bestiario-n" hidden></span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-itens" data-ctab="itens" aria-controls="cpanel-itens" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__icon" aria-hidden="true">🎒</span><span class="camp-tab__label">Itens</span></button>
+        <p class="camp-tabs__gm" id="ctab-gm-note" hidden>Bestiário e Itens: só o mestre vê.</p>
+      </nav>
+      <div class="camp-main">
 
       <div class="camp-panel" id="cpanel-combate" role="tabpanel" aria-labelledby="ctab-combate">
       <!-- Painel do personagem: quem você joga nesta campanha, com barras, testes e poderes -->
@@ -714,19 +720,8 @@
 
       </div>
 
-      <!-- Itens e bestiário: só o mestre vê -->
-      <div class="camp-panel" id="cpanel-mestre" role="tabpanel" aria-labelledby="ctab-mestre" hidden>
-        <section class="block fallen" id="fallen-block" aria-labelledby="fallen-title" hidden>
-          <div class="block__head">
-            <h2 class="block__title" id="fallen-title">Monstros derrotados</h2>
-            <div class="block__tools">
-              <button class="btn btn--primary btn--sm" type="button" id="fallen-all" hidden>Deixar todos nos drops</button>
-              <button class="btn btn--ghost btn--sm" type="button" id="fallen-clear" hidden>Limpar histórico</button>
-            </div>
-          </div>
-          <p class="block__hint">Quem cai no combate entra aqui sozinho. Um clique em "Deixar nos drops" põe o saque da criatura (campos Saque e Cronos do bestiário) para o grupo pegar.</p>
-          <ul class="rows" id="fallen-list"></ul>
-        </section>
+      <!-- Saque e armazém: listas de saque e armazéns (todos; o mestre administra) -->
+      <div class="camp-panel" id="cpanel-saque" role="tabpanel" aria-labelledby="ctab-saque" hidden>
         <section class="block loot" id="loot-block" aria-labelledby="loot-title">
           <div class="block__head">
             <h2 class="block__title" id="loot-title">Saque</h2>
@@ -743,14 +738,42 @@
           <p class="block__hint" id="vault-hint"></p>
           <div class="loot__list" id="vault-list"></div>
         </section>
-        <section class="block gmlib" id="gmlib-block" aria-labelledby="gmlib-title">
-          <h2 class="block__title" id="gmlib-title">Bestiário e itens</h2>
-          <p class="block__hint">Só você, o mestre, vê esta parte. Ponha criaturas na arena, no time que quiser, e dê itens direto na mochila dos personagens.</p>
+      </div>
+
+      <!-- Bestiário: só o mestre (derrotados e a revista de monstros) -->
+      <div class="camp-panel" id="cpanel-bestiario" role="tabpanel" aria-labelledby="ctab-bestiario" hidden>
+        <section class="block fallen" id="fallen-block" aria-labelledby="fallen-title" hidden>
+          <div class="block__head">
+            <h2 class="block__title" id="fallen-title">Monstros derrotados</h2>
+            <div class="block__tools">
+              <button class="btn btn--primary btn--sm" type="button" id="fallen-all" hidden>Deixar todos nos drops</button>
+              <button class="btn btn--ghost btn--sm" type="button" id="fallen-clear" hidden>Limpar histórico</button>
+            </div>
+          </div>
+          <p class="block__hint">Quem cai no combate entra aqui sozinho. Um clique em "Deixar nos drops" põe o saque da criatura (campos Saque e Cronos do bestiário) para o grupo pegar.</p>
+          <ul class="rows" id="fallen-list"></ul>
+        </section>
+        <section class="block beast" aria-labelledby="beast-title">
+          <div class="block__head">
+            <h2 class="block__title" id="beast-title">Bestiário</h2>
+            <input class="input beast__q" id="beast-q" type="search" autocomplete="off" placeholder="Buscar criatura" aria-label="Buscar criatura">
+          </div>
+          <p class="block__hint">Uma página por criatura. "Pôr na arena" pergunta o time e põe no Combate.</p>
+          <div class="mag__chips" id="gmlib-cats" role="group" aria-label="Categoria"></div>
+          <p class="block__hint" id="beast-hint" role="status"></p>
+          <div class="mag" id="gmlib-mag"></div>
+        </section>
+      </div>
+
+      <!-- Itens: só o mestre (dar itens direto na mochila) -->
+      <div class="camp-panel" id="cpanel-itens" role="tabpanel" aria-labelledby="ctab-itens" hidden>
+        <section class="block gmlib" aria-labelledby="gmlib-title">
+          <h2 class="block__title" id="gmlib-title">Itens</h2>
+          <p class="block__hint">Dê itens direto na mochila de um personagem. Para deixar algo para o grupo pegar, use uma lista em "Saque e armazém".</p>
           <div class="gmlib__bar">
             <div class="field">
               <label class="field__label" for="gmlib-kind">Mostrar</label>
               <select class="input" id="gmlib-kind">
-                <option value="bestiario">Bestiário (NPCs e criaturas)</option>
                 <option value="armas">Armas</option>
                 <option value="protecao">Armaduras e vestíveis</option>
                 <option value="implantes">Implantes</option>
@@ -761,14 +784,12 @@
               <label class="field__label" for="gmlib-q">Buscar</label>
               <input class="input" id="gmlib-q" type="search" autocomplete="off" placeholder="Nome ou parte dele">
             </div>
-            <div class="field" id="gmlib-to-field" hidden>
-              <label class="field__label" for="gmlib-to">Dar itens para</label>
+            <div class="field" id="gmlib-to-field">
+              <label class="field__label" for="gmlib-to">Dar para</label>
               <select class="input" id="gmlib-to"></select>
             </div>
           </div>
-          <div class="mag__chips" id="gmlib-cats" role="group" aria-label="Categoria"></div>
           <p class="block__hint" id="gmlib-hint" role="status"></p>
-          <div class="mag" id="gmlib-mag"></div>
           <ul class="rows" id="gmlib-list"></ul>
         </section>
       </div>
@@ -818,6 +839,8 @@
         </section>
       <div class="danger-zone" id="camp-danger" hidden>
         <button class="btn btn--danger" type="button" id="delete-campaign">Excluir campanha</button>
+      </div>
+      </div>
       </div>
       </div>
     </section>
@@ -1029,8 +1052,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=37"></script>
-  <script src="items.js?v=37"></script>
-  <script src="app.js?v=37"></script>
+  <script src="regras.js?v=38"></script>
+  <script src="items.js?v=38"></script>
+  <script src="app.js?v=38"></script>
 </body>
 </html>

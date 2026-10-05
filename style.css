@@ -2825,10 +2825,10 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 .mag__chips:empty { display: none; }
 .mag__chip { --cat: var(--ambar); position: static; display: inline-flex; align-items: center; min-height: 36px; background: none; font: 600 0.85rem/1 var(--fonte-ui); cursor: pointer; }
 .mag__chip.is-on { border-color: var(--cat); background: color-mix(in srgb, var(--cat) 18%, transparent); color: var(--nevoa); }
-.mag { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr)); gap: 1rem; margin-top: 0.6rem; }
+.mag { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: 1rem; margin-top: 0.6rem; }
 .mag[hidden] { display: none; }
 .mag__page { --cat: var(--ambar); display: grid; grid-template-rows: auto 1fr; overflow: hidden; border: 1px solid color-mix(in srgb, var(--cat) 45%, var(--linha)); border-radius: 14px; background: linear-gradient(180deg, color-mix(in srgb, var(--cat) 10%, var(--casco)) 0%, var(--casco) 40%); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25); }
-.mag__cover { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 10; overflow: hidden; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--cat) 45%, transparent), transparent 60%), linear-gradient(135deg, var(--abismo), color-mix(in srgb, var(--cat) 25%, var(--abismo))); }
+.mag__cover { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; max-height: 15rem; overflow: hidden; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--cat) 45%, transparent), transparent 60%), linear-gradient(135deg, var(--abismo), color-mix(in srgb, var(--cat) 25%, var(--abismo))); }
 .mag__cover img { width: 100%; height: 100%; object-fit: cover; }
 .mag__cover::after { content: ""; position: absolute; inset: auto 0 0 0; height: 45%; background: linear-gradient(0deg, color-mix(in srgb, var(--cat) 10%, var(--casco)), transparent); pointer-events: none; }
 .mag__mono { font: 700 5.5rem/1 var(--fonte-titulo); color: color-mix(in srgb, var(--cat) 80%, #fff); text-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
@@ -2887,3 +2887,45 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 .lootbox__log li::before { content: "· "; }
 .who__list { display: grid; gap: 0.1rem; }
 .fallen__row.is-dropped { opacity: 0.75; }
+
+/* ---------- Campanha: abas numa coluna (tela larga) ou numa faixa que rola (celular) ---------- */
+.container:has(.screen[data-screen="campaign"]:not([hidden])) { width: min(100% - 2 * var(--pad-x), 88rem); }
+.screen[data-screen="campaign"] .screen__head { margin-bottom: 1rem; }
+.screen[data-screen="campaign"] .screen__head h1 { font-size: clamp(1.9rem, 3.2vw, 2.8rem); }
+.screen[data-screen="campaign"] .back-link { display: inline-block; margin-bottom: 0.4rem; }
+.camp-layout { display: block; }
+.camp-main { min-width: 0; }
+.camp-tab { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; }
+.camp-tab[hidden] { display: none; }
+.camp-tab__icon { font-size: 1.05rem; line-height: 1; filter: saturate(0.8); }
+.camp-tab[aria-selected="true"] .camp-tab__icon { filter: none; }
+.camp-tab__badge { min-width: 1.35rem; padding: 0 0.35rem; border-radius: 999px; background: rgba(var(--mare-rgb), 0.2); color: var(--mare); font: 800 0.7rem/1.35rem var(--fonte-ui); text-align: center; }
+.camp-tab__badge--hot { background: #e0484a; color: #fff; }
+.camp-tab[aria-selected="true"] .camp-tab__badge { background: rgba(0, 0, 0, 0.2); color: inherit; }
+.camp-tabs__gm { display: none; }
+.camp-panel > .block + .block { margin-top: 1.25rem; }
+
+@media (min-width: 1100px) {
+  .camp-layout { display: grid; grid-template-columns: 14.5rem minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+  .camp-tabs { flex-direction: column; gap: 0.2rem; margin: 0; padding: 0.45rem; overflow: visible; }
+  .camp-tab { flex: none; justify-content: flex-start; min-height: 2.75rem; padding: 0.45rem 0.75rem; text-align: left; }
+  .camp-tab__label { flex: 1; white-space: normal; line-height: 1.2; }
+  .camp-tab__icon { width: 1.4rem; text-align: center; }
+  .camp-tab__live { margin-left: 0; }
+  .camp-tabs__gm { display: block; margin: 0.4rem 0.4rem 0.1rem; padding-top: 0.5rem; border-top: 1px solid var(--linha); color: var(--nevoa-2); font-size: 0.72rem; }
+  .camp-tabs__gm[hidden] { display: none; }
+  /* Grupo: candidatos à esquerda; descanso e acesso ao lado */
+  #cpanel-grupo:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 1fr); gap: 1.25rem; align-items: start; }
+  #cpanel-grupo > .block + .block { margin-top: 0; }
+  #cpanel-grupo > .rest { grid-column: 2; grid-row: 1; }
+  #cpanel-grupo > .access { grid-column: 2; grid-row: 2; }
+  #cpanel-grupo > .block:not(.rest):not(.access) { grid-column: 1; grid-row: 1 / span 3; }
+  #cpanel-grupo > .danger-zone { grid-column: 1 / -1; }
+}
+@media (max-width: 1099px) {
+  .camp-tabs { margin-inline: calc(-1 * min(var(--pad-x), 0.5rem)); }
+  .camp-tab { flex: 0 0 auto; padding-inline: 0.75rem; }
+}
+@media (max-width: 520px) {
+  .camp-tab { gap: 0.3rem; padding-inline: 0.6rem; font-size: 0.9rem; }
+}
