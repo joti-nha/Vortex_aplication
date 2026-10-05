@@ -1392,7 +1392,7 @@ const FIREBASE_CONFIG = {
     toastTimer = setTimeout(() => el.classList.remove('is-visible'), 4200);
   }
 
-  const openDialog = (dlg) => { if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); };
+  const openDialog = (dlg) => { play('open'); if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', ''); };
 
   // Pergunta de uma escolha (ex.: a perícia do Doutor). Devolve o valor ou null.
   function askChoice(title, label, hint, options) {
@@ -1794,6 +1794,7 @@ const FIREBASE_CONFIG = {
 
   // Rolagem feita a partir da campanha, em nome de um personagem seu
   async function campaignRoll(m, r) {
+    if (r.expr !== 'ação') play('dice');
     try {
       await db.addRoll(currentCamp.id, {
         characterId: m.characterId, characterName: m.name, characterType: m.type,
@@ -3032,6 +3033,116 @@ const FIREBASE_CONFIG = {
   }
   applyTheme(themeState.unlocked.indexOf(themeState.active) >= 0 ? themeState.active : '');
 
+  /* ---------- Sons e animações de toque ----------
+     Sons curtos feitos na hora (Web Audio, sem arquivos), com o timbre do tema atual:
+     Vortex = gotas e madeira, Ether = vidro e energia, Claptrap = bipes de robô.
+     O botão 🔊 na barra liga e desliga; a escolha fica neste aparelho. */
+  var SFX_KEY = 'vortex.sfx.v1';
+  var sfx = { on: (() => { try { return localStorage.getItem(SFX_KEY) !== 'off'; } catch (e) { return true; } })(), ctx: null, last: {} };
+  var SFX_THEME = {
+    '': { wave: 'sine', base: 520, decay: 0.09, gain: 0.16 },
+    ether: { wave: 'triangle', base: 880, decay: 0.16, gain: 0.12, shimmer: true },
+    claptrap: { wave: 'square', base: 660, decay: 0.07, gain: 0.07, bits: true }
+  };
+  // cada som: notas [frequência relativa, início, duração], e se desliza
+  var SFX = {
+    tap: [[1, 0, 1]],
+    tab: [[1.25, 0, 0.8], [1.5, 0.04, 0.8]],
+    open: [[0.75, 0, 1.2], [1.12, 0.06, 1.4]],
+    close: [[1.12, 0, 0.9], [0.75, 0.05, 1.1]],
+    drag: [[0.6, 0, 1.6, 1.6]],
+    drop: [[1.4, 0, 1.4, 0.45]],
+    ok: [[1, 0, 1], [1.26, 0.07, 1], [1.5, 0.14, 1.6]],
+    bad: [[0.8, 0, 1.4, 0.7]],
+    dice: [[1.7, 0, 0.5], [1.4, 0.05, 0.5], [1.9, 0.1, 0.5], [1.2, 0.16, 0.7]],
+    hit: [[0.5, 0, 1.8, 0.5]]
+  };
+  function sfxCtx() {
+    if (!sfx.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; sfx.ctx = new AC(); }
+    if (sfx.ctx.state === 'suspended') sfx.ctx.resume();
+    return sfx.ctx;
+  }
+  function play(name) {
+    if (!sfx || !sfx.on || !SFX[name]) return;
+    const now = performance.now();
+    if (now - (sfx.last[name] || 0) < 45) return; // vários de uma vez viram um
+    sfx.last[name] = now;
+    let ac;
+    try { ac = sfxCtx(); } catch (e) { return; }
+    if (!ac) return;
+    const th = SFX_THEME[themeState.active] || SFX_THEME[''];
+    const t0 = ac.currentTime + 0.005;
+    SFX[name].forEach((n) => {
+      const len = th.decay * n[2];
+      const start = t0 + n[1];
+      const f = th.base * n[0];
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      osc.type = th.wave;
+      osc.frequency.setValueAtTime(f, start);
+      if (n[3]) osc.frequency.exponentialRampToValueAtTime(f * n[3], start + len);
+      if (th.bits) osc.frequency.setValueAtTime(f * 1.5, start + len * 0.5); // bipe em dois tons
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(th.gain, start + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + len);
+      osc.connect(g).connect(ac.destination);
+      osc.start(start);
+      osc.stop(start + len + 0.02);
+      if (th.shimmer) { // brilho de vidro: uma oitava acima, bem baixinho
+        const o2 = ac.createOscillator();
+        const g2 = ac.createGain();
+        o2.type = 'sine';
+        o2.frequency.setValueAtTime(f * 2.01, start);
+        g2.gain.setValueAtTime(0.0001, start);
+        g2.gain.exponentialRampToValueAtTime(th.gain * 0.35, start + 0.01);
+        g2.gain.exponentialRampToValueAtTime(0.0001, start + len * 1.6);
+        o2.connect(g2).connect(ac.destination);
+        o2.start(start);
+        o2.stop(start + len * 1.6 + 0.02);
+      }
+    });
+  }
+  function renderSoundBtn() {
+    const b = $('#sound-btn');
+    if (!b) return;
+    b.textContent = sfx.on ? '🔊' : '🔇';
+    b.setAttribute('aria-pressed', String(sfx.on));
+    b.title = sfx.on ? 'Sons ligados (toque para desligar)' : 'Sons desligados (toque para ligar)';
+  }
+  $('#sound-btn').addEventListener('click', () => {
+    sfx.on = !sfx.on;
+    try { localStorage.setItem(SFX_KEY, sfx.on ? 'on' : 'off'); } catch (e) { /* vale até fechar */ }
+    renderSoundBtn();
+    play('ok');
+  });
+  renderSoundBtn();
+
+  // toques: som conforme o que foi tocado, e a onda (ripple) nos botões
+  const TAP_SEL = 'button, a[href], [role="tab"], summary, select, input[type="checkbox"], input[type="radio"], label.check';
+  document.addEventListener('pointerdown', (ev) => {
+    const el = ev.target.closest && ev.target.closest(TAP_SEL);
+    if (!el || el.disabled || el.id === 'sound-btn') return;
+    play(el.getAttribute('role') === 'tab' || el.classList.contains('cmd__tab') ? 'tab' : 'tap');
+    if (el.matches('button, a.btn') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const r = el.getBoundingClientRect();
+      const dot = document.createElement('span');
+      dot.className = 'ripple';
+      const size = Math.max(r.width, r.height) * 2;
+      dot.style.width = dot.style.height = size + 'px';
+      dot.style.left = (ev.clientX - r.left - size / 2) + 'px';
+      dot.style.top = (ev.clientY - r.top - size / 2) + 'px';
+      if (getComputedStyle(el).position === 'static') el.classList.add('has-ripple');
+      el.append(dot);
+      setTimeout(() => dot.remove(), 600);
+    }
+  }, { passive: true });
+  // arrastar e soltar (inventário, organização de listas)
+  document.addEventListener('dragstart', (ev) => { play('drag'); if (ev.target.classList) ev.target.classList.add('is-dragging'); }, true);
+  document.addEventListener('dragend', (ev) => { if (ev.target.classList) ev.target.classList.remove('is-dragging'); }, true);
+  document.addEventListener('drop', () => play('drop'), true);
+  // janelas abrindo e fechando
+  document.addEventListener('close', (ev) => { if (ev.target && ev.target.tagName === 'DIALOG') play('close'); }, true);
+
   function secretHit(q) {
     const k = nameKey(q || '');
     return /elemento\s*115|element\s*115|^115$/.test(k) ? 'ether' : '';
@@ -3627,7 +3738,7 @@ const FIREBASE_CONFIG = {
      dinheiro, e o roteiro vira um livrinho com uma folha por UP. Cada folha mostra o que aquele UP dá
      (1 UP para gastar, +1 ponto de perícia nos ímpares, 2 benefícios nos pares) e guarda a escolha.
      O roteiro fica em values.roteiro (JSON) e também é escrito no texto das folhas, que a ficha já sabe aplicar. */
-  const RT_KINDS = [['poder', 'Poder'], ['melhoria', 'Melhoria'], ['doutor', 'Doutor'], ['prof', 'Proficiência'], ['pericias', 'Perícias'], ['guardar', 'Guardar']];
+  const RT_KINDS = [['poder', 'Poder'], ['melhoria', 'Melhoria'], ['prof', 'Proficiência'], ['pericias', 'Perícias'], ['guardar', 'Guardar']];
   const RT_BEN = [['pv', '+5 PV'], ['pe', '+5 PE'], ['pa', '+1 PA']];
   const RT_MAX_UP = 30;
   const rtSkills = () => { const out = []; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => out.push([sk[0], sk[1]]))); return out; };
@@ -3856,31 +3967,37 @@ const FIREBASE_CONFIG = {
     const r = rt.r, p = r.pages[n - 1], led = rtLedger(r)[n - 1];
     const redo = () => renderRoteiro();
     const g = p.gasto;
+    // Doutor é um poder comprado como os outros: aparece em "Poder" (com a perícia escolhida)
+    const kindOf = (x) => (x && x.t === 'doutor' ? 'poder' : x && x.t);
     const kinds = h('div', 'rt-kinds', ...RT_KINDS.map((k) => {
-      const b = h('button', 'rt-kind' + (g && g.t === k[0] ? ' is-on' : ''), k[1]);
+      const on = kindOf(g) === k[0];
+      const b = h('button', 'rt-kind' + (on ? ' is-on' : ''), k[1]);
       b.type = 'button';
       b.dataset.fid = 'rt-kind-' + k[0];
-      b.setAttribute('aria-pressed', String(Boolean(g && g.t === k[0])));
-      b.addEventListener('click', () => { p.gasto = g && g.t === k[0] ? null : { t: k[0] }; if (k[0] === 'pericias') p.gasto.list = {}; redo(); });
+      b.setAttribute('aria-pressed', String(on));
+      b.addEventListener('click', () => { p.gasto = on ? null : { t: k[0] }; if (k[0] === 'pericias') p.gasto.list = {}; redo(); });
       return b;
     }));
     let detail = null;
-    if (g && g.t === 'poder') {
-      const e = g.id ? rtPower(g.id) : null;
-      const pick = h('button', 'btn btn--ghost btn--sm', g.name ? 'Trocar poder' : 'Escolher poder…');
+    if (g && (g.t === 'poder' || g.t === 'doutor')) {
+      const e = g.t === 'doutor' ? rtPower('of-pod-doutor') : g.id ? rtPower(g.id) : null;
+      const pick = h('button', 'btn btn--ghost btn--sm', g.name || g.t === 'doutor' ? 'Trocar poder' : 'Escolher poder…');
       pick.type = 'button';
       pick.dataset.fid = 'rt-power';
       pick.addEventListener('click', async () => {
-        const x = await openPicker({ title: 'Poder da folha ' + n, kinds: ['poder'], chips: ['Poder'], filter: (y) => y.kind === 'poder' && !CHOICE_POWERS[y.id] });
+        const x = await openPicker({ title: 'Poder da folha ' + n, kinds: ['poder'], chips: ['Poder'], filter: (y) => y.kind === 'poder' && (!CHOICE_POWERS[y.id] || y.id === 'of-pod-doutor') });
         if (!x || rt.r !== r) return;
+        if (x.id === 'of-pod-doutor') { p.gasto = { t: 'doutor', skill: '' }; redo(); return; }
         const opts = powerOpts(x);
         p.gasto = { t: 'poder', id: x.id, name: x.name, opt: opts.length ? opts[0].name : '' };
         redo();
       });
-      const opts = e ? powerOpts(e) : [];
+      const opts = e && g.t === 'poder' ? powerOpts(e) : [];
+      const title = g.t === 'doutor' ? (e ? e.name : 'Doutor') : g.name;
       detail = h('div', 'rt-detail',
-        g.name ? h('p', 'rt-pick', h('strong', '', g.name), h('span', '', ' · custa ' + plural(rtCost(g), 'UP', 'UP'))) : null,
+        title ? h('p', 'rt-pick', h('strong', '', title), h('span', '', ' · custa ' + plural(rtCost(g), 'UP', 'UP'))) : null,
         opts.length ? h('div', 'field', h('span', 'field__label', 'Opção'), rtSelect(opts.map((o) => [o.name, o.name + (o.text ? ': ' + o.text : '')]), g.opt, (v) => { g.opt = v; redo(); }, null, 'rt-opt')) : null,
+        g.t === 'doutor' ? h('div', 'field', h('span', 'field__label', 'Perícia (o limite dela sobe para 4)'), rtSelect(rtSkills(), g.skill, (v) => { g.skill = v; redo(); }, 'Escolha a perícia...', 'rt-doutor')) : null,
         pick);
     } else if (g && g.t === 'melhoria') {
       const before = r.pages.slice(0, n - 1).map((x) => x.gasto).filter((x) => x && x.t === 'poder' && x.id);
@@ -3890,8 +4007,6 @@ const FIREBASE_CONFIG = {
       detail = opts.length
         ? h('div', 'rt-detail', rtSelect(opts, g.id ? g.id + '|' + g.name : '', (v) => { const i = v.indexOf('|'); g.id = v.slice(0, i); g.name = v.slice(i + 1); redo(); }, 'Escolha a melhoria...', 'rt-up'))
         : h('p', 'rt-empty', 'Escolha antes, numa folha anterior, um poder que tenha melhorias.');
-    } else if (g && g.t === 'doutor') {
-      detail = h('div', 'rt-detail', rtSelect(rtSkills(), g.skill, (v) => { g.skill = v; redo(); }, 'Perícia do Doutor...', 'rt-doutor'), h('p', 'field__hint', 'O limite da perícia escolhida sobe para 4.'));
     } else if (g && g.t === 'prof') {
       detail = h('div', 'rt-detail', rtSelect(PROFS.map((x) => [x.id, x.label]), g.prof, (v) => { g.prof = v; redo(); }, 'Tipo de arma ou armadura...', 'rt-prof'), h('p', 'field__hint', 'Também dá +1 ponto de perícia.'));
     } else if (g && g.t === 'pericias') {
@@ -6465,6 +6580,7 @@ const FIREBASE_CONFIG = {
     $('#arena').classList.toggle('arena--aim', Boolean(battle.aim));
     renderBattleLog();
     renderDock();
+    renderRest();
   }
 
   function fighterPic(x) {
@@ -6475,8 +6591,14 @@ const FIREBASE_CONFIG = {
     else pic.textContent = x.name.trim().charAt(0).toUpperCase();
     return pic;
   }
+  const hpSeen = {};
   function fighterCard(x, gm, on) {
     const state = lifeState(x.layers);
+    // tremida e som quando a vida (ou escudo, blindagem) cai desde o último desenho
+    const hp = x.layers.reduce((t, l) => t + Math.max(0, l.cur), 0);
+    const hit = hpSeen[x.id] !== undefined && hp < hpSeen[x.id];
+    if (hit) play('hit');
+    hpSeen[x.id] = hp;
     const tags = sceneTags()[x.id] || [];
     const cur = sceneCurrent();
     const now = Boolean(on && cur && cur.id === x.id);
@@ -6514,7 +6636,7 @@ const FIREBASE_CONFIG = {
       acts.push(act('Tirar', async () => { await db.removeFoe(currentCamp.id, x.foe.id); combat.targets.delete(x.id); }, 'fighter__act--bad'));
     }
     if (!x.foe && gm && !on) acts.push(act('Fora do combate', () => saveOut(x.id, true)));
-    return h('li', 'fighter' + (x.foe ? ' fighter--foe' : '') + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (aimable ? ' is-aimable' : aim ? ' is-dim' : '') + (state ? ' is-down' : ''),
+    return h('li', 'fighter' + (x.foe ? ' fighter--foe' : '') + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (aimable ? ' is-aimable' : aim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (state ? ' is-down' : ''),
       sel, h('div', 'fighter__bars', ...bars),
       state || chips.length ? h('div', 'fighter__tags', state ? h('span', 'ftag ftag--down', state) : null, ...chips) : null,
       acts.length ? h('div', 'fighter__acts', ...acts) : null);
@@ -6635,8 +6757,6 @@ const FIREBASE_CONFIG = {
     box.replaceChildren(
       gmBtn('Adicionar inimigo', 'btn--ghost', addFoeFlow),
       gmBtn('Rolar defesas', 'btn--ghost', rollAllDefenses),
-      gmBtn('Descanso curto', 'btn--ghost', () => restMembers(combatants().filter((x) => !x.foe).map((x) => x.member), false)),
-      gmBtn('Descanso longo', 'btn--ghost', () => restMembers(combatants().filter((x) => !x.foe).map((x) => x.member), true)),
       name,
       gmBtn('Começar combate', 'btn--primary', startScene));
   }
@@ -6855,7 +6975,6 @@ const FIREBASE_CONFIG = {
       { id: 'disputa', label: 'Disputa', go: 'cfg' },
       { id: 'defesa', label: 'Rolar defesa', go: 'now' },
       { id: 'saque', label: 'Item de Saque', go: 'itens', char: true },
-      { id: 'descanso', label: 'Descanso', go: 'cfg', when: () => !sceneOn() },
       { id: 'passar', label: 'Encerrar turno', go: 'now', when: (x, gm) => sceneOn() && (econLive(x) || gm) }
     ]
   };
@@ -6880,7 +6999,6 @@ const FIREBASE_CONFIG = {
     disputa: 'Teste contra teste: escolha o seu teste e depois o adversário na arena.',
     defesa: 'Rola a defesa da cena de novo (2d6 + Corpo + Resistência).',
     saque: 'Uma vez por turno, sacar ou guardar um item de Saque sem gastar ações.',
-    descanso: 'Curto: metade de PV, PE e PA, e cada curto seguido recupera metade do anterior. Longo: tudo.',
     passar: 'Passa a vez.'
   };
   const SLOT_LONG = { padrao: 'Ação padrão', movimento: 'Ação de movimento', bonus: 'Ação bônus', completa: 'Ação completa', livre: 'Ações livres' };
@@ -6904,7 +7022,7 @@ const FIREBASE_CONFIG = {
     if (a.max <= 1) {
       endAim();
       battle.view = 'main';
-      try { await a.pick(x); } catch (err) { toast(errorMessage(err)); }
+      try { await a.pick(x); } catch (err) { play('bad'); toast(errorMessage(err)); }
       renderBattle();
       return;
     }
@@ -6990,6 +7108,9 @@ const FIREBASE_CONFIG = {
     else if (battle.view === 'cfg') body = cfgView(actor, list, gm);
     else if (battle.view === 'itens' && !actor.foe) body = h('div', 'cmd__panel', backBtn(battle.slot ? 'slot' : 'main'), itemsPanel(actor, list));
     else body = mainView(actor, gm);
+    // a tela de comandos entra animada só quando muda (não a cada atualização da mesa)
+    const viewKey = actor.id + '|' + battle.view + '|' + battle.slot + '|' + battle.cmd + '|' + Boolean(battle.aim);
+    if (viewKey !== battle.viewKey) { body.classList.add('is-new'); battle.viewKey = viewKey; }
     box.replaceChildren(head, body);
   }
   function backBtn(to) {
@@ -7103,7 +7224,7 @@ const FIREBASE_CONFIG = {
   function cfgView(actor, list, gm) {
     const id = battle.cmd;
     const back = backBtn('slot');
-    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', teste: 'Teste da ficha', disputa: 'Disputa', descanso: 'Descanso', poderes: 'Poderes' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
+    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', teste: 'Teste da ficha', disputa: 'Disputa', poderes: 'Poderes' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
     let body;
     if (id === 'atacar') body = attackCfg(actor, list);
     else if (id === 'manobra') body = maneuverCfg(actor, list);
@@ -7129,13 +7250,7 @@ const FIREBASE_CONFIG = {
       body = h('div', 'cmd__row', selField('cmd-test', 'Teste', tests.map((t) => [t.id, t.label]), battle.test, (v) => { battle.test = v; }),
         gmBtn('Rolar', 'btn--primary', async () => { const t = tests.find((y) => y.id === battle.test); if (t) await rollAs(actor, rollTest(t.make())); battle.view = 'main'; renderBattle(); }));
     } else if (id === 'disputa') body = duelCfg(actor, list);
-    else if (id === 'descanso') {
-      const party = list.filter((x) => !x.foe);
-      const whom = gm ? party.map((x) => x.member) : actor.foe ? [] : [actor.member];
-      body = !whom.length ? h('p', 'cmd__note', 'Inimigos não descansam por aqui.') : h('div', 'cmd__stack',
-        h('p', 'cmd__note', gm ? 'Descansa o grupo todo (' + party.map((x) => x.name).join(', ') + '). Nas lojas com NPCs comprando, o descanso também pode vender o que está à venda.' : 'Descansa ' + actor.name + '.'),
-        h('div', 'cmd__row', gmBtn('Descanso curto', 'btn--ghost', () => restMembers(whom, false)), gmBtn('Descanso longo', 'btn--primary', () => restMembers(whom, true))));
-    } else body = h('p', 'cmd__note', '');
+    else body = h('p', 'cmd__note', '');
     return h('div', 'cmd__panel', back, about, body);
   }
   function selField(id, label, opts, val, fn) {
@@ -7468,6 +7583,29 @@ const FIREBASE_CONFIG = {
     s.rests = n + 1;
     return got.length ? got.join(', ') : 'nada a recuperar';
   }
+  // Descanso fica no Grupo: o mestre descansa todos; o jogador, os personagens dele
+  const restWho = () => members.filter((m) => m.sheet && m.sheet.attrs && (currentCamp.gm || m.mine));
+  function renderRest() {
+    const box = $('#rest-block');
+    const who = currentCamp ? restWho() : [];
+    box.hidden = !who.length;
+    if (!who.length) return;
+    const busy = sceneOn();
+    $('#rest-hint').textContent = (busy ? 'Com um combate em andamento não dá para descansar. ' : '') +
+      'Curto (1 a 4 horas): metade de PV, PE e PA, e cada curto seguido recupera metade do anterior. Longo (8 horas ou mais): tudo. ' +
+      (currentCamp.gm ? 'Descansa o grupo todo (' + who.map((m) => m.name).join(', ') + '); nas lojas com NPCs comprando, o descanso também pode vender o que está à venda.' : 'Descansa ' + who.map((m) => m.name).join(', ') + '.');
+    $('#rest-short').disabled = busy;
+    $('#rest-long').disabled = busy;
+  }
+  ['short', 'long'].forEach((k) => $('#rest-' + k).addEventListener('click', async (ev) => {
+    const b = ev.currentTarget;
+    if (sceneOn()) { toast('Encerre o combate antes de descansar.'); return; }
+    b.disabled = true;
+    await restMembers(restWho(), k === 'long');
+    play('ok');
+    b.disabled = false;
+  }));
+
   async function restMembers(list, long) {
     const lines = [];
     for (const mb of list) {
@@ -7483,9 +7621,12 @@ const FIREBASE_CONFIG = {
     renderBattle();
   }
 
+  const logSeen = new Set();
   function renderBattleLog() {
     const list = lastRolls.slice(-8);
-    $('#battle-log').replaceChildren(...(list.length ? list.map((r) => h('li', 'blog__item' + (r.flag ? ' blog__item--' + (r.flag === 'falha' ? 'fail' : r.flag) : ''),
+    const first = !logSeen.size;
+    const fresh = (r) => { const k = r.id || r.createdAt || r.label + r.total; if (logSeen.has(k)) return false; logSeen.add(k); return !first; };
+    $('#battle-log').replaceChildren(...(list.length ? list.map((r) => h('li', 'blog__item' + (r.flag ? ' blog__item--' + (r.flag === 'falha' ? 'fail' : r.flag) : '') + (fresh(r) ? ' is-new' : ''),
       h('span', 'blog__who', r.characterName), h('span', 'blog__what', r.label || r.expr), h('strong', 'blog__total', rolledShow(r)),
       h('span', 'blog__detail', String(r.detail || '').slice(0, 220)))) : [h('li', 'blog__empty', 'Nada ainda. Ataques, defesas e disputas aparecem aqui.')]));
     const box = $('#battle-log');
@@ -7523,6 +7664,7 @@ const FIREBASE_CONFIG = {
   }
 
   async function postCombatRoll(who, r) {
+    if (r.expr !== 'ação') play('dice');
     const base = who.foe
       ? { characterId: 'foe:' + who.foe.id, characterName: who.foe.name, characterType: 'criatura' }
       : { characterId: who.member.characterId, characterName: who.member.name, characterType: who.member.type };
