@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -579,7 +579,16 @@
         </div>
       </header>
 
-      <!-- Painel do personagem: quem você joga nesta campanha, com barras e ações em abas -->
+      <!-- Abas da campanha: Mesa (seu personagem e o registro), Combate (a arena), Lojas e Grupo -->
+      <div class="sheet-tabs camp-tabs" role="tablist" aria-label="Partes da campanha">
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-mesa" data-ctab="mesa" aria-controls="cpanel-mesa" aria-selected="true">Mesa</button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-combate" data-ctab="combate" aria-controls="cpanel-combate" aria-selected="false" tabindex="-1">Combate <span class="camp-tab__live" id="ctab-live" hidden>ao vivo</span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-lojas" data-ctab="lojas" aria-controls="cpanel-lojas" aria-selected="false" tabindex="-1">Lojas</button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-grupo" data-ctab="grupo" aria-controls="cpanel-grupo" aria-selected="false" tabindex="-1">Grupo <span class="count" id="members-count"></span></button>
+      </div>
+
+      <div class="camp-panel" id="cpanel-mesa" role="tabpanel" aria-labelledby="ctab-mesa">
+      <!-- Painel do personagem: quem você joga nesta campanha, com barras, testes e poderes -->
       <section class="block dock" id="dock" aria-labelledby="dock-title" hidden>
         <div class="dock__head">
           <span class="dock__pic token" id="dock-pic" aria-hidden="true"></span>
@@ -600,76 +609,65 @@
           </div>
         </div>
         <div class="dock__bars" id="dock-bars"></div>
-        <div class="dock__tabs" role="tablist" aria-label="Ações do personagem">
-          <button class="dock__tab" type="button" role="tab" id="dock-tab-acoes" data-tab="acoes" aria-controls="dock-acoes" aria-selected="true">Ações</button>
-          <button class="dock__tab" type="button" role="tab" id="dock-tab-testes" data-tab="testes" aria-controls="dock-testes" aria-selected="false" tabindex="-1">Testes</button>
-        </div>
-        <div class="dock__panel" id="dock-acoes" role="tabpanel" aria-labelledby="dock-tab-acoes">
-          <div id="dock-attack"></div>
-          <p class="field__hint" id="dock-targets"></p>
-          <div class="dock__powers" id="dock-powers" role="group" aria-label="Poderes de uso" hidden></div>
-        </div>
-        <div class="dock__panel" id="dock-testes" role="tabpanel" aria-labelledby="dock-tab-testes" hidden>
-          <div class="dock__quick" id="dock-quick" role="group" aria-label="Testes rápidos"></div>
-          <div class="test-bar" id="test-bar">
-            <label class="field__label" for="test-pick">Teste da ficha (atributo ou perícia)</label>
-            <div class="test-bar__row">
-              <select class="input" id="test-pick"></select>
-              <button class="btn btn--primary btn--sm" type="button" id="test-roll">Rolar teste</button>
-            </div>
+        <p class="dock__fight" id="dock-fight" hidden></p>
+        <div class="dock__powers" id="dock-powers" role="group" aria-label="Poderes de uso" hidden></div>
+        <div class="dock__quick" id="dock-quick" role="group" aria-label="Testes rápidos"></div>
+        <div class="test-bar" id="test-bar">
+          <label class="field__label" for="test-pick">Teste da ficha (atributo ou perícia)</label>
+          <div class="test-bar__row">
+            <select class="input" id="test-pick"></select>
+            <button class="btn btn--primary btn--sm" type="button" id="test-roll">Rolar teste</button>
           </div>
         </div>
       </section>
 
-      <section class="block scene" id="scene-block" aria-labelledby="scene-title" hidden>
-        <div class="scene__head">
-          <div>
-            <p class="eyebrow">Cena e iniciativa</p>
-            <h2 class="block__title scene__title" id="scene-title">Sem combate</h2>
-            <p class="scene__meta" id="scene-meta" role="status"></p>
-          </div>
-          <div class="scene__ctl">
-            <button class="btn btn--primary btn--sm" type="button" id="scene-pass" hidden>Encerrar meu turno</button>
-            <div class="scene__gm" id="scene-gm" hidden>
-              <div class="scene__start" id="scene-start-box">
-                <label class="visually-hidden" for="scene-name">Nome da cena</label>
-                <input class="input" id="scene-name" type="text" maxlength="60" autocomplete="off" placeholder="Nome da cena (opcional)">
-                <button class="btn btn--primary btn--sm" type="button" id="scene-start">Iniciar combate</button>
-              </div>
-              <div class="scene__run" id="scene-run" hidden>
-                <button class="btn btn--ghost btn--sm" type="button" id="scene-prev" aria-label="Turno anterior">◀ Anterior</button>
-                <button class="btn btn--primary btn--sm" type="button" id="scene-next">Próximo turno ▶</button>
-                <button class="btn btn--danger btn--sm" type="button" id="scene-end">Encerrar cena</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <ol class="initiative" id="scene-order" aria-label="Ordem de iniciativa"></ol>
-        <p class="empty" id="scene-empty">Nenhum combate em andamento. Ao iniciar, o mestre rola a iniciativa (2d6 + Precisão + Iniciativa) e a defesa da cena de todos que estão no Combate.</p>
+      <section class="block chat" aria-labelledby="chat-title">
+        <h2 class="block__title" id="chat-title"><button class="help" type="button" data-help="rolagens">Registro da mesa</button></h2>
+
+        <p class="notice" id="chat-notice" hidden></p>
+
+        <ol class="roll-log" id="roll-log" role="log" aria-label="Rolagens da campanha" tabindex="0"></ol>
+        <p class="empty" id="roll-empty">Nenhuma rolagem ainda. Role o primeiro dado.</p>
       </section>
 
-      <section class="block combat" id="combat-block" aria-labelledby="combat-title">
-        <div class="block__head">
-          <h2 class="block__title" id="combat-title"><button class="help" type="button" data-help="combate">Combate</button></h2>
-          <div class="combat__gm" id="combat-gm" hidden>
-            <button class="btn btn--primary btn--sm" type="button" id="foe-add">Adicionar inimigo</button>
-            <button class="btn btn--ghost btn--sm" type="button" id="foe-def">Rolar defesa dos inimigos</button>
+      </div>
+
+      <div class="camp-panel" id="cpanel-combate" role="tabpanel" aria-labelledby="ctab-combate" hidden>
+      <!-- Arena: dois lados, ordem de turnos, menu de comandos e registro, no estilo dos RPGs antigos -->
+      <section class="battle" id="battle" aria-labelledby="battle-title">
+        <div class="battle__top">
+          <div class="battle__head">
+            <p class="eyebrow" id="battle-phase">Preparação</p>
+            <h2 class="battle__title" id="battle-title"><button class="help" type="button" data-help="combate">Combate</button></h2>
+            <p class="battle__meta" id="battle-meta" role="status"></p>
+          </div>
+          <div class="battle__gm" id="battle-gm" hidden></div>
+        </div>
+        <ol class="ctb" id="battle-order" aria-label="Ordem dos turnos" hidden></ol>
+        <div class="battle__banner" id="battle-banner" hidden></div>
+        <div class="arena" id="arena">
+          <div class="arena__side arena__side--party">
+            <p class="arena__label">Grupo</p>
+            <ul class="arena__list" id="arena-party" aria-label="Grupo"></ul>
+          </div>
+          <div class="arena__vs" aria-hidden="true">VS</div>
+          <div class="arena__side arena__side--foes">
+            <p class="arena__label">Inimigos</p>
+            <ul class="arena__list" id="arena-foes" aria-label="Inimigos"></ul>
           </div>
         </div>
-        <p class="block__hint">Marque um ou mais alvos na cena e ataque pelo painel do seu personagem (no topo) ou, se for o mestre, pelos inimigos aqui embaixo. O dano (ataque – defesa, mínimo 1) entra sozinho na ordem Escudo → Blindagem → Vida, com fraquezas e resistências de cada camada.</p>
-        <ul class="rows combatants" id="combatants" aria-label="Na cena"></ul>
-        <p class="empty" id="combat-empty">Ninguém na cena ainda. O mestre adiciona inimigos da lista aberta; os personagens da campanha entram sozinhos.</p>
-        <div class="combat__attack" id="combat-attack" hidden>
-          <h3 class="sub-title">Ataque dos inimigos (mestre)</h3>
-          <div class="field">
-            <label class="field__label" for="atk-who">Atacante</label>
-            <select class="input" id="atk-who"></select>
-          </div>
-          <div id="atk-builder"></div>
-          <p class="field__hint" id="atk-targets"></p>
+        <p class="battle__hint" id="battle-hint"></p>
+        <div class="battle__bottom">
+          <section class="ff-window cmd" id="battle-cmd" aria-label="Comandos"></section>
+          <section class="ff-window blog" aria-labelledby="blog-title">
+            <h3 class="ff-window__title" id="blog-title">Registro</h3>
+            <ol class="blog__list" id="battle-log" aria-live="polite"></ol>
+          </section>
         </div>
       </section>
+      </div>
 
+      <div class="camp-panel" id="cpanel-lojas" role="tabpanel" aria-labelledby="ctab-lojas" hidden>
       <section class="block shops" id="shop-block" aria-labelledby="shop-title" hidden>
         <div class="block__head">
           <h2 class="block__title" id="shop-title">Lojas</h2>
@@ -720,18 +718,11 @@
         <p class="empty" id="shop-empty">Nenhuma loja ainda. O mestre cria as lojas das companhias, as dele e as de NPCs; um jogador pode abrir a própria.</p>
       </section>
 
-      <div class="two-col two-col--chat">
-        <section class="block chat" aria-labelledby="chat-title">
-          <h2 class="block__title" id="chat-title"><button class="help" type="button" data-help="rolagens">Registro da mesa</button></h2>
+      </div>
 
-          <p class="notice" id="chat-notice" hidden></p>
-
-          <ol class="roll-log" id="roll-log" role="log" aria-label="Rolagens da campanha" tabindex="0"></ol>
-          <p class="empty" id="roll-empty">Nenhuma rolagem ainda. Role o primeiro dado.</p>
-        </section>
-
+      <div class="camp-panel" id="cpanel-grupo" role="tabpanel" aria-labelledby="ctab-grupo" hidden>
         <section class="block" aria-labelledby="members-title">
-          <h2 class="block__title" id="members-title"><button class="help" type="button" data-help="candidatos">Candidatos</button><span class="count" id="members-count"></span></h2>
+          <h2 class="block__title" id="members-title"><button class="help" type="button" data-help="candidatos">Candidatos</button></h2>
           <ul class="rows" id="member-list"></ul>
           <p class="empty" id="member-empty">Ninguém entrou ainda. Compartilhe o ID de entrada.</p>
 
@@ -751,11 +742,9 @@
             <p class="field__hint">10 XP = 1 UP. Os jogadores veem os novos pontos para distribuir na ficha.</p>
           </form>
         </section>
-      </div>
-
-
       <div class="danger-zone" id="camp-danger" hidden>
         <button class="btn btn--danger" type="button" id="delete-campaign">Excluir campanha</button>
+      </div>
       </div>
     </section>
 
@@ -966,8 +955,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=24"></script>
-  <script src="items.js?v=24"></script>
-  <script src="app.js?v=24"></script>
+  <script src="regras.js?v=25"></script>
+  <script src="items.js?v=25"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>

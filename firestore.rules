@@ -156,14 +156,22 @@ service cloud.firestore {
                       && request.resource.data.name == resource.data.name;
       }
 
-      // ---------- Cena: ordem de iniciativa, rodada e turno ----------
+      // ---------- Cena (arena): ordem de iniciativa, rodada, turno, condições e quem fica fora ----------
       // O mestre abre e encerra; quem participa pode avançar o turno e entrar na ordem.
+      // tags: condições e estados por lutador ({ id: [{ n, r }] }); out: personagens fora do combate.
+      // Só o mestre muda quem fica fora; as condições também mudam quando a rodada vira (duração).
       match /scene/{docId} {
         allow read: if signedIn() && (isCampaignMember(campaignId) || isCampaignOwner(campaignId));
         allow create, update: if signedIn() && docId == 'state'
                               && (isCampaignMember(campaignId) || isCampaignOwner(campaignId))
                               && request.resource.data.order is list
-                              && request.resource.data.order.size() <= 60;
+                              && request.resource.data.order.size() <= 60
+                              && (!('tags' in request.resource.data)
+                                  || (request.resource.data.tags is map && request.resource.data.tags.size() <= 80))
+                              && (!('out' in request.resource.data)
+                                  || (request.resource.data.out is list && request.resource.data.out.size() <= 60))
+                              && (isCampaignOwner(campaignId)
+                                  || request.resource.data.get('out', []) == (resource == null ? [] : resource.data.get('out', [])));
         allow delete: if signedIn() && isCampaignOwner(campaignId);
       }
 
