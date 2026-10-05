@@ -4480,21 +4480,6 @@ const FIREBASE_CONFIG = {
       changed();
       if (dmgType.value) toast(res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k)).join(', ') || 'Nenhum dano.');
     });
-    const shortRest = h('button', 'btn btn--ghost btn--sm', 'Descanso curto (metade)');
-    shortRest.type = 'button';
-    shortRest.dataset.fid = 'rest-short';
-    shortRest.title = 'De 1 a 4 horas: recupera metade dos recursos (PV, PE e PA). Em descansos curtos seguidos, a recuperação cai pela metade a cada vez, até um descanso longo.';
-    shortRest.addEventListener('click', () => {
-      const got = restSheet(s, m, false); // Humanidade: a vida convertida também regenera como orgânica
-      changed();
-      toast('Descanso curto: ' + got + '.');
-    });
-
-    const rest = h('button', 'btn btn--ghost btn--sm', 'Descanso longo (tudo)');
-    rest.type = 'button';
-    rest.dataset.fid = 'rest';
-    rest.addEventListener('click', () => { restSheet(s, m, true); changed(); toast('Todos os recursos recuperados.'); });
-
     const wasOpen = Boolean($('#res-extra') && $('#res-extra').open);
     const extra = h('details', 'bonus');
     extra.id = 'res-extra';
@@ -4515,7 +4500,7 @@ const FIREBASE_CONFIG = {
         return h('div', 'field', lab, inp);
       })));
 
-    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm, shortRest, rest), extra);
+    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm), extra);
   }
 
   function renderSkills(m) {
@@ -8118,7 +8103,7 @@ const FIREBASE_CONFIG = {
     const me = playing();
     $('#shop-gm').hidden = !gm;
     $('#shop-open-mine').hidden = !me || shops.some((sh) => sh.kind === 'jogador' && sh.ownerCharId === me.characterId);
-    $('#shop-wallet').textContent = me ? me.name + ' tem ' + fmtCronos(moneyOf(me)) + ' Cronos nesta campanha.' : gm ? 'Você é o mestre: crie lojas, ponha itens e preços, e passe os descansos para os NPCs comprarem.' : '';
+    $('#shop-wallet').textContent = me ? me.name + ' tem ' + fmtCronos(moneyOf(me)) + ' Cronos nesta campanha.' : gm ? 'Você é o mestre: crie lojas, ponha itens e preços, e descanse o grupo (aba Grupo) para os NPCs comprarem.' : '';
     $('#shop-list').replaceChildren(...shops.map(shopCard));
     $('#shop-empty').hidden = shops.length > 0;
   }
@@ -8170,8 +8155,6 @@ const FIREBASE_CONFIG = {
         toast('Loja de ' + me.name + ' aberta. Abasteça com itens da mochila; o mestre define o fluxo de pessoas.');
       } catch (err) { toast(errorMessage(err)); }
     });
-    $('#shop-rest-short').addEventListener('click', () => shopRest(false));
-    $('#shop-rest-long').addEventListener('click', () => shopRest(true));
   })();
 
   views.campaign = async function showCampaign(id) {
