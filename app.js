@@ -2444,6 +2444,8 @@ const FIREBASE_CONFIG = {
       typeTitle: type ? type.title : (e.typeTitle || '')
     });
   }
+  // pixel art dos itens oficiais (pixelart.js), achada pela id: não vai para o banco e vale para fichas antigas
+  const itemArt = (e) => (window.VORTEX_ART ? window.VORTEX_ART.itemArt(e) : '');
   const BUILTINS = (ITEM_DATA.catalogo || []).map((e) => Object.assign(decorate(e), { oficial: true, mine: false }));
 
   // Catálogo oficial sempre aparece; se o banco compartilhado falhar, o aviso fica em libSearch.warn
@@ -2460,7 +2462,8 @@ const FIREBASE_CONFIG = {
     const el = h('span', 'lib-icon' + (e.kind === 'mod-arma' ? ' lib-icon--mod' : ''));
     const color = e.values && rarColor(e.values.raridade);
     if (color) el.style.setProperty('--rar', color);
-    if (e.thumb) { const img = h('img'); img.src = e.thumb; img.alt = ''; el.append(img); }
+    const pic = e.thumb || itemArt(e);
+    if (pic) { const img = h('img'); img.src = pic; img.alt = ''; el.append(img); }
     else el.textContent = (e.name || '?').trim().charAt(0).toUpperCase();
     return el;
   }
@@ -2553,7 +2556,8 @@ const FIREBASE_CONFIG = {
     $('#entry-meta').textContent = [e.kindTitle || kindTitle(e.kind), e.typeTitle, e.oficial ? 'Catálogo oficial' : (e.mine ? 'Criado por você' : 'Banco compartilhado')].filter(Boolean).join(' · ');
     const body = $('#entry-body');
     body.replaceChildren();
-    if (e.image || e.thumb) { const img = h('img', 'entry__img'); img.src = e.image || e.thumb; img.alt = ''; body.append(img); }
+    const pic = e.image || e.thumb || itemArt(e);
+    if (pic) { const img = h('img', 'entry__img'); img.src = pic; img.alt = ''; body.append(img); }
     const dl = h('dl', 'member__data entry__data');
     const seen = new Set(['nome', 'lore']);
     ((cat && cat.fields) || []).forEach((f) => {

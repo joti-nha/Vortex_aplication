@@ -2922,3 +2922,6 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 .lootnew__other { display: flex; gap: 0.5rem; align-items: center; }
 .lootnew__other .input { flex: 1; }
 .lootnew__other:has(> .input[hidden]) { display: none; }
+/* pixel art dos itens oficiais: fundo escuro e sem borrar */
+.lib-icon img[src^="data:image/svg"], .entry__img[src^="data:image/svg"] { image-rendering: pixelated; object-fit: contain; background: #0f141c; }
+.entry__img[src^="data:image/svg"] { width: 9rem; height: 9rem; }
