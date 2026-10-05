@@ -6366,32 +6366,40 @@ const FIREBASE_CONFIG = {
     firstRolls = false;
   }
 
-  // Abas da campanha (Grupo, Combate, Lojas); a última aberta fica guardada por campanha
-  // 4ª aba: o mestre vê Itens e bestiário; o jogador vê Saque e armazém
-  const CAMP_TABS_ALL = ['grupo', 'combate', 'lojas', 'mestre'];
-  const campTabs = () => CAMP_TABS_ALL; // a 4ª aba: Itens e bestiário (mestre) ou Saque e armazém (jogador)
+  // Abas da campanha; a última aberta fica guardada por campanha.
+  // Grupo, Combate, Lojas e Saque para todos; Bestiário e Itens só para o mestre.
+  const CAMP_TABS_ALL = ['grupo', 'combate', 'lojas', 'saque', 'bestiario', 'itens'];
+  const CAMP_TABS_GM = ['bestiario', 'itens'];
+  const campTabs = () => CAMP_TABS_ALL.filter((k) => (currentCamp && currentCamp.gm) || CAMP_TABS_GM.indexOf(k) < 0);
   const campTabKey = (id) => 'vortex.campTab.' + id;
   function setCampTab(name, focus) {
     const tabs = campTabs();
-    $('#ctab-mestre').hidden = tabs.indexOf('mestre') < 0;
-    if (tabs.indexOf(name) < 0) name = 'combate'; // a antiga Mesa agora mora no Combate (e a aba do mestre é só dele)
+    CAMP_TABS_GM.forEach((k) => { $('#ctab-' + k).hidden = tabs.indexOf(k) < 0; });
+    $('#ctab-gm-note').hidden = tabs.indexOf('bestiario') < 0;
+    if (name === 'mestre') name = currentCamp && currentCamp.gm ? 'bestiario' : 'saque'; // a antiga aba única
+    if (tabs.indexOf(name) < 0) name = 'combate';
     $$('.camp-tab').forEach((t) => {
       const on = t.dataset.ctab === name;
       t.setAttribute('aria-selected', String(on));
       t.tabIndex = on ? 0 : -1;
       if (on && focus) t.focus();
+      if (on && !focus) t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
     CAMP_TABS_ALL.forEach((k) => { $('#cpanel-' + k).hidden = k !== name; });
-    if (name === 'mestre') renderGmLib();
+    if (name === 'saque') renderLootTab();
+    if (name === 'bestiario') { renderFallen(); runBeast(); }
+    if (name === 'itens') renderItemsTab();
     if (currentCamp) { try { localStorage.setItem(campTabKey(currentCamp.id), name); } catch (e) { /* sem armazenamento: só agora */ } }
   }
   $$('.camp-tab').forEach((tab) => {
     tab.addEventListener('click', () => setCampTab(tab.dataset.ctab));
     tab.addEventListener('keydown', (ev) => {
-      if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+      const next = ev.key === 'ArrowRight' || ev.key === 'ArrowDown';
+      if (!next && ev.key !== 'ArrowLeft' && ev.key !== 'ArrowUp') return;
+      ev.preventDefault();
       const tabs = campTabs();
       const i = tabs.indexOf(tab.dataset.ctab);
-      setCampTab(tabs[(i + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length], true);
+      setCampTab(tabs[(i + (next ? 1 : tabs.length - 1)) % tabs.length], true);
     });
   });
 
@@ -6565,6 +6573,7 @@ const FIREBASE_CONFIG = {
     }
     toast((ok.length ? '+' + amount + ' XP para ' + ok.join(', ') + '.' : '') + (failed.length ? ' Não foi possível dar XP para ' + failed.join(', ') + '.' : ''));
     $('#member-list').replaceChildren(...members.map(memberRow));
+    tabBadges();
     renderBattle();
   }
 
@@ -8467,54 +8476,54 @@ const FIREBASE_CONFIG = {
   const NPC_CAT_COLOR = { 'Comum': '#7fa6bf', 'Maior': '#c58b3a', 'Chefão': '#d0453f' };
   let gmlibSeq = 0;
   let gmlibCat = '';
-  function renderGmLib() {
-    renderLootTab();
+  // Itens: dar direto na mochila de um personagem
+  function renderItemsTab() {
     if (!currentCamp || !currentCamp.gm) return;
     const to = $('#gmlib-to');
     const keep = to.value;
     const chars = members.filter((mb) => mb.sheet && mb.sheet.attrs);
     to.replaceChildren(...chars.map((mb) => { const o = h('option', '', mb.name); o.value = mb.characterId; return o; }));
     if (chars.some((mb) => mb.characterId === keep)) to.value = keep;
-    runGmLib();
+    runItems();
   }
-  async function runGmLib() {
-    const kind = $('#gmlib-kind').value || 'bestiario';
-    const kinds = GMLIB_KINDS[kind] || GMLIB_KINDS.bestiario;
-    const beast = kind === 'bestiario';
-    const q = $('#gmlib-q').value;
+  async function libFind(kinds, q) {
+    try { return { list: await libSearch(kinds, q), warn: '' }; }
+    catch (err) { return { list: BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0 && matchesText(libHay(e), q)), warn: errorMessage(err) }; }
+  }
+  let itemsSeq = 0;
+  async function runItems() {
+    const kinds = GMLIB_KINDS[$('#gmlib-kind').value] || GMLIB_KINDS.armas;
+    const seq = ++itemsSeq;
+    const r = await libFind(kinds, $('#gmlib-q').value);
+    if (seq !== itemsSeq) return;
+    const list = r.list.filter((e) => kinds.indexOf(e.kind) >= 0).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
+    const noChars = !$('#gmlib-to').value;
+    $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
+    $('#gmlib-hint').textContent = r.warn || (!list.length ? 'Nada encontrado.'
+      : plural(list.length, 'resultado', 'resultados') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
+        + (noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" põe o item na mochila de quem está escolhido.'));
+  }
+  // Bestiário: a revista, com filtro por categoria
+  async function runBeast() {
+    if (!currentCamp || !currentCamp.gm) return;
+    const kinds = GMLIB_KINDS.bestiario;
     const seq = ++gmlibSeq;
-    $('#gmlib-to-field').hidden = beast;
-    let list;
-    let warn = '';
-    try { list = await libSearch(kinds, q); }
-    catch (err) { warn = errorMessage(err); list = BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0 && matchesText(libHay(e), q)); }
+    const r = await libFind(kinds, $('#beast-q').value);
     if (seq !== gmlibSeq) return;
-    list = list.filter((e) => kinds.indexOf(e.kind) >= 0).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
-    // categorias da revista (Comum, Maior, Chefão…)
-    const cats = beast ? Array.from(new Set(list.map((e) => (e.values && e.values.categoria) || 'Comum'))) : [];
+    let list = r.list.filter((e) => kinds.indexOf(e.kind) >= 0).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
+    const cats = Array.from(new Set(list.map((e) => (e.values && e.values.categoria) || 'Comum')));
     if (gmlibCat && cats.indexOf(gmlibCat) < 0) gmlibCat = '';
     $('#gmlib-cats').replaceChildren(...(cats.length > 1 ? [''].concat(cats) : []).map((c) => {
       const b = h('button', 'check--pill mag__chip' + (gmlibCat === c ? ' is-on' : ''), c || 'Todas');
       b.type = 'button';
       b.setAttribute('aria-pressed', String(gmlibCat === c));
       if (c) b.style.setProperty('--cat', NPC_CAT_COLOR[c] || 'var(--ambar)');
-      b.addEventListener('click', () => { gmlibCat = c; runGmLib(); });
+      b.addEventListener('click', () => { gmlibCat = c; runBeast(); });
       return b;
     }));
-    if (beast && gmlibCat) list = list.filter((e) => ((e.values && e.values.categoria) || 'Comum') === gmlibCat);
-    const total = list.length;
-    list = list.slice(0, GMLIB_MAX);
-    const noChars = !beast && !$('#gmlib-to').value;
-    $('#gmlib-mag').hidden = !beast;
-    $('#gmlib-list').hidden = beast;
-    if (beast) { $('#gmlib-mag').replaceChildren(...list.map(magPage)); $('#gmlib-list').replaceChildren(); }
-    else {
-      $('#gmlib-mag').replaceChildren();
-      $('#gmlib-list').replaceChildren(...list.map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
-    }
-    $('#gmlib-hint').textContent = warn || (!total ? 'Nada encontrado.'
-      : plural(total, beast ? 'criatura' : 'resultado', beast ? 'criaturas' : 'resultados') + (total > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
-        + (beast ? ' "Pôr na arena" pergunta o time e põe no Combate.' : noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" põe o item na mochila de quem está escolhido.'));
+    if (gmlibCat) list = list.filter((e) => ((e.values && e.values.categoria) || 'Comum') === gmlibCat);
+    $('#gmlib-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map(magPage));
+    $('#beast-hint').textContent = r.warn || (!list.length ? 'Nenhuma criatura encontrada.' : plural(list.length, 'criatura', 'criaturas') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.');
   }
   // uma página da revista: capa, categoria, camadas, atributos, ataque, saque e quantas vezes já caiu
   function magPage(e) {
@@ -8562,8 +8571,10 @@ const FIREBASE_CONFIG = {
       toast(e.name + ' foi para a mochila de ' + mb.name + '.');
     } catch (err) { toast(errorMessage(err)); }
   }
-  $('#gmlib-kind').addEventListener('change', runGmLib);
-  $('#gmlib-q').addEventListener('input', debounce(runGmLib, 250));
+  $('#gmlib-kind').addEventListener('change', runItems);
+  $('#gmlib-to').addEventListener('change', runItems);
+  $('#gmlib-q').addEventListener('input', debounce(runItems, 250));
+  $('#beast-q').addEventListener('input', debounce(runBeast, 250));
 
   /* ---------- Saque, armazéns e monstros derrotados ----------
      loot: listas de saque que o mestre entrega ao grupo (todos ou só alguns personagens pegam).
@@ -8611,11 +8622,20 @@ const FIREBASE_CONFIG = {
     return Object.assign(invEntryFrom(base), { qty: d.qty, src: 'saque' });
   }
 
+  // números nas abas: o que espera alguém (saque para pegar, pedidos de armazém, derrotados sem drop)
+  function tabBadges() {
+    if (!currentCamp) return;
+    const gm = Boolean(currentCamp.gm);
+    const set = (id, n, title) => { const el = $(id); el.hidden = !n; el.textContent = n > 99 ? '99+' : String(n || ''); el.title = n ? title : ''; };
+    const mine = members.filter((m) => m.mine && m.sheet && m.sheet.attrs);
+    const lootN = gm ? vaults.filter((v) => !v.approved).length : loot.filter((l) => !lootEmpty(l) && mine.some((m) => lootFor(l, m.characterId))).length;
+    set('#ctab-saque-n', lootN, gm ? 'Pedidos de armazém esperando você' : 'Saque para pegar');
+    set('#ctab-bestiario-n', gm ? fallen.filter((f) => !f.lootId && (parseDrops((f.values || {}).saque).length || num((f.values || {}).cronos))).length : 0, 'Derrotados com saque para deixar nos drops');
+    set('#ctab-grupo-n', members.length, 'Personagens no grupo');
+  }
   function renderLootTab() {
     if (!currentCamp) return;
     const gm = Boolean(currentCamp.gm);
-    $('#ctab-mestre').textContent = gm ? 'Itens e bestiário' : 'Saque e armazém';
-    $('#gmlib-block').hidden = !gm;
     $('#loot-new').hidden = !gm;
     renderFallen();
     renderLoot();
@@ -8638,6 +8658,7 @@ const FIREBASE_CONFIG = {
   function renderFallen() {
     const gm = Boolean(currentCamp && currentCamp.gm);
     $('#fallen-block').hidden = !gm || !fallen.length;
+    tabBadges();
     if (!gm) return;
     const list = fallen.slice().reverse();
     $('#fallen-all').hidden = !list.some((f) => !f.lootId);
@@ -8732,6 +8753,7 @@ const FIREBASE_CONFIG = {
       ? (loot.length ? 'Os jogadores veem estas listas na aba "Saque e armazém" e pegam o que é deles. "Quem pega" define se é o grupo todo ou só alguns.' : 'Nenhuma lista de saque. Crie uma ou deixe os drops de um monstro derrotado.')
       : (list.length ? 'Pegue com o personagem escolhido em "Jogando como"' + (me ? ' (' + me.name + ')' : '') + '. Dá também para guardar direto num armazém.' : 'Nada para pegar agora. Quando o mestre deixar um saque para vocês, ele aparece aqui.');
     $('#loot-list').replaceChildren(...list.map((l) => lootCard(l, gm, me)));
+    tabBadges();
   }
   function lootCard(l, gm, me) {
     const items = l.items || [];
@@ -8984,6 +9006,7 @@ const FIREBASE_CONFIG = {
       ? 'O armazém do grupo ou de um personagem guarda itens fora da mochila. Você define os espaços e a carga, e quando os jogadores têm acesso. Pedidos de jogadores esperam a sua aprovação.'
       : (list.length ? 'Você mexe num armazém quando o mestre libera o acesso.' : 'Nenhum armazém ainda. Peça um ao mestre; ele aprova e diz quando vocês têm acesso.');
     $('#vault-list').replaceChildren(...list.map((v) => vaultCard(v, gm)));
+    tabBadges();
   }
   function vaultCard(v, gm) {
     const items = v.items || [];
@@ -9658,6 +9681,7 @@ const FIREBASE_CONFIG = {
     renderAccess();
 
     $('#member-list').replaceChildren(...members.map(memberRow));
+    tabBadges();
     renderXpForm();
     $('#member-empty').hidden = members.length > 0;
 
@@ -9704,7 +9728,7 @@ const FIREBASE_CONFIG = {
     const here = (fn) => (list) => { if (currentCamp && currentCamp.id === id) fn(list); };
     const stopLoot = db.subscribeCol(id, 'loot', here((list) => { loot = list; renderLoot(); }), (err) => console.warn(err));
     const stopVaults = db.subscribeCol(id, 'vaults', here((list) => { vaults = list; renderVaults(); renderLoot(); }), (err) => console.warn(err));
-    const stopFallen = camp.gm ? db.subscribeCol(id, 'fallen', here((list) => { fallen = list; if (!fallenReady) { fallenReady = true; trackFallen(foes); } renderFallen(); if (!$('#cpanel-mestre').hidden && $('#gmlib-kind').value === 'bestiario') runGmLib(); }), (err) => console.warn(err)) : null;
+    const stopFallen = camp.gm ? db.subscribeCol(id, 'fallen', here((list) => { fallen = list; if (!fallenReady) { fallenReady = true; trackFallen(foes); } renderFallen(); if (!$('#cpanel-bestiario').hidden) runBeast(); }), (err) => console.warn(err)) : null;
     const stopScene = db.subscribeScene(id, (sc) => { if (currentCamp && currentCamp.id === id) { scene = sc; renderScene(); renderDock(); } }, (err) => console.warn(err));
     const stopShops = db.subscribeShops(id, (list) => { if (currentCamp && currentCamp.id === id) { shops = list; renderShops(); } }, (err) => console.warn(err));
     const stopAll = (more) => () => { [stopFoes, stopScene, stopShops, stopLoot, stopVaults, stopFallen].concat(more || []).forEach((fn) => { if (typeof fn === 'function') fn(); }); };
