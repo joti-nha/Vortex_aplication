@@ -348,11 +348,11 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'build', title: 'Build', group: 'Personagem',
-      hint: 'Build de entrada: só preenche a distribuição inicial (3 pontos de atributo, um pode ir a –1 por +1; 2 perícias com +2, 1 com +1; 4 proficiências). Build guiada: também diz os itens a comprar e, em folhas, o que pegar a cada UP; a ficha se atualiza sozinha a cada UP ganho.',
+      hint: 'Nível 0: a base da build, que preenche a distribuição inicial (3 pontos de atributo, um pode ir a –1 por +1; 2 perícias com +2, 1 com +1; 4 proficiências). No fim, o roteiro (modo avançado) monta um livrinho com o que pegar a cada UP e os itens a comprar; quem segue a build tem a ficha atualizada sozinha a cada UP ganho.',
       defaults: { tipo: 'Entrada', corpo: '0', precisao: '0', essencia: '0' },
       fields: [
         { key: 'nome', label: 'Nome da build', kind: 'text', big: true },
-        { key: 'tipo', label: 'Tipo', kind: 'select', options: 'buildTipos' },
+        { key: 'tipo', hidden: true },
         { key: 'papel', label: 'Papel no grupo', kind: 'text', placeholder: 'Ex.: Dano à distância' },
         { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
         { key: 'corpo', label: 'Corpo', kind: 'number', min: -1, step: 1 },
@@ -362,13 +362,8 @@ window.VORTEX_ITEMS = {
         { key: 'pericia2b', label: 'Outra perícia com +2', kind: 'select', options: 'pericias' },
         { key: 'pericia1', label: 'Perícia com +1', kind: 'select', options: 'pericias' },
         { key: 'profs', label: 'Proficiências (4)', kind: 'multi', options: 'profNomes' },
-        { key: 'itens', label: 'Guiada: itens a comprar (um por linha, nome do catálogo)', kind: 'textarea', big: true, placeholder: 'Carbine R-10\nTnnaks Jackt',
-          hint: 'Comprados com o dinheiro inicial, que sai da tabela pelos UP com que o personagem começa.' },
-        { key: 'folhas', label: 'Guiada: folhas, o que pegar com cada UP (uma por linha: UP | o que pegar)', kind: 'textarea', big: true,
-          placeholder: '1 | Poder: Ataques (Certeiro)\n2 | Doutor: Mira\n3 | Perícias: Mira +2, Reflexos +1\n4 | Proficiência: Fuzil\n5 | Melhoria: Regeneração maior',
-          hint: 'Separe ações da mesma folha com ";". Entende Poder: Nome (Opção), Melhoria: Nome, Doutor: Perícia, Proficiência: Tipo e Perícias: Mira +2, Reflexos +1 (1 UP em perícias). Qualquer outro texto vira um lembrete para fazer à mão.' },
-        { key: 'beneficios', label: 'Guiada: benefícios dos UP pares, em ordem', kind: 'text', placeholder: '+5 PV, +5 PE, +5 PV, +1 PA' },
-        { key: 'periciasUp', label: 'Guiada: perícias para os pontos de perícia, em ordem', kind: 'text', placeholder: 'Mira, Reflexos, Iniciativa' }
+        { key: 'roteiro', label: 'Roteiro (modo avançado)', kind: 'roteiro', big: true },
+        { key: 'itens', hidden: true }, { key: 'folhas', hidden: true }, { key: 'beneficios', hidden: true }, { key: 'periciasUp', hidden: true }, { key: 'dinheiro', hidden: true }
       ]
     },
 

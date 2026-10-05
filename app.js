@@ -2418,7 +2418,8 @@ const FIREBASE_CONFIG = {
     ((cat && cat.fields) || []).forEach((f) => {
       seen.add(f.key);
       const val = v[f.key];
-      if (f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
+      if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r) => dl.append(h('dt', '', r[0]), h('dd', 'entry__pre', r[1]))); return; }
+      if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
       dl.append(h('dt', '', f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(val)) : f.key === 'preco' ? priceText(val) : String(val)));
     });
     // campos que não estão no formulário atual (registros antigos) também aparecem
@@ -2893,6 +2894,8 @@ const FIREBASE_CONFIG = {
     grid.replaceChildren();
     cat.fields.forEach((f) => {
       if (f.onlyWithOpts && !(type && type.opts && type.opts[f.optKey])) return; // campo que só existe em alguns tipos
+      if (f.hidden) return; // escrito por outro campo (o roteiro da build)
+      if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
         if (isName) d.name = v; else d.values[f.key] = v;
@@ -3617,6 +3620,390 @@ const FIREBASE_CONFIG = {
     let v = t[0][1];
     t.forEach((r) => { if (up >= r[0]) v = r[1]; });
     return v;
+  }
+
+  /* ---------- Roteiro da build (modo avançado) ----------
+     A build tem o nível 0 (a distribuição inicial) e, se quiser, um roteiro: escolha quantos UP e quanto
+     dinheiro, e o roteiro vira um livrinho com uma folha por UP. Cada folha mostra o que aquele UP dá
+     (1 UP para gastar, +1 ponto de perícia nos ímpares, 2 benefícios nos pares) e guarda a escolha.
+     O roteiro fica em values.roteiro (JSON) e também é escrito no texto das folhas, que a ficha já sabe aplicar. */
+  const RT_KINDS = [['poder', 'Poder'], ['melhoria', 'Melhoria'], ['doutor', 'Doutor'], ['prof', 'Proficiência'], ['pericias', 'Perícias'], ['guardar', 'Guardar']];
+  const RT_BEN = [['pv', '+5 PV'], ['pe', '+5 PE'], ['pa', '+1 PA']];
+  const RT_MAX_UP = 30;
+  const rtSkills = () => { const out = []; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => out.push([sk[0], sk[1]]))); return out; };
+  const rtPage = () => ({ gasto: null, ben: ['', ''], per: '', nota: '' });
+  const rtNew = (up, money) => ({ v: 1, up, dinheiro: money, itens: [], pages: Array.from({ length: up }, rtPage) });
+  function rtRead(values) { // JSON salvo, ou o texto antigo das folhas convertido
+    const v = values || {};
+    try {
+      const r = JSON.parse(v.roteiro || '');
+      if (r && Array.isArray(r.pages)) {
+        r.pages = r.pages.map((p) => Object.assign(rtPage(), p, { ben: Array.isArray(p && p.ben) ? p.ben.slice(0, 2).concat(['', '']).slice(0, 2) : ['', ''] }));
+        r.itens = Array.isArray(r.itens) ? r.itens : [];
+        r.up = r.pages.length;
+        r.dinheiro = num(r.dinheiro);
+        return r;
+      }
+    } catch (e) { /* sem roteiro salvo */ }
+    const pages = guidePages(v);
+    if (!pages.length) return null;
+    const r = rtNew(Math.min(RT_MAX_UP, pages[pages.length - 1].n), num(v.dinheiro) || startMoney(0));
+    pages.forEach((pg) => {
+      const p = r.pages[pg.n - 1];
+      if (!p) return;
+      const notes = [];
+      pg.acts.forEach((a) => {
+        if (p.gasto) { notes.push(a.text); return; }
+        if (a.type === 'poder') { const e = findPower(a.name); if (e) p.gasto = { t: 'poder', id: e.id, name: e.name, opt: a.opt || '' }; else notes.push(a.text); }
+        else if (a.type === 'melhoria') { const e = guidePowers().find((x) => powerUps(x).some((u) => nameKey(u.name) === nameKey(a.name))); if (e) p.gasto = { t: 'melhoria', id: e.id, name: a.name }; else notes.push(a.text); }
+        else if (a.type === 'doutor' && a.id) p.gasto = { t: 'doutor', skill: a.id };
+        else if (a.type === 'prof' && a.id) p.gasto = { t: 'prof', prof: a.id };
+        else if (a.type === 'pericias' && a.list.length) { const list = {}; a.list.forEach((x) => { list[x[0]] = (list[x[0]] || 0) + x[1]; }); p.gasto = { t: 'pericias', list }; }
+        else if (a.type === 'nota' && /guard/i.test(a.text)) p.gasto = { t: 'guardar' };
+        else notes.push(a.text);
+      });
+      p.nota = notes.join('; ');
+    });
+    const ben = guideList(v.beneficios).map((x) => (/pv/i.test(x) ? 'pv' : /pe/i.test(x) ? 'pe' : /pa/i.test(x) ? 'pa' : '')).filter(Boolean);
+    r.pages.forEach((p, i) => { if ((i + 1) % 2 === 0) p.ben = [ben.shift() || '', ben.shift() || '']; });
+    const sk = guideList(v.periciasUp).map(skillIdOf).filter(Boolean);
+    r.pages.forEach((p, i) => { if ((i + 1) % 2 === 1) p.per = sk.shift() || ''; });
+    r.itens = String(v.itens || '').split('\n').map((x) => x.trim()).filter(Boolean).map((name) => ({ id: '', name, price: 0 }));
+    return r;
+  }
+  const rtPower = (id) => guidePowers().find((e) => e.id === id) || BUILTINS.find((e) => e.id === id) || null;
+  function rtCost(g) { // UP que a escolha gasta
+    if (!g) return 0;
+    if (g.t === 'poder') { const e = rtPower(g.id); return e ? Math.max(0, num(e.values && e.values.custo)) : 1; }
+    if (g.t === 'melhoria') { const e = rtPower(g.id); const u = e ? powerUps(e).find((x) => x.name === g.name) : null; return u && u.cost !== '' ? num(u.cost) : 1; }
+    return g.t === 'guardar' ? 0 : 1;
+  }
+  function rtText(g) { // a linha da folha, no formato que a ficha aplica
+    if (!g) return '';
+    if (g.t === 'poder') return g.name ? 'Poder: ' + g.name + (g.opt ? ' (' + g.opt + ')' : '') : '';
+    if (g.t === 'melhoria') return g.name ? 'Melhoria: ' + g.name : '';
+    if (g.t === 'doutor') return g.skill ? 'Doutor: ' + skillLabel(g.skill) : '';
+    if (g.t === 'prof') return g.prof ? 'Proficiência: ' + profLabel(g.prof) : '';
+    if (g.t === 'pericias') { const k = Object.keys(g.list || {}).filter((x) => g.list[x] > 0); return k.length ? 'Perícias: ' + k.map((x) => skillLabel(x) + ' +' + g.list[x]).join(', ') : ''; }
+    if (g.t === 'guardar') return 'Guardar este UP';
+    return '';
+  }
+  // saldo de UP folha a folha: quanto há para gastar em cada uma e onde falta
+  function rtLedger(r) {
+    let bank = 0;
+    return r.pages.map((p) => {
+      bank += 1;
+      const have = bank;
+      const cost = rtCost(p.gasto);
+      bank -= cost;
+      return { have, cost, short: cost > have, left: bank };
+    });
+  }
+  const rtItemsTotal = (r) => r.itens.reduce((t, x) => t + num(x.price), 0);
+  function rtProblems(r) {
+    const out = [];
+    rtLedger(r).forEach((l, i) => { if (l.short) out.push('Folha ' + (i + 1) + ': custa ' + l.cost + ' UP e só há ' + l.have + '. Guarde UP nas folhas antes.'); });
+    if (rtItemsTotal(r) > r.dinheiro) out.push('Os itens passam do dinheiro em ' + fmtCronos(rtItemsTotal(r) - r.dinheiro) + ' Cronos.');
+    return out;
+  }
+  const rtFilled = (p, n) => Boolean(rtText(p.gasto)) && (n % 2 ? Boolean(p.per) : p.ben.every(Boolean));
+  // grava o roteiro nos campos que a ficha e a distribuição inicial já leem
+  function rtWrite(values, r) {
+    if (!r) { values.roteiro = ''; values.folhas = ''; values.beneficios = ''; values.periciasUp = ''; values.itens = ''; values.dinheiro = ''; values.tipo = 'Entrada'; return; }
+    values.roteiro = JSON.stringify(Object.assign({}, r, { setup: undefined }));
+    values.folhas = r.pages.map((p, i) => {
+      const parts = [rtText(p.gasto), p.nota.trim()].filter(Boolean);
+      return parts.length ? (i + 1) + ' | ' + parts.join('; ') : '';
+    }).filter(Boolean).join('\n');
+    values.beneficios = r.pages.filter((p, i) => (i + 1) % 2 === 0).map((p) => p.ben).flat().filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', ');
+    values.periciasUp = r.pages.filter((p, i) => (i + 1) % 2 === 1 && p.per).map((p) => skillLabel(p.per)).join(', ');
+    values.itens = r.itens.map((x) => x.name).join('\n');
+    values.dinheiro = String(r.dinheiro);
+    values.tipo = 'Guiada';
+  }
+
+  function rtEntryRows(v) { // o roteiro na ficha do catálogo
+    const r = rtRead(v);
+    if (!r) return [];
+    const rows = [['Roteiro', plural(r.up, 'folha', 'folhas') + ' · ' + fmtCronos(r.dinheiro) + ' Cronos para itens']];
+    if (r.itens.length) rows.push(['Itens', r.itens.map((x) => x.name).join(', ')]);
+    const lines = r.pages.map((p, i) => {
+      const n = i + 1;
+      const parts = [rtText(p.gasto), n % 2 ? (p.per ? 'ponto em ' + skillLabel(p.per) : '') : p.ben.filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', '), p.nota].filter(Boolean);
+      return parts.length ? 'UP ' + n + ': ' + parts.join(' · ') : '';
+    }).filter(Boolean);
+    if (lines.length) rows.push(['Folhas', lines.join('\n')]);
+    return rows;
+  }
+
+  // campo do formulário da build: resumo do roteiro e o botão que abre o modo avançado
+  function roteiroField(d, onDone) {
+    const box = h('div', 'rt-field');
+    const paint = () => {
+      const r = rtRead(d.values);
+      const open = h('button', 'btn ' + (r ? 'btn--ghost' : 'btn--primary') + ' btn--sm', r ? 'Abrir o roteiro' : 'Criar roteiro (modo avançado)');
+      open.type = 'button';
+      open.dataset.fid = 'rt-open';
+      open.addEventListener('click', () => openRoteiro(d, () => { paint(); if (onDone) onDone(); }));
+      if (!r) { box.replaceChildren(h('p', 'field__hint', 'Sem roteiro, a build é só o nível 0 (de entrada). Com roteiro, ela vira guiada: um livrinho com o que pegar a cada UP, e a ficha de quem segue se atualiza sozinha.'), open); return; }
+      const filled = r.pages.filter((p, i) => rtFilled(p, i + 1)).length;
+      const probs = rtProblems(r);
+      box.replaceChildren(
+        h('div', 'rt-field__sum',
+          h('span', 'rt-chip', plural(r.up, 'folha', 'folhas')), h('span', 'rt-chip', fmtCronos(r.dinheiro) + ' Cronos'),
+          h('span', 'rt-chip', plural(r.itens.length, 'item', 'itens')), h('span', 'rt-chip' + (filled === r.up ? ' rt-chip--ok' : ''), filled + ' de ' + r.up + ' preenchidas')),
+        probs.length ? h('p', 'field__error', probs[0]) : null,
+        open);
+    };
+    paint();
+    return box;
+  }
+
+  const rt = { dlg: null, d: null, r: null, page: 0, done: null };
+  function openRoteiro(d, done) {
+    if (!rt.dlg) {
+      rt.dlg = h('dialog', 'dialog dialog--wide rt');
+      rt.dlg.setAttribute('aria-labelledby', 'rt-title');
+      document.body.append(rt.dlg);
+    }
+    rt.d = d;
+    rt.r = rtRead(d.values);
+    rt.page = 0;
+    rt.done = done;
+    renderRoteiro();
+    openDialog(rt.dlg);
+  }
+  function rtClose(save) {
+    if (save) {
+      const probs = rtProblems(rt.r);
+      rtWrite(rt.d.values, rt.r);
+      toast(probs.length ? 'Roteiro guardado com ' + plural(probs.length, 'aviso', 'avisos') + '. Salve a build para ir ao banco.' : 'Roteiro guardado. Salve a build para ir ao banco.');
+    }
+    closeDialog(rt.dlg);
+    if (save && rt.done) rt.done();
+  }
+  function rtStart(body) { // antes de tudo: UP e dinheiro
+    const up = h('input', 'input input--lg');
+    up.type = 'number'; up.min = '1'; up.max = String(RT_MAX_UP); up.step = '1'; up.id = 'rt-up'; up.inputMode = 'numeric';
+    up.value = rt.r ? String(rt.r.up) : '10';
+    const money = h('input', 'input input--lg');
+    money.type = 'number'; money.min = '0'; money.step = '100'; money.id = 'rt-money'; money.inputMode = 'numeric';
+    money.value = String(rt.r ? rt.r.dinheiro : startMoney(0));
+    const table = h('p', 'field__hint');
+    const paintTable = () => { table.textContent = 'Tabela de dinheiro inicial: quem começa com 0 UP tem ' + fmtCronos(startMoney(0)) + ' Cronos, com ' + clamp(Math.round(num(up.value)), 1, RT_MAX_UP) + ' UP tem ' + fmtCronos(startMoney(clamp(Math.round(num(up.value)), 1, RT_MAX_UP))) + '. Use o valor que fizer sentido para a build.'; };
+    paintTable();
+    up.addEventListener('input', paintTable);
+    const go = h('button', 'btn btn--primary', rt.r ? 'Atualizar o livro' : 'Criar o livro');
+    go.type = 'button';
+    go.dataset.fid = 'rt-make';
+    go.addEventListener('click', () => {
+      const n = clamp(Math.round(num(up.value)), 1, RT_MAX_UP);
+      const m = Math.max(0, Math.round(num(money.value)));
+      if (!rt.r) rt.r = rtNew(n, m);
+      else {
+        rt.r.pages = rt.r.pages.slice(0, n).concat(Array.from({ length: Math.max(0, n - rt.r.pages.length) }, rtPage));
+        rt.r.up = n;
+        rt.r.dinheiro = m;
+      }
+      rt.r.setup = false;
+      rt.page = 1;
+      renderRoteiro();
+    });
+    const lab = (inp, text) => { const l = h('label', 'field__label', text); l.htmlFor = inp.id; return l; };
+    body.append(h('div', 'rt-start',
+      h('p', 'rt-start__lead', 'Antes de tudo: até quantos UP vai o roteiro e com quanto dinheiro a build compra os itens. Cada UP vira uma folha do livro.'),
+      h('div', 'rt-start__grid', h('div', 'field', lab(up, 'UP do roteiro (folhas)'), up), h('div', 'field', lab(money, 'Dinheiro para itens (Cronos)'), money)),
+      table, h('div', 'rt-start__go', go)));
+  }
+  function rtSelect(opts, value, onChange, blank, fid) {
+    const sel = h('select', 'input');
+    const b = h('option', '', blank || 'Escolha...');
+    b.value = '';
+    sel.append(b, ...opts.map((o) => { const op = h('option', '', o[1]); op.value = o[0]; return op; }));
+    sel.value = value || '';
+    if (fid) sel.dataset.fid = fid;
+    sel.addEventListener('change', () => onChange(sel.value));
+    return sel;
+  }
+  function rtItemsPage() {
+    const r = rt.r;
+    const total = rtItemsTotal(r);
+    const add = h('button', 'btn btn--primary btn--sm', '+ Item do catálogo');
+    add.type = 'button';
+    add.dataset.fid = 'rt-item-add';
+    add.addEventListener('click', async () => {
+      const e = await openPicker({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
+        { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+        { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+      if (!e || rt.r !== r) return;
+      r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) });
+      renderRoteiro();
+    });
+    return h('article', 'guide__page rt-page rt-page--itens',
+      h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', '0')),
+      h('p', 'guide__state', 'Itens: comprados com o dinheiro do roteiro na distribuição inicial'),
+      h('div', 'rt-money' + (total > r.dinheiro ? ' is-over' : ''), h('span', '', 'Gasto'), h('strong', '', fmtCronos(total) + ' de ' + fmtCronos(r.dinheiro)), h('span', '', 'Cronos')),
+      r.itens.length ? h('ul', 'rt-items', ...r.itens.map((x, i) => {
+        const del = h('button', 'icon-btn', '×');
+        del.type = 'button';
+        del.setAttribute('aria-label', 'Tirar ' + x.name);
+        del.addEventListener('click', () => { r.itens.splice(i, 1); renderRoteiro(); });
+        return h('li', '', h('span', 'rt-items__name', x.name), h('span', 'rt-items__price', x.price ? fmtCronos(x.price) : '—'), del);
+      })) : h('p', 'rt-empty', 'Nenhum item ainda.'),
+      add);
+  }
+  function rtUpPage(n) {
+    const r = rt.r, p = r.pages[n - 1], led = rtLedger(r)[n - 1];
+    const redo = () => renderRoteiro();
+    const g = p.gasto;
+    const kinds = h('div', 'rt-kinds', ...RT_KINDS.map((k) => {
+      const b = h('button', 'rt-kind' + (g && g.t === k[0] ? ' is-on' : ''), k[1]);
+      b.type = 'button';
+      b.dataset.fid = 'rt-kind-' + k[0];
+      b.setAttribute('aria-pressed', String(Boolean(g && g.t === k[0])));
+      b.addEventListener('click', () => { p.gasto = g && g.t === k[0] ? null : { t: k[0] }; if (k[0] === 'pericias') p.gasto.list = {}; redo(); });
+      return b;
+    }));
+    let detail = null;
+    if (g && g.t === 'poder') {
+      const e = g.id ? rtPower(g.id) : null;
+      const pick = h('button', 'btn btn--ghost btn--sm', g.name ? 'Trocar poder' : 'Escolher poder…');
+      pick.type = 'button';
+      pick.dataset.fid = 'rt-power';
+      pick.addEventListener('click', async () => {
+        const x = await openPicker({ title: 'Poder da folha ' + n, kinds: ['poder'], chips: ['Poder'], filter: (y) => y.kind === 'poder' && !CHOICE_POWERS[y.id] });
+        if (!x || rt.r !== r) return;
+        const opts = powerOpts(x);
+        p.gasto = { t: 'poder', id: x.id, name: x.name, opt: opts.length ? opts[0].name : '' };
+        redo();
+      });
+      const opts = e ? powerOpts(e) : [];
+      detail = h('div', 'rt-detail',
+        g.name ? h('p', 'rt-pick', h('strong', '', g.name), h('span', '', ' · custa ' + plural(rtCost(g), 'UP', 'UP'))) : null,
+        opts.length ? h('div', 'field', h('span', 'field__label', 'Opção'), rtSelect(opts.map((o) => [o.name, o.name + (o.text ? ': ' + o.text : '')]), g.opt, (v) => { g.opt = v; redo(); }, null, 'rt-opt')) : null,
+        pick);
+    } else if (g && g.t === 'melhoria') {
+      const before = r.pages.slice(0, n - 1).map((x) => x.gasto).filter((x) => x && x.t === 'poder' && x.id);
+      const seen = {};
+      const opts = [];
+      before.forEach((x) => { if (seen[x.id]) return; seen[x.id] = 1; const e = rtPower(x.id); if (e) powerUps(e).forEach((u) => opts.push([x.id + '|' + u.name, e.name + ' · ' + u.name + ' (' + (u.cost === '' ? 1 : num(u.cost)) + ' UP)'])); });
+      detail = opts.length
+        ? h('div', 'rt-detail', rtSelect(opts, g.id ? g.id + '|' + g.name : '', (v) => { const i = v.indexOf('|'); g.id = v.slice(0, i); g.name = v.slice(i + 1); redo(); }, 'Escolha a melhoria...', 'rt-up'))
+        : h('p', 'rt-empty', 'Escolha antes, numa folha anterior, um poder que tenha melhorias.');
+    } else if (g && g.t === 'doutor') {
+      detail = h('div', 'rt-detail', rtSelect(rtSkills(), g.skill, (v) => { g.skill = v; redo(); }, 'Perícia do Doutor...', 'rt-doutor'), h('p', 'field__hint', 'O limite da perícia escolhida sobe para 4.'));
+    } else if (g && g.t === 'prof') {
+      detail = h('div', 'rt-detail', rtSelect(PROFS.map((x) => [x.id, x.label]), g.prof, (v) => { g.prof = v; redo(); }, 'Tipo de arma ou armadura...', 'rt-prof'), h('p', 'field__hint', 'Também dá +1 ponto de perícia.'));
+    } else if (g && g.t === 'pericias') {
+      g.list = g.list || {};
+      const used = Object.keys(g.list).reduce((t, k) => t + num(g.list[k]), 0);
+      const slots = [];
+      Object.keys(g.list).forEach((k) => { for (let i = 0; i < g.list[k]; i++) slots.push(k); });
+      while (slots.length < 3) slots.push('');
+      detail = h('div', 'rt-detail',
+        h('p', 'field__hint', '1 UP em perícias = 3 pontos. Marcados: ' + used + ' de 3.'),
+        h('div', 'rt-three', ...slots.slice(0, 3).map((v, i) => rtSelect(rtSkills(), v, (nv) => {
+          const next = slots.slice(0, 3);
+          next[i] = nv;
+          g.list = {};
+          next.filter(Boolean).forEach((k) => { g.list[k] = (g.list[k] || 0) + 1; });
+          redo();
+        }, '+1 em...', 'rt-per-' + i))));
+    } else if (g && g.t === 'guardar') {
+      detail = h('p', 'rt-empty', 'Este UP fica guardado para um poder ou melhoria mais cara numa folha seguinte.');
+    }
+    const res = h('div', 'rt-res',
+      h('span', 'rt-chip rt-chip--up', '1 UP' + (led.have > 1 ? ' (+' + (led.have - 1) + ' guardado' + (led.have > 2 ? 's' : '') + ')' : '')),
+      n % 2 ? h('span', 'rt-chip', '+1 ponto de perícia') : h('span', 'rt-chip', '2 benefícios'));
+    const extra = n % 2
+      ? h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Ponto de perícia'), rtSelect(rtSkills(), p.per, (v) => { p.per = v; redo(); }, 'Perícia que ganha +1...', 'rt-ponto'))
+      : h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Benefícios'), h('div', 'rt-bens', ...[0, 1].map((i) => h('div', 'rt-ben', h('span', 'rt-ben__label', (i + 1) + 'º benefício'), ...RT_BEN.map((b) => {
+        const x = h('button', 'rt-kind' + (p.ben[i] === b[0] ? ' is-on' : ''), b[1]);
+        x.type = 'button';
+        x.dataset.fid = 'rt-ben-' + i + '-' + b[0];
+        x.setAttribute('aria-pressed', String(p.ben[i] === b[0]));
+        x.addEventListener('click', () => { p.ben[i] = p.ben[i] === b[0] ? '' : b[0]; redo(); });
+        return x;
+      })))));
+    const nota = h('input', 'input');
+    nota.type = 'text';
+    nota.maxLength = 120;
+    nota.placeholder = 'Lembrete (opcional): ex. comprar munição extra';
+    nota.value = p.nota;
+    nota.dataset.fid = 'rt-nota';
+    nota.addEventListener('input', () => { p.nota = nota.value; });
+    return h('article', 'guide__page rt-page' + (rtFilled(p, n) ? ' is-done' : '') + (led.short ? ' is-bad' : ''),
+      h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', String(n))),
+      res,
+      h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Gastar o UP'), kinds, detail,
+        led.short ? h('p', 'field__error', 'Custa ' + led.cost + ' UP e só há ' + led.have + ' aqui. Use "Guardar" em folhas antes.') : null),
+      extra,
+      h('div', 'rt-sec', nota));
+  }
+  function renderRoteiro() {
+    const r = rt.r, d = rt.d;
+    const close = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+    close.type = 'button';
+    close.addEventListener('click', () => rtClose(false));
+    const save = h('button', 'btn btn--primary btn--sm', 'Guardar roteiro');
+    save.type = 'button';
+    save.dataset.fid = 'rt-save';
+    save.disabled = !r || r.setup === true;
+    save.addEventListener('click', () => rtClose(true));
+    const body = h('div', 'rt__body');
+    const head = h('div', 'rt__head',
+      h('div', 'guide__name', h('span', 'guide__kicker', 'Roteiro · modo avançado'), h('strong', '', d.name || 'Build sem nome')),
+      h('div', 'guide__acts', close, save));
+    if (!r || r.setup) {
+      rtStart(body);
+      rt.dlg.replaceChildren(h('div', 'picker rt__sheet', head, body));
+      setTimeout(() => { const x = rt.dlg.querySelector('#rt-up'); if (x) x.focus(); }, 0);
+      return;
+    }
+    rt.page = clamp(rt.page, 0, r.up);
+    const settings = h('button', 'btn btn--ghost btn--sm', 'UP e dinheiro');
+    settings.type = 'button';
+    settings.dataset.fid = 'rt-settings';
+    settings.addEventListener('click', () => { r.setup = true; renderRoteiro(); });
+    const clear = h('button', 'btn btn--ghost btn--sm', 'Apagar roteiro');
+    clear.type = 'button';
+    clear.addEventListener('click', async () => {
+      const ok = await askConfirm({ title: 'Apagar o roteiro?', text: 'A build volta a ser só o nível 0. Isso só vale quando você salvar a build.', ok: 'Apagar' });
+      if (!ok) return;
+      rtWrite(d.values, null);
+      closeDialog(rt.dlg);
+      if (rt.done) rt.done();
+    });
+    const turn = (dd, label) => {
+      const b = h('button', 'guide__turn', label);
+      b.type = 'button';
+      b.dataset.fid = dd < 0 ? 'rt-prev' : 'rt-next';
+      b.disabled = dd < 0 ? rt.page <= 0 : rt.page >= r.up;
+      b.setAttribute('aria-label', dd < 0 ? 'Folha anterior' : 'Próxima folha');
+      b.addEventListener('click', () => { rt.page += dd; renderRoteiro(); });
+      return b;
+    };
+    const led = rtLedger(r);
+    const marks = h('div', 'guide__marks rt-marks', ...[0].concat(r.pages.map((p, i) => i + 1)).map((n) => {
+      const ok = n === 0 ? r.itens.length > 0 : rtFilled(r.pages[n - 1], n);
+      const bad = n === 0 ? rtItemsTotal(r) > r.dinheiro : led[n - 1].short;
+      const b = h('button', 'guide__mark' + (ok ? ' is-done' : '') + (bad ? ' is-bad' : '') + (n === rt.page ? ' is-on' : ''), n === 0 ? 'Itens' : String(n));
+      b.type = 'button';
+      b.setAttribute('aria-label', n === 0 ? 'Folha dos itens' : 'Folha ' + n);
+      b.addEventListener('click', () => { rt.page = n; renderRoteiro(); });
+      return b;
+    }));
+    const probs = rtProblems(r);
+    body.append(
+      h('div', 'rt__bar', h('span', 'rt-chip', plural(r.up, 'UP', 'UP')), h('span', 'rt-chip', fmtCronos(r.dinheiro) + ' Cronos'),
+        h('span', 'rt-chip' + (probs.length ? ' rt-chip--bad' : ' rt-chip--ok'), probs.length ? plural(probs.length, 'aviso', 'avisos') : 'Tudo certo'), settings, clear),
+      marks,
+      h('div', 'guide__book rt-book', turn(-1, '‹'), h('div', 'guide__spread rt-spread', rt.page === 0 ? rtItemsPage() : rtUpPage(rt.page)), turn(1, '›')),
+      h('p', 'field__hint', 'Quem segue esta build recebe cada folha quando ganha o UP dela, até parar a atualização automática na ficha.'));
+    const keep = rt.dlg.querySelector('.rt__sheet');
+    const top = keep ? keep.scrollTop : 0;
+    rt.dlg.replaceChildren(h('div', 'picker rt__sheet', head, body));
+    rt.dlg.querySelector('.rt__sheet').scrollTop = top;
   }
 
   // valor atual de um recurso: sem registro = cheio (assim acompanha o máximo quando ele muda)
@@ -5207,7 +5594,8 @@ const FIREBASE_CONFIG = {
     const origin = originOf(wz.origin);
     const g = gearFor(origin);
     const startUp = previewSheet().upTotal;
-    if (g.budgetAuto) g.budget = startMoney(startUp);
+    const guideMoney = wz.guide ? num((wz.guide.values || {}).dinheiro) : 0; // o roteiro da build diz quanto dinheiro
+    if (g.budgetAuto) g.budget = guideMoney || startMoney(startUp);
     const gi = wz.guide ? String((wz.guide.values || {}).itens || '').split('\n').map((x) => x.trim()).filter(Boolean) : [];
     if (gi.length && g.guideFilled !== wz.guide.id + wz.guide.name) {
       if (g.guideFilled === '') g.mode = 'preco';
@@ -5355,7 +5743,8 @@ const FIREBASE_CONFIG = {
     box.open = c.open;
     box.addEventListener('toggle', () => { c.open = box.open; });
     const grid = h('div', 'fields-grid');
-    cat.fields.filter((f) => f.key !== 'lore').forEach((f) => {
+    cat.fields.filter((f) => f.key !== 'lore' && !f.hidden).forEach((f) => {
+      if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, null, isName ? d.name : d.values[f.key], (v) => { if (isName) d.name = v; else d.values[f.key] = v; });
       const fid = 'wzc-' + kind + '-' + f.key;
@@ -5726,10 +6115,35 @@ const FIREBASE_CONFIG = {
     const log = $('#roll-log');
     const stick = firstRolls || log.scrollHeight - log.scrollTop - log.clientHeight < 80;
     log.replaceChildren(...list.map(rollRow));
+    lastRolls = list;
+    if (currentCamp) renderBattleLog();
     $('#roll-empty').hidden = list.length > 0;
     if (stick) log.scrollTop = log.scrollHeight;
     firstRolls = false;
   }
+
+  // Abas da campanha (Mesa, Combate, Lojas, Grupo); a última aberta fica guardada por campanha
+  const CAMP_TABS = ['mesa', 'combate', 'lojas', 'grupo'];
+  const campTabKey = (id) => 'vortex.campTab.' + id;
+  function setCampTab(name, focus) {
+    if (CAMP_TABS.indexOf(name) < 0) name = 'mesa';
+    $$('.camp-tab').forEach((t) => {
+      const on = t.dataset.ctab === name;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      if (on && focus) t.focus();
+    });
+    CAMP_TABS.forEach((k) => { $('#cpanel-' + k).hidden = k !== name; });
+    if (currentCamp) { try { localStorage.setItem(campTabKey(currentCamp.id), name); } catch (e) { /* sem armazenamento: só agora */ } }
+  }
+  $$('.camp-tab').forEach((tab) => {
+    tab.addEventListener('click', () => setCampTab(tab.dataset.ctab));
+    tab.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+      const i = CAMP_TABS.indexOf(tab.dataset.ctab);
+      setCampTab(CAMP_TABS[(i + (ev.key === 'ArrowRight' ? 1 : CAMP_TABS.length - 1)) % CAMP_TABS.length], true);
+    });
+  });
 
   // Testes prontos com a ficha de quem está rolando
   const testPick = $('#test-pick');
@@ -5772,6 +6186,32 @@ const FIREBASE_CONFIG = {
     return bar;
   }
 
+  // Poderes de uso: as opções compradas que gastam PE (Certeiro, Esquiva...)
+  function powerButtons(mb, c) {
+    const s = c.sheet;
+    const m = compute(c);
+    const usable = [];
+    s.powers.forEach((p) => powerOpts(p).forEach((o) => { if (powerPicks(p).indexOf(o.name) >= 0 && peCost(o.cost)) usable.push({ p, o, pe: peCost(o.cost) }); }));
+    return usable.map((x) => {
+      const b = h('button', 'qtest qtest--power', x.o.name, h('span', 'qtest__cost', x.pe + ' PE'));
+      b.type = 'button';
+      b.title = x.p.name + ': ' + x.o.text;
+      b.addEventListener('click', async () => {
+        const cur = getCur(s, 'pe', m.max.pe);
+        if (cur < x.pe) { toast('PE insuficiente para ' + x.o.name + ' (' + cur + ' de ' + x.pe + ').'); return; }
+        b.disabled = true;
+        try {
+          await patchMemberSheet(mb, (ss) => { const mm = compute(Object.assign({}, mb, { sheet: ss })); setCur(ss, 'pe', getCur(ss, 'pe', mm.max.pe) - x.pe, mm.max.pe); });
+          await campaignRoll(mb, { expr: '−' + x.pe + ' PE', label: ('Poder: ' + x.o.name).slice(0, 60), detail: (x.p.name + ' · ' + x.o.text).slice(0, 1450), total: x.pe, flag: '' });
+          renderBattle();
+          toast(x.o.name + ': −' + x.pe + ' PE.');
+        } catch (err) { toast(errorMessage(err)); }
+        b.disabled = false;
+      });
+      return b;
+    });
+  }
+
   function renderDock() {
     const dock = $('#dock');
     const mb = currentCamp && dockMember();
@@ -5805,39 +6245,18 @@ const FIREBASE_CONFIG = {
     const state = lifeState(charLayers(c));
     $('#dock-bars').replaceChildren(...bars, ...(state ? [h('span', 'tag tag--down dock__state', state)] : []));
 
-    // Ações: o ataque usa os alvos marcados no Combate; sem alvo, só rola
-    const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
-    const hasTargets = combat.targets.size > 0;
-    $('#dock-attack').replaceChildren(attackBuilder(Object.assign({}, c, { btnLabel: hasTargets ? 'Atacar os alvos' : 'Atacar', targets: combatants().filter((x) => combat.targets.has(x.id)).map((x) => ({ id: x.id, name: x.name })) }), st, async (t, b) => {
-      if (combat.targets.size) { await runAttack({ member: mb, c }, t, st, b); return; }
-      b.disabled = true;
-      await campaignRoll(mb, rollTest(t));
-      b.disabled = false;
-    }, 'dock-'));
-    const names = combatants().filter((x) => combat.targets.has(x.id)).map((x) => x.name);
-    $('#dock-targets').textContent = names.length ? 'Alvos marcados no Combate: ' + names.join(', ') + '. O dano entra sozinho.' : 'Sem alvo marcado: o ataque só rola. Marque alvos no Combate para aplicar o dano.';
+    // Combate em andamento: atalho para a arena
+    const fight = $('#dock-fight');
+    fight.hidden = !sceneOn();
+    if (sceneOn()) {
+      const goFight = h('button', 'btn btn--primary btn--sm', myTurn ? 'Agir na arena' : 'Ver a arena');
+      goFight.type = 'button';
+      goFight.addEventListener('click', () => setCampTab('combate'));
+      fight.replaceChildren(h('span', '', myTurn ? 'É a sua vez no combate. ' : 'Combate em andamento' + (sceneCurrent() ? ': vez de ' + sceneCurrent().name + '. ' : '. ')), goFight);
+    }
 
-    // Poderes de uso: as opções compradas que gastam PE (Certeiro, Esquiva...)
-    const usable = [];
-    s.powers.forEach((p) => powerOpts(p).forEach((o) => { if (powerPicks(p).indexOf(o.name) >= 0 && peCost(o.cost)) usable.push({ p, o, pe: peCost(o.cost) }); }));
-    $('#dock-powers').replaceChildren(...(usable.length ? [h('span', 'dock__powers-label', 'Poderes'), ...usable.map((x) => {
-      const b = h('button', 'qtest qtest--power', x.o.name, h('span', 'qtest__cost', x.pe + ' PE'));
-      b.type = 'button';
-      b.title = x.p.name + ': ' + x.o.text;
-      b.addEventListener('click', async () => {
-        const cur = getCur(s, 'pe', m.max.pe);
-        if (cur < x.pe) { toast('PE insuficiente para ' + x.o.name + ' (' + cur + ' de ' + x.pe + ').'); return; }
-        b.disabled = true;
-        try {
-          await patchMemberSheet(mb, (ss) => { const mm = compute(Object.assign({}, mb, { sheet: ss })); setCur(ss, 'pe', getCur(ss, 'pe', mm.max.pe) - x.pe, mm.max.pe); });
-          await campaignRoll(mb, { expr: '−' + x.pe + ' PE', label: ('Poder: ' + x.o.name).slice(0, 60), detail: (x.p.name + ' · ' + x.o.text).slice(0, 1450), total: x.pe, flag: '' });
-          renderDock();
-          toast(x.o.name + ': −' + x.pe + ' PE.');
-        } catch (err) { toast(errorMessage(err)); }
-        b.disabled = false;
-      });
-      return b;
-    })] : []));
+    const usable = powerButtons(mb, c);
+    $('#dock-powers').replaceChildren(...(usable.length ? [h('span', 'dock__powers-label', 'Poderes'), ...usable] : []));
     $('#dock-powers').hidden = !usable.length;
 
     // Testes rápidos: atributos e as perícias que o personagem tem
@@ -5850,24 +6269,6 @@ const FIREBASE_CONFIG = {
     }));
   }
 
-  // Abas do painel
-  $$('.dock__tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      $$('.dock__tab').forEach((t) => {
-        const on = t === tab;
-        t.setAttribute('aria-selected', String(on));
-        t.tabIndex = on ? 0 : -1;
-        $('#dock-' + t.dataset.tab).hidden = !on;
-      });
-    });
-    tab.addEventListener('keydown', (ev) => {
-      if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
-      const all = $$('.dock__tab');
-      const next = all[(all.indexOf(tab) + (ev.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length];
-      next.click();
-      next.focus();
-    });
-  });
   $('#dock-pin').addEventListener('click', () => {
     const mb = dockMember();
     if (!mb || !currentCamp) return;
@@ -5884,6 +6285,7 @@ const FIREBASE_CONFIG = {
     lastCharacterId = id;
     renderTestPick();
     renderDock();
+    setCampTab('mesa');
     $('#dock').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   $('#test-roll').addEventListener('click', async () => {
@@ -5924,16 +6326,20 @@ const FIREBASE_CONFIG = {
     if (!chosen.length) { toast('Escolha pelo menos um personagem.'); return; }
     const btn = $('#xp-give');
     btn.disabled = true;
+    await giveXp(chosen, amount);
+    btn.disabled = false;
+    $('#xp-amount').value = '';
+  });
+  async function giveXp(chosen, amount) {
     const ok = [], failed = [];
     for (const m of chosen) {
       try { await patchMemberSheet(m, (s) => { s.xp = Math.max(0, num(s.xp) + amount); }); ok.push(m.name); }
       catch (err) { console.warn(err); failed.push(m.name); }
     }
-    btn.disabled = false;
-    $('#xp-amount').value = '';
     toast((ok.length ? '+' + amount + ' XP para ' + ok.join(', ') + '.' : '') + (failed.length ? ' Não foi possível dar XP para ' + failed.join(', ') + '.' : ''));
     $('#member-list').replaceChildren(...members.map(memberRow));
-  });
+    renderBattle();
+  }
 
 
   $('#copy-code').addEventListener('click', async () => {
@@ -6023,6 +6429,7 @@ const FIREBASE_CONFIG = {
     });
     members.forEach((mb) => {
       if (!mb.sheet || !mb.sheet.attrs) return;
+      if (sceneOut().indexOf('chr:' + mb.characterId) >= 0) return; // o mestre deixou fora do combate
       try {
         const c = sheetOf(mb);
         const m = compute(c);
@@ -6033,48 +6440,430 @@ const FIREBASE_CONFIG = {
     return out;
   }
 
-  function renderCombat() {
-    const block = $('#combat-block');
+  /* ---------- Arena (aba Combate) ----------
+     Como nos RPGs antigos: o grupo de um lado, os inimigos do outro, a ordem dos turnos no alto e um menu
+     de comandos embaixo. Toque num lutador para marcá-lo como alvo. Quem está na vez (ou, fora da cena,
+     quem você controla) age pelo menu: Atacar (ataque contra a defesa do alvo), Poderes, Disputa (teste
+     contra teste), Defender e Passar a vez. O mestre prepara a cena, põe condições e conduz os turnos.
+     Condições ficam na cena (scene.tags: id → [{ n, r }], r = rodadas restantes, 0 = até tirar);
+     quem não entra no combate fica em scene.out. */
+  const CONDITIONS = ['Atordoado', 'Caído', 'Sangrando', 'Em chamas', 'Envenenado', 'Cego', 'Imobilizado', 'Agarrado', 'Escondido', 'Assustado', 'Lento', 'Inspirado', 'Protegido', 'Concentrado'];
+  const battle = { actor: '', cmd: 'atacar', duel: { mine: '', target: '', theirs: '' }, name: '', xp: '' };
+  let lastRolls = [];
+  const sceneTags = () => (scene && scene.tags) || {};
+  const sceneOut = () => (scene && Array.isArray(scene.out) ? scene.out : []);
+  const sceneBase = () => deep(scene || { active: false, name: '', round: 0, turn: 0, order: [] });
+
+  function renderCombat() { renderBattle(); }
+  function renderScene() { renderBattle(); }
+  function renderBattle() {
     if (!currentCamp) return;
     const gm = Boolean(currentCamp.gm);
-    $('#combat-gm').hidden = !gm;
     const list = combatants();
     [...combat.targets].forEach((id) => { if (!list.some((x) => x.id === id)) combat.targets.delete(id); });
-    $('#combatants').replaceChildren(...list.map((x) => combatantRow(x, gm)));
-    $('#combat-empty').hidden = list.length > 0;
-    renderAttackPanel(list, gm);
-    block.hidden = false;
-    renderScene();
+    const on = sceneOn();
+    const cur = sceneCurrent();
+    $('#ctab-live').hidden = !on;
+    $('#ctab-combate').classList.toggle('camp-tab--turn', Boolean(on && cur && isMineId(cur.id)));
+    $('#battle').classList.toggle('battle--on', on);
+    $('#battle-phase').textContent = on ? 'Rodada ' + scene.round + (scene.name ? ' · ' + scene.name : '') : 'Preparação';
+    $('#battle-meta').textContent = on
+      ? (cur ? 'Vez de ' + cur.name + (isMineId(cur.id) ? ' (sua)' : '') + '.' : '')
+      : (gm ? 'Monte os dois lados, role as defesas e comece: a iniciativa (2d6 + Precisão + Iniciativa) decide a ordem.' : 'O mestre está preparando a cena. Você já pode ver os lados e rolar a sua defesa.');
+    renderBattleGm(gm, on, list);
+    renderOrder(gm, on, list);
+    const party = list.filter((x) => !x.foe);
+    const foesIn = list.filter((x) => x.foe);
+    const outs = members.filter((mb) => mb.sheet && mb.sheet.attrs && sceneOut().indexOf('chr:' + mb.characterId) >= 0);
+    $('#arena-party').replaceChildren(...party.map((x) => fighterCard(x, gm, on)), ...(gm ? outs.map(outCard) : []),
+      ...(party.length || outs.length ? [] : [h('li', 'arena__empty', 'Nenhum personagem vinculado. Os jogadores vinculam pela ficha.')]));
+    $('#arena-foes').replaceChildren(...foesIn.map((x) => fighterCard(x, gm, on)),
+      ...(foesIn.length ? [] : [h('li', 'arena__empty', gm ? 'Nenhum inimigo. Use "Adicionar inimigo".' : 'Nenhum inimigo à vista.')]));
+    renderBanner(gm, on, party, foesIn);
+    const tg = list.filter((x) => combat.targets.has(x.id));
+    $('#battle-hint').textContent = tg.length ? 'Alvo' + (tg.length > 1 ? 's' : '') + ': ' + tg.map((x) => x.name).join(', ') + '. Toque de novo para desmarcar.' : 'Toque num lutador para marcá-lo como alvo.';
+    renderCmd(gm, on, list);
+    renderBattleLog();
     renderDock();
   }
 
-  function combatantRow(x, gm) {
-    const chk = h('input');
-    chk.type = 'checkbox';
-    chk.checked = combat.targets.has(x.id);
-    chk.setAttribute('aria-label', 'Alvo: ' + x.name);
-    chk.addEventListener('change', () => { if (chk.checked) combat.targets.add(x.id); else combat.targets.delete(x.id); renderTargetsHint(); renderDock(); });
+  function fighterPic(x) {
+    const type = x.foe ? 'criatura' : x.member.type;
+    const pic = h('span', 'fighter__pic token token--' + type);
+    const img = x.foe ? (x.foe.thumb || '') : (x.member.thumb || x.member.image || '');
+    if (img) { const i = h('img'); i.src = img; i.alt = ''; pic.append(i); pic.classList.add('token--img'); }
+    else pic.textContent = x.name.trim().charAt(0).toUpperCase();
+    return pic;
+  }
+  function fighterCard(x, gm, on) {
     const state = lifeState(x.layers);
-    const meta = layersText(x.layers) + ' · Defesa ' + x.def + (x.defRolled ? ' (rolada)' : ' (mínima)');
-    const main = h('span', 'row__main',
-      h('span', 'row__title', x.name, ' ', h('span', 'tag' + (x.foe ? ' tag--foe' : ''), x.kind), state ? h('span', 'tag tag--down', ' ' + state) : null),
-      h('span', 'row__meta', meta));
-    if (x.foe) {
-      const v = foeVals(x.foe);
-      const extra = [v.categoria, v.arma ? v.arma + (v.dano ? ' (' + v.dano + ')' : '') : v.dano].filter(Boolean).join(' · ');
-      if (extra) main.append(h('span', 'row__text', extra));
-    }
-    const pick = h('label', 'combatant__pick', chk, h('span', 'visually-hidden', 'Marcar como alvo'));
-    const row = h('li', 'row combatant' + (state ? ' combatant--down' : '') + (combat.targets.has(x.id) ? ' combatant--target' : ''), pick, main);
-    chk.addEventListener('change', () => row.classList.toggle('combatant--target', chk.checked));
-    const btn = (label, cls, fn) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; b.setAttribute('aria-label', label + ': ' + x.name); b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } catch (err) { toast(errorMessage(err)); } b.disabled = false; }); return b; };
-    const canDef = x.foe ? gm : (x.member.mine || gm);
-    if (canDef) row.append(btn('Rolar defesa', 'btn--ghost', () => rollDefense(x)));
+    const tags = sceneTags()[x.id] || [];
+    const cur = sceneCurrent();
+    const now = Boolean(on && cur && cur.id === x.id);
+    const target = combat.targets.has(x.id);
+    const bars = x.layers.filter((l) => l.max > 0).reverse().map((l) => {
+      const fill = h('span', 'fbar__fill');
+      fill.style.width = clamp(Math.max(0, l.cur) / l.max * 100, 0, 100).toFixed(1) + '%';
+      return h('span', 'fbar fbar--' + l.key, h('span', 'fbar__txt', (l.key === 'pv' ? 'PV' : l.key === 'escudo' ? 'Escudo' : 'Blind.') + ' ' + l.cur + '/' + l.max), h('span', 'fbar__track', fill));
+    });
+    const sel = h('button', 'fighter__sel', fighterPic(x),
+      h('span', 'fighter__id', h('span', 'fighter__name', x.name), h('span', 'fighter__def', 'Defesa ' + x.def + (x.defRolled ? '' : ' (mín.)'))),
+      target ? h('span', 'fighter__aim', 'Alvo') : null);
+    sel.type = 'button';
+    sel.setAttribute('aria-pressed', String(target));
+    sel.setAttribute('aria-label', (target ? 'Desmarcar alvo: ' : 'Marcar como alvo: ') + x.name);
+    sel.addEventListener('click', () => { if (combat.targets.has(x.id)) combat.targets.delete(x.id); else combat.targets.add(x.id); renderBattle(); });
+    const chips = tags.map((t, i) => {
+      const label = t.n + (t.r ? ' · ' + plural(t.r, 'rodada', 'rodadas') : '');
+      if (!gm) return h('span', 'ftag', label);
+      const b = h('button', 'ftag ftag--edit', label, h('span', 'ftag__x', '×'));
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Tirar ' + t.n + ' de ' + x.name);
+      b.addEventListener('click', () => saveTags(x.id, tags.filter((y, k) => k !== i)));
+      return b;
+    });
+    const acts = [];
+    const act = (label, fn, cls) => { const b = h('button', 'fighter__act' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.setAttribute('aria-label', label + ': ' + x.name); b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } catch (err) { toast(errorMessage(err)); } b.disabled = false; }); return b; };
+    if (gm) acts.push(act('+ Condição', () => openTagDialog(x)));
+    if (x.foe ? gm : (x.member.mine || gm)) acts.push(act('Defesa', () => rollDefense(x)));
     if (x.foe && gm) {
-      row.append(btn('Restaurar', 'btn--ghost', () => db.updateFoe(currentCamp.id, x.foe.id, { cur: {}, def: null })));
-      row.append(btn('Tirar', 'btn--danger', async () => { await db.removeFoe(currentCamp.id, x.foe.id); combat.targets.delete(x.id); }));
+      acts.push(act('Restaurar', () => db.updateFoe(currentCamp.id, x.foe.id, { cur: {}, def: null })));
+      acts.push(act('Tirar', async () => { await db.removeFoe(currentCamp.id, x.foe.id); combat.targets.delete(x.id); }, 'fighter__act--bad'));
     }
-    return row;
+    if (!x.foe && gm && !on) acts.push(act('Fora do combate', () => saveOut(x.id, true)));
+    return h('li', 'fighter' + (x.foe ? ' fighter--foe' : '') + (now ? ' is-now' : '') + (target ? ' is-target' : '') + (state ? ' is-down' : ''),
+      sel, h('div', 'fighter__bars', ...bars),
+      state || chips.length ? h('div', 'fighter__tags', state ? h('span', 'ftag ftag--down', state) : null, ...chips) : null,
+      acts.length ? h('div', 'fighter__acts', ...acts) : null);
+  }
+  function outCard(mb) {
+    const b = h('button', 'fighter__act', 'Entrar no combate');
+    b.type = 'button';
+    b.addEventListener('click', () => saveOut('chr:' + mb.characterId, false));
+    return h('li', 'fighter fighter--out', h('div', 'fighter__sel', h('span', 'fighter__pic token token--' + mb.type, mb.name.trim().charAt(0).toUpperCase()),
+      h('span', 'fighter__id', h('span', 'fighter__name', mb.name), h('span', 'fighter__def', 'Fora do combate'))), h('div', 'fighter__acts', b));
+  }
+  async function saveOut(id, out) {
+    const next = sceneBase();
+    const list = (Array.isArray(next.out) ? next.out : []).filter((x) => x !== id);
+    if (out) list.push(id);
+    next.out = list;
+    if (out) combat.targets.delete(id);
+    await saveScene(next);
+  }
+  async function saveTags(id, list) {
+    const next = sceneBase();
+    next.tags = Object.assign({}, next.tags);
+    if (list.length) next.tags[id] = list; else delete next.tags[id];
+    await saveScene(next);
+  }
+  // nova rodada: as condições com duração perdem uma rodada; as que acabam saem
+  function tickTags(next) {
+    const lost = [];
+    const tags = Object.assign({}, next.tags);
+    Object.keys(tags).forEach((id) => {
+      const keep = [];
+      (tags[id] || []).forEach((t) => {
+        if (!t.r) { keep.push(t); return; }
+        if (t.r > 1) keep.push({ n: t.n, r: t.r - 1 });
+        else { const o = next.order.find((y) => y.id === id); lost.push((o ? o.name : 'Alguém') + ' sem ' + t.n); }
+      });
+      if (keep.length) tags[id] = keep; else delete tags[id];
+    });
+    next.tags = tags;
+    return lost;
+  }
+
+  let tagDlg = null;
+  function openTagDialog(x) {
+    if (!tagDlg) {
+      tagDlg = h('dialog', 'dialog tagdlg');
+      tagDlg.setAttribute('aria-labelledby', 'tagdlg-title');
+      document.body.append(tagDlg);
+    }
+    const custom = h('input', 'input');
+    custom.type = 'text';
+    custom.maxLength = 30;
+    custom.id = 'tagdlg-custom';
+    custom.placeholder = 'Outra condição ou estado';
+    const rounds = h('select', 'input');
+    rounds.id = 'tagdlg-rounds';
+    [[0, 'Até o mestre tirar'], ...[1, 2, 3, 4, 5, 6, 8, 10].map((n) => [n, plural(n, 'rodada', 'rodadas')])].forEach((o) => { const op = h('option', '', o[1]); op.value = String(o[0]); rounds.append(op); });
+    const put = async (name) => {
+      const n = cleanName(name).slice(0, 30);
+      if (!n) { custom.focus(); return; }
+      const list = (sceneTags()[x.id] || []).filter((t) => nameKey(t.n) !== nameKey(n));
+      list.push({ n, r: Math.round(num(rounds.value)) });
+      closeDialog(tagDlg);
+      await saveTags(x.id, list.slice(-8));
+      toast(x.name + ': ' + n + '.');
+    };
+    const have = (sceneTags()[x.id] || []).map((t) => nameKey(t.n));
+    const grid = h('div', 'tagdlg__grid', ...CONDITIONS.map((c) => {
+      const b = h('button', 'tagdlg__opt' + (have.indexOf(nameKey(c)) >= 0 ? ' is-on' : ''), c);
+      b.type = 'button';
+      b.addEventListener('click', () => put(c));
+      return b;
+    }));
+    const add = h('button', 'btn btn--primary btn--sm', 'Pôr');
+    add.type = 'button';
+    add.addEventListener('click', () => put(custom.value));
+    custom.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); put(custom.value); } });
+    const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+    close.type = 'button';
+    close.addEventListener('click', () => closeDialog(tagDlg));
+    const lab = (el, t) => { const l = h('label', 'field__label', t); l.htmlFor = el.id; return l; };
+    tagDlg.replaceChildren(h('div', 'tagdlg__body',
+      h('h2', '', 'Condição em ', x.name),
+      h('p', 'field__hint', 'Toque numa condição ou escreva outra. A duração conta rodadas da cena; o efeito é o que a mesa combinar.'),
+      h('div', 'field', lab(rounds, 'Duração'), rounds),
+      grid,
+      h('div', 'field', lab(custom, 'Outra'), h('div', 'tagdlg__row', custom, add)),
+      h('div', 'dialog__actions', close)));
+    openDialog(tagDlg);
+  }
+
+  function gmBtn(label, cls, fn) {
+    const b = h('button', 'btn btn--sm ' + cls, label);
+    b.type = 'button';
+    b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } catch (err) { toast(errorMessage(err)); } b.disabled = false; });
+    return b;
+  }
+  function renderBattleGm(gm, on) {
+    const box = $('#battle-gm');
+    box.hidden = !gm;
+    if (!gm) return;
+    if (on) {
+      box.replaceChildren(
+        gmBtn('◀ Anterior', 'btn--ghost', () => stepTurn(-1)),
+        gmBtn('Próximo turno ▶', 'btn--primary', () => stepTurn(1)),
+        gmBtn('Adicionar inimigo', 'btn--ghost', addFoeFlow),
+        gmBtn('Encerrar', 'btn--danger', endScene));
+      return;
+    }
+    const name = h('input', 'input');
+    name.type = 'text';
+    name.maxLength = 60;
+    name.id = 'battle-name';
+    name.placeholder = 'Nome da cena (opcional)';
+    name.value = battle.name;
+    name.setAttribute('aria-label', 'Nome da cena');
+    name.addEventListener('input', () => { battle.name = name.value; });
+    box.replaceChildren(
+      gmBtn('Adicionar inimigo', 'btn--ghost', addFoeFlow),
+      gmBtn('Rolar defesas', 'btn--ghost', rollAllDefenses),
+      name,
+      gmBtn('Começar combate', 'btn--primary', startScene));
+  }
+  function renderOrder(gm, on, list) {
+    const ol = $('#battle-order');
+    ol.hidden = !on;
+    if (!on) { ol.replaceChildren(); return; }
+    const items = scene.order.map((o, i) => {
+      const x = list.find((y) => y.id === o.id);
+      const down = x ? lifeState(x.layers) : 'fora';
+      const li = h('li', 'ctb__item' + (i === scene.turn ? ' is-now' : '') + (x && x.foe ? ' ctb__item--foe' : '') + (down ? ' is-down' : ''),
+        h('span', 'ctb__init', String(o.init)), h('span', 'ctb__name', o.name));
+      li.title = o.name + ' · iniciativa ' + o.init + (down ? ' · ' + down : '');
+      if (i === scene.turn) li.setAttribute('aria-current', 'step');
+      if (gm) {
+        const out = h('button', 'ctb__x', '×');
+        out.type = 'button';
+        out.setAttribute('aria-label', 'Tirar da ordem: ' + o.name);
+        out.addEventListener('click', () => {
+          const next = deep(scene);
+          next.order.splice(i, 1);
+          if (i < next.turn) next.turn -= 1;
+          if (next.turn >= next.order.length) next.turn = 0;
+          if (!next.order.length) next.active = false;
+          saveScene(next);
+        });
+        li.append(out);
+      }
+      return li;
+    });
+    // quem está na arena e ainda não entrou na ordem (chegou depois)
+    list.filter((x) => !scene.order.some((o) => o.id === x.id)).forEach((x) => {
+      if (!gm && !isMineId(x.id)) return;
+      const b = h('button', 'ctb__join', 'Rolar iniciativa: ' + x.name);
+      b.type = 'button';
+      b.addEventListener('click', () => joinScene(x));
+      items.push(h('li', 'ctb__item ctb__item--out', b));
+    });
+    ol.replaceChildren(...items);
+  }
+  function renderBanner(gm, on, party, foesIn) {
+    const box = $('#battle-banner');
+    const win = on && foesIn.length > 0 && foesIn.every((x) => lifeState(x.layers));
+    const lose = on && party.length > 0 && party.every((x) => lifeState(x.layers));
+    box.hidden = !win && !lose;
+    if (box.hidden) return;
+    box.className = 'battle__banner battle__banner--' + (win ? 'win' : 'lose');
+    const kids = [h('strong', 'battle__banner-title', win ? 'Vitória!' : 'Derrota…'), h('span', '', win ? 'Todos os inimigos caíram.' : 'O grupo inteiro caiu.')];
+    if (gm) {
+      const xp = h('input', 'input');
+      xp.type = 'number';
+      xp.min = '1';
+      xp.step = '1';
+      xp.inputMode = 'numeric';
+      xp.placeholder = 'XP';
+      xp.value = battle.xp;
+      xp.setAttribute('aria-label', 'XP para o grupo');
+      xp.addEventListener('input', () => { battle.xp = xp.value; });
+      const give = gmBtn('Dar XP ao grupo', 'btn--primary', async () => {
+        const amount = Math.round(num(xp.value));
+        if (amount < 1) { xp.focus(); return; }
+        await giveXp(party.map((x) => x.member), amount);
+        battle.xp = '';
+      });
+      kids.push(h('div', 'battle__banner-acts', win ? xp : null, win ? give : null, gmBtn('Encerrar a cena', 'btn--ghost', endScene)));
+    }
+    box.replaceChildren(...kids);
+  }
+
+  // testes de quem age: a ficha do personagem ou os números do inimigo
+  function foeTests(f) {
+    const v = foeVals(f);
+    const out = ATTRS.map((at) => ({ id: 'a:' + at.id, label: at.label + ' ' + signed(num(v[at.id])), make: () => ({ label: 'Teste de ' + at.label, attrName: at.label, attr: num(v[at.id]) }) }));
+    ['luta', 'mira', 'operacoes', 'resistencia', 'iniciativa'].forEach((sk) => {
+      const at = SKILL_ATTR[sk];
+      const atl = ATTR_LABEL[at];
+      const fixed = num(v[at]) + num(v[sk]);
+      out.push({ id: 's:' + sk, label: SKILL_LABEL[sk] + ' ' + signed(fixed), make: () => ({ label: 'Teste de ' + SKILL_LABEL[sk], attrName: atl, attr: num(v[at]), skillName: SKILL_LABEL[sk], skill: num(v[sk]) }) });
+    });
+    return out;
+  }
+  const testsOf = (x) => (x.foe ? foeTests(x.foe) : testCatalog(sheetOf(x.member)));
+  const rollAs = (x, r) => (x.foe ? postCombatRoll({ foe: x.foe }, r) : campaignRoll(x.member, r));
+
+  const CMDS = [['atacar', 'Atacar'], ['poderes', 'Poderes'], ['disputa', 'Disputa'], ['defender', 'Defender'], ['passar', 'Passar a vez']];
+  function renderCmd(gm, on, list) {
+    const box = $('#battle-cmd');
+    const mine = list.filter((x) => (x.foe ? gm : x.member.mine));
+    const cur = sceneCurrent();
+    let actor = on && cur ? mine.find((x) => x.id === cur.id) : null;
+    const free = !on || gm; // fora da cena (ou para o mestre) dá para escolher quem age
+    if (!actor && free) actor = mine.find((x) => x.id === battle.actor) || (gm && on ? null : mine[0]) || mine[0] || null;
+    const title = h('h3', 'ff-window__title', 'Comandos');
+    if (!actor) {
+      box.replaceChildren(title, h('p', 'cmd__wait', !mine.length
+        ? (gm ? 'Adicione inimigos para agir por eles.' : 'Vincule um personagem seu a esta campanha (pela ficha) para agir.')
+        : cur ? 'Aguardando: vez de ' + cur.name + '.' : 'Aguardando o mestre começar.'));
+      return;
+    }
+    battle.actor = actor.id;
+    const isTurn = Boolean(on && cur && cur.id === actor.id);
+    let who;
+    if (free && mine.length > 1) {
+      const sel = h('select', 'input cmd__who');
+      sel.id = 'cmd-who';
+      sel.setAttribute('aria-label', 'Agir como');
+      mine.forEach((x) => { const o = h('option', '', x.name + (on && cur && cur.id === x.id ? ' (na vez)' : '')); o.value = x.id; sel.append(o); });
+      sel.value = actor.id;
+      sel.addEventListener('change', () => { battle.actor = sel.value; renderBattle(); });
+      who = sel;
+    } else who = h('strong', 'cmd__name', actor.name);
+    const usable = actor.foe ? [] : powerButtons(actor.member, sheetOf(actor.member));
+    const cmds = CMDS.filter((c) => (c[0] === 'poderes' ? usable.length > 0 : c[0] === 'passar' ? on && (isTurn || gm) : true));
+    if (!cmds.some((c) => c[0] === battle.cmd)) battle.cmd = 'atacar';
+    const menu = h('div', 'cmd__menu', ...cmds.map((c) => {
+      const b = h('button', 'cmd__item' + (battle.cmd === c[0] ? ' is-on' : ''), c[1]);
+      b.type = 'button';
+      b.dataset.fid = 'cmd-' + c[0];
+      b.setAttribute('aria-pressed', String(battle.cmd === c[0]));
+      b.addEventListener('click', () => { if (c[0] === 'passar') { stepTurn(1); return; } battle.cmd = c[0]; renderBattle(); });
+      return b;
+    }));
+    const targets = list.filter((x) => combat.targets.has(x.id));
+    let panel;
+    if (battle.cmd === 'atacar') {
+      const tl = h('p', 'cmd__note', targets.length ? 'Contra: ' + targets.map((x) => x.name + ' (defesa ' + x.def + ')').join(', ') + '. O dano entra sozinho.' : 'Sem alvo: o ataque só rola. Toque num lutador para marcar.');
+      if (actor.foe) {
+        const st = combat.st[actor.id] = combat.st[actor.id] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
+        panel = h('div', 'cmd__panel', tl, foeAttackBuilder(actor.foe, st));
+      } else {
+        const mb = actor.member;
+        const c = sheetOf(mb);
+        const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
+        panel = h('div', 'cmd__panel', tl, attackBuilder(Object.assign({}, c, { btnLabel: targets.length ? 'Atacar os alvos' : 'Atacar', targets: targets.map((x) => ({ id: x.id, name: x.name })) }), st, async (t, b) => {
+          if (combat.targets.size) { await runAttack({ member: mb, c }, t, st, b); return; }
+          b.disabled = true;
+          await campaignRoll(mb, rollTest(t));
+          b.disabled = false;
+        }, 'cmd-'));
+      }
+    } else if (battle.cmd === 'poderes') {
+      panel = h('div', 'cmd__panel', h('p', 'cmd__note', 'Poderes que gastam PE. O gasto sai da ficha e vai para o registro.'), h('div', 'cmd__powers', ...usable));
+    } else if (battle.cmd === 'disputa') {
+      panel = duelPanel(actor, list);
+    } else {
+      panel = h('div', 'cmd__panel',
+        h('p', 'cmd__note', 'Rola a defesa da cena de novo: 2d6 + Corpo + Resistência. Abaixo da mínima (' + actor.defMin + '), vale a mínima. Agora: ' + actor.def + '.'),
+        gmBtn('Rolar defesa de ' + actor.name, 'btn--primary', () => rollDefense(actor)));
+    }
+    box.replaceChildren(h('div', 'cmd__head', title, who, isTurn ? h('span', 'cmd__turn', 'Sua vez') : null), menu, panel);
+  }
+  // Disputa: teste contra teste (quem age × um alvo); vence o maior total, falha completa perde
+  function duelPanel(actor, list) {
+    const others = list.filter((x) => x.id !== actor.id);
+    const d = battle.duel;
+    if (!others.some((x) => x.id === d.target)) d.target = ([...combat.targets].find((id) => id !== actor.id && others.some((x) => x.id === id))) || (others[0] ? others[0].id : '');
+    const foe = others.find((x) => x.id === d.target);
+    const mineT = testsOf(actor);
+    if (!mineT.some((t) => t.id === d.mine)) d.mine = mineT[0].id;
+    const theirT = foe ? testsOf(foe) : [];
+    if (foe && !theirT.some((t) => t.id === d.theirs)) d.theirs = (theirT.find((t) => t.id === d.mine) || theirT[0]).id;
+    const sel = (opts, val, fn, id, label) => {
+      const s = h('select', 'input');
+      s.id = id;
+      opts.forEach((o) => { const op = h('option', '', o[1]); op.value = o[0]; s.append(op); });
+      s.value = val;
+      s.addEventListener('change', () => { fn(s.value); renderBattle(); });
+      const l = h('label', 'field__label', label);
+      l.htmlFor = id;
+      return h('div', 'field', l, s);
+    };
+    if (!foe) return h('div', 'cmd__panel', h('p', 'cmd__note', 'Ninguém para disputar.'));
+    const go = gmBtn('Rolar a disputa', 'btn--primary', async () => {
+      const t1 = mineT.find((t) => t.id === d.mine), t2 = theirT.find((t) => t.id === d.theirs);
+      const r1 = rollTest(t1.make()), r2 = rollTest(t2.make());
+      const s1 = r1.flag === 'falha' ? -1 : r1.total, s2 = r2.flag === 'falha' ? -1 : r2.total;
+      const res = s1 === s2 ? 'empate' : (s1 > s2 ? actor.name : foe.name) + ' vence';
+      const r = { expr: r1.expr, label: ('Disputa: ' + t1.make().label.replace('Teste de ', '') + ' × ' + foe.name).slice(0, 60), total: r1.total, flag: r1.flag,
+        detail: (actor.name + ' ' + r1.detail + ' = ' + r1.total + (r1.flag === 'falha' ? ' (falha completa)' : '') + ' | ' + foe.name + ' (' + t2.make().label.replace('Teste de ', '') + ') ' + r2.detail + ' = ' + r2.total + (r2.flag === 'falha' ? ' (falha completa)' : '') + ' → ' + res).slice(0, 1450) };
+      await rollAs(actor, r);
+      toast('Disputa: ' + actor.name + ' ' + r1.total + ' × ' + r2.total + ' ' + foe.name + ' → ' + res + '.');
+    });
+    return h('div', 'cmd__panel',
+      h('p', 'cmd__note', 'Teste contra teste: cada lado rola o seu; o maior total vence, e falha completa perde.'),
+      h('div', 'cmd__duel',
+        sel(mineT.map((t) => [t.id, t.label]), d.mine, (v) => { d.mine = v; }, 'duel-mine', 'Teste de ' + actor.name),
+        sel(others.map((x) => [x.id, x.name]), d.target, (v) => { d.target = v; d.theirs = ''; }, 'duel-target', 'Contra'),
+        sel(theirT.map((t) => [t.id, t.label]), d.theirs, (v) => { d.theirs = v; }, 'duel-theirs', 'Teste de ' + foe.name)),
+      go);
+  }
+  function renderBattleLog() {
+    const list = lastRolls.slice(-8);
+    $('#battle-log').replaceChildren(...(list.length ? list.map((r) => h('li', 'blog__item' + (r.flag ? ' blog__item--' + (r.flag === 'falha' ? 'fail' : r.flag) : ''),
+      h('span', 'blog__who', r.characterName), h('span', 'blog__what', r.label || r.expr), h('strong', 'blog__total', String(r.total)),
+      h('span', 'blog__detail', String(r.detail || '').slice(0, 220)))) : [h('li', 'blog__empty', 'Nada ainda. Ataques, defesas e disputas aparecem aqui.')]));
+    const box = $('#battle-log');
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function addFoeFlow() {
+    const e = await openPicker({ title: 'Adicionar inimigo da lista aberta', kinds: ['npc'], chips: ['NPC / Inimigo'] });
+    if (!e) return;
+    const same = foes.filter((f) => f.npcId === e.id).length;
+    try {
+      await db.addFoe(currentCamp.id, { npcId: e.id, name: (e.name + (same ? ' ' + (same + 1) : '')).slice(0, 60), values: deep(e.values || {}), thumb: e.thumb || '', cur: {}, def: null });
+      toast(e.name + ' entrou na arena.');
+    } catch (err) { toast(errorMessage(err)); }
+  }
+  async function rollAllDefenses() {
+    const list = combatants().filter((x) => (currentCamp.gm ? true : x.member && x.member.mine));
+    if (!list.length) { toast('Ninguém na arena.'); return; }
+    for (const x of list) { try { await rollDefense(x); } catch (err) { toast(errorMessage(err)); } }
   }
 
   // Defesa da cena: 2d6 + Corpo + Resistência; abaixo da mínima, vale a mínima
@@ -6099,36 +6888,6 @@ const FIREBASE_CONFIG = {
     try { await db.addRoll(currentCamp.id, Object.assign(base, { expr: r.expr.slice(0, 120), label: r.label.slice(0, 60), detail: r.detail.slice(0, 1450), total: r.total, flag: r.flag })); }
     catch (err) { toast(errorMessage(err)); }
   }
-
-  function renderTargetsHint() {
-    const list = combatants().filter((x) => combat.targets.has(x.id));
-    $('#atk-targets').textContent = list.length ? 'Alvos: ' + list.map((x) => x.name).join(', ') + '.' : 'Marque um ou mais alvos na lista acima.';
-  }
-
-  // Quem pode atacar: os seus personagens e, para o mestre, os inimigos
-  function renderAttackPanel(list, gm) {
-    const panel = $('#combat-attack');
-    const opts = [];
-    if (gm) foes.forEach((f) => opts.push(['foe:' + f.id, f.name])); // os jogadores atacam pelo painel do personagem
-    panel.hidden = !opts.length || !list.length;
-    if (panel.hidden) return;
-    const sel = $('#atk-who');
-    sel.replaceChildren(...opts.map((o) => { const op = h('option', '', o[1]); op.value = o[0]; return op; }));
-    if (!opts.some((o) => o[0] === combat.who)) combat.who = opts[0][0];
-    sel.value = combat.who;
-    const st = combat.st[combat.who] = combat.st[combat.who] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
-    const box = $('#atk-builder');
-    if (combat.who.indexOf('chr:') === 0) {
-      const mb = members.find((x) => 'chr:' + x.characterId === combat.who);
-      const c = Object.assign(sheetOf(mb), { btnLabel: 'Atacar os alvos' });
-      box.replaceChildren(attackBuilder(c, st, (t, b) => runAttack({ member: mb, c }, t, st, b), 'cbt-'));
-    } else {
-      const f = foes.find((x) => 'foe:' + x.id === combat.who);
-      box.replaceChildren(foeAttackBuilder(f, st));
-    }
-    renderTargetsHint();
-  }
-  $('#atk-who').addEventListener('change', () => { combat.who = $('#atk-who').value; renderCombat(); });
 
   const FOE_MODES = { 'Corpo a corpo': ['corpo', 'luta', 'Corpo', 'Luta'], 'À distância': ['precisao', 'mira', 'Precisão', 'Mira'], 'Tecnológico': ['essencia', 'operacoes', 'Essência', 'Operações'] };
   function foeAttackBuilder(f, st) {
@@ -6240,21 +6999,6 @@ const FIREBASE_CONFIG = {
     renderCombat();
   }
 
-  $('#foe-add').addEventListener('click', async () => {
-    const e = await openPicker({ title: 'Adicionar inimigo da lista aberta', kinds: ['npc'], chips: ['NPC / Inimigo'] });
-    if (!e) return;
-    const same = foes.filter((f) => f.npcId === e.id).length;
-    try {
-      await db.addFoe(currentCamp.id, { npcId: e.id, name: (e.name + (same ? ' ' + (same + 1) : '')).slice(0, 60), values: deep(e.values || {}), cur: {}, def: null });
-      toast(e.name + ' entrou na cena.');
-    } catch (err) { toast(errorMessage(err)); }
-  });
-  $('#foe-def').addEventListener('click', async () => {
-    const list = combatants().filter((x) => x.foe);
-    if (!list.length) { toast('Nenhum inimigo na cena.'); return; }
-    for (const x of list) { try { await rollDefense(x); } catch (err) { toast(errorMessage(err)); } }
-  });
-
   /* ---------- Cena e iniciativa ----------
      Regras de Combate: ao entrar num combate, todos fazem um teste de Precisão (2d6 + Precisão + Iniciativa)
      e a ordem vai do maior para o menor, mantida até o fim; a defesa da cena é rolada junto.
@@ -6286,58 +7030,6 @@ const FIREBASE_CONFIG = {
     } catch (err) { toast(errorMessage(err)); }
   }
 
-  function renderScene() {
-    const block = $('#scene-block');
-    if (!currentCamp) return;
-    const gm = Boolean(currentCamp.gm);
-    const list = combatants();
-    block.hidden = !gm && !sceneOn() && !list.length;
-    const on = sceneOn();
-    const cur = sceneCurrent();
-    $('#scene-title').textContent = on ? (scene.name || 'Combate') : 'Sem combate';
-    $('#scene-meta').textContent = on ? 'Rodada ' + scene.round + (cur ? ' · Vez de ' + cur.name : '') : '';
-    $('#scene-gm').hidden = !gm;
-    $('#scene-start-box').hidden = on;
-    $('#scene-run').hidden = !on;
-    $('#scene-pass').hidden = !(on && cur && isMineId(cur.id) && !gm);
-    $('#scene-empty').hidden = on;
-    const order = on ? scene.order : [];
-    const rows = order.map((o, i) => {
-      const x = list.find((y) => y.id === o.id);
-      const state = x ? lifeState(x.layers) : 'fora da cena';
-      const li = h('li', 'init' + (i === scene.turn ? ' init--now' : '') + (x && x.foe ? ' init--foe' : '') + (state ? ' init--down' : ''),
-        h('span', 'init__pos', String(i + 1)),
-        h('span', 'init__val', String(o.init)),
-        h('span', 'init__main', h('span', 'init__name', o.name), h('span', 'init__meta', [x ? x.kind : '', x ? 'Defesa ' + x.def : '', state].filter(Boolean).join(' · '))));
-      if (i === scene.turn) li.setAttribute('aria-current', 'step');
-      if (gm) {
-        const out = h('button', 'btn btn--ghost btn--sm', 'Tirar');
-        out.type = 'button';
-        out.setAttribute('aria-label', 'Tirar da ordem: ' + o.name);
-        out.addEventListener('click', () => {
-          const next = deep(scene);
-          next.order.splice(i, 1);
-          if (i < next.turn) next.turn -= 1;
-          if (next.turn >= next.order.length) next.turn = 0;
-          if (!next.order.length) next.active = false;
-          saveScene(next);
-        });
-        li.append(out);
-      }
-      return li;
-    });
-    // quem está no Combate e ainda não entrou na ordem (chegou depois)
-    if (on) list.filter((x) => !order.some((o) => o.id === x.id)).forEach((x) => {
-      if (!gm && !isMineId(x.id)) return;
-      const b = h('button', 'btn btn--ghost btn--sm', 'Rolar iniciativa');
-      b.type = 'button';
-      b.setAttribute('aria-label', 'Rolar iniciativa: ' + x.name);
-      b.addEventListener('click', () => joinScene(x));
-      rows.push(h('li', 'init init--out', h('span', 'init__pos', '—'), h('span', 'init__val', '?'), h('span', 'init__main', h('span', 'init__name', x.name), h('span', 'init__meta', 'fora da ordem')), b));
-    });
-    $('#scene-order').replaceChildren(...rows);
-  }
-
   async function joinScene(x) {
     const r = rollInitiative(x);
     const next = deep(scene);
@@ -6349,43 +7041,41 @@ const FIREBASE_CONFIG = {
     await sceneLog('Iniciativa: ' + x.name, r.detail + ' → entra na ordem com ' + r.init, r.init);
   }
 
-  $('#scene-start').addEventListener('click', async () => {
+  async function startScene() {
     const list = combatants();
-    if (!list.length) { toast('Ninguém no Combate. Adicione inimigos ou vincule personagens.'); return; }
-    const btn = $('#scene-start');
-    btn.disabled = true;
+    if (!list.length) { toast('Ninguém na arena. Adicione inimigos ou vincule personagens.'); return; }
     const rolls = list.map(rollInitiative).sort(byInit);
-    const name = $('#scene-name').value.trim().slice(0, 60);
-    await saveScene({ active: true, name, round: 1, turn: 0, order: rolls.map((r) => ({ id: r.id, name: r.name, init: r.init, tie: r.tie })) });
+    const name = battle.name.trim().slice(0, 60);
+    const next = sceneBase();
+    Object.assign(next, { active: true, name, round: 1, turn: 0, order: rolls.map((r) => ({ id: r.id, name: r.name, init: r.init, tie: r.tie })) });
+    await saveScene(next);
     await sceneLog('Iniciativa' + (name ? ': ' + name : ''), rolls.map((r, i) => (i + 1) + 'º ' + r.name + ' ' + r.init).join(' · '), rolls[0].init);
     // a defesa da cena é rolada junto com a iniciativa, para quem ainda não tem
     for (const x of list.filter((y) => !y.defRolled)) { try { await rollDefense(x); } catch (err) { toast(errorMessage(err)); } }
-    $('#scene-name').value = '';
-    btn.disabled = false;
+    battle.name = '';
     toast('Combate iniciado: ' + rolls[0].name + ' começa.');
-  });
+  }
 
   function stepTurn(d) {
     if (!sceneOn()) return;
     const next = deep(scene);
     const n = next.order.length;
     next.turn += d;
-    if (next.turn >= n) { next.turn = 0; next.round += 1; }
+    let lost = [];
+    if (next.turn >= n) { next.turn = 0; next.round += 1; lost = tickTags(next); }
     if (next.turn < 0) { if (next.round > 1) { next.turn = n - 1; next.round -= 1; } else next.turn = 0; }
     saveScene(next);
     const cur = next.order[next.turn];
     if (cur && d > 0) toast('Rodada ' + next.round + ' · vez de ' + cur.name + '.');
+    if (lost.length) sceneLog('Condições', 'Rodada ' + next.round + ': ' + lost.join(' · '), lost.length);
   }
-  $('#scene-next').addEventListener('click', () => stepTurn(1));
-  $('#scene-prev').addEventListener('click', () => stepTurn(-1));
-  $('#scene-pass').addEventListener('click', () => stepTurn(1));
-  $('#scene-end').addEventListener('click', async () => {
-    const ok = await askConfirm({ title: 'Encerrar a cena?', text: 'A ordem de iniciativa é apagada. PV, defesa e inimigos continuam como estão.', ok: 'Encerrar' });
+  async function endScene() {
+    const ok = await askConfirm({ title: 'Encerrar a cena?', text: 'A ordem dos turnos e as condições são apagadas. PV, defesa e inimigos continuam como estão.', ok: 'Encerrar' });
     if (!ok) return;
     const rounds = scene ? scene.round : 0;
-    await saveScene({ active: false, name: '', round: 0, turn: 0, order: [] });
+    await saveScene({ active: false, name: '', round: 0, turn: 0, order: [], out: sceneOut() });
     await sceneLog('Fim da cena', 'Cena encerrada após ' + plural(rounds, 'rodada', 'rodadas') + '.', rounds);
-  });
+  }
 
   /* ---------- Lojas da campanha ----------
      O mestre cria as lojas (de uma companhia, dele ou de um NPC) e escolhe itens, quantidades e preços.
@@ -6711,6 +7401,9 @@ const FIREBASE_CONFIG = {
     $('#campaign-title').textContent = camp.name;
     $('#campaign-code').textContent = camp.id;
     $('#camp-danger').hidden = !camp.isOwner;
+    let tabNow = 'mesa';
+    try { tabNow = localStorage.getItem(campTabKey(camp.id)) || 'mesa'; } catch (e) { /* sem armazenamento */ }
+    setCampTab(tabNow);
     document.title = camp.name + ' | Vortex';
 
     let noAccess = false;
@@ -6721,7 +7414,7 @@ const FIREBASE_CONFIG = {
     $('#member-list').replaceChildren(...members.map(memberRow));
     renderXpForm();
     $('#member-empty').hidden = members.length > 0;
-    $('#members-count').textContent = members.length ? '(' + plural(members.length, 'ficha', 'fichas') + ')' : '';
+    $('#members-count').textContent = members.length ? String(members.length) : '';
 
     const mine = members.filter((m) => m.mine);
     const canRoll = mine.length > 0;
@@ -6749,7 +7442,8 @@ const FIREBASE_CONFIG = {
     scene = null;
     shops = [];
     combat.targets.clear();
-    $('#combat-block').hidden = noAccess && !camp.gm;
+    battle.actor = '';
+    battle.name = '';
     $('#shop-block').hidden = noAccess && !camp.gm;
     $('#shop-new').hidden = true;
     if (noAccess && !camp.gm) { renderRolls([]); return; }
