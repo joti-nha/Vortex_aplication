@@ -2888,7 +2888,7 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 .who__list { display: grid; gap: 0.1rem; }
 .fallen__row.is-dropped { opacity: 0.75; }
 
-/* ---------- Campanha: abas numa coluna (tela larga) ou numa faixa que rola (celular) ---------- */
+/* ---------- Campanha: abas numa faixa horizontal (rola no celular) ---------- */
 .container:has(.screen[data-screen="campaign"]:not([hidden])) { width: min(100% - 2 * var(--pad-x), 88rem); }
 .screen[data-screen="campaign"] .screen__head { margin-bottom: 1rem; }
 .screen[data-screen="campaign"] .screen__head h1 { font-size: clamp(1.9rem, 3.2vw, 2.8rem); }
@@ -2897,8 +2897,6 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 .camp-main { min-width: 0; }
 .camp-tab { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; }
 .camp-tab[hidden] { display: none; }
-.camp-tab__icon { font-size: 1.05rem; line-height: 1; filter: saturate(0.8); }
-.camp-tab[aria-selected="true"] .camp-tab__icon { filter: none; }
 .camp-tab__badge { min-width: 1.35rem; padding: 0 0.35rem; border-radius: 999px; background: rgba(var(--mare-rgb), 0.2); color: var(--mare); font: 800 0.7rem/1.35rem var(--fonte-ui); text-align: center; }
 .camp-tab__badge--hot { background: #e0484a; color: #fff; }
 .camp-tab[aria-selected="true"] .camp-tab__badge { background: rgba(0, 0, 0, 0.2); color: inherit; }
@@ -2906,14 +2904,6 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 .camp-panel > .block + .block { margin-top: 1.25rem; }
 
 @media (min-width: 1100px) {
-  .camp-layout { display: grid; grid-template-columns: 14.5rem minmax(0, 1fr); gap: 1.5rem; align-items: start; }
-  .camp-tabs { flex-direction: column; gap: 0.2rem; margin: 0; padding: 0.45rem; overflow: visible; }
-  .camp-tab { flex: none; justify-content: flex-start; min-height: 2.75rem; padding: 0.45rem 0.75rem; text-align: left; }
-  .camp-tab__label { flex: 1; white-space: normal; line-height: 1.2; }
-  .camp-tab__icon { width: 1.4rem; text-align: center; }
-  .camp-tab__live { margin-left: 0; }
-  .camp-tabs__gm { display: block; margin: 0.4rem 0.4rem 0.1rem; padding-top: 0.5rem; border-top: 1px solid var(--linha); color: var(--nevoa-2); font-size: 0.72rem; }
-  .camp-tabs__gm[hidden] { display: none; }
   /* Grupo: candidatos à esquerda; descanso e acesso ao lado */
   #cpanel-grupo:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 1fr); gap: 1.25rem; align-items: start; }
   #cpanel-grupo > .block + .block { margin-top: 0; }
@@ -2929,3 +2919,6 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 @media (max-width: 520px) {
   .camp-tab { gap: 0.3rem; padding-inline: 0.6rem; font-size: 0.9rem; }
 }
+.lootnew__other { display: flex; gap: 0.5rem; align-items: center; }
+.lootnew__other .input { flex: 1; }
+.lootnew__other:has(> .input[hidden]) { display: none; }

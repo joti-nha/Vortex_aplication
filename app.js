@@ -8479,11 +8479,6 @@ const FIREBASE_CONFIG = {
   // Itens: dar direto na mochila de um personagem
   function renderItemsTab() {
     if (!currentCamp || !currentCamp.gm) return;
-    const to = $('#gmlib-to');
-    const keep = to.value;
-    const chars = members.filter((mb) => mb.sheet && mb.sheet.attrs);
-    to.replaceChildren(...chars.map((mb) => { const o = h('option', '', mb.name); o.value = mb.characterId; return o; }));
-    if (chars.some((mb) => mb.characterId === keep)) to.value = keep;
     runItems();
   }
   async function libFind(kinds, q) {
@@ -8497,11 +8492,11 @@ const FIREBASE_CONFIG = {
     const r = await libFind(kinds, $('#gmlib-q').value);
     if (seq !== itemsSeq) return;
     const list = r.list.filter((e) => kinds.indexOf(e.kind) >= 0).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
-    const noChars = !$('#gmlib-to').value;
+    const noChars = !members.some((mb) => mb.sheet && mb.sheet.attrs);
     $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
     $('#gmlib-hint').textContent = r.warn || (!list.length ? 'Nada encontrado.'
       : plural(list.length, 'resultado', 'resultados') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
-        + (noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" põe o item na mochila de quem está escolhido.'));
+        + (noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" abre o grupo para você escolher quem recebe.'));
   }
   // Bestiário: a revista, com filtro por categoria
   async function runBeast() {
@@ -8562,9 +8557,61 @@ const FIREBASE_CONFIG = {
     page.style.setProperty('--cat', NPC_CAT_COLOR[cat] || 'var(--ambar)');
     return page;
   }
+  // "Dar": abre os banners do grupo e o item vai para quem for escolhido
+  let giveDlg = null;
+  function askGiveTo(e) {
+    if (!giveDlg) { giveDlg = h('dialog', 'dialog pickchar'); giveDlg.setAttribute('aria-labelledby', 'give-title'); document.body.append(giveDlg); }
+    const chars = members.filter((m) => m.sheet && m.sheet.attrs).sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (giveDlg.open) closeDialog(giveDlg); };
+      const cards = chars.map((m) => {
+        const art = h('span', 'pickchar__art');
+        if (m.thumb) { const img = h('img'); img.src = m.thumb; img.alt = ''; art.append(img); art.classList.add('pickchar__art--img'); }
+        else art.textContent = (m.name || '?').trim().charAt(0).toUpperCase();
+        const s = m.sheet || {};
+        const meta = [m.species, m.origin].filter(Boolean).join(' · ');
+        const b = h('button', 'btn btn--sm btn--primary', 'Dar');
+        b.type = 'button';
+        b.dataset.fid = 'give-' + m.characterId;
+        b.setAttribute('aria-label', 'Dar ' + e.name + ' para ' + m.name);
+        b.addEventListener('click', () => finish(m));
+        const card = h('li', 'pickchar__card', art,
+          h('span', 'pickchar__info', h('strong', 'pickchar__name', m.name), h('span', 'pickchar__meta', meta || 'Personagem'),
+            h('span', 'pickchar__meta', plural((s.inventory || []).length, 'item na mochila', 'itens na mochila'))), b);
+        card.dataset.key = nameKey([m.name, m.species, m.origin].filter(Boolean).join(' '));
+        card.addEventListener('click', (ev) => { if (!ev.target.closest('button')) finish(m); });
+        return card;
+      });
+      const none = h('p', 'field__hint', 'Nenhum personagem com esse nome.');
+      none.hidden = true;
+      const q = h('input', 'input');
+      q.type = 'search';
+      q.placeholder = 'Buscar personagem';
+      q.setAttribute('aria-label', 'Buscar personagem');
+      q.autocomplete = 'off';
+      q.addEventListener('input', () => {
+        const k = nameKey(q.value);
+        let shown = 0;
+        cards.forEach((el) => { el.hidden = Boolean(k) && el.dataset.key.indexOf(k) < 0; if (!el.hidden) shown++; });
+        none.hidden = shown > 0;
+      });
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      const title = h('h2', '', 'Dar ' + e.name);
+      title.id = 'give-title';
+      giveDlg.onclose = () => { if (!giveDlg.open) finish(null); };
+      giveDlg.replaceChildren(h('div', 'pickchar__body', title,
+        h('p', 'field__hint', 'Escolha quem recebe. O item vai para a mochila desse personagem.'),
+        chars.length > 3 ? q : null, h('ul', 'pickchar__list', ...cards), none, h('div', 'dialog__actions', cancel)));
+      openDialog(giveDlg);
+      if (chars.length > 3) q.focus();
+    });
+  }
   async function giveItem(e) {
-    const mb = members.find((m) => m.characterId === $('#gmlib-to').value);
-    if (!mb) { toast('Escolha para quem dar o item.'); return; }
+    const mb = await askGiveTo(e);
+    if (!mb) return;
     try {
       await patchMemberSheet(mb, (s) => { s.inventory.push(Object.assign(invEntryFrom(e), { src: 'mestre' })); });
       play('ok');
@@ -8572,7 +8619,6 @@ const FIREBASE_CONFIG = {
     } catch (err) { toast(errorMessage(err)); }
   }
   $('#gmlib-kind').addEventListener('change', runItems);
-  $('#gmlib-to').addEventListener('change', runItems);
   $('#gmlib-q').addEventListener('input', debounce(runItems, 250));
   $('#beast-q').addEventListener('input', debounce(runBeast, 250));
 
@@ -8784,7 +8830,7 @@ const FIREBASE_CONFIG = {
     }
     const log = (l.log || []).slice(0, 3).map((x) => h('li', '', x.text));
     const card = h('article', 'lootbox' + (lootEmpty(l) ? ' is-empty' : ''),
-      h('header', 'lootbox__head', art, h('span', 'lootbox__title', h('strong', '', l.name), h('span', 'row__meta', src[1] + (l.src && l.src.name && l.src.name !== l.name ? ': ' + l.src.name : '') + ' · ' + who)),
+      h('header', 'lootbox__head', art, h('span', 'lootbox__title', h('strong', '', l.name), h('span', 'row__meta', ((l.src && l.src.label) || src[1]) + (l.src && l.src.name && l.src.name !== l.name ? ': ' + l.src.name : '') + ' · ' + who)),
         num(l.cronos) ? h('span', 'tag tag--on', fmtCronos(num(l.cronos)) + ' Cronos') : null),
       items.length ? lootGrid(items, 0, lootSel[l.id], pickTo) : h('p', 'field__hint', lootEmpty(l) ? 'Vazia: já pegaram tudo.' : 'Sem itens, só Cronos.'),
       items.length ? pickPanel(sel, acts) : null,
@@ -8956,6 +9002,25 @@ const FIREBASE_CONFIG = {
     kind.id = 'lootnew-kind';
     Object.keys(LOOT_SRC).forEach((k) => { const o = h('option', '', LOOT_SRC[k][0] + ' ' + LOOT_SRC[k][1]); o.value = k; kind.append(o); });
     kind.value = 'bau';
+    // "Outro": a lista vira um campo de texto livre
+    const other = h('input', 'input');
+    other.id = 'lootnew-other';
+    other.maxLength = 40;
+    other.placeholder = 'Digite o texto';
+    other.hidden = true;
+    const back = h('button', 'btn btn--ghost btn--sm', 'Voltar à lista');
+    back.type = 'button';
+    back.hidden = true;
+    const srcMode = (free) => {
+      kind.hidden = free;
+      other.hidden = !free;
+      back.hidden = !free;
+      if (free) other.focus();
+      else { kind.value = 'bau'; kind.focus(); }
+      srcLab.htmlFor = free ? other.id : kind.id;
+    };
+    kind.addEventListener('change', () => { if (kind.value === 'outro') srcMode(true); });
+    back.addEventListener('click', () => srcMode(false));
     const cr = h('input', 'input');
     cr.id = 'lootnew-cronos';
     cr.type = 'number';
@@ -8970,6 +9035,8 @@ const FIREBASE_CONFIG = {
       openDialog(lootDlg);
     });
     const lab = (t, el) => { const l = h('label', 'field__label', t); l.htmlFor = el.id; return h('div', 'field', l, el); };
+    const srcLab = h('label', 'field__label', 'De onde vem');
+    srcLab.htmlFor = kind.id;
     const ok = h('button', 'btn btn--primary btn--sm', 'Criar e pôr itens');
     ok.type = 'submit';
     ok.dataset.fid = 'lootnew-ok';
@@ -8978,14 +9045,16 @@ const FIREBASE_CONFIG = {
     cancel.addEventListener('click', () => closeDialog(lootDlg));
     const form = h('form', 'startdlg__body', h('h2', '', 'Nova lista de saque'),
       h('p', 'field__hint', 'O grupo vê a lista como o inventário de onde o saque veio (um corpo, um baú, uma caixa).'),
-      lab('Nome', name), lab('De onde vem', kind), lab('Cronos', cr), whoBtn, h('div', 'dialog__actions', cancel, ok));
+      lab('Nome', name), h('div', 'field', srcLab, kind, h('div', 'lootnew__other', other, back)), lab('Cronos', cr), whoBtn, h('div', 'dialog__actions', cancel, ok));
     form.querySelector('h2').id = 'lootnew-title';
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
-      const n = cleanName(name.value).slice(0, 60) || LOOT_SRC[kind.value][1];
+      const label = kind.value === 'outro' ? cleanName(other.value).slice(0, 40) : '';
+      if (kind.value === 'outro' && !label) { toast('Diga de onde vem o saque.'); other.focus(); return; }
+      const n = cleanName(name.value).slice(0, 60) || label || LOOT_SRC[kind.value][1];
       closeDialog(lootDlg);
       try {
-        const id = await db.addDoc(currentCamp.id, 'loot', { name: n, src: { kind: kind.value, name: n, thumb: '' }, items: [], cronos: Math.max(0, Math.round(num(cr.value))), who, fallenId: '', log: [] });
+        const id = await db.addDoc(currentCamp.id, 'loot', { name: n, src: { kind: kind.value, name: n, thumb: '', label }, items: [], cronos: Math.max(0, Math.round(num(cr.value))), who, fallenId: '', log: [] });
         const l = loot.find((x) => x.id === id) || { id, name: n, items: [] };
         addLootItem(l);
       } catch (err) { toast(errorMessage(err)); }
