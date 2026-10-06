@@ -4917,6 +4917,8 @@ const FIREBASE_CONFIG = {
 
   function renderPowers() {
     const s = sheetChar.sheet;
+    const canRacial = specimenVals(s).compraRacial === 'Sim';
+    $('#racial-open').hidden = !canRacial;
     $('#power-list').replaceChildren(...s.powers.map((p, i) => {
       const v = p.values || {};
       const opts = powerOpts(p);
@@ -5368,8 +5370,94 @@ const FIREBASE_CONFIG = {
     ch.species = e.name;
     fSpecies.value = e.name;
     dirty.add('species');
+    grantBirthPowers(ch.sheet);
     changed();
   });
+
+  /* ---------- Espécime: poderes de nascença e características raciais ----------
+     O espécime pode dar poderes de graça (Etheriano: Cria do Éter) e pode deixar comprar, com UP,
+     características raciais de outros espécimes. Cada característica comprada vira um poder na lista. */
+  function specimenVals(s) {
+    const sp = s.specimen;
+    const official = sp ? BUILTINS.find((e) => e.id === sp.id) : null;
+    return Object.assign({}, official ? official.values : {}, (sp && sp.values) || {});
+  }
+  const racialLines = (v) => powerLines(v && v.racial).map((t) => Object.assign(t, { cost: t.cost === '' ? 1 : Math.max(0, Math.round(num(t.cost))) }));
+  const racialId = (esp, t) => 'racial:' + (esp.id || nameKey(esp.name)) + ':' + nameKey(t.name);
+  function grantBirthPowers(s) {
+    const names = String(specimenVals(s).poderes || '').split('\n').map((x) => x.trim()).filter(Boolean);
+    names.forEach((n) => {
+      if (s.powers.some((p) => nameKey(p.name) === nameKey(n))) return;
+      const e = BUILTINS.find((x) => x.kind === 'poder' && nameKey(x.name) === nameKey(n));
+      if (e) s.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', birth: true }));
+    });
+  }
+  let racialDlg = null;
+  let racialPick = '';
+  // o combo de pegar as 3 Experiências passadas (os 3 UP do Humano) não é permitido
+  function racialAll(s, esp, id) {
+    const lines = racialLines(esp.values).filter((t) => /^experi[eê]ncia passada/i.test(t.name));
+    if (lines.length < 2) return false;
+    const ids = lines.map((t) => racialId(esp, t));
+    if (ids.indexOf(id) < 0) return false;
+    return ids.filter((x) => x !== id && s.powers.some((p) => p.id === x)).length >= ids.length - 1;
+  }
+  async function openRacial() {
+    const ch = sheetChar;
+    if (!ch) return;
+    if (!racialDlg) { racialDlg = h('dialog', 'dialog pickchar racial'); racialDlg.setAttribute('aria-labelledby', 'racial-title'); document.body.append(racialDlg); }
+    const dlg = racialDlg;
+    let list = BUILTINS.filter((e) => e.kind === 'especime');
+    try { list = await libSearch(['especime'], ''); } catch (err) { /* fica o catálogo oficial */ }
+    const mine = ch.sheet.specimen;
+    list = list.filter((e) => racialLines(e.values).length && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
+    if (!list.some((e) => e.id === racialPick)) racialPick = list[0] ? list[0].id : '';
+    const draw = () => {
+      const s = ch.sheet;
+      const m = compute(ch);
+      const free = m.upTotal - m.upSpent;
+      const esp = list.find((e) => e.id === racialPick);
+      const races = h('div', 'racial__races', ...list.map((e) => {
+        const b = h('button', 'racial__race' + (e.id === racialPick ? ' is-on' : ''), entryIcon(e), h('span', '', e.name));
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(e.id === racialPick));
+        b.addEventListener('click', () => { racialPick = e.id; draw(); });
+        return b;
+      }));
+      const traits = esp ? racialLines(esp.values).map((t) => {
+        const id = racialId(esp, t);
+        const have = s.powers.findIndex((p) => p.id === id);
+        const b = h('button', 'btn btn--sm ' + (have >= 0 ? 'btn--ghost' : 'btn--primary'), have >= 0 ? 'Devolver' : 'Pegar · ' + t.cost + ' UP');
+        b.type = 'button';
+        b.dataset.fid = ('racial-' + nameKey(esp.name) + '-' + nameKey(t.name)).replace(/\s+/g, '-');
+        b.disabled = have < 0 && t.cost > free && !racialAll(s, esp, id);
+        b.addEventListener('click', () => {
+          if (have >= 0) s.powers.splice(have, 1);
+          else if (racialAll(s, esp, id)) { toast('Se achando muito esperto, não é? Os 3 UP do Humano não vêm juntos.'); return; }
+          else s.powers.push({ id, kind: 'poder', typeId: '', typeTitle: '', name: (esp.name + ' · ' + t.name).slice(0, 60), values: { custo: String(t.cost), efeito: t.text }, bonus: {}, slots: null, thumb: '', racial: esp.name });
+          changed();
+          draw();
+        });
+        return h('li', 'pickchar__card racial__trait' + (have >= 0 ? ' is-here' : ''),
+          h('span', 'pickchar__info', h('strong', 'pickchar__name', t.name), h('span', 'pickchar__meta', t.cost + ' UP'), t.text ? h('span', 'racial__text', t.text) : null), b);
+      }) : [];
+      const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+      close.type = 'button';
+      close.addEventListener('click', () => closeDialog(dlg));
+      const title = h('h2', '', 'Características raciais');
+      title.id = 'racial-title';
+      dlg.replaceChildren(h('div', 'pickchar__body', title,
+        h('p', 'field__hint', (mine ? mine.name : 'Este espécime') + ' pode gastar UP em características de outros espécimes. Toque num espécime para ver as características dele.'),
+        h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free))),
+        races,
+        esp ? h('h3', 'pickchar__sub', esp.name) : h('p', 'empty', 'Nenhum espécime com características raciais.'),
+        h('ul', 'pickchar__list', ...traits),
+        h('div', 'dialog__actions', close)));
+    };
+    draw();
+    openDialog(dlg);
+  }
+  $('#racial-open').addEventListener('click', openRacial);
 
   /* ---------- Pré-jogadas ----------
      Testes prontos montados a partir da ficha: atributo, perícia e ataque com a arma escolhida.
@@ -5438,6 +5526,25 @@ const FIREBASE_CONFIG = {
       ...rows,
       over ? h('p', 'field__error', 'A cadência ' + cad + ' só alcança ' + plural(cad, 'alvo', 'alvos') + '. Desmarque alvos no Combate.') : null);
     return { box, total: Math.min(total, cad), over };
+  }
+
+  /* Regra de cadência na arena: antes de escolher os alvos, mostra a penalidade de cada número de disparos,
+     com ou sem proficiência na arma, e deixa atacar com um disparo só. */
+  function cadenceBox(st, cad, prof, redraw, idp) {
+    const use = h('input');
+    use.type = 'checkbox';
+    use.id = idp + 'cad-use';
+    use.checked = st.cad !== false;
+    use.addEventListener('change', () => { st.cad = use.checked; redraw(); });
+    const steps = [];
+    for (let k = 1; k <= cad; k++) steps.push(h('span', 'cad__step' + (k === 1 ? ' cad__step--free' : ''), h('b', '', k + '×'), ' ' + (k === 1 ? 'sem penalidade' : '–' + shotPenalty(k, prof))));
+    return h('div', 'cad field--wide' + (st.cad === false ? ' cad--off' : ''),
+      h('label', 'check cad__use', use, h('span', '', 'Usar cadência (até ' + cad + ' disparos)')),
+      h('p', 'cad__rule', prof
+        ? 'Proficiente: cadência perita. Cada disparo a mais dá penalidade igual ao total de disparos.'
+        : 'Sem proficiência: a penalidade soma cada disparo (1 + 2 + 3...). Com proficiência seria só o total.'),
+      st.cad === false ? h('p', 'cad__rule', 'Ataque com um disparo, sem penalidade.') : h('div', 'cad__steps', ...steps),
+      st.cad === false ? null : h('p', 'cad__rule', 'O dano de cada alvo é multiplicado pelos disparos nele.'));
   }
 
   function attackTest(s, m, i, modeId, shots) {
@@ -5530,11 +5637,15 @@ const FIREBASE_CONFIG = {
       mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
       const fields = [field('weapon', 'Arma', wSel), field('mode', 'Forma de ataque', mSel)];
       const targets = c.targets || [];
+      const prof = weapon ? isProficient(s, weapon) : false;
+      const cadMax = st.cad === false ? 1 : maxShots(weapon); // "Usar cadência" desmarcado: um disparo só
       let per = null;
-      if (maxShots(weapon) > 1 && targets.length) {
-        per = perTargetShots(st, maxShots(weapon), targets, isProficient(s, weapon), draw, idp);
+      if (cadMax > 1 && targets.length) {
+        per = perTargetShots(st, cadMax, targets, prof, draw, idp);
         st.shots = per.total;
         fields.push(per.box);
+      } else if (maxShots(weapon) > 1 && c.aim) {
+        fields.push(cadenceBox(st, maxShots(weapon), prof, draw, idp));
       } else if (maxShots(weapon) > 1 && !c.aim) {
         st.per = null;
         const nSel = h('select', 'input');
@@ -5574,7 +5685,7 @@ const FIREBASE_CONFIG = {
       if (c.peek) c.peek(t);
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
       const stowed = c.handsOnly ? all.filter((w) => !handOf(w)).length : 0;
-      const info = [c.aim && maxShots(weapon) > 1 ? 'cadência ' + maxShots(weapon) + ': cada toque num alvo é um disparo' : '', weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
+      const info = [c.aim && cadMax > 1 ? 'cadência ' + cadMax + ': cada toque num alvo é um disparo' : '', weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
       const go = h('button', 'btn btn--primary btn--sm', (c.btnLabel || 'Atacar') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
       go.disabled = Boolean(per && per.over);
@@ -6314,6 +6425,7 @@ const FIREBASE_CONFIG = {
     s.cur = {};
     s.setup = true;
     if (wz.specimen) { c.species = wz.specimen.name; dirty.add('species'); }
+    grantBirthPowers(s);
     c.origin = cleanName(wz.origin).slice(0, 60);
     c.age = wz.age;
     dirty.add('origin'); dirty.add('age');
@@ -7448,7 +7560,7 @@ const FIREBASE_CONFIG = {
     cancel.type = 'button';
     cancel.addEventListener('click', () => { endAim(); renderBattle(); });
     const kids = [h('strong', 'aimbar__title', a.label), h('span', 'aimbar__txt', a.max > 1
-      ? 'Toque nos alvos destacados: cada toque é um disparo (' + total + ' de ' + a.max + ').' + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '')
+      ? 'Toque nos alvos destacados: cada toque é um disparo (' + total + ' de ' + a.max + ').' + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '') + (a.penalty && a.penalty(total) ? ' ' + a.penalty(total) + '.' : '')
       : 'Toque num dos alvos destacados.')];
     if (a.max > 1) {
       const clear = h('button', 'btn btn--ghost btn--sm', 'Limpar');
@@ -7693,6 +7805,7 @@ const FIREBASE_CONFIG = {
       const peek = () => { let t = null; foeAttackBuilder(actor.foe, st, null, { peek: (x) => { t = x; } }); return t; };
       return h('div', 'cmd__stack', note, foeAttackBuilder(actor.foe, st, null, { aim: () => {
         startAim({ label: 'Ataque de ' + actor.name, valid: valid.map((x) => x.id), max: cad,
+          penalty: (n) => (n > 1 ? '–' + shotPenalty(n, true) + ' no ataque (cadência perita)' : ''),
           pick: (x) => go({ foe: actor.foe }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ foe: actor.foe }, st, shots, peek) });
       } }));
     }
@@ -7702,7 +7815,8 @@ const FIREBASE_CONFIG = {
     const base = Object.assign({}, c, { handsOnly: true, meleeOnly: adv });
     return h('div', 'cmd__stack', note, attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
       const weapon = weaponsOf(c.sheet).find((w) => w.uid === st.uid) || null;
-      const cad = maxShots(weapon);
+      const cad = st.cad === false ? 1 : maxShots(weapon);
+      const prof = weapon ? isProficient(c.sheet, weapon) : false;
       const peek = () => {
         let t = null;
         const targets = combatants().filter((x) => combat.targets.has(x.id)).map((x) => ({ id: x.id, name: x.name }));
@@ -7710,6 +7824,7 @@ const FIREBASE_CONFIG = {
         return t;
       };
       startAim({ label: 'Ataque: ' + (weapon ? weapon.name : 'desarmado'), valid: valid.map((x) => x.id), max: cad,
+        penalty: (n) => (n > 1 ? '–' + shotPenalty(n, prof) + ' no ataque (' + (prof ? 'cadência perita' : 'sem proficiência') + ')' : ''),
         pick: (x) => go({ member: mb, c }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ member: mb, c }, st, shots, peek) });
     }, 'cmd-'));
   }
