@@ -240,7 +240,7 @@ window.VORTEX_ITEMS = {
 
     {
       id: 'municao', title: 'Munição', group: 'Armas', inventory: true, image: true,
-      hint: 'Pentes, cartuchos e cargas de energia. Escolha o tipo pelo pente da arma; na mochila, "Pôr na reserva" passa a munição para a arma compatível.',
+      hint: 'Pentes, cartuchos e cargas de energia. Escolha o tipo pelo pente da arma. A munição fica na mochila (ocupa espaço e carga) e a recarga da arma gasta dela.',
       types: [
         { id: 'pente-leve', title: 'Pente leve', sub: 'Até 20 disparos · ¼ de carga', rule: 'recarga/pente-leve', defaults: { pente: 'Pente leve', disparos: '20', carga: '0.25' }, opts: { pente: ['Pente leve'] } },
         { id: 'pente-medio', title: 'Pente médio', sub: 'Até 40 disparos · ½ de carga', rule: 'recarga/pente-medio', defaults: { pente: 'Pente médio', disparos: '40', carga: '0.5' }, opts: { pente: ['Pente médio'] } },
