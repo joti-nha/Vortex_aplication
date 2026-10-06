@@ -5874,6 +5874,46 @@ const FIREBASE_CONFIG = {
       saveTimer = setTimeout(flushSave, 600);
     });
   });
+  /* Caixa de sexo: um botãozinho com opções prontas; a caixa continua aceitando qualquer texto. */
+  const SEX_OPTS = ['Masculino', 'Feminino', 'Não-binário', 'Agênero', 'Gênero fluido', 'Intersexo'];
+  function sexPicker(inp) {
+    const btn = h('button', 'btn btn--ghost btn--sm pick-btn', 'Opções');
+    btn.type = 'button';
+    btn.setAttribute('aria-haspopup', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-label', 'Opções de sexo');
+    const menu = h('div', 'pick-menu');
+    menu.hidden = true;
+    const set = (v) => {
+      inp.value = v;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      close();
+      if (v) btn.focus(); else inp.focus();
+    };
+    const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    SEX_OPTS.concat(['Outro']).forEach((o) => {
+      const c = h('button', 'chip chip--toggle' + (o === 'Outro' ? ' pick-menu__other' : ''), o);
+      c.type = 'button';
+      c.dataset.fid = 'sex-' + nameKey(o).replace(/\s+/g, '-');
+      c.addEventListener('click', () => set(o === 'Outro' ? '' : o));
+      menu.append(c);
+    });
+    btn.addEventListener('click', () => {
+      const open = menu.hidden;
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+      $$('.chip', menu).forEach((c) => c.classList.toggle('is-on', c.textContent === inp.value));
+    });
+    menu.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); btn.focus(); } });
+    document.addEventListener('click', (ev) => { if (!menu.hidden && !wrap.contains(ev.target)) close(); });
+    const wrap = h('div', 'pick-wrap');
+    inp.replaceWith(wrap);
+    wrap.append(h('div', 'pick-wrap__row', inp, btn), menu);
+    inp.placeholder = inp.placeholder || 'Escreva ou escolha';
+    return wrap;
+  }
+  sexPicker(fSex);
+
   [['height', fHeight], ['weight', $('#f-weight')], ['sex', fSex], ['lore', $('#f-lore')]].forEach((pair) => {
     pair[1].addEventListener('input', () => { sheetChar.sheet[pair[0]] = pair[1].value; touchSheet(); });
   });
@@ -6450,6 +6490,7 @@ const FIREBASE_CONFIG = {
           setupField('wz-age', 'Idade', wz.age, 'Ex.: 27 anos', (v) => { wz.age = v; }, 20),
           setupField('wz-height', 'Altura', wz.height, 'Ex.: 1,78 m', (v) => { wz.height = v; }, 20),
           setupField('wz-sex', 'Sexo', wz.sex, '', (v) => { wz.sex = v; }, 20)));
+      sexPicker($('#wz-sex', body));
     }
 
     if (wz.step === STEP.equip) renderGear(body);

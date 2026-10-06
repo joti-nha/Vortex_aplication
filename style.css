@@ -3101,3 +3101,11 @@ html, body { max-width: 100%; overflow-x: clip; }
   .picker .lib-row { justify-content: flex-end; gap: 0.4rem 0.6rem; }
   .picker .row__title { overflow-wrap: break-word; }
 }
+/* caixa com botãozinho de opções (sexo): o texto continua livre */
+.pick-wrap { position: relative; }
+.pick-wrap__row { display: flex; gap: 0.4rem; }
+.pick-wrap__row .input { flex: 1; min-width: 0; }
+.pick-btn { flex: none; min-height: 44px; }
+.pick-menu { position: absolute; z-index: 20; top: calc(100% + 0.3rem); right: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; width: max-content; max-width: min(20rem, 86vw); padding: 0.6rem; border: 1px solid var(--linha-forte); border-radius: var(--r-s); background: var(--casco); box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.6); }
+.pick-menu[hidden] { display: none; }
+.pick-menu__other { border-style: dashed; }
