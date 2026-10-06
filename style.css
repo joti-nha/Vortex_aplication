@@ -2980,3 +2980,22 @@ html, body { max-width: 100%; overflow-x: clip; }
   }
   .cell.is-open .cell__actions { margin-left: 0; margin-right: 0; }
 }
+/* regra de cadência no ataque da arena */
+.cad { display: grid; gap: 0.35rem; padding: 0.6rem 0.75rem; border: 1px solid var(--linha); border-radius: 10px; background: rgba(var(--mare-rgb), 0.06); }
+.cad--off { opacity: 0.8; }
+.cad__rule { margin: 0; font-size: 0.8rem; color: var(--nevoa-2); }
+.cad__steps { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.cad__step { padding: 0.1rem 0.5rem; border: 1px solid var(--linha-forte); border-radius: 999px; font-size: 0.78rem; color: var(--nevoa); }
+.cad__step--free { border-color: var(--precisao); }
+/* características raciais (Etheriano) */
+.racial__races { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.racial__race { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 44px; padding: 0.3rem 0.7rem 0.3rem 0.35rem; border: 1px solid var(--linha-forte); border-radius: 999px; background: var(--casco-2); color: var(--nevoa); font: 600 0.9rem var(--fonte-ui); cursor: pointer; }
+.racial__race .lib-icon { width: 2rem; height: 2rem; font-size: 0.9rem; }
+.racial__race.is-on { border-color: var(--ambar); background: rgba(var(--ambar-rgb), 0.12); }
+.racial__trait { align-items: flex-start; }
+.racial__text { display: block; margin-top: 0.2rem; font-size: 0.82rem; color: var(--nevoa-2); }
+.racial__free { margin: 0; }
+.racial__free.is-over strong { color: var(--erro); }
+.pickchar__card.racial__trait { grid-template-columns: 1fr auto; padding-left: 0.8rem; }
+.pickchar__card.racial__trait.is-here { opacity: 1; border-left-color: var(--precisao); background: rgba(var(--ambar-rgb), 0.06); }
+@media (max-width: 520px) { .pickchar__card.racial__trait { grid-template-columns: 1fr; } }
