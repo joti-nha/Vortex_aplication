@@ -5478,6 +5478,7 @@ const FIREBASE_CONFIG = {
   }
   let racialDlg = null;
   let racialPick = '';
+  let racialOpen = false; // lista de espécimes expandida
   // o combo de pegar as 3 Experiências passadas (os 3 UP do Humano) não é permitido
   function racialAll(s, esp, id) {
     const lines = racialLines(esp.values).filter((t) => /^experi[eê]ncia passada/i.test(t.name));
@@ -5512,7 +5513,18 @@ const FIREBASE_CONFIG = {
       const shown = list.filter((e) => matchesText(nameKey([e.name, e.values.descricao].concat(racialLines(e.values).map((t) => t.name)).filter(Boolean).join(' ')), q.value));
       if (!shown.some((e) => e.id === racialPick)) racialPick = shown[0] ? shown[0].id : '';
       const esp = shown.find((e) => e.id === racialPick);
-      const races = h('div', 'racial__races', ...shown.map((e) => {
+      // com muitos espécimes, mostra só os primeiros (e o escolhido); o resto abre no "Mostrar todos"
+      const LIMIT = 6;
+      const cut = !racialOpen && !q.value && shown.length > LIMIT + 1;
+      const visible = cut ? shown.slice(0, LIMIT).concat(esp && shown.indexOf(esp) >= LIMIT ? [esp] : []) : shown;
+      const more = shown.length > LIMIT + 1 && !q.value ? h('button', 'link-btn racial__more', racialOpen ? 'Mostrar menos' : 'Mostrar todos (' + shown.length + ')') : null;
+      if (more) {
+        more.type = 'button';
+        more.setAttribute('aria-expanded', String(racialOpen));
+        more.dataset.fid = 'racial-more';
+        more.addEventListener('click', () => { racialOpen = !racialOpen; draw(); const m = $('[data-fid="racial-more"]', content); if (m) m.focus(); });
+      }
+      const races = h('div', 'racial__races', ...visible.map((e) => {
         const b = h('button', 'racial__race' + (e.id === racialPick ? ' is-on' : ''), entryIcon(e), h('span', '', e.name));
         b.type = 'button';
         b.setAttribute('aria-pressed', String(e.id === racialPick));
@@ -5539,6 +5551,7 @@ const FIREBASE_CONFIG = {
       content.replaceChildren(
         h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free))),
         races,
+        more,
         esp ? h('h3', 'pickchar__sub', esp.name) : h('p', 'empty', q.value ? 'Nenhum espécime com esse nome.' : 'Nenhum espécime com características raciais.'),
         h('ul', 'pickchar__list', ...traits));
     };
