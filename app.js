@@ -4149,7 +4149,7 @@ const FIREBASE_CONFIG = {
 
     // carga usada: só o que está na mochila (itens equipados não ocupam carga)
     const cargaUsed = s.inventory.reduce((t, i) => (i.slot ? t : t + parseCarga(i.values.carga) * (i.qty || 1)), 0)
-      + s.inventory.reduce((t, i) => t + reserveCarga(i), 0); // munição de reserva (pentes, cartuchos, cargas)
+
 
     const max = {};
     Object.keys(src).forEach((k) => { max[k] = Math.max(0, Math.round(total(k) * 100) / 100); });
@@ -5495,8 +5495,6 @@ const FIREBASE_CONFIG = {
     if (canArmory(i)) actions.append(act('Armeiro', 'btn--ghost', () => openArmory(i.uid)));
     if (isGun(i)) {
       actions.append(act('Procurar munição', 'btn--ghost', () => findAmmo(i)));
-      const bagAmmo = ammoForGun(s, i)[0];
-      if (bagAmmo) actions.append(act('Pôr ' + bagAmmo.name + ' na reserva', 'btn--ghost', () => { const msg = loadAmmo(s, bagAmmo, i); if (msg) { changed(); toast(msg); } }));
     }
     if (isPiece(i)) {
       const bt = attachButtons(s, i, () => changed());
@@ -5506,7 +5504,7 @@ const FIREBASE_CONFIG = {
     if (isAmmo(i)) {
       const guns = gunsForAmmo(s, i);
       if (!guns.length) card.append(h('p', 'cell__text', 'Nenhuma arma da ficha usa esta munição.'));
-      guns.slice(0, 3).forEach((gun) => actions.append(act('Reserva: ' + gun.name, 'btn--primary', () => { const msg = loadAmmo(s, i, gun); if (msg) { changed(); toast(msg); } })));
+      if (guns.length) card.append(h('p', 'cell__text', 'Serve em: ' + guns.slice(0, 3).map((x) => x.name).join(', ') + '. Gasta na recarga.'));
     }
     actions.append(act('Detalhes', 'btn--ghost', () => openInvDialog(i.uid)));
     actions.append(act('Remover', 'btn--danger', () => removeInvItem(i)));
@@ -5687,7 +5685,6 @@ const FIREBASE_CONFIG = {
         fb.addEventListener('click', () => { closeDialog(invDlg); findAmmo(i); });
       }
       body.append(h('p', 'inv__arm', ab, fb ? ' ' : '', fb, isGun(i) ? ' ' + ammoLine(i, s) : ''));
-      if (i.ammoFx && (i.ammoFx.efeito || i.ammoFx.dano)) body.append(h('p', 'field__hint', 'Munição carregada: ' + i.ammoFx.name + ' — ' + [i.ammoFx.dano ? 'dano ' + i.ammoFx.dano : '', i.ammoFx.efeito].filter(Boolean).join('. ')));
     }
     // as peças montadas mudam pelo Armeiro (só com peças que o personagem tem)
     if (canArmory(i)) {
@@ -5723,9 +5720,10 @@ const FIREBASE_CONFIG = {
   $('#inv-dialog-close').addEventListener('click', () => closeDialog(invDlg));
 
   /* ---------- Munição e recarga (capítulo Recarga) ----------
-     Cada arma de fogo guarda na ficha: ammo (disparos no pente; vazio = cheio), reserve (disparos de reserva
-     que viram pentes; no pente parcial, cartuchos soltos; no superaquecimento, cargas de energia),
-     heat (disparos da rodada e da anterior), cool (até que rodada esfria) e duplo (vez da recarga rápida). */
+     Cada arma de fogo guarda na ficha: ammo (disparos no pente; vazio = cheio), magFrom (de que munição veio
+     o pente), heat (disparos da rodada e da anterior), cool (até que rodada esfria) e duplo (vez da recarga
+     rápida). A arma não tem reserva: a munição são itens da mochila (ocupam espaço e carga) e a recarga gasta
+     esses itens. */
   const PENTE_RULES = {
     'Pente leve': { max: 20, act: 'bonus', carga: 0.25 },
     'Pente médio': { max: 40, act: 'movimento', carga: 0.5 },
@@ -5782,16 +5780,6 @@ const FIREBASE_CONFIG = {
     return { pente, rule, cap, act, duplo, alcance, heatMax, notes, unit: rule.heat ? 'carga' : rule.partial ? 'cartucho' : 'pente' };
   }
   const ammoOf = (i, g) => (i.ammo === undefined || i.ammo === null || i.ammo === '' ? g.cap : clamp(Math.round(num(i.ammo)), 0, g.cap));
-  const reserveOf = (i) => Math.max(0, Math.round(num(i.reserve)));
-  // carga da munição de reserva: pentes cheios (ou cartuchos de 20 em 20, ou cargas de energia)
-  function reserveCarga(i) {
-    if (!isGun(i) || !reserveOf(i)) return 0;
-    const g = gunInfo(i);
-    const n = reserveOf(i);
-    if (g.rule.heat) return n * g.rule.carga;
-    if (g.rule.partial) return Math.ceil(n / 20) * g.rule.carga;
-    return Math.ceil(n / g.cap) * g.rule.carga;
-  }
   const heatNow = (i, round) => {
     const h0 = i.heat || {};
     if (!round) return num(h0.n) + num(h0.prev);
@@ -5824,45 +5812,76 @@ const FIREBASE_CONFIG = {
     if (n + (round ? prev : 0) > g.heatMax) { i.cool = round ? round + 1 : -1; i.heat = { r: round || 0, n: 0, prev: 0 }; return i.name + ' superaqueceu: esfria até o fim do próximo turno.'; }
     return '';
   }
-  // recarrega; n = cartuchos no pente parcial. Devolve { cost, msg } ou { err }
+  // disparos (ou cartuchos, ou cargas) que sobram numa unidade de munição da mochila
+  const ammoLeft = (a) => ammoUnits(a);
+  // gasta k disparos de uma unidade; a sobra fica na mochila como unidade parcial
+  function spendAmmo(s, a, k) {
+    const left = ammoLeft(a) - k;
+    const rest = left > 0 ? Object.assign(deep(a), { uid: uid(), qty: 1, values: Object.assign({}, a.values, { disparos: String(left) }) }) : null;
+    if ((a.qty || 1) > 1) a.qty -= 1;
+    else s.inventory.splice(s.inventory.indexOf(a), 1);
+    if (rest) s.inventory.push(rest);
+  }
+  // munição compatível na mochila, a mais cheia primeiro
+  const bagAmmo = (s, i) => (s ? ammoForGun(s, i) : []).sort((x, y) => ammoLeft(y) - ammoLeft(x));
+  // recarrega gastando munição da mochila; n = cartuchos no pente parcial. Devolve { cost, msg } ou { err }
   function reloadGun(i, s, n) {
     const g = gunInfo(i, s);
-    const res = reserveOf(i);
+    const bag = bagAmmo(s, i);
+    const none = { err: 'Sem munição para ' + i.name + ' na mochila (' + g.pente.toLowerCase() + '). Procure munição.' };
     if (g.rule.heat) {
-      if (!res) return { err: 'Sem cargas de energia na reserva.' };
-      i.reserve = res - 1;
+      if (!bag.length) return none;
+      const a = bag[0];
+      spendAmmo(s, a, ammoLeft(a));
       i.ammo = 1;
       i.heat = { r: 0, n: 0, prev: 0 };
       i.cool = 0;
-      return { cost: 'completa', msg: 'carga nova (vale a cena inteira, até 2 cenas seguidas)' };
+      return { cost: 'completa', msg: 'carga nova de ' + a.name + ' (vale a cena inteira, até 2 cenas seguidas)' };
     }
-    const a = ammoOf(i, g);
-    if (a >= g.cap) return { err: 'O pente de ' + i.name + ' já está cheio.' };
-    if (!res) return { err: 'Sem munição de reserva para ' + i.name + '.' };
+    const cur = ammoOf(i, g);
+    if (cur >= g.cap) return { err: 'O pente de ' + i.name + ' já está cheio.' };
+    if (!bag.length) return none;
     if (g.rule.partial) {
-      const want = Math.min(n || 2, g.cap - a, res, 10);
-      i.ammo = a + want;
-      i.reserve = res - want;
-      return { cost: want <= 2 ? 'livre' : want <= 5 ? 'bonus' : 'movimento', msg: plural(want, 'cartucho', 'cartuchos') };
+      const want = Math.min(n || 2, g.cap - cur, 10);
+      let got = 0;
+      bag.forEach((a) => {
+        while (got < want && s.inventory.indexOf(a) >= 0) { const k = Math.min(ammoLeft(a), want - got); spendAmmo(s, a, k); got += k; }
+      });
+      i.ammo = cur + got;
+      return { cost: got <= 2 ? 'livre' : got <= 5 ? 'bonus' : 'movimento', msg: plural(got, 'cartucho', 'cartuchos') };
     }
-    const take = Math.min(g.cap - a, res);
-    i.ammo = a + take;
-    i.reserve = res - take;
+    // troca o pente: o novo sai da mochila; o velho, se ainda tem disparos, volta para ela
+    const a = bag[0];
+    const fill = Math.min(g.cap, ammoLeft(a));
+    const old = i.magFrom || slotSnap(a);
+    spendAmmo(s, a, fill);
+    if (cur > 0) s.inventory.push(Object.assign(invEntryFrom(old), { qty: 1, values: Object.assign({}, old.values, { disparos: String(cur) }) }));
+    i.ammo = fill;
+    i.magFrom = slotSnap(a);
     let cost = g.act;
     if (g.duplo) { cost = i.duplo ? g.act : 'bonus'; i.duplo = !i.duplo; }
-    return { cost, msg: '+' + take + ' no pente' };
+    return { cost, msg: 'pente com ' + fill + ' disparos' + (cur > 0 ? '; o pente velho (' + cur + ') foi para a mochila' : '') };
+  }
+  // quanto há na mochila para esta arma (pentes, cartuchos ou cargas)
+  function bagAmmoText(i, s) {
+    const g = gunInfo(i, s);
+    const bag = bagAmmo(s, i);
+    if (!bag.length) return 'nada na mochila';
+    const units = bag.reduce((t, a) => t + (a.qty || 1), 0);
+    if (g.rule.partial) return plural(bag.reduce((t, a) => t + ammoLeft(a) * (a.qty || 1), 0), 'cartucho', 'cartuchos') + ' na mochila';
+    return plural(units, g.rule.heat ? 'carga' : 'pente', g.rule.heat ? 'cargas' : 'pentes') + ' na mochila';
   }
   function ammoLine(i, s) {
     if (!isGun(i)) return '';
     const g = gunInfo(i, s);
-    if (g.rule.heat) return (ammoOf(i, g) ? 'carga ativa' : 'sem carga') + ' · calor ' + heatNow(i, 0) + '/' + g.heatMax + (isCooling(i, 0) ? ' · superaquecida' : '') + ' · reserva ' + plural(reserveOf(i), 'carga', 'cargas');
-    return 'pente ' + ammoOf(i, g) + '/' + g.cap + ' · reserva ' + reserveOf(i) + (i.ammoFx && i.ammoFx.name ? ' · ' + i.ammoFx.name : '');
+    if (g.rule.heat) return (ammoOf(i, g) ? 'carga ativa' : 'sem carga') + ' · calor ' + heatNow(i, 0) + '/' + g.heatMax + (isCooling(i, 0) ? ' · superaquecida' : '') + ' · ' + bagAmmoText(i, s);
+    return 'pente ' + ammoOf(i, g) + '/' + g.cap + ' · ' + bagAmmoText(i, s);
   }
 
   /* ---------- Munição como item ----------
      Um item de munição serve na arma quando o pente bate (depois dos acessórios) e, se o item
-     limita as armas ("Para"), quando o tipo da arma está na lista. "Pôr na reserva" passa uma
-     unidade da mochila para a reserva da arma (a carga continua contando, agora na arma). */
+     limita as armas ("Para"), quando o tipo da arma está na lista. Fica na mochila (ocupa espaço
+     e carga) até a recarga gastar. */
   const isAmmo = (i) => Boolean(i && i.kind === 'municao');
   function ammoUnits(a) {
     const v = a.values || {};
@@ -5885,16 +5904,6 @@ const FIREBASE_CONFIG = {
   }
   const ammoForGun = (s, gun) => s.inventory.filter((x) => !x.slot && ammoFits(x, gun, s));
   const gunsForAmmo = (s, a) => s.inventory.filter((x) => ammoFits(a, x, s));
-  // tira uma unidade da munição da mochila e soma na reserva da arma
-  function loadAmmo(s, a, gun) {
-    if (!ammoFits(a, gun, s) || s.inventory.indexOf(a) < 0) return '';
-    const n = ammoUnits(a);
-    gun.reserve = reserveOf(gun) + n;
-    const v = a.values || {};
-    gun.ammoFx = v.efeito || v.dano ? { name: a.name, efeito: v.efeito || '', dano: v.dano || '' } : null;
-    if ((a.qty || 1) > 1) a.qty -= 1; else s.inventory.splice(s.inventory.indexOf(a), 1);
-    return a.name + ' foi para a reserva de ' + gun.name + ' (+' + ammoUnitText(a) + ').';
-  }
   // "Procurar munição": abre a busca do banco só com o que serve na arma e põe na mochila
   async function findAmmo(gun) {
     const ch = sheetChar;
@@ -5904,13 +5913,11 @@ const FIREBASE_CONFIG = {
     const e = await openPicker({ title: 'Munição para ' + gun.name, kinds: ['municao'], filter: (x) => ammoFits(x, gun, s),
       chips: [g.pente, gun.typeTitle].filter(Boolean) });
     if (!e || sheetChar !== ch || s.inventory.indexOf(gun) < 0) return;
-    // a munição achada vai direto para a reserva da arma (como comprar no balcão do jogo)
-    const item = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(null), thumb: e.thumb || '', qty: 1, slot: '' });
-    s.inventory.push(item);
-    const msg = loadAmmo(s, item, gun);
+    // a munição achada vai para a mochila (ocupa espaço e carga); a recarga gasta dela
+    s.inventory.push(Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(null), thumb: e.thumb || '', qty: 1, slot: '' }));
     changed();
     if (armDlg && armDlg.open) drawArmory();
-    toast(msg || e.name + ' entrou na mochila.');
+    toast(e.name + ' entrou na mochila. Recarregue ' + gun.name + ' para usar.');
   }
 
   /* ---------- Acoplar rápido ----------
@@ -6275,28 +6282,23 @@ const FIREBASE_CONFIG = {
         stat(g.rule.heat ? 'Superaquece com' : 'Capacidade', g.rule.heat ? g.heatMax + ' disparos em 2 turnos' : g.cap + ' disparos', !g.rule.heat && g.cap !== Math.round(num(w.values.municao))),
         stat('Recarga', g.rule.heat ? 'ação completa (troca a carga)' : g.rule.partial ? 'livre (2) · bônus (5) · movimento (10)' : COST_LONG[g.act] + (g.duplo ? ' (bônus alternada)' : '') + (g.pente === 'Pente leve' ? ' (padrão se debilitado)' : '')));
       const a = ammoOf(w, g);
-      const res = reserveOf(w);
+      const res = bagAmmo(s, w).length > 0; // munição compatível na mochila
       const btn = (label, fid, fn, dis) => { const b = h('button', 'btn btn--ghost btn--sm', label); b.type = 'button'; b.dataset.fid = fid; b.disabled = Boolean(dis); b.addEventListener('click', fn); return b; };
       const reload = (n) => { const r = reloadGun(w, s, n); if (r.err) { toast(r.err); return; } toast('Recarregou ' + w.name + ': ' + r.msg + ' (em combate: ' + COST_LONG[r.cost] + ').'); armSave(); };
-      const step = g.rule.heat ? 1 : g.rule.partial ? 20 : g.cap;
-      const unitName = g.rule.heat ? ['carga', 'cargas'] : g.rule.partial ? ['cartucho', 'cartuchos'] : ['pente', 'pentes'];
-      const resText = g.rule.heat || g.rule.partial ? plural(res, unitName[0], unitName[1]) : res + ' disparos (' + plural(Math.ceil(res / g.cap), 'pente', 'pentes') + ')';
       const bar = h('div', 'armory__mag');
       const cells = g.rule.heat ? 1 : Math.min(g.cap, 40);
       for (let k = 0; k < cells; k++) bar.append(h('span', 'armory__round' + (k < Math.ceil(a * cells / g.cap) ? ' is-on' : '')));
       ammoBox.append(...[h('h3', 'armory__ptitle', 'Munição'),
         h('p', 'armory__ammo-now', g.rule.heat ? (a ? 'Carga de energia ativa' : 'Sem carga de energia') : h('span', '', h('strong', '', String(a)), ' / ' + g.cap + ' no pente')), bar,
         g.rule.heat ? h('p', 'field__hint', 'Calor: ' + heatNow(w, 0) + ' de ' + g.heatMax + ' disparos (rodada atual + anterior).' + (isCooling(w, 0) ? ' Superaquecida.' : '')) : null,
-        h('p', 'field__hint', 'Reserva: ' + resText + ' · carga ' + fmtNum(reserveCarga(w)) + '.'),
+        h('p', 'field__hint', 'Na mochila: ' + bagAmmoText(w, s).replace(/ na mochila$/, '') + '. A recarga gasta a munição da mochila; a arma não guarda reserva.'),
         h('div', 'armory__ammo-btns',
           g.rule.partial ? btn('+2 cartuchos', 'arm-reload-2', () => reload(2), a >= g.cap || !res) : btn(g.rule.heat ? 'Trocar carga' : 'Recarregar', 'arm-reload', () => reload(0), (!g.rule.heat && a >= g.cap) || !res),
           g.rule.partial ? btn('+5', 'arm-reload-5', () => reload(5), a >= g.cap || !res) : null,
           g.rule.partial ? btn('+10', 'arm-reload-10', () => reload(10), a >= g.cap || !res) : null,
           g.rule.heat && isCooling(w, 0) ? btn('Esfriar', 'arm-cool', () => { w.cool = 0; w.heat = { r: 0, n: 0, prev: 0 }; armSave(); }) : null,
           arm.m ? null : btn('Procurar munição', 'arm-find-ammo', () => findAmmo(w)),
-          ...ammoForGun(s, w).slice(0, 3).map((x) => btn('Usar ' + x.name + ((x.qty || 1) > 1 ? ' (×' + x.qty + ')' : ''), 'arm-use-' + x.uid, () => { const msg = loadAmmo(s, x, w); if (msg) { toast(msg); armSave(); } })),
-          btn('+1 ' + unitName[0] + ' de reserva', 'arm-res-add', () => { w.reserve = res + step; armSave(); }),
-          btn('−1', 'arm-res-sub', () => { w.reserve = Math.max(0, res - step); armSave(); }, !res)),
+          null),
         g.notes.length ? h('ul', 'armory__notes', ...g.notes.map((n) => h('li', '', n))) : null].filter(Boolean));
     } else if (w.kind === 'armadura') {
       stats.append(stat('Defesa', w.values.armadura), stat('Penalidade', num(w.values.penalidade) ? '–' + Math.abs(num(w.values.penalidade)) : 'nenhuma'),
