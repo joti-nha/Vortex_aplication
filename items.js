@@ -238,6 +238,32 @@ window.VORTEX_ITEMS = {
       ]
     },
 
+    {
+      id: 'municao', title: 'Munição', group: 'Armas', inventory: true, image: true,
+      hint: 'Pentes, cartuchos e cargas de energia. Escolha o tipo pelo pente da arma; na mochila, "Pôr na reserva" passa a munição para a arma compatível.',
+      types: [
+        { id: 'pente-leve', title: 'Pente leve', sub: 'Até 20 disparos · ¼ de carga', rule: 'recarga/pente-leve', defaults: { pente: 'Pente leve', disparos: '20', carga: '0.25' }, opts: { pente: ['Pente leve'] } },
+        { id: 'pente-medio', title: 'Pente médio', sub: 'Até 40 disparos · ½ de carga', rule: 'recarga/pente-medio', defaults: { pente: 'Pente médio', disparos: '40', carga: '0.5' }, opts: { pente: ['Pente médio'] } },
+        { id: 'pente-pesado', title: 'Pente pesado', sub: 'Até 150 disparos · 1 de carga', rule: 'recarga/pente-pesado', defaults: { pente: 'Pente pesado', disparos: '150', carga: '1' }, opts: { pente: ['Pente pesado'] } },
+        { id: 'sobrecarga', title: 'Sobrecarga', sub: 'Cinta de alimentação contínua · 1 de carga', rule: 'recarga/pente-pesado', defaults: { pente: 'Sobrecarga', disparos: '150', carga: '1' }, opts: { pente: ['Sobrecarga'] } },
+        { id: 'cartuchos', title: 'Cartuchos', sub: 'Pente parcial: 20 cartuchos = ¼ de carga', rule: 'recarga/recarga-parcial', defaults: { pente: 'Pente parcial', disparos: '20', carga: '0.25' }, opts: { pente: ['Pente parcial'] } },
+        { id: 'carga-energia', title: 'Carga de energia', sub: 'Superaquecimento: 1 carga dura a cena · 1 de carga', rule: 'recarga/superaquecimento', defaults: { pente: 'Superaquecimento', disparos: '1', carga: '1' }, opts: { pente: ['Superaquecimento'] } }
+      ],
+      fields: [
+        { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
+        { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 100' },
+        { key: 'pente', label: 'Serve no pente', kind: 'select', optKey: 'pente', options: 'pentes' },
+        { key: 'disparos', label: 'Disparos por unidade (cartuchos ou cargas)', kind: 'number', min: 1, step: 1 },
+        { key: 'para', label: 'Só para estas armas (opcional)', kind: 'text', placeholder: 'Ex.: Pistola, Submetralhadora' },
+        { key: 'dano', label: 'Tipo de dano (opcional)', kind: 'select', options: 'tiposDano', blank: 'O da arma' },
+        { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
+        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true, placeholder: 'O que esta munição muda no disparo (deixe vazio na munição comum).' },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
+      ]
+    },
+
     /* ------------------------------ Proteção ------------------------------ */
     {
       id: 'armadura', title: 'Armadura', group: 'Proteção', inventory: true, slots: 'armadura', image: true, bonus: true,
@@ -705,6 +731,32 @@ window.VORTEX_ITEMS = {
     cat.push({
       id: 'of-ls-' + slug(a[0]), kind: 'item-geral', typeId: '', name: a[0],
       values: { fabricante: 'Live Service', raridade: a[1], tipoUso: a[2], usos: a[3], carga: String(a[4]), bonusRec: a[5], efeito: a[6], preco: a[7] }
+    });
+  });
+})();
+
+/* Munição oficial: um item por tipo de pente, mais algumas especiais (o preço é sugestão do catálogo) */
+(function () {
+  var cat = window.VORTEX_ITEMS.catalogo;
+  var slug = function (t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+  var TYPE = { 'Pente leve': 'pente-leve', 'Pente médio': 'pente-medio', 'Pente pesado': 'pente-pesado', 'Sobrecarga': 'sobrecarga', 'Pente parcial': 'cartuchos', 'Superaquecimento': 'carga-energia' };
+  // [nome, pente, disparos, carga, raridade, preço, dano, efeito, para]
+  [
+    ['Pente leve padrão', 'Pente leve', 20, 0.25, 'Comum', '40', '', '', ''],
+    ['Pente médio padrão', 'Pente médio', 40, 0.5, 'Comum', '80', '', '', ''],
+    ['Pente pesado padrão', 'Pente pesado', 150, 1, 'Comum', '220', '', '', ''],
+    ['Cinta de sobrecarga', 'Sobrecarga', 150, 1, 'Comum', '260', '', '', ''],
+    ['Caixa de cartuchos', 'Pente parcial', 20, 0.25, 'Comum', '30', '', '', ''],
+    ['Carga de energia', 'Superaquecimento', 1, 1, 'Comum', '150', '', '', ''],
+    ['Pente leve de ponta oca', 'Pente leve', 20, 0.25, 'Incomum', '120', 'Perfurante', 'Crítico causa sangramento. Fraca contra blindagem.', 'Pistola, Submetralhadora'],
+    ['Pente médio perfurante', 'Pente médio', 40, 0.5, 'Incomum', '200', 'Perfurante', 'Efetiva contra blindagem.', ''],
+    ['Cartuchos incendiários', 'Pente parcial', 20, 0.25, 'Rara', '180', 'Fogo', 'Acerto deixa o alvo em chamas até o fim do próximo turno dele.', 'Espingarda, Revólver'],
+    ['Pente pesado traçante', 'Pente pesado', 150, 1, 'Incomum', '300', '', '+1 nos ataques seguintes contra o mesmo alvo na rodada (o rastro marca a mira).', ''],
+    ['Carga de energia instável', 'Superaquecimento', 1, 1, 'Rara', '400', 'Elétrico', 'Dano elétrico; a arma superaquece com 2 disparos a menos.', 'Laser']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-mun-' + slug(a[0]), kind: 'municao', typeId: TYPE[a[1]], name: a[0],
+      values: { raridade: a[4], preco: a[5], pente: a[1], disparos: String(a[2]), carga: String(a[3]), dano: a[6], efeito: a[7], para: a[8] }
     });
   });
 })();

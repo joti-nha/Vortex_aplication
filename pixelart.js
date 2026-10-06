@@ -290,6 +290,95 @@
       '...kkkkkkkkkk...'
     ],
     // itens gerais
+    // munições (um desenho por tipo de pente)
+    pente_leve: [
+      '......kkkk......',
+      '.....kyyyyk.....',
+      '....kkkkkkkk....',
+      '....kmllllmk....',
+      '....kmllllmk....',
+      '....kmllllmk....',
+      '....kmaaaamk....',
+      '....kmllllmk....',
+      '....kmllllmk....',
+      '....kmllllmk....',
+      '....kmmmmmmk....',
+      '...kkddddddkk...',
+      '...kkkkkkkkkk...'
+    ],
+    pente_medio: [
+      '...kkkk.........',
+      '..kyyyyk........',
+      '.kkkkkkkk.......',
+      '.kmllllmk.......',
+      '.kmllllmkk......',
+      '..kmllllmk......',
+      '..kmaaaamk......',
+      '...kmllllmk.....',
+      '...kmllllmkk....',
+      '....kmllllmk....',
+      '.....kmllllmk...',
+      '.....kmmmmmmk...',
+      '....kkddddddkk..',
+      '....kkkkkkkkkk..'
+    ],
+    pente_pesado: [
+      '.....kkkkkk.....',
+      '.....k....k.....',
+      '.kkkkkkkkkkkkkk.',
+      '.kmmmmmmmmmmmmk.',
+      '.kmllllllllllmk.',
+      '.kmlaaaaaaaalmk.',
+      '.kmlaayyyyaalmk.',
+      '.kmlaaaaaaaalmk.',
+      '.kmllllllllllmk.',
+      '.kmmmmmmmmmmmmk.',
+      '.kddddddddddddk.',
+      '.kkkkkkkkkkkkkk.'
+    ],
+    sobrecarga: [
+      '..y...y...y...y.',
+      '.yyy.yyy.yyy.yyy',
+      '.yyy.yyy.yyy.yyy',
+      '.ooo.ooo.ooo.ooo',
+      '.ooo.ooo.ooo.ooo',
+      'kaaakaaakaaakaaa',
+      'kAAAkAAAkAAAkAAA',
+      '.ooo.ooo.ooo.ooo',
+      '.ooo.ooo.ooo.ooo',
+      '.ooo.ooo.ooo.ooo',
+      '.GGG.GGG.GGG.GGG'
+    ],
+    cartuchos: [
+      '.kkkk.kkkk.kkkk.',
+      '.kRRk.kRRk.kRRk.',
+      '.krrk.krrk.krrk.',
+      '.krrk.krrk.krrk.',
+      '.krrk.krrk.krrk.',
+      '.krrk.krrk.krrk.',
+      '.krrk.krrk.krrk.',
+      '.kaak.kaak.kaak.',
+      '.kyyk.kyyk.kyyk.',
+      '.kyyk.kyyk.kyyk.',
+      '.kGGk.kGGk.kGGk.',
+      '.kkkk.kkkk.kkkk.'
+    ],
+    celula: [
+      '......kkkk......',
+      '......kmmk......',
+      '...kkkkkkkkkk...',
+      '...kddddddddk...',
+      '...kdccccccdk...',
+      '...kdcwwwccdk...',
+      '...kdcwccccdk...',
+      '...kdccccccdk...',
+      '...kdaaaaaadk...',
+      '...kdccccccdk...',
+      '...kdCCCCCCdk...',
+      '...kdCCCCCCdk...',
+      '...kddddddddk...',
+      '...kkkkkkkkkk...'
+    ],
     kit: [
       '.....kkkkk......',
       '.....k...k......',
@@ -418,6 +507,13 @@
     metralhadora: 'metralhadora', laser: 'laser', gravitacional: 'gravitacional', hibrida: 'hibrida', portal: 'portal', lancador: 'lancador',
     leve: 'leve', media: 'media', pesada: 'pesada'
   };
+  // munição: o desenho sai do tipo (pente leve, médio...); as especiais trocam a cor da ponta
+  const AMMO = { 'pente-leve': 'pente_leve', 'pente-medio': 'pente_medio', 'pente-pesado': 'pente_pesado', sobrecarga: 'sobrecarga', cartuchos: 'cartuchos', 'carga-energia': 'celula' };
+  const AMMO_TINT = {
+    'of-mun-pente-leve-de-ponta-oca': { y: '#d9434a' }, 'of-mun-pente-medio-perfurante': { y: '#5aa6ff' },
+    'of-mun-cartuchos-incendiarios': { r: '#e88a3a', R: '#b0541c' }, 'of-mun-pente-pesado-tracante': { y: '#5fd38a', o: '#c7e86a' },
+    'of-mun-carga-de-energia-instavel': { c: '#f2c14e', C: '#b07a1c' }
+  };
 
   function svgOf(rows, pal) {
     const top = Math.floor((16 - rows.length) / 2);
@@ -442,6 +538,7 @@
     if (cache[e.id] !== undefined) return cache[e.id];
     let pick = ART[e.id];
     if (!pick && String(e.id).indexOf('of-') === 0 && (e.kind === 'arma-fogo' || e.kind === 'armadura') && BY_TYPE[e.typeId]) pick = [BY_TYPE[e.typeId]];
+    if (!pick && String(e.id).indexOf('of-') === 0 && e.kind === 'municao' && AMMO[e.typeId]) pick = [AMMO[e.typeId], AMMO_TINT[e.id]];
     if (!pick || !SPR[pick[0]]) return (cache[e.id] = '');
     const rar = RAR[(e.values && e.values.raridade) || 'Comum'] || RAR.Comum;
     const pal = Object.assign({}, PAL, { a: rar[0], A: rar[1] }, pick[1] || {});

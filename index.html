@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=53">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -778,6 +778,7 @@
               <label class="field__label" for="gmlib-kind">Mostrar</label>
               <select class="input" id="gmlib-kind">
                 <option value="armas">Armas</option>
+                <option value="municao">Munições</option>
                 <option value="protecao">Armaduras e vestíveis</option>
                 <option value="implantes">Implantes</option>
                 <option value="gerais">Itens gerais</option>
@@ -785,7 +786,7 @@
             </div>
             <div class="field">
               <label class="field__label" for="gmlib-q">Buscar</label>
-              <input class="input" id="gmlib-q" type="search" autocomplete="off" placeholder="Nome ou parte dele">
+              <input class="input" id="gmlib-q" type="search" autocomplete="off" placeholder="Nome, tipo, dano ou efeito">
             </div>
           </div>
           <p class="block__hint" id="gmlib-hint" role="status"></p>
@@ -869,7 +870,7 @@
               <button class="btn btn--ghost btn--sm rules-rail__close" type="button" id="rules-close">Fechar</button>
             </div>
             <label class="visually-hidden" for="rules-filter">Buscar uma regra pelo título</label>
-            <input class="input" id="rules-filter" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar título de regra">
+            <input class="input" id="rules-filter" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar nas regras (título ou texto)">
 
             <div class="rules-chapters-wrap">
               <p class="rules-rail__sub" id="rules-chapters-title">Capítulos</p>
@@ -963,7 +964,7 @@
       <div class="picker__tools">
         <div class="field">
           <label class="visually-hidden" for="picker-q">Buscar pelo nome</label>
-          <input class="input" id="picker-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar pelo nome">
+          <input class="input" id="picker-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar por nome, tipo ou efeito">
         </div>
         <label class="check"><input type="checkbox" id="picker-fav"><span>Só favoritos</span></label>
       </div>
@@ -1060,9 +1061,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=52"></script>
-  <script src="items.js?v=52"></script>
-  <script src="pixelart.js?v=52"></script>
-  <script src="app.js?v=52"></script>
+  <script src="regras.js?v=53"></script>
+  <script src="items.js?v=53"></script>
+  <script src="pixelart.js?v=53"></script>
+  <script src="app.js?v=53"></script>
 </body>
 </html>

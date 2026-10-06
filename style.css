@@ -3190,3 +3190,8 @@ html, body { max-width: 100%; overflow-x: clip; }
   .armory__body { min-height: 5.5rem; }
   .armory__slots { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Busca: sugestão "Você quis dizer…?" e trecho do texto nas regras */
+.did-you-mean { margin: 0.5rem 0; font-size: var(--t-s); color: var(--nevoa-2); }
+.toc__empty .did-you-mean { display: block; margin: 0.35rem 0 0; }
+.toc__snip { display: block; margin-top: 0.15rem; font-size: 0.75rem; font-weight: 400; line-height: 1.35; color: var(--nevoa-2); overflow-wrap: anywhere; }

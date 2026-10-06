@@ -84,22 +84,142 @@ const FIREBASE_CONFIG = {
     });
     return Array.from(set);
   }
-  const haystack = (c) => nameKey([c.name, c.species, c.origin].join(' '));
-  // a 1ª palavra da busca é começo de alguma palavra da ficha; as demais aparecem em qualquer parte
-  function matchesQuery(c, q) {
-    const qs = words(q);
-    if (!qs.length) return true;
-    const hay = haystack(c);
-    return words(hay).some((w) => w.indexOf(qs[0]) === 0) && qs.slice(1).every((w) => hay.indexOf(w) >= 0);
+  /* Motor de busca (como num site de pesquisa): sem acento nem maiúsculas, todas as palavras
+     precisam aparecer em qualquer ordem (como começo de palavra), plural e singular valem o mesmo,
+     um erro de digitação é tolerado e o resultado vem ordenado por relevância. */
+  function stemWord(w) {
+    if (w.length < 4 || /\d/.test(w)) return w;
+    if (/[oa]es$/.test(w)) return w.slice(0, -3) + 'ao'; // munições, pães
+    if (w.length > 4 && /ais$/.test(w)) return w.slice(0, -2) + 'l'; // especiais
+    if (w.length > 4 && /eis$/.test(w)) return w.slice(0, -3) + 'el'; // papéis
+    if (/ns$/.test(w)) return w.slice(0, -2) + 'm'; // bens
+    if (/[rz]es$/.test(w)) return w.slice(0, -2); // lasers, luzes
+    if (/[^s]s$/.test(w)) return w.slice(0, -1); // pistolas
+    return w;
   }
-  // Banco de itens: mesma lógica de busca (1ª palavra = começo de palavra; o resto em qualquer parte)
+  const STEM_CACHE = new Map();
+  function stemWords(text) {
+    const key = String(text || '');
+    let out = STEM_CACHE.get(key);
+    if (out) return out;
+    out = words(key).map(stemWord);
+    // palavras coladas também valem ("P-01" acha com "p01")
+    const n = out.length;
+    for (let i = 0; i < n - 1; i++) if (out[i].length <= 3 || out[i + 1].length <= 3) out.push(out[i] + out[i + 1]);
+    if (STEM_CACHE.size > 6000) STEM_CACHE.clear();
+    STEM_CACHE.set(key, out);
+    return out;
+  }
+  // distância de edição entre t e o começo mais parecido de w (tolerância a erro de digitação)
+  function prefixDistance(t, w, max) {
+    if (Math.abs(Math.min(w.length, t.length) - t.length) > max) return max + 1;
+    let prev = [];
+    for (let j = 0; j <= w.length; j++) prev[j] = j;
+    for (let i = 1; i <= t.length; i++) {
+      const cur = [i];
+      let low = i;
+      for (let j = 1; j <= w.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (t[i - 1] === w[j - 1] ? 0 : 1));
+        if (cur[j] < low) low = cur[j];
+      }
+      if (low > max) return max + 1;
+      prev = cur;
+    }
+    let best = max + 1;
+    for (let j = Math.max(0, t.length - max); j <= w.length; j++) best = Math.min(best, prev[j]);
+    return best;
+  }
+  function editDistance(a, b) {
+    let prev = Array.from({ length: b.length + 1 }, (x, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  const typoLimit = (t) => (t.length >= 7 ? 2 : t.length >= 4 ? 1 : 0);
+  // quão bem a palavra t casa com alguma palavra da lista (0 = não casa)
+  function wordHit(t, list, fuzzy) {
+    let best = 0;
+    for (const w of list) {
+      if (w === t) return 1;
+      if (w.indexOf(t) === 0) best = Math.max(best, 0.8);
+      else if (fuzzy && best < 0.5 && t.length >= 3 && w.indexOf(t) > 0) best = Math.max(best, 0.4);
+    }
+    if (best || !fuzzy) return best;
+    const max = typoLimit(t);
+    if (!max) return 0;
+    for (const w of list) if (w.length >= 3 && prefixDistance(t, w, max) <= max) return 0.3;
+    return 0;
+  }
+  /* Pontua um registro: fields = [[texto, peso], ...] (nome pesa mais que tipo, que pesa mais que descrição).
+     Volta 0 se alguma palavra da busca não aparece; sem busca, tudo vale 1. */
+  function searchScore(fields, q) {
+    const qs = stemWords(q);
+    if (!qs.length) return 1;
+    const parts = fields.filter((f) => f && f[0]).map((f) => [stemWords(f[0]), f[1]]);
+    let total = 0;
+    for (const t of qs) {
+      let best = 0;
+      for (const [list, weight] of parts) {
+        const hit = wordHit(t, list, weight >= 4);
+        if (hit * weight > best) best = hit * weight;
+      }
+      if (!best) return 0;
+      total += best;
+    }
+    const name = fields[0] && fields[0][0] ? stemWords(fields[0][0]).join(' ') : '';
+    const query = qs.join(' ');
+    if (name === query) total += 40;
+    else if (name.indexOf(query) === 0) total += 20;
+    return total;
+  }
+  // filtra e ordena por relevância (empate: ordem alfabética); sem busca, mantém a ordem recebida
+  function rankSearch(list, q, fieldsOf) {
+    if (!stemWords(q).length) return list.slice();
+    return list.map((x) => [x, searchScore(fieldsOf(x), q)])
+      .filter((r) => r[1] > 0)
+      .sort((a, b) => (b[1] - a[1]) || String(a[0].name || '').localeCompare(String(b[0].name || ''), 'pt-BR'))
+      .map((r) => r[0]);
+  }
+  // "Você quis dizer…?": troca cada palavra sem resultado pela mais parecida dos nomes conhecidos
+  function suggestQuery(q, texts) {
+    const qs = words(q);
+    if (!qs.length) return '';
+    const vocab = new Set();
+    texts.forEach((t) => words(t).forEach((w) => { if (w.length >= 3) vocab.add(w); }));
+    let changed = false;
+    const out = qs.map((t) => {
+      if (vocab.has(t) || t.length < 3) return t;
+      if (Array.from(vocab).some((w) => w.indexOf(t) === 0)) return t;
+      const limit = t.length >= 7 ? 3 : 2;
+      let best = '', dist = limit + 1;
+      vocab.forEach((w) => {
+        if (Math.abs(w.length - t.length) > limit) return;
+        const d = editDistance(t, w);
+        if (d <= limit && (d < dist || (d === dist && w.length < best.length))) { dist = d; best = w; }
+      });
+      if (!best) return t;
+      changed = true;
+      return best;
+    });
+    return changed ? out.join(' ') : '';
+  }
+  // a busca de fichas olha nome (mais forte), espécie e origem
+  const charFields = (c) => [[c.name, 10], [[c.species, c.origin].join(' '), 4]];
+  function matchesQuery(c, q) { return searchScore(charFields(c), q) > 0; }
   const deep = (o) => JSON.parse(JSON.stringify(o === undefined ? null : o));
   const libHay = (e) => nameKey([e.name, e.typeTitle, e.kindTitle].join(' '));
-  function matchesText(hay, q) {
-    const qs = words(q || '');
-    if (!qs.length) return true;
-    return words(hay).some((w) => w.indexOf(qs[0]) === 0) && qs.slice(1).every((w) => hay.indexOf(w) >= 0);
+  // Banco de itens: nome, depois tipo/categoria/fabricante/dano..., depois todo o texto da entrada
+  const ENTRY_TAGS = ['raridade', 'fabricante', 'posicao', 'para', 'dano', 'pente', 'calibre', 'subtipo', 'tipo', 'municao', 'alcance', 'cadencia'];
+  function entryFields(e) {
+    const v = e.values || {};
+    const tags = [e.typeTitle, e.kindTitle].concat(ENTRY_TAGS.map((k) => v[k]));
+    const rest = Object.keys(v).filter((k) => ENTRY_TAGS.indexOf(k) < 0 && typeof v[k] === 'string').map((k) => v[k]);
+    return [[e.name, 10], [tags.filter(Boolean).join(' '), 4], [rest.join(' '), 1]];
   }
+  function matchesText(hay, q) { return searchScore([[hay, 4]], q) > 0; }
   const fileSlug = (name) => nameKey(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'ficha';
 
   function errorMessage(err) {
@@ -274,11 +394,9 @@ const FIREBASE_CONFIG = {
       },
 
       async searchCharacters(query, type) {
-        return Object.values(read().characters)
-          .filter((c) => (!type || c.type === type) && matchesQuery(c, query))
-          .sort((a, b) => (words(query).length ? byName(a, b) : (b.updatedAt || 0) - (a.updatedAt || 0)))
-          .slice(0, 60)
-          .map(toChar);
+        const all = Object.values(read().characters).filter((c) => !type || c.type === type)
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        return rankSearch(all, query, charFields).slice(0, 60).map(toChar);
       },
 
       async createCharacter({ name, type }) {
@@ -412,10 +530,9 @@ const FIREBASE_CONFIG = {
 
       // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
       async searchLibrary({ kinds, query }) {
-        return Object.values(read().library)
-          .filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), query))
-          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          .map(toLib);
+        const all = Object.values(read().library).filter((e) => !kinds || kinds.indexOf(e.kind) >= 0)
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).map(toLib);
+        return rankSearch(all, query, (e) => entryFields(decorate(e)));
       },
 
       async saveLibrary(entry) {
@@ -590,6 +707,7 @@ const FIREBASE_CONFIG = {
     const camps = () => fs.collection('campaigns');
     const names = () => fs.collection('names');
     const lib = () => fs.collection('library');
+    const libCache = new Map();
     const nameDoc = (kind, name) => names().doc((kind === 'campaign' ? 'k_' : 'c_') + nameKey(name));
 
     const toChar = (snap) => {
@@ -635,16 +753,26 @@ const FIREBASE_CONFIG = {
         return toChar(s);
       },
 
-      // Busca: 1ª palavra = começo de alguma palavra (nome, espécie ou origem); o resto filtra aqui
+      /* Busca: o servidor acha as fichas pelo começo de uma palavra (nome, espécie ou origem);
+         a relevância, o plural e os erros de digitação são resolvidos aqui. Sem acerto exato,
+         procura entre as fichas mais recentes com tolerância a erro. */
       async searchCharacters(query, type) {
         const qs = words(query);
-        const snap = qs.length
-          ? await chars().where('searchKeys', 'array-contains', qs[0].slice(0, 20)).limit(60).get()
-          : await chars().orderBy('updatedAt', 'desc').limit(30).get();
+        const keep = (list) => list.filter((c) => !type || c.type === type);
+        if (!qs.length) {
+          const snap = await chars().orderBy('updatedAt', 'desc').limit(30).get();
+          snap.docs.forEach(backfillKeys);
+          return keep(snap.docs.map(toChar));
+        }
+        const longest = qs.slice().sort((a, b) => b.length - a.length)[0];
+        const snap = await chars().where('searchKeys', 'array-contains', stemWord(longest).slice(0, 20)).limit(80).get();
         snap.docs.forEach(backfillKeys);
-        return snap.docs.map(toChar)
-          .filter((c) => (!type || c.type === type) && matchesQuery(c, query))
-          .sort((a, b) => (qs.length ? a.name.localeCompare(b.name, 'pt-BR') : 0));
+        let found = rankSearch(keep(snap.docs.map(toChar)), query, charFields);
+        if (!found.length) {
+          const recent = await chars().orderBy('updatedAt', 'desc').limit(300).get();
+          found = rankSearch(keep(recent.docs.map(toChar)), query, charFields);
+        }
+        return found.slice(0, 60);
       },
 
       async createCharacter({ name, type }) {
@@ -857,16 +985,20 @@ const FIREBASE_CONFIG = {
       },
 
       // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
+      /* O banco é lido por categoria e guardado por um minuto: cada letra digitada filtra aqui,
+         com relevância, plural e tolerância a erro (salvar ou excluir limpa a cópia). */
       async searchLibrary({ kinds, query }) {
-        const qs = words(query || '');
-        let snap;
-        // sem busca, o banco aparece inteiro (os itens ficam visíveis desde o começo)
-        if (qs.length) snap = await lib().where('searchKeys', 'array-contains', qs[0].slice(0, 20)).limit(500).get();
-        else if (kinds && kinds.length) snap = await lib().where('kind', 'in', kinds.slice(0, 10)).get();
-        else snap = await lib().get();
-        return snap.docs.map(toLib)
-          .filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), query))
-          .sort((a, b) => b.updatedAt - a.updatedAt);
+        const key = kinds && kinds.length && kinds.length <= 10 ? kinds.slice().sort().join(',') : '*';
+        const hit = libCache.get(key);
+        let all;
+        if (hit && Date.now() - hit.at < 60000) all = hit.list;
+        else {
+          const snap = key === '*' ? await lib().get() : await lib().where('kind', 'in', kinds.slice(0, 10)).get();
+          all = snap.docs.map(toLib).sort((a, b) => b.updatedAt - a.updatedAt);
+          libCache.set(key, { at: Date.now(), list: all });
+        }
+        all = all.filter((e) => !kinds || kinds.indexOf(e.kind) >= 0);
+        return rankSearch(all, query, (e) => entryFields(decorate(e)));
       },
 
       async saveLibrary(entry) {
@@ -879,6 +1011,7 @@ const FIREBASE_CONFIG = {
           updatedAt: FV.serverTimestamp()
         };
         let ref;
+        libCache.clear();
         if (e.id) { ref = lib().doc(e.id); await ref.update(data); }
         else { ref = lib().doc(); await ref.set(Object.assign({ ownerUid: me, createdAt: FV.serverTimestamp() }, data)); }
         return Object.assign({}, e, { id: ref.id, mine: true, updatedAt: Date.now() });
@@ -886,6 +1019,7 @@ const FIREBASE_CONFIG = {
 
       async deleteLibrary(id) {
         await lib().doc(id).delete();
+        libCache.clear();
       },
 
       async addRoll(campaignId, roll) {
@@ -2504,13 +2638,43 @@ const FIREBASE_CONFIG = {
   const BUILTINS = (ITEM_DATA.catalogo || []).map((e) => Object.assign(decorate(e), { oficial: true, mine: false }));
 
   // Catálogo oficial sempre aparece; se o banco compartilhado falhar, o aviso fica em libSearch.warn
+  /* Busca do banco (oficiais + criados), já ordenada por relevância quando há texto.
+     Sem resultado, libSearch.suggest traz um "Você quis dizer…?" montado com os nomes da categoria. */
   async function libSearch(kinds, q) {
-    const off = BUILTINS.filter((e) => (!kinds || kinds.indexOf(e.kind) >= 0) && matchesText(libHay(e), q));
+    const inKinds = (e) => !kinds || kinds.indexOf(e.kind) >= 0;
     libSearch.warn = '';
+    libSearch.suggest = '';
     let own = [];
-    try { own = await db.searchLibrary({ kinds, query: q }); }
+    try { own = (await db.searchLibrary({ kinds, query: '' })).map(decorate); }
     catch (err) { console.warn(err); libSearch.warn = errorMessage(err); }
-    return off.concat(own.map(decorate));
+    const all = BUILTINS.filter(inKinds).concat(own.filter(inKinds));
+    const found = rankSearch(all, q, entryFields);
+    if (!found.length && words(q || '').length) libSearch.suggest = suggestQuery(q, all.map((e) => [e.name, e.typeTitle, e.kindTitle].join(' ')));
+    return found;
+  }
+  // linha "Você quis dizer …?" para listas vazias: clicar troca a busca pela sugestão
+  function didYouMean(suggest, onPick, tag) {
+    if (!suggest) return null;
+    const b = h('button', 'link-btn', suggest);
+    b.type = 'button';
+    b.addEventListener('click', () => onPick(suggest));
+    return h(tag || 'p', 'did-you-mean', 'Você quis dizer ', b, '?');
+  }
+  // põe (ou tira) a sugestão logo depois da lista; clicar refaz a busca com ela
+  function suggestAfter(anchor, suggest, input, rerun) {
+    const old = anchor.nextElementSibling;
+    if (old && old.classList.contains('did-you-mean')) old.remove();
+    const line = didYouMean(suggest, (t) => { input.value = t; rerun(); input.focus(); });
+    if (line) anchor.after(line);
+  }
+  const hasQuery = (q) => words(q || '').length > 0;
+  // filtra cartões já desenhados: esconde quem não casa e põe os mais relevantes no topo
+  function rankCards(cards, objs, q, fieldsOf) {
+    const scores = objs.map((o) => searchScore(fieldsOf(o), q));
+    const order = cards.map((el, i) => i);
+    if (hasQuery(q)) order.sort((a, b) => scores[b] - scores[a] || a - b);
+    order.forEach((i) => { cards[i].hidden = !scores[i]; if (cards[i].parentNode) cards[i].parentNode.append(cards[i]); });
+    return scores.filter(Boolean).length;
   }
 
   function entryIcon(e) {
@@ -2526,6 +2690,7 @@ const FIREBASE_CONFIG = {
   function entryMeta(e) {
     const v = e.values || {};
     if (e.kind === 'build') return [e.kindTitle || kindTitle(e.kind), v.papel, ['corpo', 'precisao', 'essencia'].map((k) => k.charAt(0).toUpperCase() + ' ' + (num(v[k]) > 0 ? '+' : '') + num(v[k])).join(' '), [v.pericia2a, v.pericia2b].filter(Boolean).map((x) => x + ' +2').concat(v.pericia1 ? [v.pericia1 + ' +1'] : []).join(', ')].filter(Boolean).join(' · ');
+    if (e.kind === 'municao') return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, ammoUnitText(e), v.dano, v.para ? 'Para ' + v.para : '', priceText(v.preco)].filter(Boolean).join(' · ');
     if (e.kind === 'npc') return [e.kindTitle || kindTitle(e.kind), v.categoria, num(v.up) ? 'UP ' + v.up : '', layersSummary(v), 'Defesa mín. ' + (num(v.armadura || 6) + num(v.corpo) + num(v.resistencia)), v.dano].filter(Boolean).join(' · ');
     return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, v.tipoUso, num(v.usos) ? v.usos + ' usos' : '', v.bonusRec ? 'Bônus ' + v.bonusRec : '', priceText(v.preco)].filter(Boolean).join(' · ');
   }
@@ -2841,19 +3006,22 @@ const FIREBASE_CONFIG = {
     let list;
     let warn = '';
     try { list = await libSearch(o.kinds, q); }
-    catch (err) { warn = errorMessage(err); list = BUILTINS.filter((e) => o.kinds.indexOf(e.kind) >= 0 && matchesText(libHay(e), q)); }
+    catch (err) { warn = errorMessage(err); list = rankSearch(BUILTINS.filter((e) => o.kinds.indexOf(e.kind) >= 0), q, entryFields); }
     if (seq !== pk.seq || pk.opts !== o) return;
+    const suggest = libSearch.suggest;
     const favs = favLoad();
     const favOnly = $('#picker-fav').checked;
     // chips escolhidos pela pessoa: mostra só essas categorias (nenhum escolhido = todas)
     const picked = (o.chips || []).filter((c) => c && c.kinds && pk.on.has(c.label));
     const allowed = picked.length ? picked.reduce((t, c) => t.concat(c.kinds), []) : null;
     list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)) && (!allowed || allowed.indexOf(e.kind) >= 0));
-    list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
+    // com texto, vale a relevância; sem texto, favoritos primeiro e o resto em ordem alfabética
+    if (!hasQuery(q)) list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
     $('#picker-list').replaceChildren(...list.map((e) => libRow(e,
       [{ label: 'Escolher', cls: 'btn--primary', onClick: () => finishPicker(deep(e)) }],
       () => { if ($('#picker-fav').checked) runPicker(); })));
     $('#picker-empty').hidden = list.length > 0;
+    suggestAfter($('#picker-list'), list.length ? '' : suggest, $('#picker-q'), runPicker);
     $('#picker-hint').textContent = warn || plural(list.length, 'opção compatível', 'opções compatíveis') + (favOnly ? ' entre os favoritos' : '');
   }
 
@@ -3086,7 +3254,7 @@ const FIREBASE_CONFIG = {
       const e = await openPicker(field.bank === 'poder'
         ? { title: 'Poder de nascença', kinds, chips: ['Poder'], filter: (x) => x.kind === 'poder' }
         : { title: 'Item inicial (sobram ' + fmtCronos(Math.max(0, left)) + ' Cronos)', kinds, chips: [
-          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
           { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }],
         filter: (x) => kinds.indexOf(x.kind) >= 0 && (!field.budget || priceOf(x) <= left) });
       if (!e) return;
@@ -3590,7 +3758,8 @@ const FIREBASE_CONFIG = {
     if ($('#lib-mine').checked) list = list.filter((e) => e.mine);
     const maker = $('#lib-maker').value;
     if (maker) list = list.filter((e) => (e.values || {}).fabricante === maker);
-    list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
+    const suggest = list.length ? '' : libSearch.suggest;
+    if (!hasQuery(q)) list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
     $('#lib-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => {
       const actions = [{ label: 'Usar de base', onClick: () => openForm(e.kind, e.typeId, Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' })) }];
@@ -3608,6 +3777,7 @@ const FIREBASE_CONFIG = {
       return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
     }));
     $('#lib-empty').hidden = list.length > 0 || Boolean(secret);
+    suggestAfter($('#lib-list'), secret ? '' : suggest, $('#lib-q'), runLib);
     $('#lib-hint').textContent = libSearch.warn
       ? plural(list.length, 'registro', 'registros') + ' do catálogo oficial. O banco compartilhado não abriu: ' + libSearch.warn
       : plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
@@ -3634,6 +3804,7 @@ const FIREBASE_CONFIG = {
     { label: 'Builds', kinds: ['build'] },
     { label: 'Poderes', kinds: ['poder'] },
     { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] },
+    { label: 'Munições', kinds: ['municao'] },
     { label: 'Proteção', kinds: ['armadura', 'vestivel'] },
     { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] },
     { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] },
@@ -3655,10 +3826,12 @@ const FIREBASE_CONFIG = {
     $('#cat-hint').textContent = 'Buscando...';
     let list = await libSearch(g ? g.kinds : null, q);
     if (seq !== catState.seq) return;
-    list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+    const suggest = list.length ? '' : libSearch.suggest;
+    if (!hasQuery(q)) list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
     $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
     $('#cat-empty').hidden = list.length > 0 || Boolean(secret);
+    suggestAfter($('#cat-list'), secret ? '' : suggest, $('#cat-q'), runCatalog);
     $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
       + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');
   }
@@ -4337,7 +4510,7 @@ const FIREBASE_CONFIG = {
     add.dataset.fid = 'rt-item-add';
     add.addEventListener('click', async () => {
       const e = await openPicker({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
-        { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+        { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
         { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
       if (!e || rt.r !== r) return;
       r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) });
@@ -5208,6 +5381,7 @@ const FIREBASE_CONFIG = {
 
   // em quais espaços este item pode ser equipado
   function slotsFor(i) {
+    if (i.kind === 'municao') return []; // munição fica na mochila ou vai para a reserva da arma
     if (i.kind === 'armadura') return ['armadura'];
     if (i.kind === 'nucleo') return ['nucleo'];
     if (isModule(i)) return ['modulo'];
@@ -5263,7 +5437,7 @@ const FIREBASE_CONFIG = {
     const v = i.values || {};
     const out = [];
     const add = (l, val) => { if (val !== undefined && val !== null && val !== '') out.push([l, String(val)]); };
-    add('Dano', v.dano); add('Propriedade', v.subtipo); add('Modo', v.modo); add('Cadência', v.cadencia); add('Pente', v.pente); add('Munição', v.municao); add('Alcance', v.alcance); add('Empunhadura', v.empunhadura);
+    add('Dano', v.dano); add('Propriedade', v.subtipo); add('Modo', v.modo); add('Cadência', v.cadencia); if (i.kind !== 'municao') add('Pente', v.pente); add('Munição', v.municao); add('Alcance', v.alcance); add('Empunhadura', v.empunhadura);
     if (i.kind === 'armadura') {
       add('Defesa', v.armadura);
       add('Penalidade', num(v.penalidade) ? '–' + Math.abs(num(v.penalidade)) + ' (sem proficiência –' + Math.abs(num(v.penalidade)) * 2 + ')' : 'nenhuma');
@@ -5271,6 +5445,7 @@ const FIREBASE_CONFIG = {
     }
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
+    if (i.kind === 'municao') { add('Serve no', v.pente); add('Por unidade', ammoUnitText(i)); add('Só para', v.para); add('Efeito', v.efeito); }
     add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
     add('Carga', fmtNum(parseCarga(v.carga)) + (i.slot ? ' (equipado: não conta)' : ''));
     add('Preço', priceText(v.preco));
@@ -5316,6 +5491,16 @@ const FIREBASE_CONFIG = {
       else opts.forEach((id) => actions.append(act(slotDef(id).full, 'btn--primary', () => { if (equipItem(i, id)) changed(); })));
     }
     if (isWeapon(i.kind)) actions.append(act('Armeiro', 'btn--ghost', () => openArmory(i.uid)));
+    if (isGun(i)) {
+      actions.append(act('Procurar munição', 'btn--ghost', () => findAmmo(i)));
+      const bagAmmo = ammoForGun(s, i)[0];
+      if (bagAmmo) actions.append(act('Pôr ' + bagAmmo.name + ' na reserva', 'btn--ghost', () => { const msg = loadAmmo(s, bagAmmo, i); if (msg) { changed(); toast(msg); } }));
+    }
+    if (isAmmo(i)) {
+      const guns = gunsForAmmo(s, i);
+      if (!guns.length) card.append(h('p', 'cell__text', 'Nenhuma arma da ficha usa esta munição.'));
+      guns.slice(0, 3).forEach((gun) => actions.append(act('Reserva: ' + gun.name, 'btn--primary', () => { const msg = loadAmmo(s, i, gun); if (msg) { changed(); toast(msg); } })));
+    }
     actions.append(act('Detalhes', 'btn--ghost', () => openInvDialog(i.uid)));
     actions.append(act('Remover', 'btn--danger', () => removeInvItem(i)));
     card.append(actions);
@@ -5488,7 +5673,14 @@ const FIREBASE_CONFIG = {
       const ab = h('button', 'btn btn--primary btn--sm', 'Abrir no Armeiro');
       ab.type = 'button';
       ab.addEventListener('click', () => { closeDialog(invDlg); openArmory(i.uid); });
-      body.append(h('p', 'inv__arm', ab, isGun(i) ? ' ' + ammoLine(i, s) : ''));
+      let fb = null;
+      if (isGun(i)) {
+        fb = h('button', 'btn btn--ghost btn--sm', 'Procurar munição');
+        fb.type = 'button';
+        fb.addEventListener('click', () => { closeDialog(invDlg); findAmmo(i); });
+      }
+      body.append(h('p', 'inv__arm', ab, fb ? ' ' : '', fb, isGun(i) ? ' ' + ammoLine(i, s) : ''));
+      if (i.ammoFx && (i.ammoFx.efeito || i.ammoFx.dano)) body.append(h('p', 'field__hint', 'Munição carregada: ' + i.ammoFx.name + ' — ' + [i.ammoFx.dano ? 'dano ' + i.ammoFx.dano : '', i.ammoFx.efeito].filter(Boolean).join('. ')));
     }
     if (cat && cat.slots && cat.slots !== 'mod') body.append(slotEditor(i, () => { touchSheet(); rerender(); }));
 
@@ -5649,7 +5841,61 @@ const FIREBASE_CONFIG = {
     if (!isGun(i)) return '';
     const g = gunInfo(i, s);
     if (g.rule.heat) return (ammoOf(i, g) ? 'carga ativa' : 'sem carga') + ' · calor ' + heatNow(i, 0) + '/' + g.heatMax + (isCooling(i, 0) ? ' · superaquecida' : '') + ' · reserva ' + plural(reserveOf(i), 'carga', 'cargas');
-    return 'pente ' + ammoOf(i, g) + '/' + g.cap + ' · reserva ' + reserveOf(i);
+    return 'pente ' + ammoOf(i, g) + '/' + g.cap + ' · reserva ' + reserveOf(i) + (i.ammoFx && i.ammoFx.name ? ' · ' + i.ammoFx.name : '');
+  }
+
+  /* ---------- Munição como item ----------
+     Um item de munição serve na arma quando o pente bate (depois dos acessórios) e, se o item
+     limita as armas ("Para"), quando o tipo da arma está na lista. "Pôr na reserva" passa uma
+     unidade da mochila para a reserva da arma (a carga continua contando, agora na arma). */
+  const isAmmo = (i) => Boolean(i && i.kind === 'municao');
+  function ammoUnits(a) {
+    const v = a.values || {};
+    const n = Math.round(num(v.disparos));
+    if (n > 0) return n;
+    const r = PENTE_RULES[v.pente];
+    return r && r.max ? r.max : r && r.heat ? 1 : 20;
+  }
+  const ammoUnitText = (a) => ((a.values || {}).pente === 'Superaquecimento' ? plural(ammoUnits(a), 'carga', 'cargas') : (a.values || {}).pente === 'Pente parcial' ? plural(ammoUnits(a), 'cartucho', 'cartuchos') : plural(ammoUnits(a), 'disparo', 'disparos'));
+  function ammoFits(a, gun, s) {
+    if (!isAmmo(a) || !isGun(gun)) return false;
+    const v = a.values || {};
+    if (v.pente && v.pente !== gunInfo(gun, s).pente) return false;
+    const para = String(v.para || '').split(/[,;/]|\be\b|\bou\b/).map((x) => stemWords(x).join(' ')).filter(Boolean);
+    if (!para.length) return true;
+    const cat = findCategory(gun.kind);
+    const type = findType(cat, gun.typeId);
+    const kinds = [gun.typeId, gun.typeTitle, type && type.title, type && type.prof].filter(Boolean).map((x) => stemWords(x).join(' '));
+    return para.some((p) => kinds.some((k) => k.indexOf(p) === 0 || p.indexOf(k) === 0));
+  }
+  const ammoForGun = (s, gun) => s.inventory.filter((x) => !x.slot && ammoFits(x, gun, s));
+  const gunsForAmmo = (s, a) => s.inventory.filter((x) => ammoFits(a, x, s));
+  // tira uma unidade da munição da mochila e soma na reserva da arma
+  function loadAmmo(s, a, gun) {
+    if (!ammoFits(a, gun, s) || s.inventory.indexOf(a) < 0) return '';
+    const n = ammoUnits(a);
+    gun.reserve = reserveOf(gun) + n;
+    const v = a.values || {};
+    gun.ammoFx = v.efeito || v.dano ? { name: a.name, efeito: v.efeito || '', dano: v.dano || '' } : null;
+    if ((a.qty || 1) > 1) a.qty -= 1; else s.inventory.splice(s.inventory.indexOf(a), 1);
+    return a.name + ' foi para a reserva de ' + gun.name + ' (+' + ammoUnitText(a) + ').';
+  }
+  // "Procurar munição": abre a busca do banco só com o que serve na arma e põe na mochila
+  async function findAmmo(gun) {
+    const ch = sheetChar;
+    if (!ch || !isGun(gun)) return;
+    const s = ch.sheet;
+    const g = gunInfo(gun, s);
+    const e = await openPicker({ title: 'Munição para ' + gun.name, kinds: ['municao'], filter: (x) => ammoFits(x, gun, s),
+      chips: [g.pente, gun.typeTitle].filter(Boolean) });
+    if (!e || sheetChar !== ch || s.inventory.indexOf(gun) < 0) return;
+    // a munição achada vai direto para a reserva da arma (como comprar no balcão do jogo)
+    const item = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(null), thumb: e.thumb || '', qty: 1, slot: '' });
+    s.inventory.push(item);
+    const msg = loadAmmo(s, item, gun);
+    changed();
+    if (armDlg && armDlg.open) drawArmory();
+    toast(msg || e.name + ' entrou na mochila.');
   }
 
   /* ---------- Armeiro ----------
@@ -5764,7 +6010,7 @@ const FIREBASE_CONFIG = {
       if (c) li.style.setProperty('--rar', c);
       return li;
     };
-    const match = (e) => !arm.q || matchesText(libHay(e), arm.q);
+    const match = (e) => !arm.q || searchScore(entryFields(e), arm.q) > 0;
     let items = [];
     let title = '';
     let hint = '';
@@ -5852,6 +6098,8 @@ const FIREBASE_CONFIG = {
           g.rule.partial ? btn('+5', 'arm-reload-5', () => reload(5), a >= g.cap || !res) : null,
           g.rule.partial ? btn('+10', 'arm-reload-10', () => reload(10), a >= g.cap || !res) : null,
           g.rule.heat && isCooling(w, 0) ? btn('Esfriar', 'arm-cool', () => { w.cool = 0; w.heat = { r: 0, n: 0, prev: 0 }; armSave(); }) : null,
+          btn('Procurar munição', 'arm-find-ammo', () => findAmmo(w)),
+          ...ammoForGun(s, w).slice(0, 3).map((x) => btn('Usar ' + x.name + ((x.qty || 1) > 1 ? ' (×' + x.qty + ')' : ''), 'arm-use-' + x.uid, () => { const msg = loadAmmo(s, x, w); if (msg) { toast(msg); armSave(); } })),
           btn('+1 ' + unitName[0] + ' de reserva', 'arm-res-add', () => { w.reserve = res + step; armSave(); }),
           btn('−1', 'arm-res-sub', () => { w.reserve = Math.max(0, res - step); armSave(); }, !res)),
         g.notes.length ? h('ul', 'armory__notes', ...g.notes.map((n) => h('li', '', n))) : null].filter(Boolean));
@@ -5878,7 +6126,7 @@ const FIREBASE_CONFIG = {
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
     const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
-      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
       { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!e || sheetChar !== ch) return;
     const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
@@ -6033,7 +6281,7 @@ const FIREBASE_CONFIG = {
       const s = ch.sheet;
       const m = compute(ch);
       const free = m.upTotal - m.upSpent;
-      const shown = list.filter((e) => matchesText(nameKey([e.name, e.values.descricao].concat(racialLines(e.values).map((t) => t.name)).filter(Boolean).join(' ')), q.value));
+      const shown = rankSearch(list, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
       if (!shown.some((e) => e.id === racialPick)) racialPick = shown[0] ? shown[0].id : '';
       const esp = shown.find((e) => e.id === racialPick);
       // com muitos espécimes, mostra só os primeiros (e o escolhido); o resto abre no "Mostrar todos"
@@ -6608,7 +6856,9 @@ const FIREBASE_CONFIG = {
   }
   const setupProblem = () => stepProblem(wz.step);
   const allProblems = () => SETUP.map((x, i) => [i, stepProblem(i)]).filter((p) => p[1]);
-  const wzMatch = (...texts) => matchesText(nameKey(texts.filter(Boolean).join(' ')), wz.q || '');
+  // 1º texto = nome (pesa mais), 2º = tipo/papel, o resto = descrição
+  const wzFields = (texts) => texts.map((t, i) => [t || '', i === 0 ? 10 : i === 1 ? 4 : 1]);
+  const wzMatch = (...texts) => searchScore(wzFields(texts), wz.q || '') > 0;
   function goStep(i) {
     wz.seen.add(wz.step); // ao sair de uma etapa, o que falta nela passa a aparecer na trilha
     wz.step = clamp(i, 0, SETUP.length - 1);
@@ -6809,7 +7059,7 @@ const FIREBASE_CONFIG = {
       more.type = 'button';
       more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
         const e = await openPicker({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
-          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
           { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
         if (!e || !wz) return;
         g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e });
@@ -6842,7 +7092,7 @@ const FIREBASE_CONFIG = {
         .then((list) => { if (!wz || wz.gear !== g) return; g.shop = list.filter((e) => priceOf(e) > 0).sort((a, b) => priceOf(a) - priceOf(b)); renderSetup(); });
       return;
     }
-    const shown = g.shop.filter((e) => wzMatch(e.name, e.kindTitle, e.typeTitle, e.values.raridade, e.values.fabricante));
+    const shown = rankSearch(g.shop, wz.q, entryFields);
     body.append(h('ul', 'rows gear__shop', ...shown.slice(0, 80).map((e) => {
       const add = h('button', 'btn btn--ghost btn--sm', 'Comprar');
       add.type = 'button';
@@ -7013,7 +7263,7 @@ const FIREBASE_CONFIG = {
     if (wz.step === STEP.especime) {
       const species = BUILTINS.filter((e) => e.kind === 'especime');
       if (wz.specimen && !species.some((e) => e.id === wz.specimen.id)) species.push(wz.specimen);
-      const grid = h('div', 'pick-grid', ...species.filter((e) => wzMatch(e.name, e.values.descricao, e.values.tracos)).map((e) => pickCard(e.name, [specimenLine(e), e.values.descricao],
+      const grid = h('div', 'pick-grid', ...rankSearch(species, wz.q, (e) => wzFields([e.name, racialLines(e.values).map((t) => t.name).join(' '), e.values.descricao, e.values.tracos])).map((e) => pickCard(e.name, [specimenLine(e), e.values.descricao],
         Boolean(wz.specimen && wz.specimen.id === e.id), () => { wz.specimen = slotSnap(e); wz.specimen.thumb = e.thumb || ''; renderSetup(); })));
       grid.append(pickCard('Buscar outro', ['Qualquer espécime do banco, inclusive os criados na Oficina.'], false, async () => {
         const e = await openPicker({ title: 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime', create: { label: 'Criar espécime', onClick: () => openWzCreate('especime') } });
@@ -7961,7 +8211,7 @@ const FIREBASE_CONFIG = {
     const q = h('input', 'input');
     q.type = 'search';
     q.id = 'scadd-q';
-    q.placeholder = 'Buscar personagem pelo nome';
+    q.placeholder = 'Buscar por nome, espécie ou origem';
     q.setAttribute('aria-label', 'Buscar personagem');
     q.autocomplete = 'off';
     let seq = 0;
@@ -9540,7 +9790,7 @@ const FIREBASE_CONFIG = {
   /* ---------- Bestiário e itens (só o mestre) ----------
      Bestiário como uma revista de monstros (uma página por criatura), para pôr na arena num time;
      itens para dar direto na mochila de um personagem da campanha. */
-  const GMLIB_KINDS = { bestiario: ['npc'], armas: ['arma-melee', 'arma-fogo'], protecao: ['armadura', 'vestivel'], implantes: ['nucleo', 'protese-modulo'], gerais: ['item-geral'] };
+  const GMLIB_KINDS = { bestiario: ['npc'], armas: ['arma-melee', 'arma-fogo'], municao: ['municao'], protecao: ['armadura', 'vestivel'], implantes: ['nucleo', 'protese-modulo'], gerais: ['item-geral'] };
   const GMLIB_MAX = 80;
   const NPC_CAT_COLOR = { 'Comum': '#7fa6bf', 'Maior': '#c58b3a', 'Chefão': '#d0453f' };
   let gmlibSeq = 0;
@@ -9551,8 +9801,10 @@ const FIREBASE_CONFIG = {
     runItems();
   }
   async function libFind(kinds, q) {
-    try { return { list: await libSearch(kinds, q), warn: '' }; }
-    catch (err) { return { list: BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0 && matchesText(libHay(e), q)), warn: errorMessage(err) }; }
+    // com texto, a lista já vem por relevância; sem texto, fica em ordem alfabética
+    const order = (list) => (hasQuery(q) ? list : list.sort((x, y) => x.name.localeCompare(y.name, 'pt-BR')));
+    try { const list = await libSearch(kinds, q); return { list: order(list.filter((e) => kinds.indexOf(e.kind) >= 0)), warn: '', suggest: libSearch.suggest }; }
+    catch (err) { return { list: rankSearch(BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0), q, entryFields), warn: errorMessage(err), suggest: '' }; }
   }
   let itemsSeq = 0;
   async function runItems() {
@@ -9560,7 +9812,8 @@ const FIREBASE_CONFIG = {
     const seq = ++itemsSeq;
     const r = await libFind(kinds, $('#gmlib-q').value);
     if (seq !== itemsSeq) return;
-    const list = r.list.filter((e) => kinds.indexOf(e.kind) >= 0).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
+    const list = r.list;
+    suggestAfter($('#gmlib-list'), r.suggest, $('#gmlib-q'), runItems);
     const noChars = !members.some((mb) => mb.sheet && mb.sheet.attrs);
     $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
     $('#gmlib-hint').textContent = r.warn || (!list.length ? 'Nada encontrado.'
@@ -9574,7 +9827,8 @@ const FIREBASE_CONFIG = {
     const seq = ++gmlibSeq;
     const r = await libFind(kinds, $('#beast-q').value);
     if (seq !== gmlibSeq) return;
-    let list = r.list.filter((e) => kinds.indexOf(e.kind) >= 0).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
+    let list = r.list;
+    suggestAfter($('#gmlib-mag'), r.suggest, $('#beast-q'), runBeast);
     const cats = Array.from(new Set(list.map((e) => (e.values && e.values.categoria) || 'Comum')));
     if (gmlibCat && cats.indexOf(gmlibCat) < 0) gmlibCat = '';
     $('#gmlib-cats').replaceChildren(...(cats.length > 1 ? [''].concat(cats) : []).map((c) => {
@@ -9648,7 +9902,6 @@ const FIREBASE_CONFIG = {
         const card = h('li', 'pickchar__card', art,
           h('span', 'pickchar__info', h('strong', 'pickchar__name', m.name), h('span', 'pickchar__meta', meta || 'Personagem'),
             h('span', 'pickchar__meta', plural((s.inventory || []).length, 'item na mochila', 'itens na mochila'))), b);
-        card.dataset.key = nameKey([m.name, m.species, m.origin].filter(Boolean).join(' '));
         card.addEventListener('click', (ev) => { if (!ev.target.closest('button')) finish(m); });
         return card;
       });
@@ -9659,12 +9912,7 @@ const FIREBASE_CONFIG = {
       q.placeholder = 'Buscar personagem';
       q.setAttribute('aria-label', 'Buscar personagem');
       q.autocomplete = 'off';
-      q.addEventListener('input', () => {
-        const k = nameKey(q.value);
-        let shown = 0;
-        cards.forEach((el) => { el.hidden = Boolean(k) && el.dataset.key.indexOf(k) < 0; if (!el.hidden) shown++; });
-        none.hidden = shown > 0;
-      });
+      q.addEventListener('input', () => { none.hidden = rankCards(cards, chars, q.value, charFields) > 0; });
       const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
       cancel.type = 'button';
       cancel.addEventListener('click', () => finish(null));
@@ -10444,7 +10692,7 @@ const FIREBASE_CONFIG = {
 
   async function addBankItem(sh) {
     const e = await openPicker({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
-      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
       { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!e) return;
     const fresh = shops.find((x) => x.id === sh.id) || sh;
@@ -10755,7 +11003,6 @@ const FIREBASE_CONFIG = {
       const card = h('li', 'pickchar__card' + (here ? ' is-here' : ''), art,
         h('span', 'pickchar__info', h('strong', 'pickchar__name', c.name), h('span', 'pickchar__meta', meta || TYPE_LABEL[c.type] || 'Personagem'),
           h('span', 'pickchar__meta', camps ? plural(camps, 'campanha', 'campanhas') : 'Em nenhuma campanha')), b);
-      card.dataset.key = nameKey([c.name, c.species, c.origin].filter(Boolean).join(' '));
       if (!here) card.addEventListener('click', (ev) => { if (!ev.target.closest('button')) join(c, b); });
       return card;
     };
@@ -10770,12 +11017,7 @@ const FIREBASE_CONFIG = {
     q.placeholder = 'Buscar personagem';
     q.setAttribute('aria-label', 'Buscar personagem');
     q.autocomplete = 'off';
-    q.addEventListener('input', () => {
-      const k = nameKey(q.value);
-      let shown = 0;
-      cards.forEach((el) => { el.hidden = Boolean(k) && el.dataset.key.indexOf(k) < 0; if (!el.hidden) shown++; });
-      none.hidden = shown > 0;
-    });
+    q.addEventListener('input', () => { none.hidden = rankCards(cards, sorted, q.value, charFields) > 0; });
     const cancel = h('button', 'btn btn--ghost btn--sm', 'Fechar');
     cancel.type = 'button';
     cancel.addEventListener('click', close);
@@ -10894,6 +11136,8 @@ const FIREBASE_CONFIG = {
   const plainText = (s) => String(s).replace(/\*/g, '');
   const ruleHref = (tab, slug) => '#/rules/' + tab + (slug ? '/' + slug : '');
 
+  // todo o texto de um bloco (parágrafos, listas, tabelas), para a busca nas regras
+  const blockText = (b) => (Array.isArray(b) ? b.slice(1).map(blockText).join(' ') : typeof b === 'string' ? plainText(b) : '').replace(/\s+/g, ' ').trim();
   // Lista os títulos do capítulo (seções, subseções e cartões) e dá um endereço único a cada um
   function indexChapter(ch) {
     if (ch._toc) return ch._toc;
@@ -10903,13 +11147,17 @@ const FIREBASE_CONFIG = {
     (function walk(blocks) {
       blocks.forEach((b) => {
         const t = b[0];
-        if (t !== 'h2' && t !== 'h3' && t !== 'h4' && t !== 'card') return;
+        if (t !== 'h2' && t !== 'h3' && t !== 'h4' && t !== 'card') {
+          // o texto que vem depois de um título entra na busca desse título
+          if (toc.length) toc[toc.length - 1].body += ' ' + blockText(b);
+          return;
+        }
         const level = t === 'card' ? (b[3] || 3) : Number(t.slice(1));
         let slug = slugify(plainText(b[1]));
         used[slug] = (used[slug] || 0) + 1;
         if (used[slug] > 1) slug += '-' + used[slug];
         slugs.set(b, slug);
-        toc.push({ level, title: plainText(b[1]), slug });
+        toc.push({ level, title: plainText(b[1]), slug, body: '' });
         if (t === 'card') walk(b[2]);
       });
     })(ch.blocks);
@@ -11068,26 +11316,39 @@ const FIREBASE_CONFIG = {
 
   // Digitou no campo: procura o título em todos os capítulos
   function showHits(q) {
-    const query = nameKey(q);
-    const searching = query.length > 0;
+    const searching = hasQuery(q);
     rulesHitsEl.hidden = !searching;
     $('#rules-toc-title').hidden = $('#rules-toc-nav').hidden = searching;
     $('.rules-chapters-wrap').hidden = searching;
     if (!searching) return;
-    const hits = [];
+    // como num site de busca: título pesa mais, depois o capítulo, depois o texto da seção
+    const all = [];
     CHAPTERS.forEach((c) => {
-      if (nameKey(c.title).indexOf(query) >= 0) hits.push({ c, t: null });
-      indexChapter(c).forEach((t) => { if (nameKey(t.title).indexOf(query) >= 0) hits.push({ c, t }); });
+      all.push({ c, t: null, name: c.title });
+      indexChapter(c).forEach((t) => all.push({ c, t, name: t.title }));
     });
+    const hits = rankSearch(all, q, (x) => (x.t ? [[x.t.title, 10], [x.c.title, 4], [x.t.body, 1]] : [[x.c.title, 10]]));
+    const suggest = hits.length ? '' : suggestQuery(q, all.map((x) => x.name));
     rulesHitsEl.replaceChildren(...(hits.length
       ? hits.slice(0, 40).map(({ c, t }) => {
-        const a = h('a', '', t ? t.title : c.title, h('span', 'toc__tab', t ? c.title : 'Capítulo'));
+        const snip = t ? ruleSnippet(t.body, q) : '';
+        const a = h('a', '', t ? t.title : c.title, h('span', 'toc__tab', t ? c.title : 'Capítulo'), snip ? h('span', 'toc__snip', snip) : null);
         a.href = ruleHref(c.id, t && t.slug);
         a.dataset.tab = c.id;
         if (t) a.dataset.slug = t.slug;
         return h('li', 'toc__item toc__l2', a);
       })
-      : [h('li', 'toc__empty', 'Nenhuma regra com esse título.')]));
+      : [h('li', 'toc__empty', 'Nenhuma regra encontrada.', suggest ? h('span', '', ' ', didYouMean(suggest, (v) => { rulesFilter.value = v; showHits(v); rulesFilter.focus(); }, 'span')) : null)]));
+  }
+  // trecho do texto em volta da primeira palavra buscada que aparece nele (quando não está no título)
+  function ruleSnippet(body, q) {
+    if (!body) return '';
+    const key = nameKey(body);
+    const pos = stemWords(q).map((w) => { const m = new RegExp('(^|[^a-z0-9])' + w.replace(/[^a-z0-9]/g, '')).exec(key); return m ? m.index + m[1].length : -1; })
+      .filter((i) => i >= 0).sort((a, b) => a - b)[0];
+    if (pos === undefined) return '';
+    const start = Math.max(0, pos - 40);
+    return (start ? '…' : '') + body.slice(start, start + 120).trim() + (start + 120 < body.length ? '…' : '');
   }
 
   /* Alturas fixas no topo (barra do site e abas), para o índice e as âncoras não ficarem escondidos */
