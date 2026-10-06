@@ -54,6 +54,65 @@ window.VORTEX_ITEMS = {
     { value: 'Mecânico', sub: '3 CC · Sistema avançado de alto desempenho: altera capacidades do usuário e pode conter habilidades especiais.' }
   ],
   custoCC: { 'Suporte': '1', 'Operacional': '2', 'Mecânico': '3' },
+
+  /* Tabelas de criação aleatória (prótese/link, drop rate, tipo de arma). Só inspiração, mostradas no Compêndio.
+     Cada linha de uma tabela 2D6 é o primeiro dado; cada coluna, o segundo. */
+  gerador: {
+    // 1D20; a parte diz em que região do corpo (tipo da prótese) ela fica
+    slots: [
+      ['Cabeça', 'cabeca'], ['Olhos', 'cabeca'], ['Ouvidos', 'cabeca'], ['Nariz', 'cabeca'], ['Boca', 'cabeca'],
+      ['Pescoço', 'tronco'], ['Espinha', 'tronco'], ['Tórax', 'tronco'], ['Abdômen', 'tronco'], ['Pelves', 'tronco'],
+      ['Ombro', 'membros-superiores'], ['Braço', 'membros-superiores'], ['Antebraço', 'membros-superiores'], ['Pulso', 'membros-superiores'], ['Mão', 'membros-superiores'],
+      ['Glúteos', 'membros-inferiores'], ['Coxas/Perna', 'membros-inferiores'], ['Panturrilha', 'membros-inferiores'], ['Joelho', 'membros-inferiores'], ['Tornozelos/Pés', 'membros-inferiores']
+    ],
+    // 1D6 quando cai 7 (Espinha): órgãos internos; 6 rola duas vezes
+    orgaos: ['Esqueleto', 'Sistema Nervoso', 'Sistema Pulmonar', 'Sistema Cardiovascular', 'Sistema Digestivo', 'Rolagem dupla'],
+    tipos: ['Passiva', 'Ativa'], // 1D2
+    funcoes: ['Aprimoramento', 'Defesa', 'Ataque', 'Mobilidade', 'Utilidade', 'Suporte', 'Armazenamento / Recursos', 'Transformação'], // 1D8
+    potencias: [ // 1D12, só para as ativas
+      'Burst Caótico — Potência ★★★★★ / Consumo ★★★★★ / Duração ●',
+      'Estouro Brutal — Potência ★★★★ / Consumo ★★★★ / Duração ●●',
+      'Pico Agressivo — Potência ★★★½ / Consumo ★★★½ / Duração ●●',
+      'Forte e Curta — Potência ★★★ / Consumo ★★★ / Duração ●●●',
+      'Pulso Estável — Potência ★★★ / Consumo ★★ / Duração ●●●',
+      'Controlada — Potência ★★ / Consumo ★ / Duração ●●●●',
+      'Sustentada — Potência ★ / Consumo ☆ / Duração ●●●●●',
+      'Estendida — Potência ½★ / Consumo ☆ / Duração (Cena)',
+      'Lenta e Duradoura — Potência ¼★ / Consumo ☆ / Duração (Multi-Cena)',
+      'Alternada — Potência variável / Consumo variável / Duração intermitente',
+      'Carga Preparada — alta potência após 1 rodada de preparo',
+      'Adaptativa — role 1D6 para Potência / Consumo / Duração'
+    ],
+    subFuncao: [ // 2D6: o que a prótese faz
+      ['Precisão', 'Mira', 'Sensor', 'Monitoramento', 'Análise', 'Identificação'],
+      ['Força', 'Impacto', 'Empurrão', 'Pressão', 'Quebra', 'Engate'],
+      ['Reflexos', 'Esquiva', 'Aceleração', 'Giro', 'Frenagem', 'Absorção'],
+      ['Resistência', 'Blindagem', 'Reforço', 'Endurecimento', 'Amortecimento', 'Isolamento'],
+      ['Projétil', 'Lâmina', 'Choque', 'Pulso', 'Onda', 'Expulsão'],
+      ['Regeneração', 'Cura', 'Estabilização', 'Suporte', 'Filtragem', 'Recarga']
+    ],
+    subDescritor: [ // 2D6: como ela é ou se comporta
+      ['Extremo', 'Aumentado', 'Elevado', 'Potente', 'Superior', 'Crítico'],
+      ['Leve', 'Moderado', 'Suave', 'Contínuo', 'Estável', 'Balanceado'],
+      ['Rápido', 'Instantâneo', 'Reativo', 'Explosivo', 'Pulsante', 'Gradual'],
+      ['Focalizado', 'Amplo', 'Direcionado', 'Ajustável', 'Expansivo', 'Compacto'],
+      ['Orgânico', 'Mecânico', 'Químico', 'Térmico', 'Cinético', 'Neural'],
+      ['Computacional', 'Analítico', 'Modular', 'Adaptativo', 'Experimental', 'Prototípico']
+    ],
+    subFormato: [ // 2D6: a forma física ou o método de execução
+      ['Implante interno', 'Mecanismo retrátil', 'Ferramenta expansível', 'Compartimento oculto', 'Estrutura anatômica', 'Módulo subcutâneo'],
+      ['Emissor focal', 'Difusor amplo', 'Projeção linear', 'Projeção cônica', 'Pulso direcionado', 'Feixe modulado'],
+      ['Sistema hidráulico', 'Sistema pneumático', 'Trilho mecânico', 'Articulação móvel', 'Placas segmentadas', 'Engrenagens leves'],
+      ['Microtubos', 'Microfios', 'Nanofios', 'Nanoagulhas', 'Canais internos', 'Reservatório interno'],
+      ['Núcleo energético', 'Bateria portátil', 'Condutor de plasma', 'Injeção química', 'Bobina indutora', 'Câmara carregada'],
+      ['Estímulo elétrico', 'Estímulo neural', 'Sinal óptico', 'Radiação fraca', 'Vibração direcionada', 'Compressão ativa']
+    ],
+    // Drop rate (1D20): até este número, esta raridade
+    drop: [[6, 'Comum'], [11, 'Incomum'], [16, 'Rara'], [19, 'Epica'], [20, 'Lendária']],
+    // Tipos de arma (1D8); a Pistola vira Revólver com 2 no 1D2; Especial rola 1D6
+    armas: [['Pistola', 'pistola'], ['Rifle', 'rifle'], ['Fuzil', 'fuzil'], ['Espingarda', 'espingarda'], ['Metralhadora', 'metralhadora'], ['Submetralhadora', 'submetralhadora'], ['Especial', ''], ['Pode escolher', '']],
+    especiais: [['Laser', 'laser'], ['Lançador', 'lancador'], ['Gravitacional', 'gravitacional'], ['Portal', 'portal'], ['Híbrida', 'hibrida'], ['Escolhe qualquer um ou inventa', '']]
+  },
   armaduraBase: 6, // a armadura básica de todos os seres
 
   /* Proficiências: 4 iniciais, entre tipos de arma e de armadura */
@@ -497,7 +556,34 @@ window.VORTEX_ITEMS = {
     { id: 'of-pod-telecinese', kind: 'poder', name: 'Telecinese', values: { custo: '1', efeito: 'Você pode manipular itens em curta distância, a custo de 1 PE por carga do objeto (se for igual ou menor que ½, o objeto não gera custos por carga), +1 por ação feita com ele (tirando livre). Você pode manipular uma quantidade de objetos simultaneamente igual à sua Essência (mínimo 1), cumprindo os gastos; se os itens fizerem a mesma ação, se utiliza a mesma ação para todos os usados na ação. Você pode deslocar esses objetos pelo seu deslocamento usando sua ação de movimento dividido pela carga do item, a cada ação gasta no objeto. Fazer testes com os objetos manipulados usa suas perícias e atributos normalmente; ações contra alguém têm –3 nos testes. Você pode usar suas técnicas e habilidades normalmente com os itens manipulados.',
       melhorias: 'Mental | Sua telecinese pode interferir em sinapses neurais: lê pensamentos e memórias. Com uma ação padrão, escolha um alvo; ele deve passar num teste de Vontade contra CD 7 + (um atributo à escolha do jogador) + Operações, ou terá os pensamentos lidos. Ler os pensamentos de um alvo concede, até o fim do seu próximo turno, vantagem em qualquer coisa que você faça contra ele. Pode sustentar após a primeira leitura com a ação de movimento. Um alvo incapacitado ou inconsciente falha automaticamente, e memórias de sonho ou pesadelo que esteja vivendo não podem ser lidas. O alvo só sente a mente sendo lida quando falha criticamente no teste de Vontade. Pré-requisito: Telecinese. | 1\nPreciso | Sua telecinese não recebe penalidades por ações contra alguém, e você considera a carga de todos os itens em –1 (itens de carga 1 podem ter carga ½, anulando o custo de peso). | 1' } },
     { id: 'of-pod-mente-outro-mundo', kind: 'poder', name: 'Mente de outro mundo', values: { custo: '1', efeito: 'Você tem ganho em quaisquer testes contra efeitos mentais sobre você, e não é afetado por perda no teste em prol de falha crítica.' } },
-    { id: 'of-pod-gatilho', kind: 'poder', name: 'Gatilho do velho mundo', values: { efeito: 'Com um revólver de disparo único, obtém cadência igual a 1 + metade da precisão (para cima). O primeiro disparo não conta na penalidade de cadência. Precisa da outra mão livre.' } }
+    { id: 'of-pod-gatilho', kind: 'poder', name: 'Gatilho do velho mundo', values: { efeito: 'Com um revólver de disparo único, obtém cadência igual a 1 + metade da precisão (para cima). O primeiro disparo não conta na penalidade de cadência. Precisa da outra mão livre.' } },
+    // Próteses básicas: uma por slot do corpo, simples (Suporte, 1 CC). Sem Núcleo, só substituem a parte natural.
+    { id: 'of-nuc-comum', kind: 'nucleo', name: 'Núcleo comum +2', values: { modelo: 'Núcleo padrão', raridade: 'Comum', capacidade: '2', carga: '1', especial: 'Núcleo básico: sustenta próteses e módulos até 2 de Carga Cibernética (somada ao Corpo). Só um núcleo ativo por personagem.' } },
+    { id: 'of-pro-cabeca', kind: 'protese-modulo', typeId: 'cabeca', name: 'Prótese básica: Cabeça', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a estrutura do crânio e da face por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-olhos', kind: 'protese-modulo', typeId: 'cabeca', name: 'Prótese básica: Olhos', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a visão por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-ouvidos', kind: 'protese-modulo', typeId: 'cabeca', name: 'Prótese básica: Ouvidos', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a audição por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-nariz', kind: 'protese-modulo', typeId: 'cabeca', name: 'Prótese básica: Nariz', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui o olfato e a respiração pelo nariz por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-boca', kind: 'protese-modulo', typeId: 'cabeca', name: 'Prótese básica: Boca', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a fala, a mastigação e o paladar por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-pescoco', kind: 'protese-modulo', typeId: 'tronco', name: 'Prótese básica: Pescoço', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a sustentação e o movimento da cabeça por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-espinha', kind: 'protese-modulo', typeId: 'tronco', name: 'Prótese básica: Espinha', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a sustentação do tronco e os sinais do sistema nervoso por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-torax', kind: 'protese-modulo', typeId: 'tronco', name: 'Prótese básica: Tórax', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a proteção do peito e das costelas por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-abdomen', kind: 'protese-modulo', typeId: 'tronco', name: 'Prótese básica: Abdômen', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a parede abdominal por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-pelves', kind: 'protese-modulo', typeId: 'tronco', name: 'Prótese básica: Pelves', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a base do quadril por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-ombro', kind: 'protese-modulo', typeId: 'membros-superiores', name: 'Prótese básica: Ombro', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a articulação do ombro por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-braco', kind: 'protese-modulo', typeId: 'membros-superiores', name: 'Prótese básica: Braço', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui o braço por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-antebraco', kind: 'protese-modulo', typeId: 'membros-superiores', name: 'Prótese básica: Antebraço', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui o antebraço por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-pulso', kind: 'protese-modulo', typeId: 'membros-superiores', name: 'Prótese básica: Pulso', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a articulação do pulso por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-mao', kind: 'protese-modulo', typeId: 'membros-superiores', name: 'Prótese básica: Mão', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a mão e os dedos por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-gluteos', kind: 'protese-modulo', typeId: 'membros-inferiores', name: 'Prótese básica: Glúteos', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a musculatura do quadril por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-coxas-perna', kind: 'protese-modulo', typeId: 'membros-inferiores', name: 'Prótese básica: Coxas/Perna', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a coxa e a perna por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-panturrilha', kind: 'protese-modulo', typeId: 'membros-inferiores', name: 'Prótese básica: Panturrilha', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a panturrilha por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-joelho', kind: 'protese-modulo', typeId: 'membros-inferiores', name: 'Prótese básica: Joelho', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a articulação do joelho por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-tornozelos-pes', kind: 'protese-modulo', typeId: 'membros-inferiores', name: 'Prótese básica: Tornozelos/Pés', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui o tornozelo e o pé por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-esqueleto', kind: 'protese-modulo', typeId: 'orgaos-internos', name: 'Órgão artificial: Esqueleto', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui os ossos por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-sistema-nervoso', kind: 'protese-modulo', typeId: 'orgaos-internos', name: 'Órgão artificial: Sistema Nervoso', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui os nervos por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-sistema-pulmonar', kind: 'protese-modulo', typeId: 'orgaos-internos', name: 'Órgão artificial: Sistema Pulmonar', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui os pulmões por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-sistema-cardiovascular', kind: 'protese-modulo', typeId: 'orgaos-internos', name: 'Órgão artificial: Sistema Cardiovascular', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui o coração e a circulação por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
+    { id: 'of-pro-sistema-digestivo', kind: 'protese-modulo', typeId: 'orgaos-internos', name: 'Órgão artificial: Sistema Digestivo', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui o estômago e o intestino por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } }
   ]
 };
 
@@ -613,4 +699,50 @@ window.VORTEX_ITEMS = {
       values: { fabricante: 'Live Service', raridade: a[1], tipoUso: a[2], usos: a[3], carga: String(a[4]), bonusRec: a[5], efeito: a[6], preco: a[7] }
     });
   });
+})();
+
+/* Capítulo "Tabelas de criação aleatória" do Compêndio, montado com as tabelas do gerador (só consulta: não muda as regras). */
+(function () {
+  var d = window.VORTEX_ITEMS, g = d.gerador;
+  var regras = window.VORTEX_REGRAS;
+  if (!regras) return;
+  var list = function (arr) { return arr.map(function (x, i) { return [String(i + 1), Array.isArray(x) ? x[0] : x]; }); };
+  var grid = function (t) { return t.map(function (row, i) { return [String(i + 1)].concat(row); }); };
+  var cols = ['2D6', '1', '2', '3', '4', '5', '6'];
+  var dropRows = g.drop.map(function (r, i) { return [(i ? g.drop[i - 1][0] + 1 : 1) + (r[0] > (i ? g.drop[i - 1][0] + 1 : 1) ? '–' + r[0] : ''), r[1] === 'Epica' ? 'Épica' : r[1]]; });
+  var chapter = {
+    id: 'gerador', title: 'Tabelas de Criação Aleatória', group: 'Equipamento',
+    blocks: [
+      ['p', 'Tabelas para inspirar criações aleatórias: uma prótese (link), a raridade do saque e o tipo de arma. Elas usam uma terminologia própria para desabstrair a ideia; não são regra das próteses, que continuam simples (região, tipo, CC e efeito).'],
+      ['h2', 'Slot do link / prótese (1D20)'],
+      ['table', ['1D20', 'Slot'], list(g.slots).map(function (r) { return r[0] === '7' ? [r[0], r[1] + ' (permite órgãos internos)'] : r; })],
+      ['h3', 'Se cair 7 (Espinha): Órgãos internos (1D6)'],
+      ['table', ['1D6', 'Órgão'], list(g.orgaos)],
+      ['h2', 'Tipo (1D2)'],
+      ['table', ['1D2', 'Tipo'], list(g.tipos)],
+      ['h2', 'Função geral (1D8)'],
+      ['table', ['1D8', 'Função'], list(g.funcoes)],
+      ['h2', 'Potência das ativas (1D12)'],
+      ['table', ['1D12', 'Potência'], list(g.potencias)],
+      ['h2', 'Subfunção: ação principal (2D6)'],
+      ['p', 'Primeiro dado = linha, segundo dado = coluna. Define **o que a prótese faz**.'],
+      ['table', cols, grid(g.subFuncao)],
+      ['h2', 'Sub descritor: qualidade / estilo (2D6)'],
+      ['p', 'Aplica um modificador à subfunção. Define **como** ela é ou se comporta.'],
+      ['table', cols, grid(g.subDescritor)],
+      ['h2', 'Sub formato: mecanismo / forma física (2D6)'],
+      ['p', 'Define a **forma física** ou o **método de execução** da subfunção.'],
+      ['table', cols, grid(g.subFormato)],
+      ['h3', 'Ficha da prótese'],
+      ['fields', ['Slot', 'Tipo (passiva/ativa)', 'Potência (só ativa)', 'Função', 'Subfunção', 'Sub descritor', 'Sub formato']],
+      ['h2', 'Drop rate (1D20)'],
+      ['table', ['1D20', 'Raridade'], dropRows],
+      ['h2', 'Tipos de arma (1D8)'],
+      ['table', ['1D8', 'Tipo'], list(g.armas).map(function (r) { return r[0] === '1' ? [r[0], 'Pistola (2 no 1D2: Revólver)'] : r[0] === '7' ? [r[0], 'Especial (1D6 na lista abaixo)'] : r; })],
+      ['h3', 'Armas especiais (1D6)'],
+      ['table', ['1D6', 'Tipo'], list(g.especiais)]
+    ]
+  };
+  var at = regras.chapters.map(function (c) { return c.id; }).indexOf('nucleo-proteses-modulos');
+  regras.chapters.splice(at < 0 ? regras.chapters.length : at + 1, 0, chapter);
 })();

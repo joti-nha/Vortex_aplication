@@ -5496,13 +5496,23 @@ const FIREBASE_CONFIG = {
     try { list = await libSearch(['especime'], ''); } catch (err) { /* fica o catálogo oficial */ }
     const mine = ch.sheet.specimen;
     list = list.filter((e) => racialLines(e.values).length && !isEtheriano(e) && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
-    if (!list.some((e) => e.id === racialPick)) racialPick = list[0] ? list[0].id : '';
+    // busca por espécime: fica fora do que é redesenhado, para não perder o foco ao digitar
+    const q = h('input', 'input');
+    q.type = 'search';
+    q.id = 'racial-q';
+    q.autocomplete = 'off';
+    q.placeholder = 'Buscar espécime (nome ou característica)';
+    const qLab = h('label', 'visually-hidden', 'Buscar espécime');
+    qLab.htmlFor = 'racial-q';
+    const content = h('div', 'racial__content');
     const draw = () => {
       const s = ch.sheet;
       const m = compute(ch);
       const free = m.upTotal - m.upSpent;
-      const esp = list.find((e) => e.id === racialPick);
-      const races = h('div', 'racial__races', ...list.map((e) => {
+      const shown = list.filter((e) => matchesText(nameKey([e.name, e.values.descricao].concat(racialLines(e.values).map((t) => t.name)).filter(Boolean).join(' ')), q.value));
+      if (!shown.some((e) => e.id === racialPick)) racialPick = shown[0] ? shown[0].id : '';
+      const esp = shown.find((e) => e.id === racialPick);
+      const races = h('div', 'racial__races', ...shown.map((e) => {
         const b = h('button', 'racial__race' + (e.id === racialPick ? ' is-on' : ''), entryIcon(e), h('span', '', e.name));
         b.type = 'button';
         b.setAttribute('aria-pressed', String(e.id === racialPick));
@@ -5526,20 +5536,24 @@ const FIREBASE_CONFIG = {
         return h('li', 'pickchar__card racial__trait' + (have >= 0 ? ' is-here' : ''),
           h('span', 'pickchar__info', h('strong', 'pickchar__name', t.name), h('span', 'pickchar__meta', t.cost + ' UP'), t.text ? h('span', 'racial__text', t.text) : null), b);
       }) : [];
-      const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
-      close.type = 'button';
-      close.addEventListener('click', () => closeDialog(dlg));
-      const title = h('h2', '', 'Características raciais');
-      title.id = 'racial-title';
-      dlg.replaceChildren(h('div', 'pickchar__body', title,
-        h('p', 'racial__only', 'Exclusivo do Etheriano'),
-        h('p', 'field__hint', 'Só o Etheriano gasta UP em características raciais, e pode pegar de qualquer espécime, inclusive dos criados na Oficina. Toque num espécime para ver as características dele.'),
+      content.replaceChildren(
         h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free))),
         races,
-        esp ? h('h3', 'pickchar__sub', esp.name) : h('p', 'empty', 'Nenhum espécime com características raciais.'),
-        h('ul', 'pickchar__list', ...traits),
-        h('div', 'dialog__actions', close)));
+        esp ? h('h3', 'pickchar__sub', esp.name) : h('p', 'empty', q.value ? 'Nenhum espécime com esse nome.' : 'Nenhum espécime com características raciais.'),
+        h('ul', 'pickchar__list', ...traits));
     };
+    q.addEventListener('input', draw);
+    const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+    close.type = 'button';
+    close.addEventListener('click', () => closeDialog(dlg));
+    const title = h('h2', '', 'Características raciais');
+    title.id = 'racial-title';
+    dlg.replaceChildren(h('div', 'pickchar__body', title,
+      h('p', 'racial__only', 'Exclusivo do Etheriano'),
+      h('p', 'field__hint', 'Só o Etheriano gasta UP em características raciais, e pode pegar de qualquer espécime, inclusive dos criados na Oficina. Busque ou toque num espécime para ver as características dele.'),
+      h('div', 'field racial__search', qLab, q),
+      content,
+      h('div', 'dialog__actions', close)));
     draw();
     openDialog(dlg);
   }
