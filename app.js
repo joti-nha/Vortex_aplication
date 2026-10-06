@@ -2806,6 +2806,8 @@ const FIREBASE_CONFIG = {
     else body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
     const lore = String(v.lore || '').trim();
     if (lore) body.append(h('h3', 'entry__sub', 'Lore'), ...lore.split(/\n+/).map((t) => h('p', 'entry__lore', t)));
+    const attach = quickAttachBox(e);
+    if (attach) body.append(attach);
     openDialog(entryDlg);
   }
   $('#entry-close').addEventListener('click', () => closeDialog(entryDlg));
@@ -5896,6 +5898,90 @@ const FIREBASE_CONFIG = {
     changed();
     if (armDlg && armDlg.open) drawArmory();
     toast(msg || e.name + ' entrou na mochila.');
+  }
+
+  /* ---------- Acoplar rápido ----------
+     No popup de um mod, propriedade ou acessório: acha sozinho as armas (e armaduras, para
+     propriedades) da ficha que aceitam a peça. Se o espaço já está ocupado, tira o que está lá
+     e põe a peça nova no lugar. Devolve null quando o item nem aceita esse tipo de peça. */
+  function planAttach(target, e) {
+    const info = slotInfo(target);
+    if (!info || info.embedded) return null;
+    const t = { slots: normSlots(deep(target.slots)) };
+    const removed = [];
+    const same = (a) => (a.id && e.id ? a.id === e.id : a.name === e.name);
+    const dropMod = (m) => { t.slots.mods.splice(t.slots.mods.indexOf(m), 1); removed.push(m.name); };
+    const dropAcc = (a) => { t.slots.accs.splice(t.slots.accs.indexOf(a), 1); removed.push(a.name); };
+    const clearPos = (pos) => { const tk = takenPositions(t)[pos]; if (tk) { if (tk.mod) dropMod(tk.mod); else dropAcc(tk.acc); } };
+    const v = e.values || {};
+    if (e.kind === 'acessorio') {
+      if (!isWeapon(target.kind) || e.typeId !== target.kind || info.positions.indexOf(v.posicao) < 0) return null;
+      const tk = takenPositions(t)[v.posicao];
+      if (tk && same(tk.acc)) return { already: true };
+      if (!info.mods) return { why: target.name + ' não tem slot de mod para acessórios (raridade ' + info.rar + ').' };
+      clearPos(v.posicao);
+      t.slots.accs.push(slotSnap(e));
+      while (slotUse(t).total > info.mods && t.slots.mods.length) dropMod(t.slots.mods[0]); // acessórios precisam de slot de mod livre
+    } else if (e.kind === 'mod-arma') {
+      if (!isWeapon(target.kind) || (v.para && v.para !== 'Qualquer arma' && v.para !== WEAPON_PARA[target.kind])) return null;
+      if (t.slots.mods.some(same)) return { already: true };
+      if (modCost(e) > info.mods) return { why: e.name + ' usa ' + plural(modCost(e), 'slot', 'slots') + '; ' + target.name + ' tem ' + info.mods + '.' };
+      ((e.slots && e.slots.accs) || []).forEach((a) => clearPos(a.values.posicao));
+      const mod = slotSnap(e);
+      t.slots.mods.push(mod);
+      while (slotUse(t).total > info.mods) {
+        const old = t.slots.mods.find((m) => m !== mod);
+        if (old) dropMod(old);
+        else if (t.slots.accs.length) dropAcc(t.slots.accs[0]);
+        else break;
+      }
+    } else if (e.kind === 'propriedade') {
+      const isArmor = target.kind === 'armadura';
+      if (!isWeapon(target.kind) && !isArmor) return null;
+      if (v.para && v.para !== 'Qualquer item' && v.para !== (isArmor ? 'Armadura' : 'Arma')) return null;
+      if (t.slots.props.some(same)) return { already: true };
+      if (!info.props) return { why: target.name + ' (' + info.rar + ') não comporta propriedade.' };
+      while (t.slots.props.length >= info.props) { removed.push(t.slots.props[0].name); t.slots.props.shift(); }
+      t.slots.props.push(slotSnap(e));
+    } else return null;
+    if (slotUse(t).total > info.mods && !info.embedded) return { why: 'Não sobra slot de mod em ' + target.name + '.' };
+    return { slots: t.slots, removed };
+  }
+  // os botões "Acoplar em ..." do popup (o melhor encaixe primeiro)
+  function quickAttachBox(e) {
+    if (['mod-arma', 'propriedade', 'acessorio'].indexOf(e.kind) < 0) return null;
+    const ch = sheetChar;
+    const box = h('div', 'entry__attach', h('h3', 'entry__sub', 'Acoplar rápido'));
+    if (!ch || !(ch.mine || isMyChar(ch.id))) { box.append(h('p', 'field__hint', 'Abra a ficha de um personagem seu para acoplar esta peça direto na arma.')); return box; }
+    const s = ch.sheet;
+    const plans = s.inventory.map((x) => ({ x, p: planAttach(x, e) })).filter((r) => r.p);
+    const ok = plans.filter((r) => r.p.slots)
+      .sort((a, b) => (Number(b.x.uid === arm.uid) - Number(a.x.uid === arm.uid)) || (a.p.removed.length - b.p.removed.length) || (Number(Boolean(b.x.slot)) - Number(Boolean(a.x.slot))));
+    const hint = h('p', 'field__hint', 'Na ficha de ' + ch.name + '. Se o espaço estiver ocupado, a peça que está lá sai e esta entra no lugar.');
+    if (!ok.length) {
+      const done = plans.find((r) => r.p.already);
+      const whys = plans.filter((r) => r.p.why).slice(0, 3).map((r) => r.p.why);
+      box.append(h('p', 'field__hint', done ? e.name + ' já está acoplado em ' + done.x.name + '.' : whys.length ? whys.join(' ') : 'Nenhum item de ' + ch.name + ' aceita esta peça.'));
+      return box;
+    }
+    const btns = ok.slice(0, 4).map((r, k) => {
+      const b = h('button', 'btn btn--sm ' + (k ? 'btn--ghost' : 'btn--primary'), 'Acoplar em ' + r.x.name + (r.p.removed.length ? ' (troca ' + r.p.removed.join(', ') + ')' : ''));
+      b.type = 'button';
+      b.dataset.fid = 'attach-' + r.x.uid;
+      b.addEventListener('click', () => {
+        const fresh = planAttach(r.x, e); // a ficha pode ter mudado com o popup aberto
+        if (!fresh || !fresh.slots || s.inventory.indexOf(r.x) < 0) { toast('Não deu para acoplar: a arma mudou. Abra o popup de novo.'); return; }
+        r.x.slots = fresh.slots;
+        touchSheet();
+        rerender();
+        if (armDlg && armDlg.open) drawArmory();
+        closeDialog(entryDlg);
+        toast('Acoplou ' + e.name + ' em ' + r.x.name + '.' + (fresh.removed.length ? ' Saiu: ' + fresh.removed.join(', ') + '.' : ''));
+      });
+      return b;
+    });
+    box.append(hint, h('div', 'entry__attach-btns', ...btns));
+    return box;
   }
 
   /* ---------- Armeiro ----------
