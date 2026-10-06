@@ -3200,3 +3200,12 @@ html, body { max-width: 100%; overflow-x: clip; }
 .entry__attach { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--linha); }
 .entry__attach-btns { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
 .entry__attach-btns .btn { white-space: normal; text-align: left; }
+.armory__who { font-size: var(--t-s); font-weight: 500; color: var(--nevoa-2); }
+.armory__why--swap { color: var(--ambar); }
+/* no celular, o botão da peça desce para baixo do nome (nome não quebra no meio) */
+.armory__part-info { flex: 1 1 auto; }
+@media (max-width: 480px) {
+  .armory__part { flex-wrap: wrap; }
+  .armory__part > .btn { margin-left: auto; }
+  .armory__part-info { flex-basis: 100%; }
+}

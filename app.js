@@ -3257,7 +3257,7 @@ const FIREBASE_CONFIG = {
         ? { title: 'Poder de nascença', kinds, chips: ['Poder'], filter: (x) => x.kind === 'poder' }
         : { title: 'Item inicial (sobram ' + fmtCronos(Math.max(0, left)) + ' Cronos)', kinds, chips: [
           { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }],
+          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }],
         filter: (x) => kinds.indexOf(x.kind) >= 0 && (!field.budget || priceOf(x) <= left) });
       if (!e) return;
       if (!lib.some((x) => nameKey(x.name) === nameKey(e.name))) lib = lib.concat([e]);
@@ -4513,7 +4513,7 @@ const FIREBASE_CONFIG = {
     add.addEventListener('click', async () => {
       const e = await openPicker({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
         { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-        { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+        { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
       if (!e || rt.r !== r) return;
       r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) });
       renderRoteiro();
@@ -5383,7 +5383,7 @@ const FIREBASE_CONFIG = {
 
   // em quais espaços este item pode ser equipado
   function slotsFor(i) {
-    if (i.kind === 'municao') return []; // munição fica na mochila ou vai para a reserva da arma
+    if (i.kind === 'municao' || isPiece(i)) return []; // munição e peças ficam na mochila (vão para a arma pelo Armeiro)
     if (i.kind === 'armadura') return ['armadura'];
     if (i.kind === 'nucleo') return ['nucleo'];
     if (isModule(i)) return ['modulo'];
@@ -5497,6 +5497,11 @@ const FIREBASE_CONFIG = {
       actions.append(act('Procurar munição', 'btn--ghost', () => findAmmo(i)));
       const bagAmmo = ammoForGun(s, i)[0];
       if (bagAmmo) actions.append(act('Pôr ' + bagAmmo.name + ' na reserva', 'btn--ghost', () => { const msg = loadAmmo(s, bagAmmo, i); if (msg) { changed(); toast(msg); } }));
+    }
+    if (isPiece(i)) {
+      const bt = attachButtons(s, i, () => changed());
+      if (bt.length) bt.forEach((b) => actions.append(b));
+      else card.append(h('p', 'cell__text', 'Nenhuma arma ou armadura da ficha aceita esta peça agora.'));
     }
     if (isAmmo(i)) {
       const guns = gunsForAmmo(s, i);
@@ -5684,7 +5689,15 @@ const FIREBASE_CONFIG = {
       body.append(h('p', 'inv__arm', ab, fb ? ' ' : '', fb, isGun(i) ? ' ' + ammoLine(i, s) : ''));
       if (i.ammoFx && (i.ammoFx.efeito || i.ammoFx.dano)) body.append(h('p', 'field__hint', 'Munição carregada: ' + i.ammoFx.name + ' — ' + [i.ammoFx.dano ? 'dano ' + i.ammoFx.dano : '', i.ammoFx.efeito].filter(Boolean).join('. ')));
     }
-    if (cat && cat.slots && cat.slots !== 'mod') body.append(slotEditor(i, () => { touchSheet(); rerender(); }));
+    // as peças montadas mudam pelo Armeiro (só com peças que o personagem tem)
+    if (canArmory(i)) {
+      const parts = i.slots ? (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name) : [];
+      body.append(h('p', 'field__hint', parts.length ? 'Montado: ' + parts.join(', ') + '. Troque no Armeiro.' : 'Nada montado. Monte peças da mochila no Armeiro.'));
+    }
+    if (isPiece(i) && !i.slot) {
+      const bt = attachButtons(s, i, () => { changed(); });
+      if (bt.length) body.append(h('div', 'entry__attach-btns', ...bt));
+    }
 
     const qty = h('input', 'input');
     qty.type = 'number';
@@ -5909,9 +5922,10 @@ const FIREBASE_CONFIG = {
     if (!info || info.embedded) return null;
     const t = { slots: normSlots(deep(target.slots)) };
     const removed = [];
+    const parts = []; // as peças que saem (voltam para a mochila)
     const same = (a) => (a.id && e.id ? a.id === e.id : a.name === e.name);
-    const dropMod = (m) => { t.slots.mods.splice(t.slots.mods.indexOf(m), 1); removed.push(m.name); };
-    const dropAcc = (a) => { t.slots.accs.splice(t.slots.accs.indexOf(a), 1); removed.push(a.name); };
+    const dropMod = (m) => { t.slots.mods.splice(t.slots.mods.indexOf(m), 1); removed.push(m.name); parts.push(m); };
+    const dropAcc = (a) => { t.slots.accs.splice(t.slots.accs.indexOf(a), 1); removed.push(a.name); parts.push(a); };
     const clearPos = (pos) => { const tk = takenPositions(t)[pos]; if (tk) { if (tk.mod) dropMod(tk.mod); else dropAcc(tk.acc); } };
     const v = e.values || {};
     if (e.kind === 'acessorio') {
@@ -5941,46 +5955,78 @@ const FIREBASE_CONFIG = {
       if (v.para && v.para !== 'Qualquer item' && v.para !== (isArmor ? 'Armadura' : 'Arma')) return null;
       if (t.slots.props.some(same)) return { already: true };
       if (!info.props) return { why: target.name + ' (' + info.rar + ') não comporta propriedade.' };
-      while (t.slots.props.length >= info.props) { removed.push(t.slots.props[0].name); t.slots.props.shift(); }
+      while (t.slots.props.length >= info.props) { removed.push(t.slots.props[0].name); parts.push(t.slots.props.shift()); }
       t.slots.props.push(slotSnap(e));
     } else return null;
     if (slotUse(t).total > info.mods && !info.embedded) return { why: 'Não sobra slot de mod em ' + target.name + '.' };
-    return { slots: t.slots, removed };
+    return { slots: t.slots, removed, parts };
   }
-  // os botões "Acoplar em ..." do popup (o melhor encaixe primeiro)
+  /* Peças são itens: só monta quem tem. Montar tira uma unidade da mochila; o que sai da arma volta para ela. */
+  const PIECE_KINDS = ['mod-arma', 'propriedade', 'acessorio'];
+  const isPiece = (x) => Boolean(x && PIECE_KINDS.indexOf(x.kind) >= 0);
+  const samePiece = (a, b) => (a.id && b.id ? a.id === b.id : nameKey(a.name) === nameKey(b.name));
+  function takeFromBag(s, x) {
+    if ((x.qty || 1) > 1) { x.qty -= 1; return; }
+    const k = s.inventory.indexOf(x);
+    if (k >= 0) s.inventory.splice(k, 1);
+  }
+  function returnToBag(s, parts) {
+    parts.forEach((p) => {
+      const same = s.inventory.find((x) => !x.slot && isPiece(x) && samePiece(x, p) && !(p.slots && p.slots.accs && p.slots.accs.length));
+      if (same) same.qty = (same.qty || 1) + 1;
+      else s.inventory.push(Object.assign(invEntryFrom(p), { qty: 1 }));
+    });
+  }
+  // monta a peça que já está fora da arma (mochila, ou já comprada/tirada do armazém)
+  function mountPiece(s, target, e) {
+    const plan = planAttach(target, e);
+    if (!plan || !plan.slots) return null;
+    target.slots = plan.slots;
+    returnToBag(s, plan.parts);
+    return plan;
+  }
+  // "Acoplar em ..." com uma peça da mochila (cartão, detalhes e popup)
+  function attachButtons(s, piece, after) {
+    return armoryItems(s).map((x) => ({ x, p: planAttach(x, piece) })).filter((r) => r.p && r.p.slots)
+      .sort((a, b) => (a.p.removed.length - b.p.removed.length) || (Number(Boolean(b.x.slot)) - Number(Boolean(a.x.slot))))
+      .slice(0, 4).map((r, k) => {
+        const b = h('button', 'btn btn--sm ' + (k ? 'btn--ghost' : 'btn--primary'), 'Acoplar em ' + r.x.name + (r.p.removed.length ? ' (troca ' + r.p.removed.join(', ') + ')' : ''));
+        b.type = 'button';
+        b.dataset.fid = 'attach-' + r.x.uid;
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          if (s.inventory.indexOf(piece) < 0) { toast(piece.name + ' não está mais na mochila.'); return; }
+          const name = piece.name;
+          takeFromBag(s, piece);
+          const plan = mountPiece(s, r.x, slotSnap(piece));
+          if (!plan) { returnToBag(s, [piece]); toast('Não deu para acoplar: a arma mudou.'); return; }
+          after();
+          toast('Acoplou ' + name + ' em ' + r.x.name + '.' + (plan.removed.length ? ' ' + plan.removed.join(', ') + ' voltou para a mochila.' : ''));
+        });
+        return b;
+      });
+  }
+  // popup de uma peça do banco: só acopla se a ficha aberta tem a peça na mochila
   function quickAttachBox(e) {
-    if (['mod-arma', 'propriedade', 'acessorio'].indexOf(e.kind) < 0) return null;
+    if (!isPiece(e)) return null;
     const ch = sheetChar;
     const box = h('div', 'entry__attach', h('h3', 'entry__sub', 'Acoplar rápido'));
-    if (!ch || !(ch.mine || isMyChar(ch.id))) { box.append(h('p', 'field__hint', 'Abra a ficha de um personagem seu para acoplar esta peça direto na arma.')); return box; }
+    if (!ch || !(ch.mine || isMyChar(ch.id))) { box.append(h('p', 'field__hint', 'Abra a ficha de um personagem seu para acoplar esta peça.')); return box; }
     const s = ch.sheet;
-    const plans = s.inventory.map((x) => ({ x, p: planAttach(x, e) })).filter((r) => r.p);
-    const ok = plans.filter((r) => r.p.slots)
-      .sort((a, b) => (Number(b.x.uid === arm.uid) - Number(a.x.uid === arm.uid)) || (a.p.removed.length - b.p.removed.length) || (Number(Boolean(b.x.slot)) - Number(Boolean(a.x.slot))));
-    const hint = h('p', 'field__hint', 'Na ficha de ' + ch.name + '. Se o espaço estiver ocupado, a peça que está lá sai e esta entra no lugar.');
-    if (!ok.length) {
-      const done = plans.find((r) => r.p.already);
-      const whys = plans.filter((r) => r.p.why).slice(0, 3).map((r) => r.p.why);
-      box.append(h('p', 'field__hint', done ? e.name + ' já está acoplado em ' + done.x.name + '.' : whys.length ? whys.join(' ') : 'Nenhum item de ' + ch.name + ' aceita esta peça.'));
+    const own = s.inventory.find((x) => !x.slot && isPiece(x) && samePiece(x, e));
+    if (!own) {
+      box.append(h('p', 'field__hint', ch.name + ' não tem ' + e.name + ' na mochila. Compre numa loja ou pegue num armazém pelo Armeiro da campanha.'));
       return box;
     }
-    const btns = ok.slice(0, 4).map((r, k) => {
-      const b = h('button', 'btn btn--sm ' + (k ? 'btn--ghost' : 'btn--primary'), 'Acoplar em ' + r.x.name + (r.p.removed.length ? ' (troca ' + r.p.removed.join(', ') + ')' : ''));
-      b.type = 'button';
-      b.dataset.fid = 'attach-' + r.x.uid;
-      b.addEventListener('click', () => {
-        const fresh = planAttach(r.x, e); // a ficha pode ter mudado com o popup aberto
-        if (!fresh || !fresh.slots || s.inventory.indexOf(r.x) < 0) { toast('Não deu para acoplar: a arma mudou. Abra o popup de novo.'); return; }
-        r.x.slots = fresh.slots;
-        touchSheet();
-        rerender();
-        if (armDlg && armDlg.open) drawArmory();
-        closeDialog(entryDlg);
-        toast('Acoplou ' + e.name + ' em ' + r.x.name + '.' + (fresh.removed.length ? ' Saiu: ' + fresh.removed.join(', ') + '.' : ''));
-      });
-      return b;
-    });
-    box.append(hint, h('div', 'entry__attach-btns', ...btns));
+    const btns = attachButtons(s, own, () => { touchSheet(); rerender(); if (armDlg && armDlg.open) drawArmory(); closeDialog(entryDlg); });
+    if (!btns.length) {
+      const plans = armoryItems(s).map((x) => planAttach(x, own)).filter(Boolean);
+      const whys = plans.filter((p) => p.why).slice(0, 3).map((p) => p.why);
+      box.append(h('p', 'field__hint', plans.some((p) => p.already) ? e.name + ' já está acoplado.' : whys.length ? whys.join(' ') : 'Nenhum item de ' + ch.name + ' aceita esta peça.'));
+      return box;
+    }
+    box.append(h('p', 'field__hint', 'Na mochila de ' + ch.name + ((own.qty || 1) > 1 ? ' (×' + own.qty + ')' : '') + '. Se o espaço estiver ocupado, a peça que está lá volta para a mochila.'),
+      h('div', 'entry__attach-btns', ...btns));
     return box;
   }
 
@@ -5989,7 +6035,9 @@ const FIREBASE_CONFIG = {
      (mira, bocal...) ou num slot de mod/propriedade e troca a peça na lista ao lado. Os números da arma
      mudam na hora (pente, recarga, alcance), e a munição fica no mesmo lugar. */
   let armDlg = null;
-  const arm = { uid: '', sel: '', q: '', lib: null };
+  // m: membro da campanha (Armeiro da campanha: mochila, armazéns e lojas); sem m, a ficha aberta (só a mochila)
+  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false };
+  const armSheet = () => (arm.m ? arm.m.sheet : sheetChar && sheetChar.sheet);
   const ARM_SPOTS = {
     'arma-fogo': { Mira: 'top', Bocal: 'right', Carregador: 'bottom', Empunhadura: 'left' },
     'arma-melee': { Ponta: 'right', Dorso: 'top', Empunhadura: 'bottom', Cabo: 'left' }
@@ -5998,9 +6046,9 @@ const FIREBASE_CONFIG = {
   const canArmory = (i) => Boolean(i) && (isWeapon(i.kind) || i.kind === 'armadura');
   const armoryItems = (s) => s.inventory.filter(canArmory)
     .sort((a, b) => (Number(isWeapon(b.kind)) - Number(isWeapon(a.kind))) || (Number(Boolean(b.slot)) - Number(Boolean(a.slot))));
-  function openArmory(u) {
-    const ch = sheetChar;
-    if (!ch) return;
+  function openArmory(u, m) {
+    const ch = m || sheetChar;
+    if (!ch || !ch.sheet) return;
     const guns = armoryItems(ch.sheet);
     if (!guns.length) { toast('Nenhuma arma ou armadura no inventário. Adicione uma do banco para usar o Armeiro.'); return; }
     if (!armDlg) {
@@ -6013,15 +6061,73 @@ const FIREBASE_CONFIG = {
     arm.sel = '';
     arm.q = '';
     arm.lib = null;
+    arm.m = m || null;
     drawArmory();
     openDialog(armDlg);
-    libSearch(['mod-arma', 'propriedade', 'acessorio'], '').then((list) => { arm.lib = list; if (armDlg.open) drawArmory(); }).catch(() => { /* fica o catálogo oficial */ });
   }
-  function armSave() { touchSheet(); rerender(); drawArmory(); }
+  // salva: na ficha aberta, como qualquer edição; na campanha, grava a mochila (e o dinheiro) do personagem
+  async function armSave() {
+    if (!arm.m) { touchSheet(); rerender(); drawArmory(); return; }
+    const local = arm.m.sheet;
+    const camp = currentCamp && currentCamp.id;
+    arm.busy = true;
+    drawArmory();
+    try {
+      await patchMemberSheet(arm.m, (sh) => {
+        sh.inventory = deep(local.inventory);
+        if (camp) { sh.money = Object.assign({}, sh.money); sh.money[camp] = num((local.money || {})[camp]); }
+      });
+    } catch (err) { toast(errorMessage(err)); }
+    arm.busy = false;
+    if (armDlg.open) drawArmory();
+    if (typeof renderShops === 'function') renderShops();
+  }
+  /* De onde vêm as peças: a mochila sempre; no Armeiro da campanha também os armazéns liberados e as
+     lojas (comprando). Cada fonte sabe tirar uma unidade e devolve true quando deu certo. */
+  function armSources(s) {
+    const out = [];
+    s.inventory.filter((x) => !x.slot && isPiece(x)).forEach((x) => out.push({
+      e: x, where: 'Na mochila' + ((x.qty || 1) > 1 ? ' ×' + x.qty : ''), act: 'Montar',
+      take: async () => { if (s.inventory.indexOf(x) < 0) return false; takeFromBag(s, x); return true; }
+    }));
+    if (!arm.m || !currentCamp) return out;
+    const camp = currentCamp.id;
+    vaults.filter(vaultUsable).forEach((v) => (v.items || []).filter(isPiece).forEach((x) => out.push({
+      e: x, where: v.name + ((x.qty || 1) > 1 ? ' ×' + x.qty : ''), act: 'Tirar e montar',
+      take: async () => {
+        const cur = vaults.find((y) => y.id === v.id) || v;
+        const it = (cur.items || []).find((y) => y.uid === x.uid);
+        if (!it) { toast(x.name + ' já saiu de ' + v.name + '.'); return false; }
+        const items = (it.qty || 1) > 1 ? cur.items.map((y) => (y.uid === it.uid ? Object.assign({}, y, { qty: y.qty - 1 }) : y)) : cur.items.filter((y) => y.uid !== it.uid);
+        return saveCol('vaults', v.id, { items, log: lootLog(cur, arm.m.name + ' tirou ' + it.name + ' para montar no Armeiro.') });
+      }
+    })));
+    shops.forEach((sh) => shopStock(sh).filter((it) => it.sale && isPiece(it.entry) && !(sh.kind === 'jogador' && sh.ownerCharId === arm.m.characterId)).forEach((it) => {
+      const price = shopPrice(sh, it);
+      out.push({
+        e: decorate(it.entry), where: sh.name + ' · ' + fmtCronos(price) + ' Cronos', act: 'Comprar e montar', price,
+        take: async () => {
+          if (num((s.money || {})[camp]) < price) { toast(arm.m.name + ' tem ' + fmtCronos(num((s.money || {})[camp])) + ' Cronos; ' + it.entry.name + ' custa ' + fmtCronos(price) + '.'); return false; }
+          const fresh = shops.find((x) => x.id === sh.id) || sh;
+          const cur = shopStock(fresh).find((x) => x.uid === it.uid);
+          if (!cur || (cur.qty !== null && cur.qty !== undefined && cur.qty < 1)) { toast('Esse item acabou.'); return false; }
+          const items = fresh.items.map((x) => (x.uid === cur.uid && x.qty !== null && x.qty !== undefined ? Object.assign({}, x, { qty: x.qty - 1 }) : x))
+            .filter((x) => x.qty === null || x.qty === undefined || x.qty > 0);
+          try { await db.updateShop(camp, sh.id, { items, log: shopLog(fresh, arm.m.name + ' comprou ' + cur.entry.name + ' por ' + fmtCronos(price) + ' Cronos (Armeiro).') }); }
+          catch (err) { toast(errorMessage(err)); return false; }
+          if (sh.kind === 'jogador') await payMember(sh.ownerCharId, price).catch(() => {});
+          s.money = Object.assign({}, s.money);
+          s.money[camp] = num(s.money[camp]) - price;
+          return true;
+        }
+      });
+    }));
+    return out;
+  }
   function drawArmory() {
-    const ch = sheetChar;
-    if (!ch || !armDlg) return;
-    const s = ch.sheet;
+    const s = armSheet();
+    if (!s || !armDlg) return;
+    const ch = arm.m || sheetChar;
     const guns = armoryItems(s);
     const w = guns.find((x) => x.uid === arm.uid) || guns[0];
     if (!w) { closeDialog(armDlg); return; }
@@ -6033,7 +6139,6 @@ const FIREBASE_CONFIG = {
     const taken = takenPositions(w);
     const positions = info.positions;
     if (!arm.sel || (arm.sel === 'mod' && !info.mods) || (arm.sel.indexOf('pos:') === 0 && positions.indexOf(arm.sel.slice(4)) < 0)) arm.sel = positions[0] ? 'pos:' + positions[0] : info.mods ? 'mod' : 'prop';
-    const lib = arm.lib || BUILTINS.filter((e) => ['mod-arma', 'propriedade', 'acessorio'].indexOf(e.kind) >= 0);
     const keep = armDlg.contains(document.activeElement) ? document.activeElement.dataset.fid : '';
 
     // cabeçalho e troca de arma
@@ -6070,7 +6175,6 @@ const FIREBASE_CONFIG = {
     const stage = h('div', 'armory__stage', body, ...positions.map(spot));
 
     // slots de mod e de propriedade
-    const modFree = info.mods - use.total;
     const slotBtn = (id, label, part, locked) => {
       const b = h('button', 'armory__slot' + (arm.sel === id ? ' is-on' : '') + (part ? ' is-full' : '') + (locked ? ' is-locked' : ''), h('span', 'armory__slot-k', label), h('span', 'armory__slot-v', part || (locked ? 'bloqueado' : 'vazio')));
       b.type = 'button';
@@ -6082,25 +6186,49 @@ const FIREBASE_CONFIG = {
       !info.mods ? null : slotBtn('mod', 'Mods · ' + use.total + '/' + info.mods + (use.acc ? ' (' + use.acc + ' com acessórios)' : ''), w.slots.mods.map((x) => x.name).join(', ')),
       slotBtn('prop', 'Propriedade · ' + w.slots.props.length + '/' + info.props, w.slots.props.map((x) => x.name).join(', '), !info.props));
 
-    // lista de peças do que está selecionado
+    // lista de peças do que está selecionado: primeiro o que está montado, depois o que dá para montar
     const panel = h('div', 'armory__panel');
-    const row = (e, on, can, why, act) => {
-      const btn = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Tirar' : 'Montar');
+    const row = (e, on, opt) => {
+      const label = on ? 'Tirar' : opt.act || 'Montar';
+      const btn = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), label);
       btn.type = 'button';
-      btn.dataset.fid = 'arm-part-' + nameKey(e.name).replace(/\s+/g, '-');
-      btn.disabled = !on && !can;
-      if (!on && !can && why) btn.title = why;
-      btn.addEventListener('click', act);
+      btn.dataset.fid = 'arm-part-' + nameKey(e.name).replace(/\s+/g, '-') + (opt.n ? '-' + opt.n : '');
+      btn.disabled = Boolean(opt.why) || arm.busy;
+      if (opt.why) btn.title = opt.why;
+      btn.addEventListener('click', opt.run);
       const li = h('li', 'armory__part' + (on ? ' is-on' : ''), h('span', 'armory__part-info', h('strong', '', e.name, e.oficial ? ' ' : '', e.oficial ? h('span', 'tag', 'Oficial') : null),
-        h('span', 'armory__part-meta', [e.values.raridade, e.values.para, e.kind === 'mod-arma' ? modCost(e) + (modCost(e) === 1 ? ' slot' : ' slots') : ''].filter(Boolean).join(' · ')),
+        h('span', 'armory__part-meta', [on ? 'Montado' : opt.where, e.values.raridade, e.values.para, e.kind === 'mod-arma' ? modCost(e) + (modCost(e) === 1 ? ' slot' : ' slots') : ''].filter(Boolean).join(' · ')),
         entryText(e) ? h('span', 'armory__part-text', entryText(e)) : null,
-        e.slots && e.slots.accs && e.slots.accs.length ? h('span', 'armory__part-meta', 'Traz: ' + e.slots.accs.map((a) => a.name + ' (' + a.values.posicao + ')').join(', ')) : null,
-        !on && !can && why ? h('span', 'armory__why', why) : null), btn);
+        e.slots && e.slots.accs && e.slots.accs.length ? h('span', 'armory__part-meta', 'Traz: ' + e.slots.accs.map((x) => x.name + ' (' + x.values.posicao + ')').join(', ')) : null,
+        opt.swap ? h('span', 'armory__why armory__why--swap', 'Troca: ' + opt.swap + ' (volta para a mochila)') : null,
+        opt.why ? h('span', 'armory__why', opt.why) : null), btn);
       const c = rarColor(e.values.raridade);
       if (c) li.style.setProperty('--rar', c);
       return li;
     };
     const match = (e) => !arm.q || searchScore(entryFields(e), arm.q) > 0;
+    // tirar: a peça sai da arma e vai para a mochila
+    const unmount = (list, piece) => () => { list.splice(list.indexOf(piece), 1); returnToBag(s, [piece]); toast(piece.name + ' voltou para a mochila.'); armSave(); };
+    // montar: tira uma unidade da fonte e põe na arma (o que estava no lugar volta para a mochila)
+    const mountFrom = (src, plan) => async () => {
+      if (arm.busy) return;
+      arm.busy = true;
+      const ok = await src.take();
+      arm.busy = false;
+      if (!ok) { drawArmory(); return; }
+      const done = mountPiece(s, w, slotSnap(src.e));
+      if (!done) { returnToBag(s, [slotSnap(src.e)]); toast('Não coube: ' + src.e.name + ' foi para a mochila.'); }
+      else toast('Montou ' + src.e.name + ' em ' + w.name + '.' + (done.removed.length ? ' ' + done.removed.join(', ') + ' voltou para a mochila.' : ''));
+      armSave();
+    };
+    const sources = armSources(s);
+    const candRows = (test) => sources.filter((src) => test(src.e) && match(src.e)).map((src, n) => {
+      const plan = planAttach(w, src.e);
+      if (!plan) return null;
+      if (plan.already) return null;
+      const poor = src.price !== undefined && arm.m && currentCamp && num((s.money || {})[currentCamp.id]) < src.price ? 'Dinheiro insuficiente.' : '';
+      return row(src.e, false, { act: src.act, where: src.where, n: n + 1, why: plan.why || poor, swap: plan.slots && plan.removed.length ? plan.removed.join(', ') : '', run: mountFrom(src, plan) });
+    }).filter(Boolean);
     let items = [];
     let title = '';
     let hint = '';
@@ -6108,46 +6236,21 @@ const FIREBASE_CONFIG = {
       const pos = arm.sel.slice(4);
       const t = taken[pos];
       title = pos;
-      if (t && t.mod) hint = 'Esta posição vem no mod ' + t.mod.name + '. Tire o mod para trocar.';
+      if (t && t.mod) hint = 'Esta posição vem no mod ' + t.mod.name + '. Montar outro acessório aqui tira o mod.';
       else hint = 'Um acessório por posição. Cada slot de mod livre leva ' + per + ' acessórios.';
-      const own = t && !t.mod ? 1 : 0;
-      const room = Math.ceil((w.slots.accs.length - own + 1) / per) + use.mods <= info.mods;
-      items = lib.filter((e) => e.kind === 'acessorio' && e.values.posicao === pos && e.typeId === w.kind && match(e)).map((e) => {
-        const on = Boolean(t && !t.mod && (t.acc.id ? t.acc.id === e.id : t.acc.name === e.name));
-        return row(e, on, !(t && t.mod) && room, t && t.mod ? 'Vem no mod.' : 'Sem slot de mod livre para mais acessórios.', () => {
-          if (on) w.slots.accs.splice(w.slots.accs.indexOf(t.acc), 1);
-          else { if (t && !t.mod) w.slots.accs.splice(w.slots.accs.indexOf(t.acc), 1); w.slots.accs.push(slotSnap(e)); }
-          armSave();
-        });
-      });
+      if (t) items.push(row(t.acc, true, t.mod ? { why: 'Vem no mod ' + t.mod.name + '.', run: () => {} } : { run: unmount(w.slots.accs, t.acc) }));
+      items = items.concat(candRows((e) => e.kind === 'acessorio' && e.values.posicao === pos && e.typeId === w.kind));
     } else if (arm.sel === 'mod') {
       title = 'Mods';
       hint = 'Raridade ' + info.rar + ': ' + info.mods + (info.mods === 1 ? ' slot' : ' slots') + ' de mod. Mod Comum usa 1, Rara usa 2, Lendária usa 3.';
-      const para = WEAPON_PARA[w.kind];
-      items = lib.filter((e) => e.kind === 'mod-arma' && (!e.values.para || e.values.para === 'Qualquer arma' || e.values.para === para) && match(e)).map((e) => {
-        const idx = w.slots.mods.findIndex((m) => (m.id ? m.id === e.id : m.name === e.name));
-        const on = idx >= 0;
-        const clash = ((e.slots && e.slots.accs) || []).find((a) => taken[a.values.posicao]);
-        const fits = modCost(e) <= modFree;
-        return row(e, on, fits && !clash, !fits ? 'Precisa de ' + modCost(e) + (modCost(e) === 1 ? ' slot livre' : ' slots livres') + '.' : clash ? 'A posição ' + clash.values.posicao + ' já está ocupada.' : '', () => {
-          if (on) w.slots.mods.splice(idx, 1); else w.slots.mods.push(slotSnap(e));
-          armSave();
-        });
-      });
+      items = w.slots.mods.map((m) => row(m, true, { run: unmount(w.slots.mods, m) })).concat(candRows((e) => e.kind === 'mod-arma'));
     } else {
       title = 'Propriedade';
       hint = info.props ? 'A raridade ' + info.rar + ' comporta ' + plural(info.props, 'propriedade', 'propriedades') + '.' : 'A raridade ' + info.rar + ' não comporta propriedade. Só Incomum, Épica e Lendária.';
       if (w.kind === 'armadura') hint += ' Armadura não recebe mods nem acessórios, só propriedade.';
-      const paraProp = w.kind === 'armadura' ? 'Armadura' : 'Arma';
-      items = lib.filter((e) => e.kind === 'propriedade' && (!e.values.para || e.values.para === 'Qualquer item' || e.values.para === paraProp) && match(e)).map((e) => {
-        const idx = w.slots.props.findIndex((p) => (p.id ? p.id === e.id : p.name === e.name));
-        const on = idx >= 0;
-        return row(e, on, w.slots.props.length < info.props, info.props ? 'Já tem todas as propriedades que a raridade permite.' : 'A raridade não comporta propriedade.', () => {
-          if (on) w.slots.props.splice(idx, 1); else w.slots.props.push(slotSnap(e));
-          armSave();
-        });
-      });
+      items = w.slots.props.map((x) => row(x, true, { run: unmount(w.slots.props, x) })).concat(candRows((e) => e.kind === 'propriedade'));
     }
+    hint += arm.m ? ' Peças da mochila, dos armazéns liberados e das lojas (comprando).' : ' Só aparecem as peças que estão na mochila; armazéns e lojas ficam no Armeiro da campanha.';
     const q = h('input', 'input');
     q.type = 'search';
     q.id = 'arm-q';
@@ -6159,7 +6262,7 @@ const FIREBASE_CONFIG = {
     const qLab = h('label', 'visually-hidden', 'Buscar peça');
     qLab.htmlFor = q.id;
     panel.append(h('h3', 'armory__ptitle', title), h('p', 'field__hint', hint), qLab, q,
-      items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', arm.q ? 'Nenhuma peça com esse nome.' : 'Nenhuma peça para esta posição no banco. Crie uma na Oficina.'));
+      items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', arm.q ? 'Nenhuma peça com esse nome.' : arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.'));
 
     // números da arma e munição
     const stat = (k, v, changed) => h('div', 'armory__stat' + (changed ? ' is-changed' : ''), h('span', '', k), h('strong', '', v || '—'));
@@ -6190,7 +6293,7 @@ const FIREBASE_CONFIG = {
           g.rule.partial ? btn('+5', 'arm-reload-5', () => reload(5), a >= g.cap || !res) : null,
           g.rule.partial ? btn('+10', 'arm-reload-10', () => reload(10), a >= g.cap || !res) : null,
           g.rule.heat && isCooling(w, 0) ? btn('Esfriar', 'arm-cool', () => { w.cool = 0; w.heat = { r: 0, n: 0, prev: 0 }; armSave(); }) : null,
-          btn('Procurar munição', 'arm-find-ammo', () => findAmmo(w)),
+          arm.m ? null : btn('Procurar munição', 'arm-find-ammo', () => findAmmo(w)),
           ...ammoForGun(s, w).slice(0, 3).map((x) => btn('Usar ' + x.name + ((x.qty || 1) > 1 ? ' (×' + x.qty + ')' : ''), 'arm-use-' + x.uid, () => { const msg = loadAmmo(s, x, w); if (msg) { toast(msg); armSave(); } })),
           btn('+1 ' + unitName[0] + ' de reserva', 'arm-res-add', () => { w.reserve = res + step; armSave(); }),
           btn('−1', 'arm-res-sub', () => { w.reserve = Math.max(0, res - step); armSave(); }, !res)),
@@ -6203,7 +6306,7 @@ const FIREBASE_CONFIG = {
     }
 
     armDlg.replaceChildren(
-      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', 'Armeiro')), close),
+      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', 'Armeiro'), ch && ch.name ? h('small', 'armory__who', ' · ' + ch.name + (arm.m && currentCamp ? ' · ' + fmtCronos(num((s.money || {})[currentCamp.id])) + ' Cronos' : '')) : null), close),
       tabs,
       h('div', 'armory__grid',
         h('div', 'armory__left', stage, slotRow, stats, ammoBox.children.length ? ammoBox : null),
@@ -6222,7 +6325,7 @@ const FIREBASE_CONFIG = {
     const ch = sheetChar;
     const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
       { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!e || sheetChar !== ch) return;
     const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
     const wasOver = compute(ch).over;
@@ -7155,7 +7258,7 @@ const FIREBASE_CONFIG = {
       more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
         const e = await openPicker({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
           { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
         if (!e || !wz) return;
         g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e });
         renderSetup();
@@ -10487,6 +10590,7 @@ const FIREBASE_CONFIG = {
       ? 'O armazém do grupo ou de um personagem guarda itens fora da mochila. Você define os espaços e a carga, e quando os jogadores têm acesso. Pedidos de jogadores esperam a sua aprovação.'
       : (list.length ? 'Você mexe num armazém quando o mestre libera o acesso.' : 'Nenhum armazém ainda. Peça um ao mestre; ele aprova e diz quando vocês têm acesso.');
     $('#vault-list').replaceChildren(...list.map((v) => vaultCard(v, gm)));
+    renderCampArmory();
     tabBadges();
   }
   function vaultCard(v, gm) {
@@ -10625,6 +10729,24 @@ const FIREBASE_CONFIG = {
     openDialog(vaultDlg);
     name.focus();
   }
+  /* Armeiro da campanha: as armas e armaduras do personagem jogado, com peças da mochila, dos armazéns e das lojas */
+  async function openCampArmory() {
+    let m = playing();
+    if (!m && currentCamp && currentCamp.gm) {
+      const opts = members.filter((x) => x.sheet && x.sheet.attrs && armoryItems(x.sheet).length);
+      if (!opts.length) { toast('Ninguém do grupo tem arma ou armadura.'); return; }
+      const id = opts.length === 1 ? opts[0].characterId : await askChoice('Armeiro', 'Personagem', 'Escolha de quem são as armas.', opts.map((x) => [x.characterId, x.name]), 'Abrir');
+      m = opts.find((x) => x.characterId === id) || null;
+    }
+    if (!m) { toast('Escolha um personagem seu em "Jogando como".'); return; }
+    if (!m.sheet || !armoryItems(m.sheet).length) { toast(m.name + ' não tem arma nem armadura no inventário.'); return; }
+    openArmory('', m);
+  }
+  function renderCampArmory() {
+    const me = playing();
+    $('#carm-hint').textContent = (me ? me.name + ': m' : 'M') + 'onte mods, acessórios e propriedades com peças da mochila, dos armazéns liberados ou das lojas da campanha (comprando na hora). Toda marca armamentista vende acessórios.';
+  }
+  $('#carm-open').addEventListener('click', openCampArmory);
   $('#vault-new').addEventListener('click', () => {
     if (!currentCamp.gm && !playing()) { toast('Escolha um personagem seu em "Jogando como".'); return; }
     vaultForm(null);
@@ -10648,6 +10770,19 @@ const FIREBASE_CONFIG = {
   const shopKindText = (sh) => (sh.kind === 'companhia' ? 'Companhia ' + sh.company : sh.kind === 'npc' ? 'NPC: ' + sh.npc : sh.kind === 'jogador' ? 'Loja de jogador (' + sh.ownerName + ')' : 'Do mestre');
   const catalogPrice = (entry) => priceOf(BUILTINS.find((e) => e.id && e.id === entry.id) || entry);
   const shopLog = (sh, text) => [{ t: Date.now(), text }].concat(sh.log || []).slice(0, 20);
+  /* Toda marca armamentista (companhia que fabrica armas) vende os acessórios do banco, com estoque infinito */
+  let accBank = null;
+  const armsMaker = (co) => Boolean(co) && BUILTINS.some((e) => isWeapon(e.kind) && (e.values || {}).fabricante === co);
+  function shopStock(sh) {
+    if (sh.kind !== 'companhia' || !armsMaker(sh.company)) return sh.items;
+    if (!accBank) {
+      accBank = BUILTINS.filter((e) => e.kind === 'acessorio');
+      libSearch(['acessorio'], '').then((l) => { accBank = l; renderShops(); }).catch(() => { /* fica o catálogo oficial */ });
+    }
+    const extra = accBank.filter((e) => !sh.items.some((x) => samePiece(x.entry, e)))
+      .map((e) => ({ uid: 'acc-' + (e.id || nameKey(e.name)), entry: slotSnap(e), qty: null, price: priceOf(e) || 17, sale: true, virtual: true }));
+    return sh.items.concat(extra);
+  }
   const stockText = (it) => (it.qty === null || it.qty === undefined ? '∞' : '×' + it.qty);
   /* Preços avançados (lojas do mestre, de companhia e de NPC): inflação ou desconto geral, por raridade
      e por categoria, variação aleatória fixa por item e arredondamento. O preço do item é a base. */
@@ -10733,7 +10868,7 @@ const FIREBASE_CONFIG = {
     const price = shopPrice(shops.find((x) => x.id === sh.id) || sh, it);
     if (moneyOf(me) < price) { toast(me.name + ' tem ' + fmtCronos(moneyOf(me)) + ' Cronos nesta campanha; ' + it.entry.name + ' custa ' + fmtCronos(price) + '.'); return; }
     const fresh = shops.find((x) => x.id === sh.id);
-    const cur = fresh && fresh.items.find((x) => x.uid === it.uid);
+    const cur = fresh && shopStock(fresh).find((x) => x.uid === it.uid);
     if (!cur || !cur.sale || (cur.qty !== null && cur.qty !== undefined && cur.qty < 1)) { toast('Esse item acabou.'); return; }
     const camp = currentCamp.id;
     try {
@@ -10788,7 +10923,7 @@ const FIREBASE_CONFIG = {
   async function addBankItem(sh) {
     const e = await openPicker({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
       { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!e) return;
     const fresh = shops.find((x) => x.id === sh.id) || sh;
     await saveShop(fresh, { items: fresh.items.concat([{ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }]) });
@@ -10890,7 +11025,8 @@ const FIREBASE_CONFIG = {
     const gm = currentCamp.gm;
     const owner = isShopOwner(sh);
     const manage = gm || owner;
-    const forSale = sh.items.filter((i) => i.sale);
+    const stock = shopStock(sh);
+    const forSale = stock.filter((i) => i.sale);
     const det = h('details', 'shop shop--' + sh.kind);
     det.open = shopUi.open.has(sh.id);
     det.addEventListener('toggle', () => { if (det.open) shopUi.open.add(sh.id); else shopUi.open.delete(sh.id); });
@@ -10900,8 +11036,9 @@ const FIREBASE_CONFIG = {
       h('span', 'shop__main', h('strong', 'shop__name', sh.name),
         h('span', 'shop__meta', [shopKindText(sh), plural(forSale.length, 'item à venda', 'itens à venda'), sh.kind === 'companhia' ? 'estoque da companhia' : (TRAFFIC.find((t) => t[0] === sh.traffic) || TRAFFIC[0])[1], sh.kind !== 'companhia' && sh.npcBuyers ? 'NPCs compram' : '', sh.pricing && sh.kind !== 'jogador' ? 'preços ajustados' : ''].filter(Boolean).join(' · ')))));
     const body = h('div', 'shop__body');
-    const shown = manage ? sh.items : forSale;
-    if (shown.length) body.append(h('ul', 'rows shop__items', ...shown.map((it) => shopItemRow(sh, it, manage))));
+    const shown = manage ? stock : forSale;
+    if (shown.length) body.append(h('ul', 'rows shop__items', ...shown.map((it) => shopItemRow(sh, it, manage && !it.virtual))));
+    if (stock.some((it) => it.virtual)) body.append(h('p', 'field__hint', sh.company + ' é marca armamentista: vende todos os acessórios, sem limite de estoque.'));
     else body.append(h('p', 'empty', manage ? 'Loja vazia. ' + (owner ? 'Abasteça com itens da mochila.' : 'Adicione itens do banco.') : 'Nada à venda agora.'));
     const acts = h('div', 'shop__acts');
     if (gm) {

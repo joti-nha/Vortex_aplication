@@ -350,31 +350,33 @@ window.VORTEX_ITEMS = {
 
     /* ------------------------------ Peças de slot ------------------------------ */
     {
-      id: 'mod-arma', title: 'Mod de arma', group: 'Peças de slot', slots: 'mod', bonus: true,
+      id: 'mod-arma', title: 'Mod de arma', group: 'Peças de slot', inventory: true, slots: 'mod', bonus: true,
       hint: 'Mod é uma peça à parte: depois de salvo, é encaixado em cada arma pelos slots. A cor vem da raridade.',
       fields: [
         { key: 'nome', label: 'Nome do mod', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'raridade', label: 'Raridade (define a cor e quantos slots usa)', kind: 'rarity', options: 'raridadesMod', big: true },
         { key: 'para', label: 'Serve em', kind: 'select', options: 'paraMod' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 300' },
         { key: 'tipo', label: 'Mod (tipo)', kind: 'text' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
-      id: 'propriedade', title: 'Propriedade', group: 'Peças de slot', image: true, bonus: true,
+      id: 'propriedade', title: 'Propriedade', group: 'Peças de slot', inventory: true, image: true, bonus: true,
       hint: 'Propriedades só entram em itens cuja raridade comporta (Incomum, Épica e Lendária).',
       fields: [
         { key: 'nome', label: 'Nome da propriedade', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'para', label: 'Serve em', kind: 'select', options: 'paraPropriedade' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 600' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
-      id: 'acessorio', title: 'Acessório', group: 'Peças de slot',
+      id: 'acessorio', title: 'Acessório', group: 'Peças de slot', inventory: true,
       hint: 'Escolha o tipo de arma. Cada posição da arma só aceita um acessório daquela posição.',
       types: [
         { id: 'arma-fogo', title: 'Para arma de fogo', sub: 'Mira, Bocal, Carregador, Empunhadura', rule: 'mods-e-acessorios/acessorios', opts: { posicao: ['Mira', 'Bocal', 'Carregador', 'Empunhadura'] } },
@@ -384,6 +386,7 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome do acessório', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'posicao', label: 'Posição (slot)', kind: 'select', optKey: 'posicao', options: [] },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 17 (3 acessórios = 50)' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
@@ -732,6 +735,13 @@ window.VORTEX_ITEMS = {
       id: 'of-ls-' + slug(a[0]), kind: 'item-geral', typeId: '', name: a[0],
       values: { fabricante: 'Live Service', raridade: a[1], tipoUso: a[2], usos: a[3], carga: String(a[4]), bonusRec: a[5], efeito: a[6], preco: a[7] }
     });
+  });
+})();
+
+/* Acessórios oficiais: o livro cobra 50 Cronos a cada 3 acessórios (17 cada, arredondado) */
+(function () {
+  window.VORTEX_ITEMS.catalogo.forEach(function (e) {
+    if (e.kind === 'acessorio' && !(e.values || {}).preco) e.values.preco = '17';
   });
 })();
 
