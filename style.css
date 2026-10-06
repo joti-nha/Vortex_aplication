@@ -2957,3 +2957,26 @@ html, body { max-width: 100%; overflow-x: clip; }
   .gear__shop .row > .row__open { flex: 1 1 100%; }
   .gear__shop .row > .gear__price { margin-left: auto; }
 }
+
+/* Celular: o retângulo do item no inventário vira um painel fixo na parte de baixo da tela,
+   em vez de sair do quadrado (que cortava pelas bordas). */
+@media (max-width: 760px) {
+  .cell:hover .cell__card { display: none; }
+  .cell.is-open .cell__card {
+    display: block;
+    position: fixed;
+    top: auto;
+    left: max(0.75rem, env(safe-area-inset-left));
+    right: max(0.75rem, env(safe-area-inset-right));
+    bottom: calc(5.9rem + env(safe-area-inset-bottom));
+    z-index: 60;
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    max-height: min(62vh, 30rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.85rem 1rem 0.9rem;
+  }
+  .cell.is-open .cell__actions { margin-left: 0; margin-right: 0; }
+}

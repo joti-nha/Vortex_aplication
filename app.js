@@ -9597,7 +9597,7 @@ const FIREBASE_CONFIG = {
     const price = shopPrice(sh, it);
     const main = h('span', 'row__main', h('span', 'row__title', e.name, ' ', h('span', 'tag shop__stock', stockText(it)), manage ? h('span', 'tag' + (it.sale ? ' tag--on' : ''), it.sale ? 'À venda' : 'No armazém') : null),
       h('span', 'row__meta', [kindTitle(e.kind), e.typeTitle, v.raridade, v.fabricante].filter(Boolean).join(' · ')));
-    const row = h('li', 'row shop__item' + (it.sale ? '' : ' shop__item--off'), h('span', 'row__open row__open--static', entryIcon(e), main),
+    const row = h('li', 'row shop__item' + (it.sale ? '' : ' shop__item--off'), gearOpen(e, entryIcon(e), main),
       h('strong', 'gear__price', price !== base && manage ? h('s', 'shop__base', fmtCronos(base)) : null, price !== base && manage ? ' ' : null, fmtCronos(price)));
     const me = playing();
     if (it.sale && me && !(sh.kind === 'jogador' && sh.ownerCharId === me.characterId)) {
