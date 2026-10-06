@@ -492,6 +492,16 @@ window.VORTEX_ITEMS = {
     { id: 'of-acc-lanterna', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna', values: { posicao: 'Empunhadura', efeito: 'Pode ligar quando quiser, te concede uma fonte de luz frontal (cone) da arma de 9 metros à sua frente.' } },
     { id: 'of-acc-lanterna-uv', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna UV', values: { posicao: 'Empunhadura', efeito: 'Como lanterna, mas é uma luz UV que não serve para enxergar no escuro.' } },
     { id: 'of-acc-tripe', kind: 'acessorio', typeId: 'arma-fogo', name: 'Tripé', values: { posicao: 'Empunhadura', efeito: 'Use somente uma ação de movimento para apoiar a arma (em vez de ação completa).' } },
+    // Acessórios corpo a corpo (um por posição) e peças de teste para o Armeiro
+    { id: 'of-acc-ponta-serrilhada', kind: 'acessorio', typeId: 'arma-melee', name: 'Ponta serrilhada', values: { posicao: 'Ponta', efeito: 'Golpes cortantes que acertam deixam o alvo sangrando: ele perde 1 PV no começo do próximo turno dele.' } },
+    { id: 'of-acc-dorso-pesado', kind: 'acessorio', typeId: 'arma-melee', name: 'Dorso pesado', values: { posicao: 'Dorso', efeito: 'Golpes com as duas mãos podem causar dano contundente em vez do dano normal da arma.' } },
+    { id: 'of-acc-empunhadura-emborrachada', kind: 'acessorio', typeId: 'arma-melee', name: 'Empunhadura emborrachada', values: { posicao: 'Empunhadura', efeito: 'Ganho nos testes para resistir a ser desarmado.' } },
+    { id: 'of-acc-cabo-laco', kind: 'acessorio', typeId: 'arma-melee', name: 'Cabo com laço', values: { posicao: 'Cabo', efeito: 'Sacar ou guardar esta arma é ação livre, uma vez por turno.' } },
+    { id: 'of-mod-lamina-vibratoria', kind: 'mod-arma', name: 'Lâmina vibratória', values: { raridade: 'Rara', para: 'Arma corpo a corpo', tipo: 'Vibração', efeito: 'Uma vez por cena, um golpe que acertar ignora a Blindagem do alvo (o dano vai direto para a próxima camada).' } },
+    { id: 'of-mod-nucleo-adaptativo', kind: 'mod-arma', name: 'Núcleo adaptativo', values: { raridade: 'Lendária', para: 'Qualquer arma', tipo: 'Adaptativo', efeito: 'Uma vez por cena, antes de atacar, escolha o tipo de dano do ataque entre os tipos de dano do sistema.' } },
+    { id: 'of-prop-reforcada', kind: 'propriedade', name: 'Reforçada', values: { para: 'Qualquer item', efeito: 'Não quebra nem se danifica por desgaste comum, queda ou efeitos de ambiente.' } },
+    { id: 'of-prop-ricochete', kind: 'propriedade', name: 'Ricochete', values: { para: 'Arma', efeito: 'Quando um ataque errar o alvo por 1, ele acerta outro alvo adjacente a esse, à sua escolha (com o mesmo resultado).' } },
+    { id: 'of-prop-isolamento', kind: 'propriedade', name: 'Isolamento elétrico', values: { para: 'Armadura', efeito: 'Enquanto vestida, efeitos de PE não desativam seus shields.' } },
 
     // Espécimes
     {
@@ -588,6 +598,11 @@ window.VORTEX_ITEMS = {
 (function () {
   var cat = window.VORTEX_ITEMS.catalogo;
   var slug = function (n) { return n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); };
+
+  /* Mod com acessórios embutidos (teste do Armeiro): ocupa 1 slot e já traz mira e lanterna montadas */
+  var accOf = function (id) { var a = cat.filter(function (e) { return e.id === id; })[0]; return { id: a.id, kind: a.kind, typeId: a.typeId, typeTitle: '', name: a.name, values: a.values, bonus: {}, slots: null }; };
+  cat.push({ id: 'of-mod-kit-recon', kind: 'mod-arma', name: 'Kit tático Recon', values: { raridade: 'Comum', para: 'Arma de fogo', tipo: 'Kit tático', efeito: 'Kit de entrada: vem com a mira Red dot/Holográfica e a lanterna já montadas.' },
+    slots: { accs: [accOf('of-acc-red-dot'), accOf('of-acc-lanterna')] } });
 
   /* Armaduras Tnnak: [nome, tipo, raridade, armadura, penalidade, carga, preço, especial] */
   var TIPO_ARMADURA = { 'Leve': 'leve', 'Média': 'media', 'Pesada': 'pesada' };

@@ -3126,3 +3126,67 @@ html, body { max-width: 100%; overflow-x: clip; }
 .script__help { margin: 0; padding-left: 1rem; font-size: 0.75rem; color: var(--nevoa-2); }
 .script__help code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--essencia); }
 .entry__code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; }
+
+/* Armeiro: arma no centro, posições em volta, peças ao lado (estilo CoD/Battlefield, simplificado) */
+.block__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.armory { width: min(68rem, calc(100vw - 1rem)); }
+.armory__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
+.armory__head .dialog__title { margin: 0; }
+.armory__guns { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.35rem; margin-bottom: 0.9rem; scrollbar-width: thin; }
+.armory__gun { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; max-width: 14rem; padding: 0.4rem 0.7rem; border: 1px solid var(--linha); border-bottom: 3px solid var(--rar, var(--linha)); border-radius: var(--r-s); background: var(--casco); color: inherit; font: inherit; font-size: 0.85rem; cursor: pointer; }
+.armory__gun.is-on { border-color: var(--rar, var(--ambar)); background: rgba(var(--ambar-rgb), 0.1); }
+.armory__gun-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.armory__gun .ico, .armory__gunart .ico { flex-shrink: 0; }
+.armory__grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.armory__left { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
+.armory__stage { display: grid; grid-template-areas: ". top ." "left body right" ". bottom ."; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); gap: 0.5rem; align-items: center; padding: 0.75rem; border: 1px solid var(--linha); border-radius: var(--r-m, 10px);
+  background: radial-gradient(ellipse at center, rgba(var(--ambar-rgb), 0.08), transparent 70%), repeating-linear-gradient(0deg, transparent 0 23px, rgba(255, 255, 255, 0.03) 23px 24px), repeating-linear-gradient(90deg, transparent 0 23px, rgba(255, 255, 255, 0.03) 23px 24px); }
+.armory__body { grid-area: body; display: grid; place-items: center; min-height: 7.5rem; padding: 0.6rem; border: 2px solid var(--rar); border-radius: var(--r-m, 10px); box-shadow: 0 0 24px -8px var(--rar); text-align: center; }
+.armory__gunart { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; min-width: 0; }
+.armory__gunart .ico { width: 3rem; height: 3rem; }
+.armory__gunart strong { font-family: var(--fonte-titulo); font-size: 1.05rem; overflow-wrap: anywhere; }
+.armory__gunmeta { font-size: 0.75rem; color: var(--nevoa-2); }
+.armory__spot { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; padding: 0.45rem 0.55rem; border: 1px dashed var(--linha-forte); border-radius: var(--r-s); background: var(--casco); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.armory__spot--top { grid-area: top; } .armory__spot--bottom { grid-area: bottom; } .armory__spot--left { grid-area: left; } .armory__spot--right { grid-area: right; }
+.armory__spot.is-full { border-style: solid; border-color: var(--mare, #5ef2ff); }
+.armory__spot.is-on, .armory__slot.is-on { outline: 2px solid var(--ambar); outline-offset: 1px; }
+.armory__spot-pos, .armory__slot-k { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--nevoa-2); }
+.armory__spot-part, .armory__slot-v { font-size: 0.85rem; overflow-wrap: anywhere; }
+.armory__slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.armory__slot { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; padding: 0.55rem 0.7rem; border: 1px solid var(--linha); border-left: 3px solid var(--essencia); border-radius: var(--r-s); background: var(--casco); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.armory__slot.is-locked { opacity: 0.55; }
+.armory__stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: 0.4rem; }
+.armory__stat { display: flex; flex-direction: column; padding: 0.4rem 0.55rem; border-radius: var(--r-s); background: rgba(255, 255, 255, 0.03); font-size: 0.8rem; }
+.armory__stat span { color: var(--nevoa-2); font-size: 0.72rem; }
+.armory__stat strong { overflow-wrap: anywhere; }
+.armory__stat.is-changed strong { color: var(--mare, #5ef2ff); }
+.armory__ammo { padding: 0.75rem; border: 1px solid var(--linha); border-radius: var(--r-m, 10px); background: var(--casco); }
+.armory__ammo-now { margin: 0 0 0.35rem; }
+.armory__ammo-now strong { font-family: var(--fonte-titulo); font-size: 1.6rem; color: var(--ambar); }
+.armory__mag { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 0.4rem; }
+.armory__round { width: 6px; height: 14px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); }
+.armory__round.is-on { background: var(--ambar); }
+.armory__ammo-btns { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.armory__notes { margin: 0.6rem 0 0; padding-left: 1rem; font-size: 0.78rem; color: var(--mare, #5ef2ff); }
+.armory__panel { position: sticky; top: 0; display: flex; flex-direction: column; gap: 0.45rem; min-width: 0; padding: 0.75rem; border: 1px solid var(--linha); border-radius: var(--r-m, 10px); background: var(--casco); }
+.armory__ptitle { margin: 0; font-family: var(--fonte-titulo); font-size: 1.1rem; }
+.armory__parts { display: flex; flex-direction: column; gap: 0.45rem; margin: 0; padding: 0; list-style: none; max-height: 60vh; overflow-y: auto; }
+.armory__part { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; padding: 0.55rem 0.65rem; border: 1px solid var(--linha); border-left: 3px solid var(--rar, var(--linha-forte)); border-radius: var(--r-s); }
+.armory__part.is-on { background: rgba(var(--ambar-rgb), 0.08); border-color: var(--ambar); }
+.armory__part > .btn { flex-shrink: 0; }
+.armory__part-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.armory__part-meta { font-size: 0.72rem; color: var(--nevoa-2); }
+.armory__part-text { font-size: 0.82rem; }
+.armory__why { font-size: 0.72rem; color: var(--erro); }
+.attack__warn { margin: 0.4rem 0 0; font-size: var(--t-s); color: var(--erro); }
+.inv__arm { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-size: var(--t-s); color: var(--nevoa-2); }
+@media (max-width: 860px) {
+  .armory__grid { grid-template-columns: minmax(0, 1fr); }
+  .armory__panel { position: static; }
+  .armory__parts { max-height: none; }
+}
+@media (max-width: 480px) {
+  .armory__stage { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "body body" "top right" "left bottom"; padding: 0.5rem; }
+  .armory__body { min-height: 5.5rem; }
+  .armory__slots { grid-template-columns: minmax(0, 1fr); }
+}

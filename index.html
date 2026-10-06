@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=51">
+  <link rel="stylesheet" href="style.css?v=52">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -468,7 +468,10 @@
       <section class="block sheet-block" aria-labelledby="inv-title">
         <div class="block__head">
           <h2 class="block__title" id="inv-title"><button class="help" type="button" data-help="inventario">Inventário</button></h2>
-          <button class="btn btn--primary btn--sm" type="button" id="inv-add">Adicionar do banco</button>
+          <div class="block__actions">
+            <button class="btn btn--ghost btn--sm" type="button" id="inv-armory">Armeiro</button>
+            <button class="btn btn--primary btn--sm" type="button" id="inv-add">Adicionar do banco</button>
+          </div>
         </div>
         <div class="equip">
           <div>
@@ -1057,9 +1060,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=51"></script>
-  <script src="items.js?v=51"></script>
-  <script src="pixelart.js?v=51"></script>
-  <script src="app.js?v=51"></script>
+  <script src="regras.js?v=52"></script>
+  <script src="items.js?v=52"></script>
+  <script src="pixelart.js?v=52"></script>
+  <script src="app.js?v=52"></script>
 </body>
 </html>
