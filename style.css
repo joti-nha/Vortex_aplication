@@ -3209,3 +3209,6 @@ html, body { max-width: 100%; overflow-x: clip; }
   .armory__part > .btn { margin-left: auto; }
   .armory__part-info { flex-basis: 100%; }
 }
+/* Opções de um poder-lista: mesmo modelo das características raciais */
+.powopt__efeito { margin: 0; color: var(--nevoa); font-size: 0.92rem; }
+.pw-sub__more { margin-left: 0.4rem; font-size: 0.78rem; letter-spacing: 0; text-transform: none; }

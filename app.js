@@ -5298,7 +5298,13 @@ const FIREBASE_CONFIG = {
       const meta = [costTxt, v.custoUso ? 'Uso: ' + v.custoUso : '', bonusLine(p.bonus || {})].filter(Boolean).join(' · ');
       const main = h('span', 'row__main', h('span', 'row__title', p.name, ...(entryLore(p) ? [' ', entryLore(p)] : [])), h('span', 'row__meta', meta));
       if (v.efeito) main.append(h('span', 'row__text', v.efeito));
-      if (opts.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Opções (marque as compradas)'), ...opts.map((o, k) => powerOptRow(s, p, o, i + '-' + k))));
+      if (opts.length) {
+        const more = h('button', 'link-btn pw-sub__more', 'Ver opções');
+        more.type = 'button';
+        more.dataset.fid = 'pw-opts-' + i;
+        more.addEventListener('click', () => openPowerOpts(sheetChar, p, p));
+        main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Opções (marque as compradas) ', more), ...opts.map((o, k) => powerOptRow(s, p, o, i + '-' + k))));
+      }
       if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
       del.type = 'button';
@@ -6363,15 +6369,81 @@ const FIREBASE_CONFIG = {
       if (!choice || sheetChar !== ch) return;
       s.powers.push(choicePower(e, choice));
     } else if (powerOpts(e).length) {
-      const opts = powerOpts(e);
-      const first = await askChoice(e.name, 'Escolha a primeira opção (' + num(e.values.custo) + ' UP cada)', 'As outras você marca depois, na lista de poderes.', opts.map((o) => [o.name, o.name + (o.cost ? ' · ' + o.cost : '')]), 'Adicionar poder');
-      if (!first || sheetChar !== ch) return;
-      ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', picks: [first] }));
+      openPowerOpts(ch, e, null);
+      return;
     } else {
       ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '' }));
     }
     changed();
   });
+
+  /* Escolha das opções de um poder-lista (Defensivas, Ataques), no modelo das características raciais:
+     cada opção é um cartão com o efeito e o botão de pegar ou devolver. O poder entra na ficha com a
+     primeira opção pega e sai quando a última é devolvida. */
+  let powOptDlg = null;
+  function openPowerOpts(ch, e, cur) {
+    if (!powOptDlg) { powOptDlg = h('dialog', 'dialog pickchar racial powopt'); powOptDlg.setAttribute('aria-labelledby', 'powopt-title'); document.body.append(powOptDlg); }
+    const dlg = powOptDlg;
+    let p = cur;
+    const cost = num(e.values && e.values.custo);
+    const opts = powerOpts(e);
+    const q = h('input', 'input');
+    q.type = 'search';
+    q.id = 'powopt-q';
+    q.autocomplete = 'off';
+    q.placeholder = 'Buscar opção (nome ou efeito)';
+    const qLab = h('label', 'visually-hidden', 'Buscar opção');
+    qLab.htmlFor = 'powopt-q';
+    const content = h('div', 'racial__content');
+    const draw = () => {
+      const s = ch.sheet;
+      const m = compute(ch);
+      const free = m.upTotal - m.upSpent;
+      const picks = p ? powerPicks(p) : [];
+      const shown = rankSearch(opts, q.value, (o) => [[o.name, 10], [[o.text, o.cost].filter(Boolean).join(' '), 2]]);
+      const cards = shown.map((o) => {
+        const have = picks.indexOf(o.name) >= 0;
+        const b = h('button', 'btn btn--sm ' + (have ? 'btn--ghost' : 'btn--primary'), have ? 'Devolver' : 'Pegar · ' + cost + ' UP');
+        b.type = 'button';
+        b.dataset.fid = ('powopt-' + nameKey(o.name)).replace(/\s+/g, '-');
+        b.addEventListener('click', () => {
+          if (have) {
+            p.picks = powerPicks(p).filter((n) => n !== o.name);
+            if (!p.picks.length) { const k = s.powers.indexOf(p); if (k >= 0) s.powers.splice(k, 1); p = null; }
+          } else if (p) p.picks = powerPicks(p).concat([o.name]);
+          else { p = Object.assign(slotSnap(e), { thumb: e.thumb || '', picks: [o.name] }); s.powers.push(p); }
+          changed();
+          draw();
+          const again = $('[data-fid="' + b.dataset.fid + '"]', content);
+          if (again) again.focus();
+        });
+        return h('li', 'pickchar__card racial__trait' + (have ? ' is-here' : ''),
+          h('span', 'pickchar__info', h('strong', 'pickchar__name', o.name),
+            h('span', 'pickchar__meta', [cost + ' UP', o.cost ? 'uso ' + o.cost : ''].filter(Boolean).join(' · ')),
+            o.text ? h('span', 'racial__text', o.text) : null), b);
+      });
+      content.replaceChildren(
+        h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free)),
+          ' · ', plural(picks.length, 'opção pega', 'opções pegas')),
+        shown.length ? h('ul', 'pickchar__list', ...cards) : h('p', 'empty', 'Nenhuma opção com esse nome.'));
+    };
+    q.addEventListener('input', draw);
+    const close = h('button', 'btn btn--primary btn--sm', 'Pronto');
+    close.type = 'button';
+    close.addEventListener('click', () => closeDialog(dlg));
+    const title = h('h2', '', e.name);
+    title.id = 'powopt-title';
+    const ef = e.values && e.values.efeito;
+    dlg.replaceChildren(h('div', 'pickchar__body', title,
+      h('p', 'racial__only', 'Escolha as opções'),
+      ef ? h('p', 'powopt__efeito', ef) : null,
+      h('p', 'field__hint', 'Cada opção custa ' + cost + ' UP. Pegue quantas quiser; dá para devolver aqui ou desmarcar depois na lista de poderes.'),
+      opts.length > 6 ? h('div', 'field racial__search', qLab, q) : null,
+      content,
+      h('div', 'dialog__actions', close)));
+    draw();
+    openDialog(dlg);
+  }
 
   $('#species-pick').addEventListener('click', async () => {
     const ch = sheetChar;
