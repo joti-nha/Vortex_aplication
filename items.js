@@ -370,7 +370,7 @@ window.VORTEX_ITEMS = {
       fields: [
         { key: 'nome', label: 'Nome do espécime', kind: 'text', big: true },
         { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
-        { key: 'racial', label: 'Habilidades raciais (3, de 1 UP cada)', kind: 'racial3', big: true, hint: 'Quem é deste espécime já nasce com as 3. Só o Etheriano pode comprar as de outros espécimes com UP.' },
+        { key: 'racial', label: 'Habilidades raciais (3)', kind: 'racial3', big: true, hint: 'Quem é deste espécime já nasce com as 3. Só o Etheriano pode comprar as de outros espécimes com UP.' },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
@@ -507,7 +507,7 @@ window.VORTEX_ITEMS = {
     {
       id: 'of-esp-android', kind: 'especime', name: 'Android',
       values: { descricao: 'Você é um robô, só que humanoide...',
-        racial: 'Engenharia | Não equipa, acopla armas e armaduras (ao menos 1 hora); acopladas, ocupam a carga cibernética em vez da carga; +1 de carga cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças e módulos não precisam de prótese. | 1 | acopla\nNúcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Shield. Ser eletrônico: efeitos de PE atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nHumanidade | Resiste ao atordoamento automático de efeitos de PE e se regenera como um ser orgânico, e também por engenharia e bateria. | 1 | humanidade' }
+        racial: 'Engenharia | Não equipa, acopla armas e armaduras (ao menos 1 hora); acopladas, ocupam a carga cibernética em vez da carga; +1 de carga cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças e módulos não precisam de prótese. | 1 | acopla\nNúcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Shield. Ser eletrônico: efeitos de PE atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nHumanidade | Você pode fazer testes para resistir a efeitos de PE se tiver CD, e metade da sua blindagem pode ser regenerada como se fossem PVs. | 1 | humanidade' }
     },
     {
       id: 'of-esp-etheriano', kind: 'especime', name: 'Etheriano',

@@ -2624,7 +2624,7 @@ const FIREBASE_CONFIG = {
       if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r) => dl.append(h('dt', '', r[0]), h('dd', 'entry__pre', r[1]))); return; }
       if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
       if (f.kind === 'script') { dl.append(h('dt', '', 'Script'), h('dd', 'entry__pre entry__code', String(val))); return; }
-      if (f.kind === 'racial3') { dl.append(h('dt', '', 'Habilidades raciais'), h('dd', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), ' (' + (t.cost || 1) + ' UP)' + (t.text ? ': ' + t.text : ''))))); return; }
+      if (f.kind === 'racial3') { dl.append(h('dt', '', 'Habilidades raciais'), h('dd', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : '')))); return; }
       dl.append(h('dt', '', f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(val)) : f.key === 'preco' ? priceText(val) : String(val)));
     });
     // campos que não estão no formulário atual (registros antigos) também aparecem
@@ -2982,7 +2982,7 @@ const FIREBASE_CONFIG = {
     return { id: null, kind, typeId: typeId || '', name: '', values, image: '', thumb: '', slots: normSlots(null), bonus: {} };
   }
 
-  /* Espécime: 3 caixas, uma para cada habilidade racial (1 UP cada). Grava no formato "Nome | efeito | 1", uma por linha. */
+  /* Espécime: 3 caixas, uma para cada habilidade racial (o Etheriano compra as de outros por 1 UP). Grava no formato "Nome | efeito | 1", uma por linha. */
   /* Script: fica escondido num "</>" discreto no fim do poder. É onde mora a mecânica (vida base, UP, núcleo, flags, bônus). */
   function scriptField(id, value, onChange) {
     const box = h('details', 'script');
@@ -3037,7 +3037,7 @@ const FIREBASE_CONFIG = {
       tx.setAttribute('aria-label', 'Efeito da habilidade racial ' + (i + 1));
       tx.addEventListener('input', () => { t.text = tx.value; save(); });
       const sc = scriptField('racial3-' + field.key + '-' + i + '-script', String(t.script || '').split(/\s*;\s*/).filter(Boolean).join('\n'), (v) => { t.script = v; save(); });
-      box.append(h('div', 'racial3__box', h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', 'Habilidade racial'), h('span', 'racial3__cost', '1 UP')), nm, tx, sc));
+      box.append(h('div', 'racial3__box', h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', 'Habilidade racial')), nm, tx, sc));
     });
     return box;
   }
@@ -3832,7 +3832,7 @@ const FIREBASE_CONFIG = {
     ['up: 3', 'UP iniciais'],
     ['nucleo: 2', 'núcleo de nascença (capacidade)'],
     ['acopla', 'Engenharia: armas e armaduras acopladas ocupam a Carga Cibernética'],
-    ['humanidade', 'regenera como ser orgânico e resiste ao atordoamento de PE'],
+    ['humanidade', 'testes contra efeitos de PE com CD; metade da Blindagem/Escudo regenera como PV'],
     ['eletronico', 'ser eletrônico: efeitos de PE atordoam'],
     ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)']
   ];
@@ -8463,7 +8463,8 @@ const FIREBASE_CONFIG = {
       h('ul', 'inv__list', ...(bag.length ? bag.map((i) => row(i, false)) : [h('li', 'inv__empty', 'Nada que dê para pegar no combate.')])));
   }
 
-  /* Descanso (capítulo Recursos): curto recupera metade de PV, PE e PA (com Humanidade, também a vida convertida),
+  /* Descanso (capítulo Recursos): curto recupera metade de PV, PE e PA (com Humanidade, também metade da vida convertida,
+     como se fossem PV: o descanso não leva a Blindagem/Escudo além da metade),
      e cada curto seguido recupera metade do anterior; o longo recupera tudo e zera a sequência. */
   function restSheet(s, m, long) {
     if (long) { s.cur = {}; s.rests = 0; return 'tudo recuperado'; }
@@ -8474,8 +8475,11 @@ const FIREBASE_CONFIG = {
     keys.forEach((k) => {
       const mx = m.max[k];
       if (!mx) return;
+      const half = k === m.base && k !== 'pv'; // Humanidade: só metade da vida convertida regenera
+      const pool = half ? Math.ceil(mx / 2) : mx;
       const before = getCur(s, k, mx);
-      setCur(s, k, before + Math.max(1, Math.ceil(mx / 2 / Math.pow(2, n))), mx);
+      if (before >= pool) return;
+      setCur(s, k, Math.min(pool, before + Math.max(1, Math.ceil(pool / 2 / Math.pow(2, n)))), mx);
       const d = getCur(s, k, mx) - before;
       if (d) got.push('+' + d + ' ' + (k === 'pv' ? 'PV' : k === 'pe' ? 'PE' : k === 'pa' ? 'PA' : k === 'escudo' ? 'Escudo' : 'Blindagem'));
     });
