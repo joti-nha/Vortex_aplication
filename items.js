@@ -71,7 +71,7 @@ window.VORTEX_ITEMS = {
   buildTipos: ['Entrada', 'Guiada'],
   /* Dinheiro inicial (Cronos) pelos UP com que o personagem começa: [UP, Cronos]. Acima do último, +1.000 por UP.
      0 UP compra uma arma comum e uma armadura leve comum. */
-  dinheiroInicial: [[0, 1500], [1, 2000], [2, 2500], [3, 3000], [4, 3500], [5, 4500], [6, 5500], [7, 6500], [8, 8000], [9, 9000], [10, 10000]],
+  dinheiroInicial: 1500, // Cronos com que todo personagem começa, igual para todos
   paraMod: ['Qualquer arma', 'Arma de fogo', 'Arma corpo a corpo'],
   paraPropriedade: ['Qualquer item', 'Arma', 'Armadura'],
   vidaBase: ['PV', 'Blindagem', 'Escudo'],
@@ -307,8 +307,8 @@ window.VORTEX_ITEMS = {
     /* ------------------------------ Personagem ------------------------------ */
     {
       id: 'especime', title: 'Espécime', group: 'Personagem', image: true, bonus: true,
-      hint: 'A espécie escolhida na ficha. A vida base diz em que tipo de resistência os PV do personagem entram na barra.',
-      defaults: { vidaBase: 'PV', upInicial: '0', nucleoBase: '0', acopla: 'Não', humanidade: 'Não', eletronico: 'Não', compraRacial: 'Não' },
+      hint: 'A espécie escolhida na ficha. A vida base diz em que tipo de resistência os PV do personagem entram na barra. Cada espécime tem 3 habilidades raciais de 1 UP; comprar habilidades raciais de outros espécimes é exclusivo do Etheriano.',
+      defaults: { vidaBase: 'PV', upInicial: '0', nucleoBase: '0', acopla: 'Não', humanidade: 'Não', eletronico: 'Não' },
       fields: [
         { key: 'nome', label: 'Nome do espécime', kind: 'text', big: true },
         { key: 'vidaBase', label: 'Vida base', kind: 'select', options: 'vidaBase' },
@@ -319,9 +319,8 @@ window.VORTEX_ITEMS = {
         { key: 'eletronico', label: 'Ser elétrico ou eletrônico (efeitos de PE atordoam)?', kind: 'select', options: 'simNao' },
         { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
         { key: 'tracos', label: 'Traços e regras', kind: 'textarea', big: true },
-        { key: 'racial', label: 'Características raciais (uma por linha: Nome | efeito | custo em UP)', kind: 'textarea', big: true, placeholder: 'Núcleo | Contém um núcleo +2 comum desde o início. | 1' },
-        { key: 'poderes', label: 'Poderes de nascença (nome do poder, um por linha; entram de graça)', kind: 'textarea', big: true },
-        { key: 'compraRacial', label: 'Pode comprar características raciais de outros espécimes com UP?', kind: 'select', options: 'simNao' },
+        { key: 'racial', label: 'Habilidades raciais (3, de 1 UP cada)', kind: 'racial3', big: true, hint: 'Só o Etheriano pode comprar estas habilidades com UP.' },
+        { key: 'poderes', label: 'Poderes de nascença (entram de graça)', kind: 'banklines', bank: 'poder', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
@@ -345,7 +344,7 @@ window.VORTEX_ITEMS = {
       fields: [
         { key: 'nome', label: 'Nome da origem', kind: 'text', big: true },
         { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
-        { key: 'itens', label: 'Itens iniciais (um por linha)', kind: 'textarea', big: true, placeholder: '1 pistola básica ou rifle (3 slots de munição);' },
+        { key: 'itens', label: 'Itens iniciais (um por linha)', kind: 'banklines', bank: 'itens', budget: true, big: true, placeholder: '1 pistola básica ou rifle (3 slots de munição);' },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
@@ -461,7 +460,7 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'of-esp-etheriano', kind: 'especime', name: 'Etheriano',
-      values: { vidaBase: 'PV', upInicial: '2', nucleoBase: '0', compraRacial: 'Sim', poderes: 'Cria do Éter', descricao: 'Cria do Éter.', tracos: 'Cria do Éter: nasce com o poder Cria do Éter. 2 Up points extras iniciais, que também podem comprar características raciais de outros espécimes (aba Poderes → Características raciais). Os 3 UP do humano não vêm juntos: no sistema eles são 3 características de 1 UP cada.' }
+      values: { vidaBase: 'PV', upInicial: '2', nucleoBase: '0', poderes: 'Cria do Éter', descricao: 'Cria do Éter.', tracos: 'Cria do Éter: nasce com o poder Cria do Éter. 2 Up points extras iniciais, que também podem comprar características raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais). Só o Etheriano faz isso. Os 3 UP do humano não vêm juntos: no sistema eles são 3 características de 1 UP cada.' }
     },
 
     // Builds (recomendações da distribuição inicial)

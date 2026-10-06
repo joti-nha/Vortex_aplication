@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=42">
+  <link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -456,7 +456,7 @@
       <section class="block sheet-block" aria-labelledby="powers-title">
         <div class="block__head">
           <h2 class="block__title" id="powers-title"><button class="help" type="button" data-help="poderes">Poderes</button></h2>
-          <button class="btn btn--ghost btn--sm" type="button" id="racial-open" hidden>Características raciais</button>
+          <button class="btn btn--ghost btn--sm" type="button" id="racial-open" hidden>Características raciais (Etheriano)</button>
           <button class="btn btn--ghost btn--sm" type="button" id="power-add">Adicionar poder</button>
         </div>
         <ul class="rows" id="power-list"></ul>
@@ -984,23 +984,32 @@
   </dialog>
 
   <!-- Distribuição inicial (abre na primeira vez que a ficha é feita) -->
-  <dialog class="dialog dialog--wide" id="setup-dialog" aria-labelledby="setup-title">
+  <dialog class="dialog dialog--wide creator" id="setup-dialog" aria-labelledby="setup-title">
     <div class="setup">
-      <p class="setup__step" id="setup-step"></p>
-      <nav class="setup__tabs" id="setup-tabs" aria-label="Partes da distribuição inicial"></nav>
-      <h2 id="setup-title" tabindex="-1"></h2>
-      <p class="setup__lead" id="setup-lead"></p>
-      <div class="field setup__search" id="setup-search-wrap">
-        <label class="visually-hidden" for="setup-search">Buscar nesta parte</label>
-        <input class="input" id="setup-search" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar nesta parte (ex.: mira, robô, pistola)">
+      <header class="setup__head">
+        <p class="setup__step" id="setup-step"></p>
+        <button class="btn btn--ghost btn--sm setup__skip" type="button" id="setup-skip">Pular por enquanto</button>
+        <div class="setup__progress" aria-hidden="true"><span id="setup-bar"></span></div>
+      </header>
+      <div class="setup__grid">
+        <nav class="setup__tabs" id="setup-tabs" aria-label="Etapas da criação do personagem"></nav>
+        <div class="setup__main" id="setup-main">
+          <h2 id="setup-title" tabindex="-1"></h2>
+          <p class="setup__lead" id="setup-lead"></p>
+          <div class="field setup__search" id="setup-search-wrap">
+            <label class="visually-hidden" for="setup-search">Buscar nesta etapa</label>
+            <input class="input" id="setup-search" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar nesta etapa (ex.: mira, robô, pistola)">
+          </div>
+          <div class="setup__body" id="setup-body"></div>
+        </div>
+        <aside class="setup__side" id="setup-side" aria-label="Sua ficha até agora"></aside>
       </div>
-      <div class="setup__body" id="setup-body"></div>
-      <p class="field__error" id="setup-error" role="alert"></p>
-      <div class="dialog__actions">
-        <button class="btn btn--ghost setup__skip" type="button" id="setup-skip">Pular por enquanto</button>
+      <footer class="setup__foot">
+        <p class="field__error" id="setup-error" role="alert"></p>
+        <button class="btn btn--ghost setup__side-toggle" type="button" id="setup-side-toggle" aria-expanded="false" aria-controls="setup-side">Ver ficha</button>
         <button class="btn btn--ghost" type="button" id="setup-back">Voltar</button>
         <button class="btn btn--primary" type="button" id="setup-next">Continuar</button>
-      </div>
+      </footer>
     </div>
   </dialog>
 
@@ -1048,9 +1057,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=42"></script>
-  <script src="items.js?v=42"></script>
-  <script src="pixelart.js?v=42"></script>
-  <script src="app.js?v=42"></script>
+  <script src="regras.js?v=43"></script>
+  <script src="items.js?v=43"></script>
+  <script src="pixelart.js?v=43"></script>
+  <script src="app.js?v=43"></script>
 </body>
 </html>
