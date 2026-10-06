@@ -366,12 +366,11 @@ window.VORTEX_ITEMS = {
     /* ------------------------------ Personagem ------------------------------ */
     {
       id: 'especime', title: 'Espécime', group: 'Personagem', image: true,
-      hint: 'Só descrição, habilidades raciais e poderes. A mecânica (vida base, UP iniciais, núcleo, orgânico ou eletrônico) vem dos poderes de nascença. Comprar habilidades raciais de outros espécimes é exclusivo do Etheriano.',
+      hint: 'Só descrição e as 3 habilidades raciais. A mecânica (vida base, UP iniciais, núcleo, orgânico ou eletrônico) fica no script de cada habilidade. Comprar habilidades raciais de outros espécimes é exclusivo do Etheriano.',
       fields: [
         { key: 'nome', label: 'Nome do espécime', kind: 'text', big: true },
         { key: 'descricao', label: 'Descrição', kind: 'textarea', big: true },
-        { key: 'racial', label: 'Habilidades raciais (3, de 1 UP cada)', kind: 'racial3', big: true, hint: 'Só o Etheriano pode comprar estas habilidades com UP.' },
-        { key: 'poderes', label: 'Poderes de nascença (entram de graça)', kind: 'banklines', bank: 'poder', big: true },
+        { key: 'racial', label: 'Habilidades raciais (3, de 1 UP cada)', kind: 'racial3', big: true, hint: 'Quem é deste espécime já nasce com as 3. Só o Etheriano pode comprar as de outros espécimes com UP.' },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
@@ -497,22 +496,23 @@ window.VORTEX_ITEMS = {
     // Espécimes
     {
       id: 'of-esp-humano', kind: 'especime', name: 'Humano',
-      values: { poderes: 'Experiência passada', descricao: 'Nada de especial, talvez sua experiência passada.',
-        racial: 'Experiência passada I | Um dos 3 Up points de início do humano. | 1\nExperiência passada II | Um dos 3 Up points de início do humano. | 1\nExperiência passada III | Um dos 3 Up points de início do humano. | 1' }
+      values: { descricao: 'Nada de especial, talvez sua experiência passada. Opcional (experiência mundana): 26 a 30 anos, 4 UP e 1 Perda; 31 a 40 anos, 5 UP e 2 Perdas; 41 a 60 anos, 6 UP e 3 Perdas; mais que isso, até 10 UP e um valor igual de Perdas.',
+        racial: 'Experiência passada I | Um dos 3 Up points de início do humano. | 1 | up: 1\nExperiência passada II | Um dos 3 Up points de início do humano. | 1 | up: 1\nExperiência passada III | Um dos 3 Up points de início do humano. | 1 | up: 1' }
     },
     {
       id: 'of-esp-robo', kind: 'especime', name: 'Robô',
-      values: { poderes: 'Núcleo de nascença\nNão vivo', descricao: 'Meio que é… feito de lata né não?',
-        racial: 'Núcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Shield. | 1\nEngenharia | Não equipa itens, acopla armaduras e módulos (ao menos 1 hora); +1 de carga cibernética a cada +2 de carga dada pelo núcleo. | 1\nNão vivo | Não é afetado por coisas biológicas nem precisa descansar; não recupera PV por descanso nem curas, é consertado com Tecnologia e um kit de ferramentas. | 1' }
+      values: { descricao: 'Meio que é… feito de lata né não?',
+        racial: 'Núcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Shield. Ser eletrônico: efeitos de PE atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nEngenharia | Não equipa itens, acopla armaduras e módulos (ao menos 1 hora); +1 de carga cibernética a cada +2 de carga dada pelo núcleo. | 1\nNão vivo | Não é afetado por coisas biológicas nem precisa descansar; não recupera PV por descanso nem curas, é consertado com Tecnologia e um kit de ferramentas. | 1' }
     },
     {
       id: 'of-esp-android', kind: 'especime', name: 'Android',
-      values: { poderes: 'Núcleo de nascença\nEngenharia\nHumanidade', descricao: 'Você é um robô, só que humanoide...',
-        racial: 'Engenharia | Não equipa, acopla armas e armaduras (ao menos 1 hora); acopladas, ocupam a carga cibernética em vez da carga. Próteses são peças e módulos não precisam de prótese. | 1\nNúcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Shield. | 1\nHumanidade | Resiste ao atordoamento automático de efeitos de PE e se regenera como um ser orgânico, e também por engenharia e bateria. | 1' }
+      values: { descricao: 'Você é um robô, só que humanoide...',
+        racial: 'Engenharia | Não equipa, acopla armas e armaduras (ao menos 1 hora); acopladas, ocupam a carga cibernética em vez da carga; +1 de carga cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças e módulos não precisam de prótese. | 1 | acopla\nNúcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Shield. Ser eletrônico: efeitos de PE atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nHumanidade | Resiste ao atordoamento automático de efeitos de PE e se regenera como um ser orgânico, e também por engenharia e bateria. | 1 | humanidade' }
     },
     {
       id: 'of-esp-etheriano', kind: 'especime', name: 'Etheriano',
-      values: { poderes: 'Cria do Éter\nDom do Éter', descricao: 'Cria do Éter.' }
+      values: { descricao: 'Cria do Éter.',
+        racial: 'Cria do Éter | Quando é afetado por energia Ether pura, recupera recursos iguais ao tamanho do Ether (10 de Resistência e PE para pequena, 25 para média, 50 para grande); o excesso conta como recurso bônus até o próximo descanso. Pode tornar um Éter instável e forçar sua absorção. | 1\nDom do Éter | 2 Up points extras iniciais, que também podem comprar características raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais). Só o Etheriano faz isso. | 1 | up: 2' }
     },
 
     // Builds (recomendações da distribuição inicial)
@@ -544,13 +544,6 @@ window.VORTEX_ITEMS = {
     { id: 'of-pod-prof-arma', kind: 'poder', name: 'Proficiência em arma', values: { custo: '1', efeito: 'Escolha um tipo de arma o qual é proficiente, para usar a regra de cadência proficiente. Ganha +1 de perícia para distribuir.' } },
     { id: 'of-pod-prof-armadura', kind: 'poder', name: 'Proficiência em armadura', values: { custo: '1', efeito: 'Escolha um tipo de armadura o qual é proficiente: ganha +1 de armadura com ela e usa a regra de proficiência com a armadura. Ganha +1 de perícia para distribuir.' } },
     { id: 'of-pod-cria-eter', kind: 'poder', name: 'Cria do Éter', values: { custoUso: 'Concedido por origem ou espécime (Etheriano)', efeito: 'Quando é afetado por energia Ether pura, recupera uma quantidade de recursos igual ao tamanho do Ether: 10 de Resistência e PE para pequena, 25 de Resistência e PE para média, 50 de Resistência e PE para a grande. Recursos sobressalentes contam como recursos bônus até seu próximo descanso, e não são acumulados com outra fonte (considere o maior bônus).\nVocê pode tornar um Éter instável e forçar sua absorção, ainda dividindo a todos os indivíduos na área o XP cedido pelo Éter.' } },
-    // Poderes de nascença dos espécimes oficiais: a mecânica do espécime fica no script
-    { id: 'of-pod-esp-experiencia', kind: 'poder', name: 'Experiência passada', values: { custoUso: 'Concedido por espécime (Humano)', efeito: 'Tome 3 Up points de início! Opcional (experiência mundana): 26 a 30 anos, 4 UP e 1 Perda; 31 a 40 anos, 5 UP e 2 Perdas; 41 a 60 anos, 6 UP e 3 Perdas; mais que isso, até 10 UP e um valor igual de Perdas.', script: 'up: 3' } },
-    { id: 'of-pod-esp-nucleo', kind: 'poder', name: 'Núcleo de nascença', values: { custoUso: 'Concedido por espécime (Robô, Android)', efeito: 'Depende de um núcleo acoplado para sobreviver: contém um núcleo +2 comum desde o início. Os PV são convertidos para Blindagem e os negativos contam como Shield. Ser eletrônico: efeitos de PE atordoam.', script: 'vida: Blindagem\nnucleo: 2\neletronico' } },
-    { id: 'of-pod-esp-nao-vivo', kind: 'poder', name: 'Não vivo', values: { custoUso: 'Concedido por espécime (Robô)', efeito: 'Engenharia: não equipa itens, acopla (ao menos 1 hora). Não é afetado por coisas biológicas nem precisa descansar; não recupera PV por descanso nem curas, é consertado com Tecnologia e um kit de ferramentas.' } },
-    { id: 'of-pod-esp-engenharia', kind: 'poder', name: 'Engenharia', values: { custoUso: 'Concedido por espécime (Android)', efeito: 'Não equipa, acopla (ao menos 1 hora). Armas e armaduras acopladas ocupam a Carga Cibernética em vez da carga; +1 de Carga Cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças, e módulos não precisam de prótese.', script: 'acopla' } },
-    { id: 'of-pod-esp-humanidade', kind: 'poder', name: 'Humanidade', values: { custoUso: 'Concedido por espécime (Android)', efeito: 'Resiste a efeitos de PE (não é atordoado automaticamente como outros seres eletrônicos) e se regenera como um ser orgânico, e também por engenharia e bateria.', script: 'humanidade' } },
-    { id: 'of-pod-esp-dom-eter', kind: 'poder', name: 'Dom do Éter', values: { custoUso: 'Concedido por espécime (Etheriano)', efeito: '2 Up points extras iniciais, que também podem comprar características raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais). Só o Etheriano faz isso. Os 3 UP do humano não vêm juntos: no sistema eles são 3 características de 1 UP cada.', script: 'up: 2' } },
     { id: 'of-pod-transformacao', kind: 'poder', name: 'Transformação', values: { efeito: 'Com uma ação completa você se transforma; cria uma transformação trocando seus Up points e os realocando como quiser. Seus itens caem ao chão no processo. Cada Up point equivale a uma transformação.' } },
     { id: 'of-pod-akimbo', kind: 'poder', name: 'Akimbo', values: { efeito: 'Empunhe pistolas ou submetralhadoras uma em cada mão. O tempo de recarga aumenta em uma categoria. Pode mirar em um único alvo com ambas ou escolher até dois alvos; faz um teste de ataque com cada arma, que aplicam dano separadamente.' } },
     { id: 'of-pod-telecinese', kind: 'poder', name: 'Telecinese', values: { custo: '1', efeito: 'Você pode manipular itens em curta distância, a custo de 1 PE por carga do objeto (se for igual ou menor que ½, o objeto não gera custos por carga), +1 por ação feita com ele (tirando livre). Você pode manipular uma quantidade de objetos simultaneamente igual à sua Essência (mínimo 1), cumprindo os gastos; se os itens fizerem a mesma ação, se utiliza a mesma ação para todos os usados na ação. Você pode deslocar esses objetos pelo seu deslocamento usando sua ação de movimento dividido pela carga do item, a cada ação gasta no objeto. Fazer testes com os objetos manipulados usa suas perícias e atributos normalmente; ações contra alguém têm –3 nos testes. Você pode usar suas técnicas e habilidades normalmente com os itens manipulados.',
