@@ -907,8 +907,8 @@ window.VORTEX_REGRAS = {
           ['h4', 'Núcleo'],
           ['p', 'Você contém núcleo! Você depende do mesmo acoplado a você para sobreviver, você contém um núcleo +2 comum desde o início do jogo, e seus PV são convertidos para blindagem e os negativos contam como Shield!'],
           ['h4', 'Humanidade'],
-          ['p', '“Resistência” a PE e capacidade de se regenerar como um ser orgânico, e também por engenharia e bateria.'],
-          ['p', 'Efeitos de PE causam atordoamento automático em seres elétricos ou eletrônicos e desativam shields; a Humanidade faz o Android resistir ao atordoamento automático.']
+          ['p', 'Você pode fazer testes para resistir a efeitos de PE se tiver CD, e metade da sua blindagem pode ser regenerada como se fossem PVs.'],
+          ['p', 'Efeitos de PE causam atordoamento automático em seres elétricos ou eletrônicos e desativam shields; com a Humanidade, o Android faz o teste quando houver CD.']
         ]]
       ]
     },
