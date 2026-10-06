@@ -1636,7 +1636,7 @@ const FIREBASE_CONFIG = {
     },
     'dados-basicos': {
       title: 'Dados básicos',
-      text: 'Nome, espécime, idade, altura, sexo e origem. O nome é único. "Buscar no banco" vincula um espécime: a vida base, os UP iniciais e o núcleo dele entram sozinhos na ficha.',
+      text: 'Nome, espécime, idade, altura, sexo e origem. O nome é único. "Buscar no banco" vincula um espécime: os poderes de nascença dele entram sozinhos na ficha, com a mecânica (vida base, UP iniciais, núcleo).',
       rule: 'ficha/modelo-de-ficha'
     },
     rolagens: {
@@ -2602,6 +2602,9 @@ const FIREBASE_CONFIG = {
     return row;
   }
 
+  // campos de mecânica que o espécime tinha antes do script dos poderes
+  const LEGACY_LABEL = { vidaBase: 'Vida base (campo antigo)', upInicial: 'UP iniciais (campo antigo)', nucleoBase: 'Núcleo (campo antigo)', acopla: 'Acopla (campo antigo)', humanidade: 'Humanidade (campo antigo)', eletronico: 'Eletrônico (campo antigo)', tracos: 'Traços e regras' };
+  const LEGACY_SPECIES = Object.keys(LEGACY_LABEL);
   /* Todos os dados de um registro do banco (vale para itens, espécimes, poderes e origens) */
   const entryDlg = $('#entry-dialog');
   function openEntry(e) {
@@ -2620,11 +2623,16 @@ const FIREBASE_CONFIG = {
       const val = v[f.key];
       if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r) => dl.append(h('dt', '', r[0]), h('dd', 'entry__pre', r[1]))); return; }
       if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
+      if (f.kind === 'script') { dl.append(h('dt', '', 'Script'), h('dd', 'entry__pre entry__code', String(val))); return; }
       if (f.kind === 'racial3') { dl.append(h('dt', '', 'Habilidades raciais'), h('dd', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), ' (' + (t.cost || 1) + ' UP)' + (t.text ? ': ' + t.text : ''))))); return; }
       dl.append(h('dt', '', f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(val)) : f.key === 'preco' ? priceText(val) : String(val)));
     });
     // campos que não estão no formulário atual (registros antigos) também aparecem
-    Object.keys(v).forEach((k) => { if (!seen.has(k) && String(v[k] || '').trim()) dl.append(h('dt', '', k), h('dd', '', String(v[k]))); });
+    Object.keys(v).forEach((k) => {
+      if (seen.has(k) || !String(v[k] || '').trim()) return;
+      if (e.kind === 'especime' && LEGACY_LABEL[k]) { if (v[k] !== 'Não' && v[k] !== '0') dl.append(h('dt', '', LEGACY_LABEL[k]), h('dd', '', String(v[k]))); return; }
+      dl.append(h('dt', '', k), h('dd', '', String(v[k])));
+    });
     const b = bonusLine(entryBonus(e));
     if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (cat && cat.inventory ? ' (quando equipado)' : '')));
     const parts = e.slots ? (e.slots.mods || []).concat(e.slots.props || [], e.slots.accs || []).map((x) => x.name) : [];
@@ -2975,6 +2983,33 @@ const FIREBASE_CONFIG = {
   }
 
   /* Espécime: 3 caixas, uma para cada habilidade racial (1 UP cada). Grava no formato "Nome | efeito | 1", uma por linha. */
+  /* Script: fica escondido num "</>" discreto no fim do poder. É onde mora a mecânica (vida base, UP, núcleo, flags, bônus). */
+  function scriptField(id, value, onChange) {
+    const box = h('details', 'script');
+    box.open = Boolean(String(value || '').trim());
+    const ta = h('textarea', 'input script__code');
+    ta.id = id;
+    ta.rows = 4;
+    ta.maxLength = 600;
+    ta.spellcheck = false;
+    ta.autocapitalize = 'off';
+    ta.value = value || '';
+    ta.placeholder = 'vida: Blindagem\nup: 2\nacopla';
+    const state = h('p', 'script__state');
+    const check = () => {
+      const r = parseScript(ta.value);
+      state.classList.toggle('script__state--bad', r.bad.length > 0);
+      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
+    };
+    ta.addEventListener('input', () => { onChange(ta.value); check(); });
+    check();
+    const lab = h('label', 'visually-hidden', 'Script do poder');
+    lab.htmlFor = id;
+    box.append(h('summary', 'script__sum', h('span', 'script__icon', '</>'), ' script'),
+      h('div', 'script__body', lab, ta, state,
+        h('ul', 'script__help', ...SCRIPT_HELP.map((x) => h('li', '', h('code', '', x[0]), ' ' + x[1])))));
+    return box;
+  }
   function racial3Field(field, value, onChange) {
     const cur = powerLines(value).slice(0, 3);
     while (cur.length < 3) cur.push({ name: '', text: '' });
@@ -3122,6 +3157,7 @@ const FIREBASE_CONFIG = {
       return box;
     }
     if (field.kind === 'racial3') return racial3Field(field, value, onChange);
+    if (field.kind === 'script') return scriptField(id, value, onChange);
     if (field.kind === 'banklines') return bankLinesField(field, value, onChange);
     if (field.kind === 'textarea') {
       const ta = h('textarea', 'input');
@@ -3187,6 +3223,7 @@ const FIREBASE_CONFIG = {
       if (f.onlyWithOpts && !(type && type.opts && type.opts[f.optKey])) return; // campo que só existe em alguns tipos
       if (f.hidden) return; // escrito por outro campo (o roteiro da build)
       if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
+      if (f.kind === 'script') { grid.append(h('div', 'field field--wide', fieldControl(f, type, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
         if (isName) d.name = v; else d.values[f.key] = v;
@@ -3278,7 +3315,10 @@ const FIREBASE_CONFIG = {
     }
     const values = {};
     cat.fields.forEach((f) => { if (f.key !== 'nome') values[f.key] = String(d.values[f.key] === undefined || d.values[f.key] === null ? '' : d.values[f.key]).trim(); });
+    // espécime antigo: os campos de mecânica saíram do formulário, mas continuam valendo até virarem poder
+    if (cat.id === 'especime') LEGACY_SPECIES.forEach((k) => { if (d.values[k] !== undefined && d.values[k] !== '') values[k] = String(d.values[k]); });
     const bonus = {};
+    if (cat.id === 'especime' && d.bonus) BONUS_KEYS.forEach((b) => { if (num(d.bonus[b[0]])) bonus[b[0]] = num(d.bonus[b[0]]); });
     BONUS_KEYS.forEach((b) => { if (cat.bonus && num(d.bonus[b[0]])) bonus[b[0]] = num(d.bonus[b[0]]); });
     const entry = {
       kind: cat.id, typeId: d.typeId || '', typeTitle: type ? type.title : '', kindTitle: cat.title, name, values, bonus,
@@ -3781,6 +3821,73 @@ const FIREBASE_CONFIG = {
     return base + powerUps(p).reduce((t, u) => t + (u.cost === '' ? 1 : num(u.cost)) * upCount(p, u.name), 0);
   }
 
+  /* Script dos poderes: a mecânica que antes ficava no espécime (vida base, UP iniciais, núcleo, ser orgânico
+     ou eletrônico, bônus). Uma linha por regra, "chave: valor"; flags valem sozinhas ("acopla"). */
+  const SCRIPT_FLAGS = { acopla: 'acopla', engenharia: 'acopla', humanidade: 'humanidade', organico: 'humanidade', eletronico: 'eletronico', eletrico: 'eletronico' };
+  const SCRIPT_HELP = [
+    ['vida: Blindagem', 'os PV viram Blindagem (ou Escudo, ou PV)'],
+    ['up: 3', 'UP iniciais'],
+    ['nucleo: 2', 'núcleo de nascença (capacidade)'],
+    ['acopla', 'Engenharia: armas e armaduras acopladas ocupam a Carga Cibernética'],
+    ['humanidade', 'regenera como ser orgânico e resiste ao atordoamento de PE'],
+    ['eletronico', 'ser eletrônico: efeitos de PE atordoam'],
+    ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)']
+  ];
+  function parseScript(txt) {
+    const out = { vida: '', up: 0, nucleo: 0, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
+    String(txt || '').split('\n').forEach((raw) => {
+      const line = raw.replace(/\/\/.*$|#.*$/, '').trim();
+      if (!line) return;
+      const i = line.search(/[:=]/);
+      const key = nameKey(i < 0 ? line : line.slice(0, i)).replace(/\s+/g, '');
+      const val = i < 0 ? '' : line.slice(i + 1).trim();
+      const no = /^(nao|não|false|0)$/i.test(val);
+      if (SCRIPT_FLAGS[key]) { out[SCRIPT_FLAGS[key]] = !no; return; }
+      if (key === 'vida' || key === 'vidabase') {
+        const v = (ITEM_DATA.vidaBase || ['PV', 'Blindagem', 'Escudo']).find((x) => nameKey(x) === nameKey(val));
+        if (v) out.vida = v; else out.bad.push(raw.trim());
+        return;
+      }
+      const n = Number(val.replace(',', '.'));
+      if (val === '' || !isFinite(n)) { out.bad.push(raw.trim()); return; }
+      if (key === 'up' || key === 'ups' || key === 'upinicial' || key === 'upiniciais') out.up += Math.round(n);
+      else if (key === 'nucleo' || key === 'nucleobase') out.nucleo = Math.max(out.nucleo, Math.round(n));
+      else if (BONUS_KEYS.some((b) => b[0] === key)) out.bonus[key] = (out.bonus[key] || 0) + n;
+      else out.bad.push(raw.trim());
+    });
+    return out;
+  }
+  // o script de um poder na ficha: o da cópia, ou o do poder oficial (fichas antigas não têm o script)
+  function powerScript(p) {
+    const v = (p && p.values) || {};
+    if (v.script) return v.script;
+    const off = p && p.id ? BUILTINS.find((e) => e.id === p.id) : null;
+    return off && off.values ? off.values.script || '' : '';
+  }
+  // espécimes criados antes do script guardam a mecânica em campos próprios: continuam valendo
+  function legacySpecies(v) {
+    const out = parseScript('');
+    if (!v) return out;
+    if (v.vidaBase && v.vidaBase !== 'PV') out.vida = v.vidaBase;
+    out.up = Math.round(num(v.upInicial));
+    out.nucleo = Math.round(num(v.nucleoBase));
+    out.acopla = v.acopla === 'Sim';
+    out.humanidade = v.humanidade === 'Sim';
+    out.eletronico = v.eletronico === 'Sim';
+    return out;
+  }
+  function mergeMech(list) {
+    const m = { vida: 'PV', up: 0, nucleo: 0, acopla: false, humanidade: false, eletronico: false };
+    list.forEach((x) => {
+      if (x.vida) m.vida = x.vida;
+      m.up += x.up;
+      m.nucleo = Math.max(m.nucleo, x.nucleo);
+      ['acopla', 'humanidade', 'eletronico'].forEach((k) => { if (x[k]) m[k] = true; });
+    });
+    return m;
+  }
+  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
+
   /* Poderes com escolha: Doutor (uma perícia) e Proficiência em arma ou armadura (um tipo).
      Cada compra é um poder na lista, com a escolha guardada em choice. */
   const CHOICE_POWERS = { 'of-pod-doutor': 'pericia', 'of-pod-prof-arma': 'arma', 'of-pod-prof-armadura': 'armadura' };
@@ -3800,20 +3907,20 @@ const FIREBASE_CONFIG = {
     const s = c.sheet;
     const a = s.attrs;
     const sp = s.specimen;
-    const official = sp ? BUILTINS.find((e) => e.id === sp.id) : null; // fichas antigas ganham os traços novos do espécime oficial
-    const spv = Object.assign({}, official ? official.values : {}, (sp && sp.values) || {});
+    const spv = specimenVals(s);
+    const mech = sheetMech(s);
     const equipped = s.inventory.filter((i) => i.slot);
     const armor = equipped.find((i) => i.slot === 'armadura');
     const core = equipped.find((i) => i.slot === 'nucleo');
 
     // núcleo: só um ativo (o da espécie, o implantado ou o da armadura; vale o maior)
-    const nucleo = Math.max(num(spv.nucleoBase), core ? num(core.values.capacidade) : 0, armor && armor.values.nucleo === 'Sim' ? num(armor.values.capacidade) : 0);
+    const nucleo = Math.max(mech.nucleo, core ? num(core.values.capacidade) : 0, armor && armor.values.nucleo === 'Sim' ? num(armor.values.capacidade) : 0);
     const implants = equipped.filter((i) => i.kind === 'protese-modulo');
     const protUsed = implants.filter((i) => !isModule(i)).reduce((t, i) => t + ccOf(i), 0);
     const modUsed = implants.filter(isModule).reduce((t, i) => t + ccOf(i), 0);
     // Engenharia (ex.: Android): armas e armadura acopladas ocupam a Carga Cibernética, não a carga,
     // e o núcleo dá +1 de CC a cada +2 de carga que concede
-    const acopla = spv.acopla === 'Sim';
+    const acopla = mech.acopla;
     const attached = acopla ? equipped.filter((i) => isWeapon(i.kind) || i.kind === 'armadura') : [];
     const attachUsed = Math.round(attached.reduce((t, i) => t + parseCarga(i.values.carga), 0) * 100) / 100;
     const coreCarga = acopla && core ? num(entryBonus(core).carga) : 0;
@@ -3823,6 +3930,7 @@ const FIREBASE_CONFIG = {
     const sources = [];
     if (sp) sources.push({ name: sp.name, b: sp.bonus || {} });
     s.powers.forEach((p) => sources.push({ name: p.name, b: p.bonus || {} }));
+    mech.powers.forEach((p) => { const b = parseScript(powerScript(p)).bonus; if (Object.keys(b).length) sources.push({ name: p.name + ' (script)', b }); });
     // sem núcleo, próteses só substituem o órgão e módulos ficam inativos: não dão bônus
     equipped.forEach((i) => { if (i.kind !== 'protese-modulo' || nucleo > 0) sources.push({ name: i.name, b: entryBonus(i) }); });
     sources.push({ name: 'ajuste manual', b: s.extra });
@@ -3835,9 +3943,9 @@ const FIREBASE_CONFIG = {
     src.pv.push({ name: 'base (5 + Corpo × 5)', val: Math.max(5, 5 + a.corpo * 5) });
     if (s.up.pv) src.pv.push({ name: 'benefícios de UP', val: 5 * s.up.pv });
     ['pv', 'escudo', 'blindagem'].forEach(fromSources);
-    const base = spv.vidaBase === 'Blindagem' ? 'blindagem' : spv.vidaBase === 'Escudo' ? 'escudo' : 'pv';
+    const base = mech.vida === 'Blindagem' ? 'blindagem' : mech.vida === 'Escudo' ? 'escudo' : 'pv';
     if (base !== 'pv') {
-      src[base].unshift({ name: 'PV convertidos (' + sp.name + ')', val: total('pv') });
+      src[base].unshift({ name: 'PV convertidos (' + (mech.vidaFrom || 'espécime') + ')', val: total('pv') });
       src.pv = [];
     }
 
@@ -3872,9 +3980,9 @@ const FIREBASE_CONFIG = {
       max, src, base, pen, armor, armorProf, nucleo, core,
       cargaUsed: Math.round(cargaUsed * 100) / 100, cargaMax: max.carga, over: cargaUsed > max.carga,
       defMin: max.armadura + a.corpo + num(s.skills.resistencia),
-      ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: spv.humanidade === 'Sim',
+      ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: mech.humanidade, eletronico: mech.eletronico,
       ccOver: (nucleo > 0 || attachUsed > 0) && (protUsed + attachUsed > ccMax || protUsed + attachUsed + modUsed > ccMax + modExtra),
-      upEarned, upTotal: upEarned + num(spv.upInicial) + num(s.upExtra),
+      upEarned, upTotal: upEarned + mech.up + num(s.upExtra),
       upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
       skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length,
@@ -4982,15 +5090,16 @@ const FIREBASE_CONFIG = {
   function renderSpeciesLink() {
     const s = sheetChar.sheet;
     const box = $('#species-link');
-    if (!s.specimen) { box.textContent = 'Sem vínculo com o banco: escolha um espécime para aplicar vida base, UP iniciais e núcleo.'; return; }
-    const v = s.specimen.values || {};
+    if (!s.specimen) { box.textContent = 'Sem vínculo com o banco: escolha um espécime para receber os poderes de nascença dele.'; return; }
+    const v = specimenVals(s);
     const un = h('button', 'link-btn', 'Desvincular');
     un.type = 'button';
     un.addEventListener('click', () => { s.specimen = null; changed(); });
-    box.replaceChildren('Traços de ' + s.specimen.name + ': vida base ' + (v.vidaBase || 'PV') + ', ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ', núcleo +' + num(v.nucleoBase) : '') + '. ', un);
+    const m = sheetMech(s);
+    box.replaceChildren(s.specimen.name + ': ' + mechLine(m).replace(/^V/, 'v') + (birthNames(v).length ? ' (dos poderes ' + birthNames(v).join(', ') + ')' : '') + '. ', un);
     const lb = entryLore(s.specimen);
     if (lb) box.append(' ', lb);
-    if (v.tracos) box.title = v.tracos;
+    if (v.descricao) box.title = v.descricao;
   }
 
   function bonusLine(b) {
@@ -5459,20 +5568,48 @@ const FIREBASE_CONFIG = {
   /* ---------- Espécime: poderes de nascença e características raciais ----------
      O espécime pode dar poderes de graça (Etheriano: Cria do Éter) e pode deixar comprar, com UP,
      características raciais de outros espécimes. Cada característica comprada vira um poder na lista. */
+  // espécime oficial: vale o catálogo atual (a cópia antiga da ficha tinha a mecânica nos campos)
   function specimenVals(s) {
     const sp = s.specimen;
     const official = sp ? BUILTINS.find((e) => e.id === sp.id) : null;
-    return Object.assign({}, official ? official.values : {}, (sp && sp.values) || {});
+    return official ? Object.assign({}, official.values) : Object.assign({}, (sp && sp.values) || {});
+  }
+  const birthNames = (v) => String((v && v.poderes) || '').split('\n').map((x) => x.trim()).filter(Boolean);
+  const findBirthPower = (n) => guidePowers().find((x) => nameKey(x.name) === nameKey(n)) || BUILTINS.find((x) => x.kind === 'poder' && nameKey(x.name) === nameKey(n));
+  // a mecânica de um espécime do banco: os scripts dos poderes de nascença (e os campos antigos, se tiver)
+  function speciesMech(e) {
+    const v = (e && e.values) || {};
+    const official = e && e.id ? BUILTINS.some((x) => x.id === e.id) : false;
+    const parts = official ? [] : [legacySpecies(v)];
+    birthNames(v).forEach((n) => { const p = findBirthPower(n); if (p) parts.push(parseScript(powerScript(p))); });
+    return mergeMech(parts);
+  }
+  // a mecânica da ficha: espécime antigo + scripts de todos os poderes (os de nascença valem mesmo fora da lista)
+  function sheetMech(s) {
+    const sp = s.specimen;
+    const official = sp ? BUILTINS.some((e) => e.id === sp.id) : false;
+    const powers = s.powers.slice();
+    birthNames(specimenVals(s)).forEach((n) => {
+      if (powers.some((p) => nameKey(p.name) === nameKey(n))) return;
+      const p = findBirthPower(n);
+      if (p) powers.push(p);
+    });
+    const parts = sp && !official ? [legacySpecies(specimenVals(s))] : [];
+    let vidaFrom = sp && parts.length && parts[0].vida ? sp.name : '';
+    powers.forEach((p) => { const x = parseScript(powerScript(p)); if (x.vida) vidaFrom = p.name; parts.push(x); });
+    return Object.assign(mergeMech(parts), { powers, vidaFrom });
   }
   // comprar características raciais de outros espécimes é exclusivo do Etheriano
   function isEtheriano(sp) { return Boolean(sp && (sp.id === 'of-esp-etheriano' || nameKey(sp.name) === 'etheriano')); }
   const racialLines = (v) => powerLines(v && v.racial).map((t) => Object.assign(t, { cost: t.cost === '' ? 1 : Math.max(0, Math.round(num(t.cost))) }));
   const racialId = (esp, t) => 'racial:' + (esp.id || nameKey(esp.name)) + ':' + nameKey(t.name);
   function grantBirthPowers(s) {
-    const names = String(specimenVals(s).poderes || '').split('\n').map((x) => x.trim()).filter(Boolean);
+    const names = birthNames(specimenVals(s));
+    // trocar de espécime tira os poderes de nascença do anterior (a mecânica dele vinha deles)
+    s.powers = s.powers.filter((p) => !p.birth || names.some((n) => nameKey(n) === nameKey(p.name)));
     names.forEach((n) => {
       if (s.powers.some((p) => nameKey(p.name) === nameKey(n))) return;
-      const e = BUILTINS.find((x) => x.kind === 'poder' && nameKey(x.name) === nameKey(n));
+      const e = findBirthPower(n);
       if (e) s.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', birth: true }));
     });
   }
@@ -6004,7 +6141,7 @@ const FIREBASE_CONFIG = {
   // Uma tela por parte. As abas no topo deixam ir direto a qualquer parte, em qualquer ordem.
   const SETUP = [
     { id: 'builds', tab: 'Começo rápido', title: 'Começo rápido', lead: 'Escolha uma build pronta para preencher atributos, perícias e proficiências de uma vez, ou pule e monte do seu jeito. Tudo pode ser ajustado nas próximas etapas.', search: true },
-    { id: 'especime', tab: 'Espécime', title: 'Espécime', lead: 'A espécie define a vida base, os UP iniciais e se já nasce com núcleo.', search: true },
+    { id: 'especime', tab: 'Espécime', title: 'Espécime', lead: 'A espécie traz descrição e poderes de nascença; são eles que definem a vida base, os UP iniciais e o núcleo.', search: true },
     { id: 'origem', tab: 'Origem', title: 'Origem e apresentação', lead: 'A origem traz o kit de itens iniciais. Idade, altura e sexo podem ser mudados depois na ficha.', search: true },
     { id: 'atributos', tab: 'Atributos', title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
     { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 com +1, ou, se preferir, espalhe os mesmos 5 pontos como quiser, até +2 em cada. Toque para alternar entre nada, +1 e +2.', search: true },
@@ -6168,7 +6305,7 @@ const FIREBASE_CONFIG = {
     b.addEventListener('click', onClick);
     return b;
   }
-  const specimenLine = (e) => { const v = e.values || {}; return 'Vida base ' + (v.vidaBase || 'PV') + ' · ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ' · núcleo +' + num(v.nucleoBase) : '') + (v.acopla === 'Sim' ? ' · acopla armas e armaduras' : '') + (v.humanidade === 'Sim' ? ' · Humanidade' : '') + (v.eletronico === 'Sim' ? ' · eletrônico' : '') + (isEtheriano(e) ? ' · exclusivo: compra características raciais de qualquer espécime' : ''); };
+  const specimenLine = (e) => mechLine(speciesMech(e)) + (birthNames(e.values).length ? ' · poderes: ' + birthNames(e.values).join(', ') : '') + (isEtheriano(e) ? ' · exclusivo: compra características raciais de qualquer espécime' : '');
 
   function previewSheet() { // a ficha como ficaria com as escolhas do assistente
     const s = normSheet(deep(sheetChar.sheet));
@@ -6338,6 +6475,7 @@ const FIREBASE_CONFIG = {
     const grid = h('div', 'fields-grid');
     cat.fields.filter((f) => f.key !== 'lore' && !f.hidden).forEach((f) => {
       if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
+      if (f.kind === 'script') { grid.append(h('div', 'field field--wide', fieldControl(f, null, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, null, isName ? d.name : d.values[f.key], (v) => { if (isName) d.name = v; else d.values[f.key] = v; });
       const fid = 'wzc-' + kind + '-' + f.key;
