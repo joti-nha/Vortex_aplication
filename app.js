@@ -5492,7 +5492,7 @@ const FIREBASE_CONFIG = {
       else if (opts.length === 1) actions.append(act('Equipar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
       else opts.forEach((id) => actions.append(act(slotDef(id).full, 'btn--primary', () => { if (equipItem(i, id)) changed(); })));
     }
-    if (isWeapon(i.kind)) actions.append(act('Armeiro', 'btn--ghost', () => openArmory(i.uid)));
+    if (canArmory(i)) actions.append(act('Armeiro', 'btn--ghost', () => openArmory(i.uid)));
     if (isGun(i)) {
       actions.append(act('Procurar munição', 'btn--ghost', () => findAmmo(i)));
       const bagAmmo = ammoForGun(s, i)[0];
@@ -5671,7 +5671,7 @@ const FIREBASE_CONFIG = {
     if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (i.slot ? '' : ' (só quando equipado)')));
     body.replaceChildren();
     if (dl.children.length) body.append(dl);
-    if (isWeapon(i.kind)) {
+    if (canArmory(i)) {
       const ab = h('button', 'btn btn--primary btn--sm', 'Abrir no Armeiro');
       ab.type = 'button';
       ab.addEventListener('click', () => { closeDialog(invDlg); openArmory(i.uid); });
@@ -5994,11 +5994,15 @@ const FIREBASE_CONFIG = {
     'arma-fogo': { Mira: 'top', Bocal: 'right', Carregador: 'bottom', Empunhadura: 'left' },
     'arma-melee': { Ponta: 'right', Dorso: 'top', Empunhadura: 'bottom', Cabo: 'left' }
   };
+  // o que entra no Armeiro: tudo que recebe mod, acessório ou propriedade pelas regras (armas e armaduras)
+  const canArmory = (i) => Boolean(i) && (isWeapon(i.kind) || i.kind === 'armadura');
+  const armoryItems = (s) => s.inventory.filter(canArmory)
+    .sort((a, b) => (Number(isWeapon(b.kind)) - Number(isWeapon(a.kind))) || (Number(Boolean(b.slot)) - Number(Boolean(a.slot))));
   function openArmory(u) {
     const ch = sheetChar;
     if (!ch) return;
-    const guns = weaponsOf(ch.sheet);
-    if (!guns.length) { toast('Nenhuma arma no inventário. Adicione uma do banco para usar o Armeiro.'); return; }
+    const guns = armoryItems(ch.sheet);
+    if (!guns.length) { toast('Nenhuma arma ou armadura no inventário. Adicione uma do banco para usar o Armeiro.'); return; }
     if (!armDlg) {
       armDlg = h('dialog', 'dialog armory');
       armDlg.setAttribute('aria-labelledby', 'armory-title');
@@ -6018,7 +6022,7 @@ const FIREBASE_CONFIG = {
     const ch = sheetChar;
     if (!ch || !armDlg) return;
     const s = ch.sheet;
-    const guns = weaponsOf(s);
+    const guns = armoryItems(s);
     const w = guns.find((x) => x.uid === arm.uid) || guns[0];
     if (!w) { closeDialog(armDlg); return; }
     arm.uid = w.uid;
@@ -6028,7 +6032,7 @@ const FIREBASE_CONFIG = {
     const per = SLOT_RULES.acessoriosPorSlot || 3;
     const taken = takenPositions(w);
     const positions = info.positions;
-    if (!arm.sel) arm.sel = positions[0] ? 'pos:' + positions[0] : 'mod';
+    if (!arm.sel || (arm.sel === 'mod' && !info.mods) || (arm.sel.indexOf('pos:') === 0 && positions.indexOf(arm.sel.slice(4)) < 0)) arm.sel = positions[0] ? 'pos:' + positions[0] : info.mods ? 'mod' : 'prop';
     const lib = arm.lib || BUILTINS.filter((e) => ['mod-arma', 'propriedade', 'acessorio'].indexOf(e.kind) >= 0);
     const keep = armDlg.contains(document.activeElement) ? document.activeElement.dataset.fid : '';
 
@@ -6075,7 +6079,7 @@ const FIREBASE_CONFIG = {
       return b;
     };
     const slotRow = h('div', 'armory__slots',
-      slotBtn('mod', 'Mods · ' + use.total + '/' + info.mods + (use.acc ? ' (' + use.acc + ' com acessórios)' : ''), w.slots.mods.map((x) => x.name).join(', ')),
+      !info.mods ? null : slotBtn('mod', 'Mods · ' + use.total + '/' + info.mods + (use.acc ? ' (' + use.acc + ' com acessórios)' : ''), w.slots.mods.map((x) => x.name).join(', ')),
       slotBtn('prop', 'Propriedade · ' + w.slots.props.length + '/' + info.props, w.slots.props.map((x) => x.name).join(', '), !info.props));
 
     // lista de peças do que está selecionado
@@ -6133,7 +6137,9 @@ const FIREBASE_CONFIG = {
     } else {
       title = 'Propriedade';
       hint = info.props ? 'A raridade ' + info.rar + ' comporta ' + plural(info.props, 'propriedade', 'propriedades') + '.' : 'A raridade ' + info.rar + ' não comporta propriedade. Só Incomum, Épica e Lendária.';
-      items = lib.filter((e) => e.kind === 'propriedade' && (!e.values.para || e.values.para === 'Qualquer item' || e.values.para === 'Arma') && match(e)).map((e) => {
+      if (w.kind === 'armadura') hint += ' Armadura não recebe mods nem acessórios, só propriedade.';
+      const paraProp = w.kind === 'armadura' ? 'Armadura' : 'Arma';
+      items = lib.filter((e) => e.kind === 'propriedade' && (!e.values.para || e.values.para === 'Qualquer item' || e.values.para === paraProp) && match(e)).map((e) => {
         const idx = w.slots.props.findIndex((p) => (p.id ? p.id === e.id : p.name === e.name));
         const on = idx >= 0;
         return row(e, on, w.slots.props.length < info.props, info.props ? 'Já tem todas as propriedades que a raridade permite.' : 'A raridade não comporta propriedade.', () => {
@@ -6189,6 +6195,9 @@ const FIREBASE_CONFIG = {
           btn('+1 ' + unitName[0] + ' de reserva', 'arm-res-add', () => { w.reserve = res + step; armSave(); }),
           btn('−1', 'arm-res-sub', () => { w.reserve = Math.max(0, res - step); armSave(); }, !res)),
         g.notes.length ? h('ul', 'armory__notes', ...g.notes.map((n) => h('li', '', n))) : null].filter(Boolean));
+    } else if (w.kind === 'armadura') {
+      stats.append(stat('Defesa', w.values.armadura), stat('Penalidade', num(w.values.penalidade) ? '–' + Math.abs(num(w.values.penalidade)) : 'nenhuma'),
+        stat('Carga', fmtNum(parseCarga(w.values.carga))), stat('Núcleo', w.values.nucleo === 'Sim' ? '+' + num(w.values.capacidade) : 'não'));
     } else {
       stats.append(stat('Dano', w.values.dano), stat('Empunhadura', w.values.empunhadura), stat('Carga', fmtNum(parseCarga(w.values.carga))));
     }
@@ -6197,7 +6206,7 @@ const FIREBASE_CONFIG = {
       h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', 'Armeiro')), close),
       tabs,
       h('div', 'armory__grid',
-        h('div', 'armory__left', stage, slotRow, stats, ammoBox),
+        h('div', 'armory__left', stage, slotRow, stats, ammoBox.children.length ? ammoBox : null),
         panel));
     $('h2.dialog__title', armDlg).id = 'armory-title';
     const on = $('.armory__gun.is-on', armDlg);
