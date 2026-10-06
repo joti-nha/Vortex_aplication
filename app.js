@@ -2614,12 +2614,13 @@ const FIREBASE_CONFIG = {
     const pic = e.image || e.thumb || itemArt(e);
     if (pic) { const img = h('img', 'entry__img'); img.src = pic; img.alt = ''; body.append(img); }
     const dl = h('dl', 'member__data entry__data');
-    const seen = new Set(['nome', 'lore']);
+    const seen = new Set(['nome', 'lore', 'compraRacial']); // compraRacial: campo antigo, hoje é exclusivo do Etheriano
     ((cat && cat.fields) || []).forEach((f) => {
       seen.add(f.key);
       const val = v[f.key];
       if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r) => dl.append(h('dt', '', r[0]), h('dd', 'entry__pre', r[1]))); return; }
       if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
+      if (f.kind === 'racial3') { dl.append(h('dt', '', 'Habilidades raciais'), h('dd', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), ' (' + (t.cost || 1) + ' UP)' + (t.text ? ': ' + t.text : ''))))); return; }
       dl.append(h('dt', '', f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(val)) : f.key === 'preco' ? priceText(val) : String(val)));
     });
     // campos que não estão no formulário atual (registros antigos) também aparecem
@@ -2973,6 +2974,94 @@ const FIREBASE_CONFIG = {
     return { id: null, kind, typeId: typeId || '', name: '', values, image: '', thumb: '', slots: normSlots(null), bonus: {} };
   }
 
+  /* Espécime: 3 caixas, uma para cada habilidade racial (1 UP cada). Grava no formato "Nome | efeito | 1", uma por linha. */
+  function racial3Field(field, value, onChange) {
+    const cur = powerLines(value).slice(0, 3);
+    while (cur.length < 3) cur.push({ name: '', text: '' });
+    const box = h('div', 'racial3');
+    box.setAttribute('role', 'group');
+    const save = () => onChange(cur.filter((t) => cleanName(t.name)).map((t) => cleanName(t.name).replace(/\|/g, '/') + ' | ' + String(t.text || '').replace(/\s*\n\s*/g, ' ').replace(/\|/g, '/').trim() + ' | 1').join('\n'));
+    cur.forEach((t, i) => {
+      const nm = h('input', 'input');
+      nm.type = 'text';
+      nm.maxLength = 60;
+      nm.autocomplete = 'off';
+      nm.value = t.name;
+      nm.placeholder = ['Ex.: Núcleo', 'Ex.: Engenharia', 'Ex.: Não vivo'][i];
+      nm.dataset.fid = 'racial3-' + field.key + '-' + i + '-nome';
+      nm.setAttribute('aria-label', 'Nome da habilidade racial ' + (i + 1));
+      nm.addEventListener('input', () => { t.name = nm.value; save(); });
+      const tx = h('textarea', 'input');
+      tx.rows = 2;
+      tx.maxLength = 400;
+      tx.value = t.text;
+      tx.placeholder = 'O que ela faz.';
+      tx.dataset.fid = 'racial3-' + field.key + '-' + i + '-efeito';
+      tx.setAttribute('aria-label', 'Efeito da habilidade racial ' + (i + 1));
+      tx.addEventListener('input', () => { t.text = tx.value; save(); });
+      box.append(h('div', 'racial3__box', h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', 'Habilidade racial'), h('span', 'racial3__cost', '1 UP')), nm, tx));
+    });
+    return box;
+  }
+
+  /* Texto com uma linha por item (ou poder) e um botão para trazer do banco.
+     Com budget, soma o preço do que veio do banco e só deixa pegar o que cabe no dinheiro inicial. */
+  function bankLinesField(field, value, onChange) {
+    const kinds = field.bank === 'poder' ? ['poder'] : INVENTORY_KINDS;
+    const ta = h('textarea', 'input');
+    ta.id = 'item-f-' + field.key;
+    ta.rows = 3;
+    ta.maxLength = 1200;
+    ta.value = value || '';
+    if (field.placeholder) ta.placeholder = field.placeholder;
+    let lib = BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0);
+    const list = h('ul', 'banklines__list');
+    const sum = h('p', 'banklines__sum');
+    const lineKey = (l) => nameKey(String(l).replace(/[;.]\s*$/, '').replace(/^1\s+/, ''));
+    const lines = () => ta.value.split('\n').map((x) => x.trim()).filter(Boolean);
+    const found = (l) => lib.find((e) => nameKey(e.name) === lineKey(l));
+    const total = () => lines().reduce((t, l) => t + priceOf(found(l)), 0);
+    const paint = () => {
+      list.replaceChildren(...lines().map((l, i) => {
+        const e = found(l);
+        const rm = h('button', 'icon-btn', '×');
+        rm.type = 'button';
+        rm.setAttribute('aria-label', 'Tirar ' + l);
+        rm.addEventListener('click', () => { const all = lines(); all.splice(i, 1); ta.value = all.join('\n'); onChange(ta.value); paint(); });
+        return h('li', 'banklines__item' + (e ? ' is-bank' : ''), e ? entryIcon(e) : null,
+          h('span', 'banklines__name', e ? e.name : l),
+          h('span', 'banklines__meta', e ? (field.budget ? (priceOf(e) ? fmtCronos(priceOf(e)) + ' Cronos' : 'sem preço') : kindTitle(e.kind)) : 'texto livre'), rm);
+      }));
+      list.hidden = !lines().length;
+      if (field.budget) {
+        const t = total();
+        sum.className = 'banklines__sum' + (t > START_CRONOS ? ' is-over' : '');
+        sum.replaceChildren('Itens do banco: ', h('strong', '', fmtCronos(t)), ' de ' + fmtCronos(START_CRONOS) + ' Cronos (o dinheiro inicial de todo personagem).');
+      }
+    };
+    ta.addEventListener('input', () => { onChange(ta.value); paint(); });
+    const add = h('button', 'btn btn--ghost btn--sm', field.bank === 'poder' ? '+ Poder do banco' : '+ Item do banco');
+    add.type = 'button';
+    add.dataset.fid = 'banklines-' + field.key;
+    add.addEventListener('click', async () => {
+      const left = START_CRONOS - total();
+      const e = await openPicker(field.bank === 'poder'
+        ? { title: 'Poder de nascença', kinds, chips: ['Poder'], filter: (x) => x.kind === 'poder' }
+        : { title: 'Item inicial (sobram ' + fmtCronos(Math.max(0, left)) + ' Cronos)', kinds, chips: [
+          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Itens gerais', kinds: ['item-geral'] }],
+        filter: (x) => kinds.indexOf(x.kind) >= 0 && (!field.budget || priceOf(x) <= left) });
+      if (!e) return;
+      if (!lib.some((x) => nameKey(x.name) === nameKey(e.name))) lib = lib.concat([e]);
+      ta.value = lines().concat([e.name]).join('\n');
+      onChange(ta.value);
+      paint();
+    });
+    libSearch(kinds, '').then((l) => { lib = l; paint(); }).catch(() => { /* fica o catálogo oficial */ });
+    paint();
+    return h('div', 'banklines', list, ta, h('div', 'banklines__foot', field.budget ? sum : null, add));
+  }
+
   function fieldControl(field, type, value, onChange) {
     const id = 'item-f-' + field.key;
     const opts = fieldOptions(field, type);
@@ -3032,6 +3121,8 @@ const FIREBASE_CONFIG = {
       });
       return box;
     }
+    if (field.kind === 'racial3') return racial3Field(field, value, onChange);
+    if (field.kind === 'banklines') return bankLinesField(field, value, onChange);
     if (field.kind === 'textarea') {
       const ta = h('textarea', 'input');
       ta.id = id;
@@ -3109,7 +3200,7 @@ const FIREBASE_CONFIG = {
         });
         if (f.key === 'raridade' || f.key === 'para') renderItemSlots();
       });
-      const grouped = f.kind === 'multi' || f.kind === 'rarity' || f.kind === 'cards';
+      const grouped = f.kind === 'multi' || f.kind === 'rarity' || f.kind === 'cards' || f.kind === 'racial3';
       const label = h(grouped ? 'span' : 'label', 'field__label', f.label);
       if (!grouped) label.htmlFor = 'item-f-' + f.key;
       if (grouped) { const gid = 'item-l-' + f.key; label.id = gid; ctrl.setAttribute('aria-labelledby', gid); }
@@ -3923,14 +4014,8 @@ const FIREBASE_CONFIG = {
   }
 
   /* Dinheiro inicial pelos UP com que o personagem começa (tabela interna, items.js) */
-  function startMoney(up) {
-    const t = ITEM_DATA.dinheiroInicial || [[0, 1500]];
-    const last = t[t.length - 1];
-    if (up > last[0]) return last[1] + (up - last[0]) * 1000;
-    let v = t[0][1];
-    t.forEach((r) => { if (up >= r[0]) v = r[1]; });
-    return v;
-  }
+  // todo personagem começa com o mesmo dinheiro, seja qual for o espécime ou os UP iniciais
+  const START_CRONOS = Math.max(0, Math.round(num(ITEM_DATA.dinheiroInicial))) || 1500;
 
   /* ---------- Roteiro da build (modo avançado) ----------
      A build tem o nível 0 (a distribuição inicial) e, se quiser, um roteiro: escolha quantos UP e quanto
@@ -3951,13 +4036,13 @@ const FIREBASE_CONFIG = {
         r.pages = r.pages.map((p) => Object.assign(rtPage(), p, { ben: Array.isArray(p && p.ben) ? p.ben.slice(0, 2).concat(['', '']).slice(0, 2) : ['', ''] }));
         r.itens = Array.isArray(r.itens) ? r.itens : [];
         r.up = r.pages.length;
-        r.dinheiro = num(r.dinheiro);
+        r.dinheiro = START_CRONOS; // o mesmo dinheiro inicial para todos
         return r;
       }
     } catch (e) { /* sem roteiro salvo */ }
     const pages = guidePages(v);
     if (!pages.length) return null;
-    const r = rtNew(Math.min(RT_MAX_UP, pages[pages.length - 1].n), num(v.dinheiro) || startMoney(0));
+    const r = rtNew(Math.min(RT_MAX_UP, pages[pages.length - 1].n), START_CRONOS);
     pages.forEach((pg) => {
       const p = r.pages[pg.n - 1];
       if (!p) return;
@@ -4097,18 +4182,15 @@ const FIREBASE_CONFIG = {
     up.type = 'number'; up.min = '1'; up.max = String(RT_MAX_UP); up.step = '1'; up.id = 'rt-up'; up.inputMode = 'numeric';
     up.value = rt.r ? String(rt.r.up) : '10';
     const money = h('input', 'input input--lg');
-    money.type = 'number'; money.min = '0'; money.step = '100'; money.id = 'rt-money'; money.inputMode = 'numeric';
-    money.value = String(rt.r ? rt.r.dinheiro : startMoney(0));
-    const table = h('p', 'field__hint');
-    const paintTable = () => { table.textContent = 'Tabela de dinheiro inicial: quem começa com 0 UP tem ' + fmtCronos(startMoney(0)) + ' Cronos, com ' + clamp(Math.round(num(up.value)), 1, RT_MAX_UP) + ' UP tem ' + fmtCronos(startMoney(clamp(Math.round(num(up.value)), 1, RT_MAX_UP))) + '. Use o valor que fizer sentido para a build.'; };
-    paintTable();
-    up.addEventListener('input', paintTable);
+    money.type = 'number'; money.id = 'rt-money'; money.readOnly = true;
+    money.value = String(START_CRONOS);
+    const table = h('p', 'field__hint', 'Todo personagem começa com ' + fmtCronos(START_CRONOS) + ' Cronos, então toda build compra os itens com esse valor.');
     const go = h('button', 'btn btn--primary', rt.r ? 'Atualizar o livro' : 'Criar o livro');
     go.type = 'button';
     go.dataset.fid = 'rt-make';
     go.addEventListener('click', () => {
       const n = clamp(Math.round(num(up.value)), 1, RT_MAX_UP);
-      const m = Math.max(0, Math.round(num(money.value)));
+      const m = START_CRONOS;
       if (!rt.r) rt.r = rtNew(n, m);
       else {
         rt.r.pages = rt.r.pages.slice(0, n).concat(Array.from({ length: Math.max(0, n - rt.r.pages.length) }, rtPage));
@@ -4917,7 +4999,7 @@ const FIREBASE_CONFIG = {
 
   function renderPowers() {
     const s = sheetChar.sheet;
-    const canRacial = specimenVals(s).compraRacial === 'Sim';
+    const canRacial = isEtheriano(s.specimen);
     $('#racial-open').hidden = !canRacial;
     $('#power-list').replaceChildren(...s.powers.map((p, i) => {
       const v = p.values || {};
@@ -5382,6 +5464,8 @@ const FIREBASE_CONFIG = {
     const official = sp ? BUILTINS.find((e) => e.id === sp.id) : null;
     return Object.assign({}, official ? official.values : {}, (sp && sp.values) || {});
   }
+  // comprar características raciais de outros espécimes é exclusivo do Etheriano
+  function isEtheriano(sp) { return Boolean(sp && (sp.id === 'of-esp-etheriano' || nameKey(sp.name) === 'etheriano')); }
   const racialLines = (v) => powerLines(v && v.racial).map((t) => Object.assign(t, { cost: t.cost === '' ? 1 : Math.max(0, Math.round(num(t.cost))) }));
   const racialId = (esp, t) => 'racial:' + (esp.id || nameKey(esp.name)) + ':' + nameKey(t.name);
   function grantBirthPowers(s) {
@@ -5405,12 +5489,13 @@ const FIREBASE_CONFIG = {
   async function openRacial() {
     const ch = sheetChar;
     if (!ch) return;
+    if (!isEtheriano(ch.sheet.specimen)) { toast('Características raciais de outros espécimes são exclusivas do Etheriano.'); return; }
     if (!racialDlg) { racialDlg = h('dialog', 'dialog pickchar racial'); racialDlg.setAttribute('aria-labelledby', 'racial-title'); document.body.append(racialDlg); }
     const dlg = racialDlg;
     let list = BUILTINS.filter((e) => e.kind === 'especime');
     try { list = await libSearch(['especime'], ''); } catch (err) { /* fica o catálogo oficial */ }
     const mine = ch.sheet.specimen;
-    list = list.filter((e) => racialLines(e.values).length && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
+    list = list.filter((e) => racialLines(e.values).length && !isEtheriano(e) && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
     if (!list.some((e) => e.id === racialPick)) racialPick = list[0] ? list[0].id : '';
     const draw = () => {
       const s = ch.sheet;
@@ -5447,7 +5532,8 @@ const FIREBASE_CONFIG = {
       const title = h('h2', '', 'Características raciais');
       title.id = 'racial-title';
       dlg.replaceChildren(h('div', 'pickchar__body', title,
-        h('p', 'field__hint', (mine ? mine.name : 'Este espécime') + ' pode gastar UP em características de outros espécimes. Toque num espécime para ver as características dele.'),
+        h('p', 'racial__only', 'Exclusivo do Etheriano'),
+        h('p', 'field__hint', 'Só o Etheriano gasta UP em características raciais, e pode pegar de qualquer espécime, inclusive dos criados na Oficina. Toque num espécime para ver as características dele.'),
         h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free))),
         races,
         esp ? h('h3', 'pickchar__sub', esp.name) : h('p', 'empty', 'Nenhum espécime com características raciais.'),
@@ -5850,14 +5936,14 @@ const FIREBASE_CONFIG = {
   const setupDlg = $('#setup-dialog');
   // Uma tela por parte. As abas no topo deixam ir direto a qualquer parte, em qualquer ordem.
   const SETUP = [
-    { id: 'builds', tab: 'Builds', title: 'Builds recomendadas', lead: 'Escolha uma build comum para preencher atributos, perícias e proficiências de uma vez, ou monte do seu jeito nas outras partes. Tudo pode ser ajustado depois.', search: true },
+    { id: 'builds', tab: 'Começo rápido', title: 'Começo rápido', lead: 'Escolha uma build pronta para preencher atributos, perícias e proficiências de uma vez, ou pule e monte do seu jeito. Tudo pode ser ajustado nas próximas etapas.', search: true },
     { id: 'especime', tab: 'Espécime', title: 'Espécime', lead: 'A espécie define a vida base, os UP iniciais e se já nasce com núcleo.', search: true },
-    { id: 'origem', tab: 'Origem', title: 'Origem e apresentação', lead: 'A origem traz itens iniciais. Idade, altura e sexo podem ser mudados depois na ficha.', search: true },
-    { id: 'equip', tab: 'Itens iniciais', title: 'Itens iniciais', lead: 'Pegue o kit da origem, escolhendo o que levar e trocando por itens do banco, ou monte o seu com um orçamento em Cronos.', search: true },
+    { id: 'origem', tab: 'Origem', title: 'Origem e apresentação', lead: 'A origem traz o kit de itens iniciais. Idade, altura e sexo podem ser mudados depois na ficha.', search: true },
     { id: 'atributos', tab: 'Atributos', title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
     { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 perícia com +1. Toque para alternar entre nada, +1 e +2.', search: true },
     { id: 'profs', tab: 'Proficiências', title: 'Proficiências', lead: 'Escolha 4 tipos de arma ou armadura em que o personagem é proficiente desde o início.', search: true },
-    { id: 'resumo', tab: 'Resumo', title: 'Resumo', lead: 'Confira. Os recursos já saem calculados dos atributos.' }
+    { id: 'equip', tab: 'Itens iniciais', title: 'Itens iniciais', lead: 'Leve o kit da origem (trocando o que quiser por itens do banco) ou compre do banco com o dinheiro inicial, igual para todos.', search: true },
+    { id: 'resumo', tab: 'Resumo', title: 'Tudo pronto?', lead: 'Confira a ficha. Os recursos já saem calculados dos atributos.' }
   ];
   const STEP = {};
   SETUP.forEach((x, i) => { STEP[x.id] = i; });
@@ -5919,12 +6005,16 @@ const FIREBASE_CONFIG = {
   const allProblems = () => SETUP.map((x, i) => [i, stepProblem(i)]).filter((p) => p[1]);
   const wzMatch = (...texts) => matchesText(nameKey(texts.filter(Boolean).join(' ')), wz.q || '');
   function goStep(i) {
+    wz.seen.add(wz.step); // ao sair de uma etapa, o que falta nela passa a aparecer na trilha
     wz.step = clamp(i, 0, SETUP.length - 1);
     wz.q = '';
     $('#setup-search').value = '';
     renderSetup();
     $('#setup-title').focus({ preventScroll: true });
-    $('.setup').scrollTop = 0;
+    $('#setup-main').scrollTop = 0;
+    $('.setup').classList.remove('setup--side');
+    $('#setup-side-toggle').setAttribute('aria-expanded', 'false');
+    $('#setup-side-toggle').textContent = 'Ver ficha';
   }
   function applyBuild(b) {
     wz.attrs = Object.assign({}, b.attrs);
@@ -5936,9 +6026,7 @@ const FIREBASE_CONFIG = {
   }
 
   /* ---------- Itens iniciais: kit da origem ou compra por preço ----------
-     O livro não dá dinheiro inicial; o orçamento padrão (1.500 Cronos) é o de uma
-     arma comum mais uma armadura leve comum do catálogo. Pode ser mudado. */
-  const START_BUDGET = 1500;
+     Todo personagem começa com START_CRONOS (1.500 Cronos: uma arma comum mais uma armadura leve comum). */
   const priceOf = (e) => parseInt(String((e && e.values && e.values.preco) || '').replace(/[^0-9]/g, ''), 10) || 0;
   const invEntryFrom = (e) => Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
   function parseOriginLine(text) {
@@ -6008,7 +6096,7 @@ const FIREBASE_CONFIG = {
     b.addEventListener('click', onClick);
     return b;
   }
-  const specimenLine = (e) => { const v = e.values || {}; return 'Vida base ' + (v.vidaBase || 'PV') + ' · ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ' · núcleo +' + num(v.nucleoBase) : '') + (v.acopla === 'Sim' ? ' · acopla armas e armaduras' : '') + (v.humanidade === 'Sim' ? ' · Humanidade' : '') + (v.eletronico === 'Sim' ? ' · eletrônico' : ''); };
+  const specimenLine = (e) => { const v = e.values || {}; return 'Vida base ' + (v.vidaBase || 'PV') + ' · ' + num(v.upInicial) + ' UP iniciais' + (num(v.nucleoBase) ? ' · núcleo +' + num(v.nucleoBase) : '') + (v.acopla === 'Sim' ? ' · acopla armas e armaduras' : '') + (v.humanidade === 'Sim' ? ' · Humanidade' : '') + (v.eletronico === 'Sim' ? ' · eletrônico' : '') + (isEtheriano(e) ? ' · exclusivo: compra características raciais de qualquer espécime' : ''); };
 
   function previewSheet() { // a ficha como ficaria com as escolhas do assistente
     const s = normSheet(deep(sheetChar.sheet));
@@ -6033,9 +6121,7 @@ const FIREBASE_CONFIG = {
   function renderGear(body) {
     const origin = originOf(wz.origin);
     const g = gearFor(origin);
-    const startUp = previewSheet().upTotal;
-    const guideMoney = wz.guide ? num((wz.guide.values || {}).dinheiro) : 0; // o roteiro da build diz quanto dinheiro
-    if (g.budgetAuto) g.budget = guideMoney || startMoney(startUp);
+    g.budget = START_CRONOS;
     const gi = wz.guide ? String((wz.guide.values || {}).itens || '').split('\n').map((x) => x.trim()).filter(Boolean) : [];
     if (gi.length && g.guideFilled !== wz.guide.id + wz.guide.name) {
       if (g.guideFilled === '') g.mode = 'preco';
@@ -6128,18 +6214,11 @@ const FIREBASE_CONFIG = {
     }
 
     // Por preço: orçamento, carrinho e a loja (catálogo + banco, só o que tem preço)
-    const inp = h('input', 'input');
-    inp.type = 'text';
-    inp.inputMode = 'numeric';
-    inp.id = 'gear-budget';
-    inp.value = String(g.budget);
-    inp.addEventListener('change', () => { g.budget = Math.max(0, parseInt(inp.value.replace(/[^0-9]/g, ''), 10) || 0); g.budgetAuto = false; renderSetup(); });
-    const lab = h('label', 'field__label', 'Orçamento (Cronos)');
-    lab.htmlFor = 'gear-budget';
     const left = g.budget - cartTotal(g);
-    body.append(h('div', 'gear__budget', h('div', 'field', lab, inp),
+    body.append(h('div', 'gear__budget',
+      h('p', 'setup__pool', 'Dinheiro inicial: ', h('strong', '', fmtCronos(g.budget)), ' Cronos'),
       h('p', 'setup__pool' + (left < 0 ? ' setup__pool--over' : ''), 'Sobra: ', h('strong', '', fmtCronos(left)), ' Cronos')),
-      h('p', 'field__hint', 'Dinheiro inicial pela tabela: começando com ' + plural(startUp, 'UP', 'UP') + ', ' + fmtCronos(startMoney(startUp)) + ' Cronos (0 UP = ' + fmtCronos(startMoney(0)) + ', uma arma comum e uma armadura leve comum). Combine o valor com o mestre.' + (origin ? ' O kit de ' + origin.name + ' continua na aba "Kit da origem" para comparar.' : '')));
+      h('p', 'field__hint', 'Todo personagem começa com o mesmo valor, ' + fmtCronos(START_CRONOS) + ' Cronos, e pode comprar qualquer item do banco que caiba nele.' + (origin ? ' O kit de ' + origin.name + ' continua na aba "Kit da origem" para comparar.' : '')));
     if (wz.guide && gi.length) body.append(h('p', 'field__hint gear__guide', '📖 ' + wz.guide.name + ' já pôs no carrinho: ' + gi.join(', ') + '.' + (g.guideMissing && g.guideMissing.length ? ' Não achei no banco: ' + g.guideMissing.join(', ') + '.' : '')));
     if (g.cart.length) {
       body.append(h('h3', 'setup__sub', 'Comprados'), h('ul', 'rows', ...g.cart.map((e, i) => {
@@ -6190,11 +6269,11 @@ const FIREBASE_CONFIG = {
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, null, isName ? d.name : d.values[f.key], (v) => { if (isName) d.name = v; else d.values[f.key] = v; });
       const fid = 'wzc-' + kind + '-' + f.key;
-      const grouped = f.kind === 'multi';
+      const grouped = f.kind === 'multi' || f.kind === 'racial3';
       const label = h(grouped ? 'span' : 'label', 'field__label', f.label);
       if (grouped) { label.id = fid; ctrl.setAttribute('aria-labelledby', fid); }
-      else { ctrl.id = fid; label.htmlFor = fid; }
-      grid.append(h('div', 'field' + (f.big || grouped ? ' field--wide' : ''), label, ctrl));
+      else { (f.kind === 'banklines' ? $('textarea', ctrl) : ctrl).id = fid; label.htmlFor = fid; }
+      grid.append(h('div', 'field' + (f.big || grouped ? ' field--wide' : ''), label, ctrl, f.hint ? h('p', 'field__hint', f.hint) : null));
     });
     const save = h('button', 'btn btn--primary btn--sm', 'Salvar e usar');
     save.type = 'button';
@@ -6224,22 +6303,73 @@ const FIREBASE_CONFIG = {
     if (box) { box.scrollIntoView({ block: 'start' }); const n = $('#wzc-' + kind + '-nome'); if (n) n.focus({ preventScroll: true }); }
   }
 
+  // o que já foi escolhido em cada etapa, mostrado embaixo do nome dela na trilha
+  function stepValue(i) {
+    const id = SETUP[i].id;
+    if (id === 'builds') return wz.build || 'opcional';
+    if (id === 'especime') return wz.specimen ? wz.specimen.name : '';
+    if (id === 'origem') return cleanName(wz.origin);
+    if (id === 'atributos') { const p = attrPool(wz.attrs); if (p.left) return p.left > 0 ? plural(p.left, 'ponto livre', 'pontos livres') : 'passou ' + (-p.left); return ATTRS.map((at) => at.label.charAt(0) + ' ' + signed(wz.attrs[at.id])).join(' · '); }
+    if (id === 'pericias') { const c = skillCount(wz.skills); return c.two === 2 && c.one === 1 ? Object.keys(wz.skills).map(skillLabel).join(', ') : '+2: ' + c.two + '/2 · +1: ' + c.one + '/1'; }
+    if (id === 'profs') return wz.profs.length + ' de 4';
+    if (id === 'equip') {
+      const g = wz.gear;
+      if (g.mode === 'nenhum') return 'nenhum';
+      if (g.mode === 'preco') return g.cart.length ? fmtCronos(cartTotal(g)) + ' de ' + fmtCronos(g.budget) + ' Cronos' : '';
+      return wz.origin ? plural(gearEntries(gearFor(originOf(wz.origin))).length, 'item', 'itens') : '';
+    }
+    return allProblems().length ? plural(allProblems().length, 'pendência', 'pendências') : 'pronto para concluir';
+  }
+  const stepDone = (i) => !stepProblem(i) && Boolean(stepValue(i)) && SETUP[i].id !== 'resumo' && !(SETUP[i].id === 'builds' && !wz.build);
+
+  // painel "Sua ficha": o personagem como vai ficar, atualizado a cada escolha
+  function renderSetupSide() {
+    const side = $('#setup-side');
+    const m = previewSheet();
+    const c = sheetChar;
+    const skills = [];
+    ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (wz.skills[sk[0]]) skills.push(sk[1] + ' +' + wz.skills[sk[0]]); }));
+    const g = wz.gear;
+    const money = g.mode === 'preco' ? fmtCronos(g.budget - cartTotal(g)) + ' de ' + fmtCronos(g.budget) + ' Cronos sobrando' : fmtCronos(START_CRONOS) + ' Cronos para gastar na loja';
+    const stat = (k, v, cls) => h('div', 'cside__stat' + (cls ? ' ' + cls : ''), h('span', '', k), h('strong', '', v));
+    const probs = allProblems().length;
+    side.replaceChildren(
+      h('div', 'cside__who', h('span', 'cside__avatar', (c.name || '?').trim().charAt(0).toUpperCase()),
+        h('span', 'cside__id', h('strong', 'cside__name', c.name || 'Sem nome'), h('span', 'cside__sub', [wz.specimen && wz.specimen.name, cleanName(wz.origin)].filter(Boolean).join(' · ') || 'Espécime e origem a escolher'))),
+      h('div', 'cside__attrs', ...ATTRS.map((at) => h('div', 'cside__attr cside__attr--' + at.id, h('span', '', at.label), h('strong', '', signed(wz.attrs[at.id]))))),
+      h('div', 'cside__stats', ...LIFE.filter((l) => m.max[l[0]] > 0).map((l) => stat(l[1], String(m.max[l[0]]), 'cside__stat--life')),
+        stat('PE', String(m.max.pe)), stat('PA', String(m.max.pa)), stat('Defesa', String(m.defMin)), stat('Carga', fmtNum(m.cargaMax)), stat('UP', String(m.upTotal))),
+      h('p', 'cside__label', 'Perícias'), h('p', 'cside__line', skills.join(' · ') || '—'),
+      h('p', 'cside__label', 'Proficiências'), h('p', 'cside__line', wz.profs.map(profLabel).join(' · ') || '—'),
+      h('p', 'cside__label', 'Itens iniciais'), h('p', 'cside__line', gearSummary(gearFor(originOf(wz.origin)))),
+      h('p', 'cside__money', money),
+      h('p', 'cside__state' + (probs ? ' is-bad' : ' is-ok'), probs ? 'Falta completar ' + plural(probs, 'etapa', 'etapas') + '.' : 'Tudo certo para concluir.'));
+  }
+
   function renderSetup(focusId) {
     const body = $('#setup-body');
     const st = SETUP[wz.step];
-    $('#setup-step').textContent = 'Distribuição inicial · parte ' + (wz.step + 1) + ' de ' + SETUP.length;
+    $('#setup-step').replaceChildren(h('span', 'setup__step-pre', 'Criação de personagem · '), 'etapa ' + (wz.step + 1) + ' de ' + SETUP.length);
+    $('#setup-bar').style.width = Math.round((SETUP.filter((x, i) => stepDone(i)).length / (SETUP.length - 1)) * 100) + '%';
     $('#setup-title').textContent = st.title;
     $('#setup-lead').textContent = st.lead;
     $('#setup-search-wrap').hidden = !st.search;
     $('#setup-tabs').replaceChildren(...SETUP.map((x, i) => {
-      const bad = stepProblem(i);
-      const b = h('button', 'setup__tab' + (i === wz.step ? ' is-on' : '') + (bad ? ' setup__tab--bad' : ''), x.tab);
+      const bad = wz.seen.has(i) || i < wz.step || i === STEP.resumo ? stepProblem(i) : '';
+      const done = stepDone(i);
+      const val = stepValue(i);
+      const b = h('button', 'setup__tab' + (i === wz.step ? ' is-on' : '') + (bad ? ' setup__tab--bad' : '') + (done ? ' setup__tab--done' : ''),
+        h('span', 'setup__num', done ? '✓' : bad ? '!' : String(i + 1)),
+        h('span', 'setup__tab-text', h('span', 'setup__tab-name', x.tab), h('span', 'setup__tab-val', val || 'a escolher')));
       b.type = 'button';
       if (i === wz.step) b.setAttribute('aria-current', 'step');
       b.title = bad || x.title;
       b.addEventListener('click', () => goStep(i));
       return b;
     }));
+    const on = $('#setup-tabs .is-on');
+    if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+    renderSetupSide();
     body.replaceChildren();
 
     if (wz.step === STEP.builds) {
@@ -6393,7 +6523,7 @@ const FIREBASE_CONFIG = {
     $('#setup-back').hidden = wz.step === 0;
     const next = $('#setup-next');
     const last = wz.step === SETUP.length - 1;
-    next.textContent = last ? 'Concluir' : 'Continuar';
+    next.textContent = last ? 'Criar personagem' : 'Próximo: ' + SETUP[wz.step + 1].tab;
     next.disabled = last && allProblems().length > 0;
     if (focusId) { const el = $('[data-fid="' + focusId + '"]', body) || $('[data-fid^="' + focusId.slice(0, -1) + '"]:not(:disabled)', body); if (el) el.focus({ preventScroll: true }); }
   }
@@ -6401,9 +6531,9 @@ const FIREBASE_CONFIG = {
   function openSetup() {
     const c = sheetChar, s = c.sheet;
     wz = {
-      step: skipBuilds() ? STEP.especime : STEP.builds, q: '', build: '', attrs: Object.assign({}, s.attrs), skills: {}, profs: s.profs.slice(0, 4), oficio: s.oficio || '',
+      step: skipBuilds() ? STEP.especime : STEP.builds, seen: new Set(), q: '', build: '', attrs: Object.assign({}, s.attrs), skills: {}, profs: s.profs.slice(0, 4), oficio: s.oficio || '',
       specimen: s.specimen ? deep(s.specimen) : null, origin: c.origin || '', age: c.age || '', height: s.height || '', sex: s.sex || '',
-      gear: { mode: s.originItems ? 'nenhum' : 'kit', origin: null, lines: [], budget: START_BUDGET, budgetAuto: true, cart: [], shop: null, guideFilled: '' }
+      gear: { mode: s.originItems ? 'nenhum' : 'kit', origin: null, lines: [], budget: START_CRONOS, cart: [], shop: null, guideFilled: '' }
     };
     Object.keys(s.skills).forEach((k) => { if (s.skills[k] === 1 || s.skills[k] === 2) wz.skills[k] = s.skills[k]; });
     if (attrPool(wz.attrs).left < 0 || ATTRS.some((at) => wz.attrs[at.id] > 3)) wz.attrs = { corpo: 0, precisao: 0, essencia: 0 }; // ficha já evoluída: recomeça do zero
@@ -6441,7 +6571,7 @@ const FIREBASE_CONFIG = {
     fillBasics();
     changed();
     flushSave();
-    toast('Distribuição inicial concluída.' + (guided ? ' A build ' + s.guide.name + ' vai atualizar a ficha a cada UP; as folhas ficam em Progressão.' : ''));
+    toast('Personagem pronto: a ficha já está preenchida.' + (guided ? ' A build ' + s.guide.name + ' vai atualizar a ficha a cada UP; as folhas ficam em Progressão.' : ''));
   }
 
   $('#setup-open').addEventListener('click', openSetup);
@@ -6458,6 +6588,11 @@ const FIREBASE_CONFIG = {
     touchSheet();
   });
   setupDlg.addEventListener('close', () => { wz = null; });
+  $('#setup-side-toggle').addEventListener('click', () => {
+    const on = $('.setup').classList.toggle('setup--side');
+    $('#setup-side-toggle').setAttribute('aria-expanded', String(on));
+    $('#setup-side-toggle').textContent = on ? 'Voltar à etapa' : 'Ver ficha';
+  });
 
   /* Exportar: PDF, Word, texto ou copiar */
   const exportDlg = $('#export-dialog');
