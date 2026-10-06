@@ -3111,3 +3111,17 @@ html, body { max-width: 100%; overflow-x: clip; }
 .pick-menu__other { border-style: dashed; }
 .racial__more { align-self: flex-start; margin: 0.3rem 0 0; }
 .racial__only { width: fit-content; }
+
+/* Script dos poderes: discreto, no fim do formulário */
+.script { border: 1px dashed var(--linha); border-radius: var(--r-s); }
+.script__sum { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.6rem; cursor: pointer; list-style: none; font-size: 0.78rem; color: var(--nevoa-2); opacity: 0.75; }
+.script__sum::-webkit-details-marker { display: none; }
+.script__sum:hover, .script[open] .script__sum { opacity: 1; color: var(--essencia); }
+.script__icon { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 800; }
+.script__body { display: flex; flex-direction: column; gap: 0.45rem; padding: 0 0.6rem 0.6rem; }
+.script__code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; }
+.script__state { margin: 0; font-size: 0.78rem; color: var(--nevoa-2); }
+.script__state--bad { color: var(--erro); }
+.script__help { margin: 0; padding-left: 1rem; font-size: 0.75rem; color: var(--nevoa-2); }
+.script__help code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--essencia); }
+.entry__code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; }
