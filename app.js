@@ -5994,7 +5994,7 @@ const FIREBASE_CONFIG = {
     { id: 'especime', tab: 'Espécime', title: 'Espécime', lead: 'A espécie define a vida base, os UP iniciais e se já nasce com núcleo.', search: true },
     { id: 'origem', tab: 'Origem', title: 'Origem e apresentação', lead: 'A origem traz o kit de itens iniciais. Idade, altura e sexo podem ser mudados depois na ficha.', search: true },
     { id: 'atributos', tab: 'Atributos', title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
-    { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 perícia com +1. Toque para alternar entre nada, +1 e +2.', search: true },
+    { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 com +1, ou, se preferir, espalhe os mesmos 5 pontos como quiser, até +2 em cada. Toque para alternar entre nada, +1 e +2.', search: true },
     { id: 'profs', tab: 'Proficiências', title: 'Proficiências', lead: 'Escolha 4 tipos de arma ou armadura em que o personagem é proficiente desde o início.', search: true },
     { id: 'equip', tab: 'Itens iniciais', title: 'Itens iniciais', lead: 'Leve o kit da origem (trocando o que quiser por itens do banco) ou compre do banco com o dinheiro inicial, igual para todos.', search: true },
     { id: 'resumo', tab: 'Resumo', title: 'Tudo pronto?', lead: 'Confira a ficha. Os recursos já saem calculados dos atributos.' }
@@ -6039,8 +6039,11 @@ const FIREBASE_CONFIG = {
   };
   const skillCount = (sk) => {
     const vals = Object.keys(sk).map((k) => sk[k]);
-    return { two: vals.filter((v) => v === 2).length, one: vals.filter((v) => v === 1).length };
+    return { two: vals.filter((v) => v === 2).length, one: vals.filter((v) => v === 1).length, sum: vals.reduce((t, v) => t + v, 0) };
   };
+  // perícias: o padrão é 2 com +2 e 1 com +1; no modo livre, os mesmos 5 pontos vão onde quiser, até +2 em cada
+  const SKILL_POINTS = 5;
+  const skillsOk = (sk, mode) => { const c = skillCount(sk); return mode === 'livre' ? c.sum === SKILL_POINTS : c.two === 2 && c.one === 1; };
   function stepProblem(step) {
     if (step === STEP.atributos) {
       const p = attrPool(wz.attrs);
@@ -6049,7 +6052,8 @@ const FIREBASE_CONFIG = {
     }
     if (step === STEP.pericias) {
       const c = skillCount(wz.skills);
-      if (c.two !== 2 || c.one !== 1) return 'Marcadas: ' + c.two + ' de 2 perícias com +2 e ' + c.one + ' de 1 perícia com +1.';
+      if (wz.skillMode === 'livre') { if (c.sum !== SKILL_POINTS) return 'Distribuídos: ' + c.sum + ' de ' + SKILL_POINTS + ' pontos de perícia.'; }
+      else if (c.two !== 2 || c.one !== 1) return 'Marcadas: ' + c.two + ' de 2 perícias com +2 e ' + c.one + ' de 1 perícia com +1.';
     }
     if (step === STEP.profs && wz.profs.length !== 4) return 'Escolhidas: ' + wz.profs.length + ' de 4 proficiências.';
     if (step === STEP.equip && wz.gear.mode === 'preco' && cartTotal(wz.gear) > wz.gear.budget) return 'A compra passou do orçamento em ' + fmtCronos(cartTotal(wz.gear) - wz.gear.budget) + ' Cronos.';
@@ -6073,6 +6077,7 @@ const FIREBASE_CONFIG = {
   function applyBuild(b) {
     wz.attrs = Object.assign({}, b.attrs);
     wz.skills = Object.assign({}, b.skills);
+    wz.skillMode = 'padrao';
     wz.profs = b.profs.slice();
     wz.build = b.name;
     wz.guide = b.guided ? b.entry : null;
@@ -6364,7 +6369,7 @@ const FIREBASE_CONFIG = {
     if (id === 'especime') return wz.specimen ? wz.specimen.name : '';
     if (id === 'origem') return cleanName(wz.origin);
     if (id === 'atributos') { const p = attrPool(wz.attrs); if (p.left) return p.left > 0 ? plural(p.left, 'ponto livre', 'pontos livres') : 'passou ' + (-p.left); return ATTRS.map((at) => at.label.charAt(0) + ' ' + signed(wz.attrs[at.id])).join(' · '); }
-    if (id === 'pericias') { const c = skillCount(wz.skills); return c.two === 2 && c.one === 1 ? Object.keys(wz.skills).map(skillLabel).join(', ') : '+2: ' + c.two + '/2 · +1: ' + c.one + '/1'; }
+    if (id === 'pericias') { const c = skillCount(wz.skills); return skillsOk(wz.skills, wz.skillMode) ? Object.keys(wz.skills).map(skillLabel).join(', ') : wz.skillMode === 'livre' ? c.sum + ' de ' + SKILL_POINTS + ' pontos' : '+2: ' + c.two + '/2 · +1: ' + c.one + '/1'; }
     if (id === 'profs') return wz.profs.length + ' de 4';
     if (id === 'equip') {
       const g = wz.gear;
@@ -6512,7 +6517,20 @@ const FIREBASE_CONFIG = {
 
     if (wz.step === STEP.pericias) {
       const c = skillCount(wz.skills);
-      body.append(h('p', 'setup__pool', 'Com +2: ', h('strong', '', c.two + ' de 2'), ' · Com +1: ', h('strong', '', c.one + ' de 1')));
+      const livre = wz.skillMode === 'livre';
+      body.append(h('div', 'segmented skill-modes', ...[['padrao', '2 com +2 e 1 com +1'], ['livre', '5 pontos livres (até +2)']].map((m) => {
+        const inp = h('input');
+        inp.type = 'radio';
+        inp.name = 'skill-mode';
+        inp.value = m[0];
+        inp.checked = (wz.skillMode || 'padrao') === m[0];
+        inp.dataset.fid = 'skill-mode-' + m[0];
+        inp.addEventListener('change', () => { wz.skillMode = m[0]; renderSetup('skill-mode-' + m[0]); });
+        return h('label', 'segmented__opt', inp, h('span', '', m[1]));
+      })));
+      body.append(livre
+        ? h('p', 'setup__pool' + (c.sum > SKILL_POINTS ? ' setup__pool--over' : ''), 'Pontos para distribuir: ', h('strong', '', String(SKILL_POINTS - c.sum)), ' de ' + SKILL_POINTS + ' (no máximo +2 em cada perícia)')
+        : h('p', 'setup__pool', 'Com +2: ', h('strong', '', c.two + ' de 2'), ' · Com +1: ', h('strong', '', c.one + ' de 1')));
       ATTRS.forEach((at) => {
         const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(wz.attrs[at.id]))));
         const line = h('div', 'skill-picks');
@@ -6527,6 +6545,7 @@ const FIREBASE_CONFIG = {
           if (info.summary) b.title = info.summary + ' ' + (info.uses || '');
           b.addEventListener('click', () => {
             const next = (v + 1) % 3;
+            if (livre && next > v && c.sum >= SKILL_POINTS) { toast('Os ' + SKILL_POINTS + ' pontos já foram usados. Tire de outra perícia primeiro.'); return; }
             if (next) wz.skills[sk[0]] = next; else delete wz.skills[sk[0]];
             renderSetup('wzs-' + sk[0]);
           });
@@ -6591,6 +6610,7 @@ const FIREBASE_CONFIG = {
       gear: { mode: s.originItems ? 'nenhum' : 'kit', origin: null, lines: [], budget: START_CRONOS, cart: [], shop: null, guideFilled: '' }
     };
     Object.keys(s.skills).forEach((k) => { if (s.skills[k] === 1 || s.skills[k] === 2) wz.skills[k] = s.skills[k]; });
+    wz.skillMode = !skillsOk(wz.skills, 'padrao') && skillsOk(wz.skills, 'livre') ? 'livre' : 'padrao';
     if (attrPool(wz.attrs).left < 0 || ATTRS.some((at) => wz.attrs[at.id] > 3)) wz.attrs = { corpo: 0, precisao: 0, essencia: 0 }; // ficha já evoluída: recomeça do zero
     renderSetup();
     openDialog(setupDlg);
