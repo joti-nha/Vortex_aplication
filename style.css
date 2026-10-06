@@ -3092,3 +3092,12 @@ html, body { max-width: 100%; overflow-x: clip; }
 .entry__racial { margin: 0 0 0.3rem; color: var(--nevoa) !important; }
 .creator .gear__budget { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1.5rem; margin-bottom: 0.4rem; }
 .creator .gear__budget .setup__pool { margin: 0; }
+.picker > * { flex-shrink: 0; } /* a lista não encolhe por baixo do "Não achou?" no celular */
+.racial__search { margin: 0.2rem 0 0.6rem; }
+.racial__only { align-self: flex-start; }
+@media (max-width: 480px) { /* listas de busca no celular: nome inteiro na linha de cima, estrela e botão embaixo */
+  .picker__tools { grid-template-columns: minmax(0, 1fr); }
+  .picker .lib-row .row__open { flex-basis: 100%; }
+  .picker .lib-row { justify-content: flex-end; gap: 0.4rem 0.6rem; }
+  .picker .row__title { overflow-wrap: break-word; }
+}
