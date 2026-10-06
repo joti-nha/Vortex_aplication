@@ -745,7 +745,7 @@ window.VORTEX_ITEMS = {
   });
 })();
 
-/* Munição oficial: um item por tipo de pente, mais algumas especiais (o preço é sugestão do catálogo) */
+/* Munição oficial: um item por tipo de pente (o preço é sugestão do catálogo) */
 (function () {
   var cat = window.VORTEX_ITEMS.catalogo;
   var slug = function (t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
@@ -757,12 +757,7 @@ window.VORTEX_ITEMS = {
     ['Pente pesado padrão', 'Pente pesado', 150, 1, 'Comum', '220', '', '', ''],
     ['Cinta de sobrecarga', 'Sobrecarga', 150, 1, 'Comum', '260', '', '', ''],
     ['Caixa de cartuchos', 'Pente parcial', 20, 0.25, 'Comum', '30', '', '', ''],
-    ['Carga de energia', 'Superaquecimento', 1, 1, 'Comum', '150', '', '', ''],
-    ['Pente leve de ponta oca', 'Pente leve', 20, 0.25, 'Incomum', '120', 'Perfurante', 'Crítico causa sangramento. Fraca contra blindagem.', 'Pistola, Submetralhadora'],
-    ['Pente médio perfurante', 'Pente médio', 40, 0.5, 'Incomum', '200', 'Perfurante', 'Efetiva contra blindagem.', ''],
-    ['Cartuchos incendiários', 'Pente parcial', 20, 0.25, 'Rara', '180', 'Fogo', 'Acerto deixa o alvo em chamas até o fim do próximo turno dele.', 'Espingarda, Revólver'],
-    ['Pente pesado traçante', 'Pente pesado', 150, 1, 'Incomum', '300', '', '+1 nos ataques seguintes contra o mesmo alvo na rodada (o rastro marca a mira).', ''],
-    ['Carga de energia instável', 'Superaquecimento', 1, 1, 'Rara', '400', 'Elétrico', 'Dano elétrico; a arma superaquece com 2 disparos a menos.', 'Laser']
+    ['Carga de energia', 'Superaquecimento', 1, 1, 'Comum', '150', '', '', '']
   ].forEach(function (a) {
     cat.push({
       id: 'of-mun-' + slug(a[0]), kind: 'municao', typeId: TYPE[a[1]], name: a[0],
