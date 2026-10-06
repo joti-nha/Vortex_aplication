@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=55">
+  <link rel="stylesheet" href="style.css?v=57">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -741,6 +741,13 @@
           <p class="block__hint" id="vault-hint"></p>
           <div class="loot__list" id="vault-list"></div>
         </section>
+        <section class="block" id="carm-block" aria-labelledby="carm-title">
+          <div class="block__head">
+            <h2 class="block__title" id="carm-title">Armeiro</h2>
+            <button class="btn btn--primary btn--sm" type="button" id="carm-open">Abrir o Armeiro</button>
+          </div>
+          <p class="block__hint" id="carm-hint"></p>
+        </section>
       </div>
 
       <!-- Bestiário: só o mestre (derrotados e a revista de monstros) -->
@@ -1061,9 +1068,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=55"></script>
-  <script src="items.js?v=55"></script>
-  <script src="pixelart.js?v=55"></script>
-  <script src="app.js?v=55"></script>
+  <script src="regras.js?v=57"></script>
+  <script src="items.js?v=57"></script>
+  <script src="pixelart.js?v=57"></script>
+  <script src="app.js?v=57"></script>
 </body>
 </html>

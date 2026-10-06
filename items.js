@@ -350,31 +350,33 @@ window.VORTEX_ITEMS = {
 
     /* ------------------------------ Peças de slot ------------------------------ */
     {
-      id: 'mod-arma', title: 'Mod de arma', group: 'Peças de slot', slots: 'mod', bonus: true,
+      id: 'mod-arma', title: 'Mod de arma', group: 'Peças de slot', inventory: true, slots: 'mod', bonus: true,
       hint: 'Mod é uma peça à parte: depois de salvo, é encaixado em cada arma pelos slots. A cor vem da raridade.',
       fields: [
         { key: 'nome', label: 'Nome do mod', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'raridade', label: 'Raridade (define a cor e quantos slots usa)', kind: 'rarity', options: 'raridadesMod', big: true },
         { key: 'para', label: 'Serve em', kind: 'select', options: 'paraMod' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 300' },
         { key: 'tipo', label: 'Mod (tipo)', kind: 'text' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
-      id: 'propriedade', title: 'Propriedade', group: 'Peças de slot', image: true, bonus: true,
+      id: 'propriedade', title: 'Propriedade', group: 'Peças de slot', inventory: true, image: true, bonus: true,
       hint: 'Propriedades só entram em itens cuja raridade comporta (Incomum, Épica e Lendária).',
       fields: [
         { key: 'nome', label: 'Nome da propriedade', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'para', label: 'Serve em', kind: 'select', options: 'paraPropriedade' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 600' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
     {
-      id: 'acessorio', title: 'Acessório', group: 'Peças de slot',
+      id: 'acessorio', title: 'Acessório', group: 'Peças de slot', inventory: true,
       hint: 'Escolha o tipo de arma. Cada posição da arma só aceita um acessório daquela posição.',
       types: [
         { id: 'arma-fogo', title: 'Para arma de fogo', sub: 'Mira, Bocal, Carregador, Empunhadura', rule: 'mods-e-acessorios/acessorios', opts: { posicao: ['Mira', 'Bocal', 'Carregador', 'Empunhadura'] } },
@@ -384,6 +386,7 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome do acessório', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'posicao', label: 'Posição (slot)', kind: 'select', optKey: 'posicao', options: [] },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 17 (3 acessórios = 50)' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
@@ -735,7 +738,14 @@ window.VORTEX_ITEMS = {
   });
 })();
 
-/* Munição oficial: um item por tipo de pente, mais algumas especiais (o preço é sugestão do catálogo) */
+/* Acessórios oficiais: o livro cobra 50 Cronos a cada 3 acessórios (17 cada, arredondado) */
+(function () {
+  window.VORTEX_ITEMS.catalogo.forEach(function (e) {
+    if (e.kind === 'acessorio' && !(e.values || {}).preco) e.values.preco = '17';
+  });
+})();
+
+/* Munição oficial: um item por tipo de pente (o preço é sugestão do catálogo) */
 (function () {
   var cat = window.VORTEX_ITEMS.catalogo;
   var slug = function (t) { return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
@@ -747,12 +757,7 @@ window.VORTEX_ITEMS = {
     ['Pente pesado padrão', 'Pente pesado', 150, 1, 'Comum', '220', '', '', ''],
     ['Cinta de sobrecarga', 'Sobrecarga', 150, 1, 'Comum', '260', '', '', ''],
     ['Caixa de cartuchos', 'Pente parcial', 20, 0.25, 'Comum', '30', '', '', ''],
-    ['Carga de energia', 'Superaquecimento', 1, 1, 'Comum', '150', '', '', ''],
-    ['Pente leve de ponta oca', 'Pente leve', 20, 0.25, 'Incomum', '120', 'Perfurante', 'Crítico causa sangramento. Fraca contra blindagem.', 'Pistola, Submetralhadora'],
-    ['Pente médio perfurante', 'Pente médio', 40, 0.5, 'Incomum', '200', 'Perfurante', 'Efetiva contra blindagem.', ''],
-    ['Cartuchos incendiários', 'Pente parcial', 20, 0.25, 'Rara', '180', 'Fogo', 'Acerto deixa o alvo em chamas até o fim do próximo turno dele.', 'Espingarda, Revólver'],
-    ['Pente pesado traçante', 'Pente pesado', 150, 1, 'Incomum', '300', '', '+1 nos ataques seguintes contra o mesmo alvo na rodada (o rastro marca a mira).', ''],
-    ['Carga de energia instável', 'Superaquecimento', 1, 1, 'Rara', '400', 'Elétrico', 'Dano elétrico; a arma superaquece com 2 disparos a menos.', 'Laser']
+    ['Carga de energia', 'Superaquecimento', 1, 1, 'Comum', '150', '', '', '']
   ].forEach(function (a) {
     cat.push({
       id: 'of-mun-' + slug(a[0]), kind: 'municao', typeId: TYPE[a[1]], name: a[0],

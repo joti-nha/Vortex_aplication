@@ -507,13 +507,9 @@
     metralhadora: 'metralhadora', laser: 'laser', gravitacional: 'gravitacional', hibrida: 'hibrida', portal: 'portal', lancador: 'lancador',
     leve: 'leve', media: 'media', pesada: 'pesada'
   };
-  // munição: o desenho sai do tipo (pente leve, médio...); as especiais trocam a cor da ponta
+  // munição: o desenho sai do tipo (pente leve, médio...)
   const AMMO = { 'pente-leve': 'pente_leve', 'pente-medio': 'pente_medio', 'pente-pesado': 'pente_pesado', sobrecarga: 'sobrecarga', cartuchos: 'cartuchos', 'carga-energia': 'celula' };
-  const AMMO_TINT = {
-    'of-mun-pente-leve-de-ponta-oca': { y: '#d9434a' }, 'of-mun-pente-medio-perfurante': { y: '#5aa6ff' },
-    'of-mun-cartuchos-incendiarios': { r: '#e88a3a', R: '#b0541c' }, 'of-mun-pente-pesado-tracante': { y: '#5fd38a', o: '#c7e86a' },
-    'of-mun-carga-de-energia-instavel': { c: '#f2c14e', C: '#b07a1c' }
-  };
+  const AMMO_TINT = {};
 
   function svgOf(rows, pal) {
     const top = Math.floor((16 - rows.length) / 2);
