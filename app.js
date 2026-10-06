@@ -3973,7 +3973,8 @@ const FIREBASE_CONFIG = {
     const pen = armor ? Math.abs(num(armor.values.penalidade)) * (armorProf ? 1 : 2) : 0;
 
     // carga usada: só o que está na mochila (itens equipados não ocupam carga)
-    const cargaUsed = s.inventory.reduce((t, i) => (i.slot ? t : t + parseCarga(i.values.carga) * (i.qty || 1)), 0);
+    const cargaUsed = s.inventory.reduce((t, i) => (i.slot ? t : t + parseCarga(i.values.carga) * (i.qty || 1)), 0)
+      + s.inventory.reduce((t, i) => t + reserveCarga(i), 0); // munição de reserva (pentes, cartuchos, cargas)
 
     const max = {};
     Object.keys(src).forEach((k) => { max[k] = Math.max(0, Math.round(total(k) * 100) / 100); });
@@ -5299,6 +5300,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'protese-modulo' && i.slot && !m.nucleo) card.append(h('p', 'cell__tag', 'Sem núcleo: só substitui o órgão natural'));
     const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);
     if (parts.length) card.append(h('p', 'cell__text', 'Encaixes: ' + parts.join(', ')));
+    if (isGun(i)) card.append(h('p', 'cell__text', 'Munição: ' + ammoLine(i, s)));
     const b = bonusLine(entryBonus(i));
     if (b) card.append(h('p', 'cell__text', 'Bônus: ' + b + (i.slot ? '' : ' (só equipado)')));
     const text = entryText(i);
@@ -5313,6 +5315,7 @@ const FIREBASE_CONFIG = {
       else if (opts.length === 1) actions.append(act('Equipar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
       else opts.forEach((id) => actions.append(act(slotDef(id).full, 'btn--primary', () => { if (equipItem(i, id)) changed(); })));
     }
+    if (isWeapon(i.kind)) actions.append(act('Armeiro', 'btn--ghost', () => openArmory(i.uid)));
     actions.append(act('Detalhes', 'btn--ghost', () => openInvDialog(i.uid)));
     actions.append(act('Remover', 'btn--danger', () => removeInvItem(i)));
     card.append(actions);
@@ -5481,6 +5484,12 @@ const FIREBASE_CONFIG = {
     if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (i.slot ? '' : ' (só quando equipado)')));
     body.replaceChildren();
     if (dl.children.length) body.append(dl);
+    if (isWeapon(i.kind)) {
+      const ab = h('button', 'btn btn--primary btn--sm', 'Abrir no Armeiro');
+      ab.type = 'button';
+      ab.addEventListener('click', () => { closeDialog(invDlg); openArmory(i.uid); });
+      body.append(h('p', 'inv__arm', ab, isGun(i) ? ' ' + ammoLine(i, s) : ''));
+    }
     if (cat && cat.slots && cat.slots !== 'mod') body.append(slotEditor(i, () => { touchSheet(); rerender(); }));
 
     const qty = h('input', 'input');
@@ -5506,6 +5515,366 @@ const FIREBASE_CONFIG = {
   }
   $('#inv-dialog-close').addEventListener('click', () => closeDialog(invDlg));
 
+  /* ---------- Munição e recarga (capítulo Recarga) ----------
+     Cada arma de fogo guarda na ficha: ammo (disparos no pente; vazio = cheio), reserve (disparos de reserva
+     que viram pentes; no pente parcial, cartuchos soltos; no superaquecimento, cargas de energia),
+     heat (disparos da rodada e da anterior), cool (até que rodada esfria) e duplo (vez da recarga rápida). */
+  const PENTE_RULES = {
+    'Pente leve': { max: 20, act: 'bonus', carga: 0.25 },
+    'Pente médio': { max: 40, act: 'movimento', carga: 0.5 },
+    'Pente pesado': { max: 150, act: 'completa', carga: 1 },
+    'Sobrecarga': { max: 150, act: 'completa', carga: 1 }, // o livro não define: vale como pente pesado
+    'Pente parcial': { partial: true, carga: 0.25 },        // ¼ de carga a cada 20 cartuchos
+    'Superaquecimento': { heat: true, carga: 1 }            // cada carga de energia ocupa 1 de carga
+  };
+  const PENTE_STEP = ['Pente leve', 'Pente médio', 'Pente pesado'];
+  const ACT_UP = { livre: 'bonus', bonus: 'movimento', movimento: 'padrao', padrao: 'completa', completa: 'completa' };
+  const ALCANCES = ITEM_DATA.alcances || [];
+  const isGun = (i) => Boolean(i && i.kind === 'arma-fogo');
+  const sceneRound = () => (scene && scene.active ? Math.round(num(scene.round)) : 0);
+  function accsOf(i) {
+    const t = takenPositions({ slots: normSlots(i.slots) });
+    return Object.keys(t).map((k) => t[k].acc);
+  }
+  const dualLight = (s) => {
+    const hands = ['mao-d', 'mao-e'].map((id) => s.inventory.find((x) => x.slot === id));
+    return hands.every((x) => isGun(x) && (x.typeId === 'pistola' || x.typeId === 'submetralhadora'));
+  };
+  // o que a arma é depois dos acessórios: pente, capacidade, ação de recarga, alcance
+  function gunInfo(i, s) {
+    const v = i.values || {};
+    const accs = accsOf(i);
+    const has = (id, word) => accs.some((a) => a.id === id || nameKey(a.name).indexOf(word) >= 0);
+    const notes = [];
+    let cap = Math.max(0, Math.round(num(v.municao)));
+    let pente = PENTE_RULES[v.pente] ? v.pente : (cap && cap <= 20 ? 'Pente leve' : cap > 40 ? 'Pente pesado' : 'Pente médio');
+    if (has('of-acc-escalar', 'escalar') && PENTE_STEP.indexOf(pente) >= 0) {
+      const k = PENTE_STEP.indexOf(pente);
+      const np = PENTE_STEP[k < 2 ? k + 1 : k - 1];
+      cap = Math.min(PENTE_RULES[np].max, k < 2 ? (cap || PENTE_RULES[pente].max) * 2 : cap || PENTE_RULES[np].max);
+      notes.push('Carregador escalar: ' + pente.toLowerCase() + ' vira ' + np.toLowerCase());
+      pente = np;
+    }
+    const rule = PENTE_RULES[pente];
+    if (rule.heat) cap = 1;
+    else if (!cap) cap = rule.max || 10;
+    if (rule.max && has('of-acc-estendido', 'estendido') && cap < rule.max) { cap = rule.max; notes.push('Carregador estendido: até ' + rule.max + ' disparos'); }
+    let act = rule.partial ? 'livre' : rule.act;
+    if (i.typeId === 'fuzil') {
+      if (v.subtipo === 'Assalto (Leve)' && pente === 'Pente médio' && cap <= 30) { act = 'bonus'; notes.push('Assalto: pente médio de até 30 recarrega com ação bônus'); }
+      if (v.subtipo === 'Precisão (Pesado)' && pente === 'Pente pesado' && cap <= 50) { act = 'movimento'; notes.push('Precisão: pente pesado de até 50 conta como médio'); }
+      if (s && pente === 'Pente médio' && act !== 'bonus' && isProficient(s, i)) { act = 'bonus'; notes.push('Proficiente: pente médio do fuzil recarrega com ação bônus'); }
+    }
+    const duplo = has('of-acc-duplo', 'duplo') && !rule.partial && !rule.heat && cap <= 30;
+    if (duplo) notes.push('Carregador duplo: recarga com ação bônus, uma vez sim, outra não');
+    if (s && i.slot && dualLight(s)) { act = ACT_UP[act]; notes.push('Uma arma em cada mão: recarga uma categoria acima'); }
+    let alcance = v.alcance || '';
+    const ai = ALCANCES.indexOf(alcance);
+    if (has('of-acc-cano-longo', 'cano longo') && ai >= 0 && ai < ALCANCES.length - 1) { alcance = ALCANCES[ai + 1]; notes.push('Cano longo: alcance ' + v.alcance + ' vira ' + alcance); }
+    const heatMax = rule.heat ? Math.max(1, Math.round(num(v.municao)) || Math.max(1, Math.round(num(v.cadencia))) * 2) : 0;
+    return { pente, rule, cap, act, duplo, alcance, heatMax, notes, unit: rule.heat ? 'carga' : rule.partial ? 'cartucho' : 'pente' };
+  }
+  const ammoOf = (i, g) => (i.ammo === undefined || i.ammo === null || i.ammo === '' ? g.cap : clamp(Math.round(num(i.ammo)), 0, g.cap));
+  const reserveOf = (i) => Math.max(0, Math.round(num(i.reserve)));
+  // carga da munição de reserva: pentes cheios (ou cartuchos de 20 em 20, ou cargas de energia)
+  function reserveCarga(i) {
+    if (!isGun(i) || !reserveOf(i)) return 0;
+    const g = gunInfo(i);
+    const n = reserveOf(i);
+    if (g.rule.heat) return n * g.rule.carga;
+    if (g.rule.partial) return Math.ceil(n / 20) * g.rule.carga;
+    return Math.ceil(n / g.cap) * g.rule.carga;
+  }
+  const heatNow = (i, round) => {
+    const h0 = i.heat || {};
+    if (!round) return num(h0.n) + num(h0.prev);
+    return h0.r === round ? num(h0.n) + num(h0.prev) : h0.r === round - 1 ? num(h0.n) : 0;
+  };
+  const isCooling = (i, round) => Boolean(i.cool) && (i.cool < 0 || !round || round <= i.cool);
+  // dá para disparar? devolve o motivo quando não dá
+  function fireBlock(i, shots, round) {
+    if (!isGun(i)) return '';
+    const g = gunInfo(i);
+    if (g.rule.heat) {
+      if (!ammoOf(i, g)) return i.name + ' está sem carga de energia: recarregue.';
+      if (isCooling(i, round)) return i.name + ' está superaquecida: espere esfriar.';
+      return '';
+    }
+    const a = ammoOf(i, g);
+    if (a < shots) return a ? 'Só ' + plural(a, 'disparo', 'disparos') + ' no pente de ' + i.name + '.' : i.name + ' está sem munição: recarregue.';
+    return '';
+  }
+  // gasta os disparos; no superaquecimento soma o calor e pode travar a arma
+  function fireGun(i, shots, round) {
+    const g = gunInfo(i);
+    if (!g.rule.heat) { i.ammo = Math.max(0, ammoOf(i, g) - shots); return ''; }
+    const h0 = i.heat || {};
+    let prev = 0;
+    if (round && h0.r === round) prev = num(h0.prev);
+    else if (round && h0.r === round - 1) prev = num(h0.n);
+    const n = (round && h0.r === round ? num(h0.n) : round ? 0 : num(h0.n) + num(h0.prev)) + shots;
+    i.heat = { r: round || 0, n, prev: round ? prev : 0 };
+    if (n + (round ? prev : 0) > g.heatMax) { i.cool = round ? round + 1 : -1; i.heat = { r: round || 0, n: 0, prev: 0 }; return i.name + ' superaqueceu: esfria até o fim do próximo turno.'; }
+    return '';
+  }
+  // recarrega; n = cartuchos no pente parcial. Devolve { cost, msg } ou { err }
+  function reloadGun(i, s, n) {
+    const g = gunInfo(i, s);
+    const res = reserveOf(i);
+    if (g.rule.heat) {
+      if (!res) return { err: 'Sem cargas de energia na reserva.' };
+      i.reserve = res - 1;
+      i.ammo = 1;
+      i.heat = { r: 0, n: 0, prev: 0 };
+      i.cool = 0;
+      return { cost: 'completa', msg: 'carga nova (vale a cena inteira, até 2 cenas seguidas)' };
+    }
+    const a = ammoOf(i, g);
+    if (a >= g.cap) return { err: 'O pente de ' + i.name + ' já está cheio.' };
+    if (!res) return { err: 'Sem munição de reserva para ' + i.name + '.' };
+    if (g.rule.partial) {
+      const want = Math.min(n || 2, g.cap - a, res, 10);
+      i.ammo = a + want;
+      i.reserve = res - want;
+      return { cost: want <= 2 ? 'livre' : want <= 5 ? 'bonus' : 'movimento', msg: plural(want, 'cartucho', 'cartuchos') };
+    }
+    const take = Math.min(g.cap - a, res);
+    i.ammo = a + take;
+    i.reserve = res - take;
+    let cost = g.act;
+    if (g.duplo) { cost = i.duplo ? g.act : 'bonus'; i.duplo = !i.duplo; }
+    return { cost, msg: '+' + take + ' no pente' };
+  }
+  function ammoLine(i, s) {
+    if (!isGun(i)) return '';
+    const g = gunInfo(i, s);
+    if (g.rule.heat) return (ammoOf(i, g) ? 'carga ativa' : 'sem carga') + ' · calor ' + heatNow(i, 0) + '/' + g.heatMax + (isCooling(i, 0) ? ' · superaquecida' : '') + ' · reserva ' + plural(reserveOf(i), 'carga', 'cargas');
+    return 'pente ' + ammoOf(i, g) + '/' + g.cap + ' · reserva ' + reserveOf(i);
+  }
+
+  /* ---------- Armeiro ----------
+     Como no Call of Duty e no Battlefield, só que nas regras do livro: escolhe a arma, toca numa posição
+     (mira, bocal...) ou num slot de mod/propriedade e troca a peça na lista ao lado. Os números da arma
+     mudam na hora (pente, recarga, alcance), e a munição fica no mesmo lugar. */
+  let armDlg = null;
+  const arm = { uid: '', sel: '', q: '', lib: null };
+  const ARM_SPOTS = {
+    'arma-fogo': { Mira: 'top', Bocal: 'right', Carregador: 'bottom', Empunhadura: 'left' },
+    'arma-melee': { Ponta: 'right', Dorso: 'top', Empunhadura: 'bottom', Cabo: 'left' }
+  };
+  function openArmory(u) {
+    const ch = sheetChar;
+    if (!ch) return;
+    const guns = weaponsOf(ch.sheet);
+    if (!guns.length) { toast('Nenhuma arma no inventário. Adicione uma do banco para usar o Armeiro.'); return; }
+    if (!armDlg) {
+      armDlg = h('dialog', 'dialog armory');
+      armDlg.setAttribute('aria-labelledby', 'armory-title');
+      armDlg.addEventListener('close', () => { arm.lib = null; });
+      document.body.append(armDlg);
+    }
+    arm.uid = u && guns.some((w) => w.uid === u) ? u : guns[0].uid;
+    arm.sel = '';
+    arm.q = '';
+    arm.lib = null;
+    drawArmory();
+    openDialog(armDlg);
+    libSearch(['mod-arma', 'propriedade', 'acessorio'], '').then((list) => { arm.lib = list; if (armDlg.open) drawArmory(); }).catch(() => { /* fica o catálogo oficial */ });
+  }
+  function armSave() { touchSheet(); rerender(); drawArmory(); }
+  function drawArmory() {
+    const ch = sheetChar;
+    if (!ch || !armDlg) return;
+    const s = ch.sheet;
+    const guns = weaponsOf(s);
+    const w = guns.find((x) => x.uid === arm.uid) || guns[0];
+    if (!w) { closeDialog(armDlg); return; }
+    arm.uid = w.uid;
+    w.slots = w.slots && w.slots.mods ? w.slots : normSlots(w.slots);
+    const info = slotInfo(w);
+    const use = slotUse(w);
+    const per = SLOT_RULES.acessoriosPorSlot || 3;
+    const taken = takenPositions(w);
+    const positions = info.positions;
+    if (!arm.sel) arm.sel = positions[0] ? 'pos:' + positions[0] : 'mod';
+    const lib = arm.lib || BUILTINS.filter((e) => ['mod-arma', 'propriedade', 'acessorio'].indexOf(e.kind) >= 0);
+    const keep = armDlg.contains(document.activeElement) ? document.activeElement.dataset.fid : '';
+
+    // cabeçalho e troca de arma
+    const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+    close.type = 'button';
+    close.addEventListener('click', () => closeDialog(armDlg));
+    const tabs = h('div', 'armory__guns', ...guns.map((g) => {
+      const b = h('button', 'armory__gun' + (g.uid === w.uid ? ' is-on' : ''), entryIcon(g), h('span', 'armory__gun-name', g.name));
+      b.type = 'button';
+      b.dataset.fid = 'arm-gun-' + g.uid;
+      b.setAttribute('aria-pressed', String(g.uid === w.uid));
+      const c = rarColor(g.values.raridade);
+      if (c) b.style.setProperty('--rar', c);
+      b.addEventListener('click', () => { arm.uid = g.uid; arm.sel = ''; drawArmory(); });
+      return b;
+    }));
+
+    // a arma no centro, com as posições em volta
+    const spots = ARM_SPOTS[w.kind] || {};
+    const spot = (pos) => {
+      const t = taken[pos];
+      const b = h('button', 'armory__spot armory__spot--' + (spots[pos] || 'top') + (arm.sel === 'pos:' + pos ? ' is-on' : '') + (t ? ' is-full' : ''),
+        h('span', 'armory__spot-pos', pos), h('span', 'armory__spot-part', t ? t.acc.name : 'vazio'));
+      b.type = 'button';
+      b.dataset.fid = 'arm-pos-' + nameKey(pos);
+      if (t && t.mod) b.title = 'Vem no mod ' + t.mod.name;
+      b.addEventListener('click', () => { arm.sel = 'pos:' + pos; arm.jump = true; drawArmory(); });
+      return b;
+    };
+    const color = rarColor(w.values.raridade) || 'var(--linha-forte)';
+    const body = h('div', 'armory__body');
+    body.style.setProperty('--rar', color);
+    body.append(h('div', 'armory__gunart', entryIcon(w), h('strong', '', w.name), h('span', 'armory__gunmeta', [w.typeTitle, w.values.raridade].filter(Boolean).join(' · '))));
+    const stage = h('div', 'armory__stage', body, ...positions.map(spot));
+
+    // slots de mod e de propriedade
+    const modFree = info.mods - use.total;
+    const slotBtn = (id, label, part, locked) => {
+      const b = h('button', 'armory__slot' + (arm.sel === id ? ' is-on' : '') + (part ? ' is-full' : '') + (locked ? ' is-locked' : ''), h('span', 'armory__slot-k', label), h('span', 'armory__slot-v', part || (locked ? 'bloqueado' : 'vazio')));
+      b.type = 'button';
+      b.dataset.fid = 'arm-' + id.replace(':', '-');
+      b.addEventListener('click', () => { arm.sel = id; arm.jump = true; drawArmory(); });
+      return b;
+    };
+    const slotRow = h('div', 'armory__slots',
+      slotBtn('mod', 'Mods · ' + use.total + '/' + info.mods + (use.acc ? ' (' + use.acc + ' com acessórios)' : ''), w.slots.mods.map((x) => x.name).join(', ')),
+      slotBtn('prop', 'Propriedade · ' + w.slots.props.length + '/' + info.props, w.slots.props.map((x) => x.name).join(', '), !info.props));
+
+    // lista de peças do que está selecionado
+    const panel = h('div', 'armory__panel');
+    const row = (e, on, can, why, act) => {
+      const btn = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Tirar' : 'Montar');
+      btn.type = 'button';
+      btn.dataset.fid = 'arm-part-' + nameKey(e.name).replace(/\s+/g, '-');
+      btn.disabled = !on && !can;
+      if (!on && !can && why) btn.title = why;
+      btn.addEventListener('click', act);
+      const li = h('li', 'armory__part' + (on ? ' is-on' : ''), h('span', 'armory__part-info', h('strong', '', e.name, e.oficial ? ' ' : '', e.oficial ? h('span', 'tag', 'Oficial') : null),
+        h('span', 'armory__part-meta', [e.values.raridade, e.values.para, e.kind === 'mod-arma' ? modCost(e) + (modCost(e) === 1 ? ' slot' : ' slots') : ''].filter(Boolean).join(' · ')),
+        entryText(e) ? h('span', 'armory__part-text', entryText(e)) : null,
+        e.slots && e.slots.accs && e.slots.accs.length ? h('span', 'armory__part-meta', 'Traz: ' + e.slots.accs.map((a) => a.name + ' (' + a.values.posicao + ')').join(', ')) : null,
+        !on && !can && why ? h('span', 'armory__why', why) : null), btn);
+      const c = rarColor(e.values.raridade);
+      if (c) li.style.setProperty('--rar', c);
+      return li;
+    };
+    const match = (e) => !arm.q || matchesText(libHay(e), arm.q);
+    let items = [];
+    let title = '';
+    let hint = '';
+    if (arm.sel.indexOf('pos:') === 0) {
+      const pos = arm.sel.slice(4);
+      const t = taken[pos];
+      title = pos;
+      if (t && t.mod) hint = 'Esta posição vem no mod ' + t.mod.name + '. Tire o mod para trocar.';
+      else hint = 'Um acessório por posição. Cada slot de mod livre leva ' + per + ' acessórios.';
+      const own = t && !t.mod ? 1 : 0;
+      const room = Math.ceil((w.slots.accs.length - own + 1) / per) + use.mods <= info.mods;
+      items = lib.filter((e) => e.kind === 'acessorio' && e.values.posicao === pos && e.typeId === w.kind && match(e)).map((e) => {
+        const on = Boolean(t && !t.mod && (t.acc.id ? t.acc.id === e.id : t.acc.name === e.name));
+        return row(e, on, !(t && t.mod) && room, t && t.mod ? 'Vem no mod.' : 'Sem slot de mod livre para mais acessórios.', () => {
+          if (on) w.slots.accs.splice(w.slots.accs.indexOf(t.acc), 1);
+          else { if (t && !t.mod) w.slots.accs.splice(w.slots.accs.indexOf(t.acc), 1); w.slots.accs.push(slotSnap(e)); }
+          armSave();
+        });
+      });
+    } else if (arm.sel === 'mod') {
+      title = 'Mods';
+      hint = 'Raridade ' + info.rar + ': ' + info.mods + (info.mods === 1 ? ' slot' : ' slots') + ' de mod. Mod Comum usa 1, Rara usa 2, Lendária usa 3.';
+      const para = WEAPON_PARA[w.kind];
+      items = lib.filter((e) => e.kind === 'mod-arma' && (!e.values.para || e.values.para === 'Qualquer arma' || e.values.para === para) && match(e)).map((e) => {
+        const idx = w.slots.mods.findIndex((m) => (m.id ? m.id === e.id : m.name === e.name));
+        const on = idx >= 0;
+        const clash = ((e.slots && e.slots.accs) || []).find((a) => taken[a.values.posicao]);
+        const fits = modCost(e) <= modFree;
+        return row(e, on, fits && !clash, !fits ? 'Precisa de ' + modCost(e) + (modCost(e) === 1 ? ' slot livre' : ' slots livres') + '.' : clash ? 'A posição ' + clash.values.posicao + ' já está ocupada.' : '', () => {
+          if (on) w.slots.mods.splice(idx, 1); else w.slots.mods.push(slotSnap(e));
+          armSave();
+        });
+      });
+    } else {
+      title = 'Propriedade';
+      hint = info.props ? 'A raridade ' + info.rar + ' comporta ' + plural(info.props, 'propriedade', 'propriedades') + '.' : 'A raridade ' + info.rar + ' não comporta propriedade. Só Incomum, Épica e Lendária.';
+      items = lib.filter((e) => e.kind === 'propriedade' && (!e.values.para || e.values.para === 'Qualquer item' || e.values.para === 'Arma') && match(e)).map((e) => {
+        const idx = w.slots.props.findIndex((p) => (p.id ? p.id === e.id : p.name === e.name));
+        const on = idx >= 0;
+        return row(e, on, w.slots.props.length < info.props, info.props ? 'Já tem todas as propriedades que a raridade permite.' : 'A raridade não comporta propriedade.', () => {
+          if (on) w.slots.props.splice(idx, 1); else w.slots.props.push(slotSnap(e));
+          armSave();
+        });
+      });
+    }
+    const q = h('input', 'input');
+    q.type = 'search';
+    q.id = 'arm-q';
+    q.dataset.fid = 'arm-q';
+    q.placeholder = 'Buscar peça';
+    q.autocomplete = 'off';
+    q.value = arm.q;
+    q.addEventListener('input', () => { arm.q = q.value; drawArmory(); });
+    const qLab = h('label', 'visually-hidden', 'Buscar peça');
+    qLab.htmlFor = q.id;
+    panel.append(h('h3', 'armory__ptitle', title), h('p', 'field__hint', hint), qLab, q,
+      items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', arm.q ? 'Nenhuma peça com esse nome.' : 'Nenhuma peça para esta posição no banco. Crie uma na Oficina.'));
+
+    // números da arma e munição
+    const stat = (k, v, changed) => h('div', 'armory__stat' + (changed ? ' is-changed' : ''), h('span', '', k), h('strong', '', v || '—'));
+    const stats = h('div', 'armory__stats');
+    const ammoBox = h('div', 'armory__ammo');
+    if (isGun(w)) {
+      const g = gunInfo(w, s);
+      stats.append(stat('Dano', w.values.dano), stat('Modo', w.values.modo), stat('Cadência', w.values.cadencia),
+        stat('Alcance', g.alcance, g.alcance !== (w.values.alcance || '')), stat('Pente', g.pente, g.pente !== w.values.pente),
+        stat(g.rule.heat ? 'Superaquece com' : 'Capacidade', g.rule.heat ? g.heatMax + ' disparos em 2 turnos' : g.cap + ' disparos', !g.rule.heat && g.cap !== Math.round(num(w.values.municao))),
+        stat('Recarga', g.rule.heat ? 'ação completa (troca a carga)' : g.rule.partial ? 'livre (2) · bônus (5) · movimento (10)' : COST_LONG[g.act] + (g.duplo ? ' (bônus alternada)' : '') + (g.pente === 'Pente leve' ? ' (padrão se debilitado)' : '')));
+      const a = ammoOf(w, g);
+      const res = reserveOf(w);
+      const btn = (label, fid, fn, dis) => { const b = h('button', 'btn btn--ghost btn--sm', label); b.type = 'button'; b.dataset.fid = fid; b.disabled = Boolean(dis); b.addEventListener('click', fn); return b; };
+      const reload = (n) => { const r = reloadGun(w, s, n); if (r.err) { toast(r.err); return; } toast('Recarregou ' + w.name + ': ' + r.msg + ' (em combate: ' + COST_LONG[r.cost] + ').'); armSave(); };
+      const step = g.rule.heat ? 1 : g.rule.partial ? 20 : g.cap;
+      const unitName = g.rule.heat ? ['carga', 'cargas'] : g.rule.partial ? ['cartucho', 'cartuchos'] : ['pente', 'pentes'];
+      const resText = g.rule.heat || g.rule.partial ? plural(res, unitName[0], unitName[1]) : res + ' disparos (' + plural(Math.ceil(res / g.cap), 'pente', 'pentes') + ')';
+      const bar = h('div', 'armory__mag');
+      const cells = g.rule.heat ? 1 : Math.min(g.cap, 40);
+      for (let k = 0; k < cells; k++) bar.append(h('span', 'armory__round' + (k < Math.ceil(a * cells / g.cap) ? ' is-on' : '')));
+      ammoBox.append(...[h('h3', 'armory__ptitle', 'Munição'),
+        h('p', 'armory__ammo-now', g.rule.heat ? (a ? 'Carga de energia ativa' : 'Sem carga de energia') : h('span', '', h('strong', '', String(a)), ' / ' + g.cap + ' no pente')), bar,
+        g.rule.heat ? h('p', 'field__hint', 'Calor: ' + heatNow(w, 0) + ' de ' + g.heatMax + ' disparos (rodada atual + anterior).' + (isCooling(w, 0) ? ' Superaquecida.' : '')) : null,
+        h('p', 'field__hint', 'Reserva: ' + resText + ' · carga ' + fmtNum(reserveCarga(w)) + '.'),
+        h('div', 'armory__ammo-btns',
+          g.rule.partial ? btn('+2 cartuchos', 'arm-reload-2', () => reload(2), a >= g.cap || !res) : btn(g.rule.heat ? 'Trocar carga' : 'Recarregar', 'arm-reload', () => reload(0), (!g.rule.heat && a >= g.cap) || !res),
+          g.rule.partial ? btn('+5', 'arm-reload-5', () => reload(5), a >= g.cap || !res) : null,
+          g.rule.partial ? btn('+10', 'arm-reload-10', () => reload(10), a >= g.cap || !res) : null,
+          g.rule.heat && isCooling(w, 0) ? btn('Esfriar', 'arm-cool', () => { w.cool = 0; w.heat = { r: 0, n: 0, prev: 0 }; armSave(); }) : null,
+          btn('+1 ' + unitName[0] + ' de reserva', 'arm-res-add', () => { w.reserve = res + step; armSave(); }),
+          btn('−1', 'arm-res-sub', () => { w.reserve = Math.max(0, res - step); armSave(); }, !res)),
+        g.notes.length ? h('ul', 'armory__notes', ...g.notes.map((n) => h('li', '', n))) : null].filter(Boolean));
+    } else {
+      stats.append(stat('Dano', w.values.dano), stat('Empunhadura', w.values.empunhadura), stat('Carga', fmtNum(parseCarga(w.values.carga))));
+    }
+
+    armDlg.replaceChildren(
+      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', 'Armeiro')), close),
+      tabs,
+      h('div', 'armory__grid',
+        h('div', 'armory__left', stage, slotRow, stats, ammoBox),
+        panel));
+    $('h2.dialog__title', armDlg).id = 'armory-title';
+    const on = $('.armory__gun.is-on', armDlg);
+    if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // no celular a lista de peças fica embaixo: tocar numa posição leva até ela
+    if (arm.jump && window.matchMedia('(max-width: 860px)').matches) panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    arm.jump = false;
+    if (keep) { const el = $('[data-fid="' + keep + '"]', armDlg); if (el) { el.focus({ preventScroll: true }); if (keep === 'arm-q') el.setSelectionRange(el.value.length, el.value.length); } }
+  }
+
+  $('#inv-armory').addEventListener('click', () => openArmory(''));
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
     const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
@@ -5952,12 +6321,23 @@ const FIREBASE_CONFIG = {
       if (c.peek) c.peek(t);
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
       const stowed = c.handsOnly ? all.filter((w) => !handOf(w)).length : 0;
-      const info = [c.aim && cadMax > 1 ? 'cadência ' + cadMax + ': cada toque num alvo é um disparo' : '', weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
+      const info = [weapon && isGun(weapon) ? ammoLine(weapon, s) : '', c.aim && cadMax > 1 ? 'cadência ' + cadMax + ': cada toque num alvo é um disparo' : '', weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
       const go = h('button', 'btn btn--primary btn--sm', (c.btnLabel || 'Atacar') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
-      go.disabled = Boolean(per && per.over);
+      // munição: sem disparos no pente (ou arma superaquecida) não dá para atacar; recarregar custa a ação da regra
+      const block = weapon && isGun(weapon) ? fireBlock(weapon, c.aim ? 1 : st.shots || 1, sceneRound()) : '';
+      go.disabled = Boolean(per && per.over) || Boolean(block);
       go.addEventListener('click', () => onRoll(t, go));
-      box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, info ? h('span', 'attack__info', info) : null));
+      let rl = null;
+      if (weapon && isGun(weapon) && c.onReload) {
+        const g = gunInfo(weapon, s);
+        const cost = g.rule.heat ? 'completa' : g.rule.partial ? 'livre' : g.duplo && !weapon.duplo ? 'bonus' : g.act;
+        rl = h('button', 'btn btn--ghost btn--sm', (g.rule.heat ? 'Trocar carga' : g.rule.partial ? '+2 cartuchos' : 'Recarregar') + ' · ' + COST_LABEL[cost]);
+        rl.type = 'button';
+        rl.dataset.fid = idp + 'reload';
+        rl.addEventListener('click', () => c.onReload(weapon, rl));
+      }
+      box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, rl, info ? h('span', 'attack__info', info) : null), block ? h('p', 'attack__warn', block) : null);
     };
     draw();
     return box;
@@ -8190,7 +8570,18 @@ const FIREBASE_CONFIG = {
     const mb = actor.member;
     const c = sheetOf(mb);
     const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
-    const base = Object.assign({}, c, { handsOnly: true, meleeOnly: adv });
+    const onReload = async (weapon, btn) => {
+      btn.disabled = true;
+      let r = null;
+      try {
+        await patchMemberSheet(mb, (sh) => { const w = sh.inventory.find((x) => x.uid === weapon.uid); if (w) r = reloadGun(w, sh, 2); });
+      } catch (err) { toast(errorMessage(err)); btn.disabled = false; return; }
+      if (!r || r.err) { toast(r ? r.err : 'A arma não está mais no inventário.'); btn.disabled = false; return; }
+      const paid = econPay(actor, r.cost);
+      toast(actor.name + ' recarregou ' + weapon.name + ': ' + r.msg + ' (' + paid + ').');
+      renderBattle();
+    };
+    const base = Object.assign({}, c, { handsOnly: true, meleeOnly: adv, onReload });
     return h('div', 'cmd__stack', note, attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
       const weapon = weaponsOf(c.sheet).find((w) => w.uid === st.uid) || null;
       const cad = st.cad === false ? 1 : maxShots(weapon);
@@ -8834,6 +9225,14 @@ const FIREBASE_CONFIG = {
       if (weapon && weapon.typeId === 'marreta') effective = 'blindagem';
       if (weapon && weapon.typeId === 'machado') effective = 'escudo';
       if (!weapon || weapon.kind !== 'arma-fogo') shots = 1;
+      if (isGun(weapon)) {
+        const total = st.per && shots > 1 ? list.reduce((tt, x) => tt + (st.per[x.id] || 1), 0) : shots;
+        const block = fireBlock(weapon, total, sceneRound());
+        if (block) { toast(block); return; }
+        try {
+          await patchMemberSheet(who.member, (sh) => { const w = sh.inventory.find((x) => x.uid === weapon.uid); if (w) { const hot = fireGun(w, total, sceneRound()); if (hot) toast(hot); } });
+        } catch (err) { toast(errorMessage(err)); return; }
+      }
     }
     btn.disabled = true;
     const r = rollTest(t);
