@@ -5409,6 +5409,7 @@ const FIREBASE_CONFIG = {
     el.setAttribute('aria-valuenow', String(cur));
     return el;
   }
+  let vitEdit = false; // painel de valores dos recursos aberto sob os anéis
   function renderVitals(m) {
     const s = sheetChar.sheet;
     const life = LIFE.map((l) => ({ key: l[0], max: m.max[l[0]], cur: getCur(s, l[0], m.max[l[0]]) })).filter((l) => l.max > 0 || l.key === m.base);
@@ -5417,14 +5418,61 @@ const FIREBASE_CONFIG = {
     const lifeNote = life.filter((l) => l.max > 0).map((l) => (l.key === 'pv' ? 'PV' : l.key === 'escudo' ? 'Esc' : 'Bld') + ' ' + l.cur).join(' · ');
     const box = (cls, label, value, note) => h('div', 'vital vital--' + cls, h('span', 'vital__label', label), h('span', 'vital__big', value), note ? h('span', 'vital__note', note) : null);
     const free = m.upTotal - m.upSpent;
+    // recursos mexidos direto no topo da ficha: − e + em cada anel; tocar no anel abre os valores para digitar
+    const step = (key, label, d, on, off) => {
+      const b = h('button', 'vital__btn', d < 0 ? '−' : '+');
+      b.type = 'button';
+      b.dataset.fid = 'vit-' + key + (d < 0 ? '-' : '+');
+      b.setAttribute('aria-label', (d < 0 ? 'Perder 1 de ' : 'Recuperar 1 de ') + label);
+      b.disabled = off;
+      b.addEventListener('click', on);
+      return b;
+    };
+    const one = (key) => getCur(s, key, m.max[key]);
+    const bump = (key, d) => () => { setCur(s, key, one(key) + d, m.max[key]); changed(); };
+    // Resistência: perder vai de fora para dentro (Escudo → Blindagem → Vida), recuperar de dentro para fora
+    const lifeHit = life.slice().reverse().find((l) => l.cur > curMin(l.key, l.max) && (l.cur > 0 || l.key === 'pv'));
+    const lifeHeal = life.find((l) => l.cur < l.max);
+    const ctl = (key, label, cur, max, minus, plus, minusOff) => {
+      const r = ring(key, label, cur, max, key === 'life' ? lifeNote : key === 'pe' ? 'Esforço' : 'Ação');
+      const dial = r.querySelector('.vital__dial');
+      const open = h('button', 'vital__open');
+      open.type = 'button';
+      open.dataset.fid = 'vit-open-' + key;
+      open.setAttribute('aria-label', 'Editar ' + label);
+      open.setAttribute('aria-expanded', String(vitEdit));
+      open.title = 'Digitar os valores';
+      open.addEventListener('click', () => { vitEdit = !vitEdit; renderVitals(compute(sheetChar)); if (vitEdit) { const f = $('#vitals-edit input'); if (f) f.focus(); } });
+      dial.replaceWith(open);
+      open.append(dial);
+      r.append(h('span', 'vital__ctl', step(key, label, -1, minus, minusOff), step(key, label, 1, plus, cur >= max)));
+      return r;
+    };
+    const lifeRing = ctl('life', 'Resistência', lifeCur, lifeMax,
+      () => { if (lifeHit) { setCur(s, lifeHit.key, lifeHit.cur - 1, lifeHit.max); changed(); } },
+      () => { if (lifeHeal) { setCur(s, lifeHeal.key, lifeHeal.cur + 1, lifeHeal.max); changed(); } }, !lifeHit);
+    const edit = h('div', 'vitals-edit');
+    edit.id = 'vitals-edit';
+    edit.hidden = !vitEdit;
+    if (vitEdit) {
+      const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+      close.type = 'button';
+      close.dataset.fid = 'vit-close';
+      close.addEventListener('click', () => { vitEdit = false; renderVitals(compute(sheetChar)); });
+      edit.append(h('div', 'vitals-edit__head', h('strong', '', 'Recursos atuais'), h('span', 'field__hint', 'Digite o valor ou use − e +. O máximo vem da ficha.'), close),
+        ...life.map((l) => resRow(l.key, l.key === 'pv' ? 'PV' : l.key === 'escudo' ? 'Escudo' : 'Blindagem', l.cur, l.max, m.src[l.key], 'v')),
+        resRow('pe', 'PE · Esforço', one('pe'), m.max.pe, m.src.pe, 'v'), resRow('pa', 'PA · Ação', one('pa'), m.max.pa, m.src.pa, 'v'));
+    }
     $('#vitals').replaceChildren(
       box('def', 'Defesa', String(m.defMin), 'mínima'),
-      ring('life', 'Resistência', lifeCur, lifeMax, lifeNote),
-      ring('pe', 'PE', getCur(s, 'pe', m.max.pe), m.max.pe, 'Esforço'),
-      ring('pa', 'PA', getCur(s, 'pa', m.max.pa), m.max.pa, 'Ação'),
+      lifeRing,
+      ctl('pe', 'PE', one('pe'), m.max.pe, bump('pe', -1), bump('pe', 1), one('pe') <= 0),
+      ctl('pa', 'PA', one('pa'), m.max.pa, bump('pa', -1), bump('pa', 1), one('pa') <= 0),
       box('move', 'Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarregado' : 'padrão'),
       box('carga', 'Carga', fmtNum(m.cargaUsed) + '/' + fmtNum(m.cargaMax), m.over ? 'acima do limite' : 'mochila'),
       box('up', 'UP livres', String(free), 'XP ' + num(s.xp)));
+    const old = $('#vitals-edit');
+    if (old) old.replaceWith(edit); else $('#vitals').after(edit);
     $('#sheet-sub').textContent = [sheetChar.species, sheetChar.origin, m.armor ? m.armor.name : ''].filter(Boolean).join(' · ');
   }
 
@@ -5448,7 +5496,8 @@ const FIREBASE_CONFIG = {
     }));
   }
 
-  function resRow(key, label, cur, max, src) {
+  function resRow(key, label, cur, max, src, pre) {
+    const fid = (pre || '') + 'cur-' + key;
     const s = sheetChar.sheet;
     const set = (v) => { setCur(s, key, v, max); changed(); };
     const inp = h('input', 'input res__cur');
@@ -5457,13 +5506,13 @@ const FIREBASE_CONFIG = {
     inp.value = cur;
     inp.min = curMin(key, max);
     inp.max = max;
-    inp.dataset.fid = 'cur-' + key;
+    inp.dataset.fid = fid;
     inp.setAttribute('aria-label', label + ' atual');
     inp.addEventListener('change', () => set(inp.value));
     const btn = (txt, d) => {
       const b = h('button', 'stepper__btn', txt);
       b.type = 'button';
-      b.dataset.fid = 'cur-' + key + (d < 0 ? '-' : '+');
+      b.dataset.fid = fid + (d < 0 ? '-' : '+');
       b.setAttribute('aria-label', (d < 0 ? 'Perder 1 de ' : 'Recuperar 1 de ') + label);
       b.disabled = d < 0 ? cur <= curMin(key, max) : cur >= max;
       b.addEventListener('click', () => set(cur + d));
