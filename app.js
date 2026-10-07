@@ -2673,6 +2673,102 @@ const FIREBASE_CONFIG = {
     if (line) anchor.after(line);
   }
   const hasQuery = (q) => words(q || '').length > 0;
+
+  /* ---------- Filtros por especificação ----------
+     Toda tela de busca põe, acima da lista, grupos de filtros tirados dos campos da categoria
+     (tipo, raridade, criadora, dano, empunhadura, quando usa...). Dentro de um grupo vale qualquer
+     marcado; entre grupos, todos. Só aparece grupo com 2 ou mais valores na lista atual, e o número
+     ao lado de cada valor diz quantos registros sobram ao marcá-lo. Sem categoria escolhida (lista
+     com muitas categorias), só os filtros comuns: categoria, raridade, criadora e origem. */
+  const FACET_LABEL = { fabricante: 'Criadora', raridade: 'Raridade', momento: 'Quando usa', dano: 'Dano', tipoUso: 'Uso', nucleo: 'Aceita núcleo', profs: 'Proficiências', efetivo: 'Efetivo contra', ataque: 'Ataque', posicao: 'Posição', para: 'Para' };
+  const FACET_KINDS = ['select', 'multi', 'rarity', 'cards'];
+  const FACET_BROAD = ['raridade', 'fabricante'];
+  const facetLabel = (f) => FACET_LABEL[f.key] || String(f.label || f.key).replace(/\(.*?\)/g, '').split(' / ')[0].trim();
+  function facetOrder(f) {
+    const o = f && f.options;
+    const list = Array.isArray(o) ? o : (typeof o === 'string' && Array.isArray(ITEM_DATA[o]) ? ITEM_DATA[o] : []);
+    return list.map((x) => (x && typeof x === 'object' ? x.title || x.label || x.id : x));
+  }
+  function facetDefs(kinds, skip) {
+    const cats = ITEM_DATA.categories.filter((c) => kinds.indexOf(c.id) >= 0);
+    const broad = cats.length > 3;
+    const defs = [];
+    const add = (d) => { if (!defs.some((x) => x.key === d.key) && (skip || []).indexOf(d.key) < 0) defs.push(d); };
+    if (cats.length > 1) add({ key: '_kind', label: 'Categoria', get: (e) => e.kindTitle || kindTitle(e.kind), order: cats.map((c) => c.title) });
+    if (!broad && cats.some((c) => c.types && c.types.length)) add({ key: '_type', label: 'Tipo', get: (e) => e.typeTitle || '', order: cats.reduce((t, c) => t.concat((c.types || []).map((x) => x.title)), []) });
+    if (kinds.indexOf('poder') >= 0 && !broad) {
+      add({ key: '_custo', label: 'Custo', get: (e) => (e.kind === 'poder' ? Math.max(0, num((e.values || {}).custo)) + ' UP' : ''), num: true });
+      add({ key: 'momento', label: 'Quando usa', get: (e) => (e.kind === 'poder' ? powerMoment(e) : ''), order: POWER_MOMENTS });
+    }
+    if (kinds.indexOf('npc') >= 0 && !broad) add({ key: '_up', label: 'UP', get: (e) => (e.kind === 'npc' && num((e.values || {}).up) ? 'UP ' + num((e.values || {}).up) : ''), num: true });
+    if (kinds.indexOf('build') >= 0 && !broad) add({ key: 'tipo', label: 'Tipo de build', get: (e) => (e.kind === 'build' ? (e.values || {}).tipo : ''), order: ITEM_DATA.buildTipos });
+    cats.forEach((c) => (c.fields || []).forEach((f) => {
+      if (FACET_KINDS.indexOf(f.kind) < 0 || f.options === 'pericias') return;
+      if (broad && FACET_BROAD.indexOf(f.key) < 0) return;
+      add({ key: f.key, label: facetLabel(f), multi: f.kind === 'multi', order: facetOrder(f), rarity: f.kind === 'rarity', get: (e) => (kinds.length > 1 && !(findCategory(e.kind) || { fields: [] }).fields.some((x) => x.key === f.key) ? '' : (e.values || {})[f.key]) });
+    }));
+    add({ key: '_src', label: 'Fonte', get: (e) => (e.oficial ? 'Oficial' : e.mine ? 'Meus' : 'Do banco'), order: ['Oficial', 'Meus', 'Do banco'] });
+    return defs;
+  }
+  const facetVals = (d, e) => {
+    const v = d.get(e);
+    const arr = Array.isArray(v) ? v : d.multi && typeof v === 'string' ? v.split(',') : [v];
+    return arr.map((x) => String(x == null ? '' : x).trim()).filter(Boolean);
+  };
+  // uma caixa de filtros: apply(lista, kinds) desenha os grupos e devolve a lista filtrada
+  function facetBox(onChange, cfg) {
+    const o = cfg || {};
+    const box = h('details', 'facets');
+    box.open = true; // aberto ao escolher a categoria; fechar fica valendo até sair da tela
+    const st = { on: {}, box };
+    const active = () => Object.keys(st.on).reduce((t, k) => t + st.on[k].size, 0);
+    st.reset = () => { st.on = {}; };
+    st.apply = (list, kinds) => {
+      const ks = kinds && kinds.length ? kinds : Array.from(new Set(list.map((e) => e.kind)));
+      const defs = facetDefs(ks, typeof o.skip === 'function' ? o.skip() : o.skip);
+      Object.keys(st.on).forEach((k) => { if (!defs.some((d) => d.key === k) || !st.on[k].size) delete st.on[k]; });
+      const pass = (e, skip) => defs.every((d) => d.key === skip || !st.on[d.key] || facetVals(d, e).some((v) => st.on[d.key].has(v)));
+      const groups = [];
+      defs.forEach((d) => {
+        const counts = new Map();
+        list.forEach((e) => { if (pass(e, d.key)) facetVals(d, e).forEach((v) => counts.set(v, (counts.get(v) || 0) + 1)); });
+        const sel = st.on[d.key] || new Set();
+        sel.forEach((v) => { if (!counts.has(v)) counts.set(v, 0); });
+        if (counts.size < 2 && !sel.size) return;
+        const ord = d.order || [];
+        const keys = Array.from(counts.keys()).sort((a, b) => {
+          const ia = ord.indexOf(a), ib = ord.indexOf(b);
+          if (ia >= 0 || ib >= 0) return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+          if (d.num) return num(a.replace(/\D+/g, '')) - num(b.replace(/\D+/g, ''));
+          return a.localeCompare(b, 'pt-BR');
+        });
+        groups.push(h('div', 'facets__group', h('span', 'facets__label', d.label), h('div', 'facets__chips', ...keys.map((v) => {
+          const on = sel.has(v);
+          const b = h('button', 'chip chip--toggle facets__chip', v, h('small', 'facets__n', String(counts.get(v))));
+          b.type = 'button';
+          b.dataset.facet = d.key + ':' + v;
+          b.setAttribute('aria-pressed', String(on));
+          if (d.rarity && ITEM_DATA.raridadeCor[v]) b.style.setProperty('--rar', ITEM_DATA.raridadeCor[v]);
+          if (!counts.get(v) && !on) b.disabled = true;
+          b.addEventListener('click', () => {
+            const s = st.on[d.key] || (st.on[d.key] = new Set());
+            if (s.has(v)) s.delete(v); else s.add(v);
+            onChange();
+          });
+          return b;
+        }))));
+      });
+      const n = active();
+      const clear = h('button', 'link-btn facets__clear', 'Limpar filtros');
+      clear.type = 'button';
+      clear.hidden = !n;
+      clear.addEventListener('click', (ev) => { ev.preventDefault(); st.reset(); onChange(); });
+      box.replaceChildren(h('summary', 'facets__sum', 'Filtrar por especificação', n ? h('span', 'facets__count', String(n)) : null), ...groups, clear);
+      box.hidden = !groups.length && !n;
+      return list.filter((e) => pass(e));
+    };
+    return st;
+  }
   // filtra cartões já desenhados: esconde quem não casa e põe os mais relevantes no topo
   function rankCards(cards, objs, q, fieldsOf) {
     const scores = objs.map((o) => searchScore(fieldsOf(o), q));
@@ -3230,6 +3326,7 @@ const FIREBASE_CONFIG = {
     const picked = (o.chips || []).filter((c) => c && c.kinds && pk.on.has(c.label));
     const allowed = picked.length ? picked.reduce((t, c) => t.concat(c.kinds), []) : null;
     list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)) && (!allowed || allowed.indexOf(e.kind) >= 0));
+    list = pkFacets.apply(list, allowed || o.kinds);
     // com texto, vale a relevância; sem texto, favoritos primeiro e o resto em ordem alfabética
     if (!hasQuery(q)) list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
     $('#picker-list').replaceChildren(...list.map((e) => libRow(e,
@@ -3248,6 +3345,8 @@ const FIREBASE_CONFIG = {
       pk.resolve = resolve;
       $('#picker-title').textContent = opts.title;
       pk.on = new Set();
+      pkFacets.reset();
+      pkFacets.box.hidden = true;
       const chips = (opts.chips || []).filter(Boolean);
       const toggles = chips.some((c) => c.kinds);
       $('#picker-chips').replaceChildren(h('span', 'picker__filter-label', toggles ? 'Filtro (toque para mostrar só as escolhidas):' : 'Filtro automático:'), ...chips.map((c) => {
@@ -3277,6 +3376,9 @@ const FIREBASE_CONFIG = {
     });
   }
   // seleção múltipla do picker: só nos menus que aceitam vários itens (openPickerMany)
+  // a categoria já tem os chips do topo quando o menu aceita mais de uma
+  const pkFacets = facetBox(() => runPicker(), { skip: () => ((pk.opts && pk.opts.chips) || []).some((c) => c && c.kinds) ? ['_kind'] : [] });
+  $('#picker-hint').before(pkFacets.box);
   const pkMulti = multiPick($('#picker-list'), { enabled: () => pk.multi, label: (n) => 'Adicionar ' + (n || ''), onConfirm: (list) => finishPicker(list) });
   $('#picker-list').before(pkMulti.tip);
   $('#picker-list').after(pkMulti.bar);
@@ -4063,8 +4165,7 @@ const FIREBASE_CONFIG = {
     const favs = favLoad();
     if ($('#lib-fav').checked) list = list.filter((e) => favs.has(e.id));
     if ($('#lib-mine').checked) list = list.filter((e) => e.mine);
-    const maker = $('#lib-maker').value;
-    if (maker) list = list.filter((e) => (e.values || {}).fabricante === maker);
+    list = libFacets.apply(list, kind ? [kind] : ITEM_KINDS);
     const suggest = list.length ? '' : libSearch.suggest;
     if (!hasQuery(q)) list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
@@ -4090,18 +4191,16 @@ const FIREBASE_CONFIG = {
       : plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
   }
   $('#lib-q').addEventListener('input', debounce(runLib, 300));
-  ['#lib-kind', '#lib-maker', '#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
+  const libFacets = facetBox(() => runLib());
+  $('#lib-hint').before(libFacets.box);
+  $('#lib-kind').addEventListener('change', () => { libFacets.reset(); runLib(); });
+  ['#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
   (function fillLibKinds() {
     const sel = $('#lib-kind');
     const all = h('option', '', 'Todas');
     all.value = '';
     sel.append(all);
     ITEM_DATA.categories.filter((c) => ITEM_KINDS.indexOf(c.id) >= 0).forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
-    const mk = $('#lib-maker');
-    const any = h('option', '', 'Todas');
-    any.value = '';
-    mk.append(any);
-    (ITEM_DATA.fabricantes || []).forEach((f) => { const o = h('option', '', f); o.value = f; mk.append(o); });
   })();
 
   /* Catálogo na tela Personagens: ver todas as origens, espécimes, poderes e itens, só leitura */
@@ -4128,12 +4227,14 @@ const FIREBASE_CONFIG = {
       $('#cat-list').replaceChildren();
       $('#cat-empty').hidden = true;
       $('#cat-hint').textContent = '';
+      catFacets.box.hidden = true;
       return;
     }
     $('#cat-hint').textContent = 'Buscando...';
     let list = await libSearch(g ? g.kinds : null, q);
     if (seq !== catState.seq) return;
     const suggest = list.length ? '' : libSearch.suggest;
+    list = catFacets.apply(list, g && g.kinds ? g.kinds : ITEM_DATA.categories.map((c) => c.id));
     if (!hasQuery(q)) list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
     $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
@@ -4149,12 +4250,16 @@ const FIREBASE_CONFIG = {
       b.setAttribute('aria-pressed', 'false');
       b.addEventListener('click', () => {
         catState.group = catState.group === g ? null : g;
+        catFacets.reset();
         $$('#cat-chips .chip--toggle').forEach((x) => x.setAttribute('aria-pressed', String(x === b && catState.group === g)));
         runCatalog();
       });
       return b;
     }));
   })();
+  const catFacets = facetBox(() => runCatalog());
+  catFacets.box.hidden = true;
+  $('#cat-hint').before(catFacets.box);
   $('#cat-q').addEventListener('input', debounce(runCatalog, 300));
 
   // Itens da versão anterior (salvos só neste aparelho): entram no banco uma única vez
@@ -10650,7 +10755,7 @@ const FIREBASE_CONFIG = {
     const seq = ++itemsSeq;
     const r = await libFind(kinds, $('#gmlib-q').value);
     if (seq !== itemsSeq) return;
-    const list = r.list;
+    const list = gmFacets.apply(r.list, kinds);
     suggestAfter($('#gmlib-list'), r.suggest, $('#gmlib-q'), runItems);
     const noChars = !members.some((mb) => mb.sheet && mb.sheet.attrs);
     $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
@@ -10679,6 +10784,7 @@ const FIREBASE_CONFIG = {
       return b;
     }));
     if (gmlibCat) list = list.filter((e) => ((e.values && e.values.categoria) || 'Comum') === gmlibCat);
+    list = beastFacets.apply(list, kinds);
     $('#gmlib-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map(magPage));
     $('#beast-hint').textContent = r.warn || (!list.length ? 'Nenhuma criatura encontrada.' : plural(list.length, 'criatura', 'criaturas') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.');
   }
@@ -10788,7 +10894,12 @@ const FIREBASE_CONFIG = {
       toast(e.name + ' foi para a mochila de ' + mb.name + '.');
     } catch (err) { toast(errorMessage(err)); }
   }
-  $('#gmlib-kind').addEventListener('change', runItems);
+  const gmFacets = facetBox(() => runItems());
+  $('#gmlib-hint').before(gmFacets.box);
+  // a categoria do bestiário já tem os chips coloridos da revista
+  const beastFacets = facetBox(() => runBeast(), { skip: ['categoria'] });
+  $('#gmlib-cats').after(beastFacets.box);
+  $('#gmlib-kind').addEventListener('change', () => { gmFacets.reset(); runItems(); });
   $('#gmlib-q').addEventListener('input', debounce(runItems, 250));
   $('#beast-q').addEventListener('input', debounce(runBeast, 250));
 
