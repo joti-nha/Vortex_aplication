@@ -4207,15 +4207,17 @@ const FIREBASE_CONFIG = {
   function blankSheet() {
     return {
       v: 2, setup: false, attrs: { corpo: 0, precisao: 0, essencia: 0 }, skills: {}, profs: [], oficio: '', height: '', weight: '', sex: '',
-      xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0 },
+      xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0, carga: 0, armadura: 0 }, attrMod: { corpo: 0, precisao: 0, essencia: 0 },
       cur: {}, specimen: null, powers: [], inventory: [], originItems: '', doutor: [], upProfs: []
     };
   }
+  // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
+  const attrOf = (s, id) => num(s.attrs[id]) + num((s.attrMod || {})[id]);
   function normSheet(raw) {
     const r = raw && typeof raw === 'object' ? raw : {};
     const b = blankSheet();
     const s = Object.assign({}, b, r);
-    ['attrs', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
+    ['attrs', 'attrMod', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
     s.powers = Array.isArray(r.powers) ? r.powers.slice() : [];
     s.profs = Array.isArray(r.profs) ? r.profs.filter((x) => typeof x === 'string') : [];
     // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
@@ -4393,7 +4395,7 @@ const FIREBASE_CONFIG = {
 
   function compute(c) {
     const s = c.sheet;
-    const a = s.attrs;
+    const a = { corpo: attrOf(s, 'corpo'), precisao: attrOf(s, 'precisao'), essencia: attrOf(s, 'essencia') };
     const sp = s.specimen;
     const spv = specimenVals(s);
     const mech = sheetMech(s);
@@ -5268,9 +5270,10 @@ const FIREBASE_CONFIG = {
     };
     $('#attr-band').replaceChildren(...ATTRS.map((at) => {
       const v = s.attrs[at.id];
-      const tile = h('div', 'attr attr--' + at.id,
-        h('span', 'attr__name', at.label),
-        h('span', 'attr__value', signed(v)),
+      const mod = num((s.attrMod || {})[at.id]);
+      const tile = h('div', 'attr attr--' + at.id + (mod ? ' attr--mod' : ''),
+        h('span', 'attr__name', at.label, mod ? (() => { const t = h('span', 'attr__mod', (mod > 0 ? '+' : '') + mod); t.title = 'Ajuste manual de ' + (mod > 0 ? '+' : '') + mod + ' (ficha ' + signed(v) + ')'; return t; })() : null),
+        h('span', 'attr__value', signed(v + mod)),
         stepper(v, { min: -1, max: 6, label: at.label, fid: 'attr-' + at.id, text: '', onChange: (n) => { s.attrs[at.id] = n; changed(); } }),
         h('span', 'attr__feeds', feeds[at.id]));
       tile.title = at.hint;
@@ -5364,25 +5367,34 @@ const FIREBASE_CONFIG = {
       changed();
       if (dmgType.value) toast(res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k)).join(', ') || 'Nenhum dano.');
     });
-    const wasOpen = Boolean($('#res-extra') && $('#res-extra').open);
-    const extra = h('details', 'bonus');
+    // ajustes manuais: bônus ou penalidades que não vêm de item, poder ou espécime
+    const adjRow = (label, value, o) => h('div', 'adj__row' + (value ? ' is-on' : ''),
+      h('span', 'adj__label', h('strong', '', label), o.note ? h('span', 'adj__note', o.note) : null),
+      stepper(value, { min: o.min, max: o.max, label: 'ajuste de ' + label, fid: o.fid, text: value > 0 ? '+' + value : String(value), onChange: o.set }));
+    const attrAdj = ATTRS.map((at) => {
+      const mod = num(s.attrMod[at.id]);
+      return adjRow(at.label, mod, { min: -6, max: 6, fid: 'adj-' + at.id, note: 'ficha ' + signed(s.attrs[at.id]) + ' → vale ' + signed(s.attrs[at.id] + mod), set: (n) => { s.attrMod[at.id] = n; changed(); } });
+    });
+    const resAdj = BONUS_KEYS.map((b) => {
+      const v = Math.round(num(s.extra[b[0]]));
+      return adjRow(b[1], v, { min: -99, max: 99, fid: 'extra-' + b[0], note: 'máximo ' + fmtNum(m.max[b[0]]), set: (n) => { s.extra[b[0]] = n; changed(); } });
+    });
+    const anyAdj = ATTRS.some((at) => num(s.attrMod[at.id])) || BONUS_KEYS.some((b) => num(s.extra[b[0]]));
+    const clearAdj = h('button', 'btn btn--ghost btn--sm', 'Zerar ajustes');
+    clearAdj.type = 'button';
+    clearAdj.dataset.fid = 'adj-clear';
+    clearAdj.disabled = !anyAdj;
+    clearAdj.addEventListener('click', () => { ATTRS.forEach((at) => { s.attrMod[at.id] = 0; }); BONUS_KEYS.forEach((b) => { s.extra[b[0]] = 0; }); changed(); toast('Ajustes manuais zerados.'); });
+    const wasOpen = $('#res-extra') ? $('#res-extra').open : anyAdj;
+    const extra = h('details', 'adj');
     extra.id = 'res-extra';
     extra.open = wasOpen;
-    extra.append(h('summary', '', 'Ajustes manuais (outras fontes)'),
-      h('p', 'field__hint', 'Para bônus que não vêm de item, poder ou espécime. Somam no máximo de cada recurso.'),
-      h('div', 'bonus__grid', ...BONUS_KEYS.filter((b) => b[0] in s.extra).map((b) => {
-        const inp = h('input', 'input');
-        inp.type = 'number';
-        inp.step = '1';
-        inp.id = 'extra-' + b[0];
-        inp.dataset.fid = 'extra-' + b[0];
-        inp.value = num(s.extra[b[0]]) || '';
-        inp.placeholder = '0';
-        inp.addEventListener('change', () => { s.extra[b[0]] = Math.round(num(inp.value)); changed(); });
-        const lab = h('label', 'field__label bonus__label bonus__label--' + b[0], b[1]);
-        lab.htmlFor = inp.id;
-        return h('div', 'field', lab, inp);
-      })));
+    extra.append(h('summary', 'adj__summary', h('span', '', 'Ajustes manuais'), h('span', 'adj__count', anyAdj ? 'com ajustes' : 'nenhum')),
+      h('p', 'field__hint', 'Aumente ou diminua atributos e recursos por coisas que a ficha não calcula sozinha: condições, efeitos da cena, decisões do mestre. O ajuste soma no valor e aparece nos testes e nos máximos.'),
+      h('div', 'adj__cols',
+        h('section', 'adj__group', h('h3', 'adj__title', 'Atributos'), ...attrAdj),
+        h('section', 'adj__group', h('h3', 'adj__title', 'Recursos (máximo)'), ...resAdj)),
+      h('div', 'adj__acts', clearAdj));
 
     box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm), extra);
   }
@@ -5394,12 +5406,12 @@ const FIREBASE_CONFIG = {
       ...(left > 0 ? [h('strong', 'skills__pending', plural(left, 'ponto pendente', 'pontos pendentes') + ' para distribuir.')] : []),
       ...(left < 0 ? [h('strong', 'skills__pending', 'Passou ' + plural(-left, 'ponto', 'pontos') + ' do limite.')] : []));
     $('#skills-block').replaceChildren(...ATTRS.map((at) => {
-      const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(s.attrs[at.id]))));
+      const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(attrOf(s, at.id)))));
       SKILLS[at.id].forEach((sk) => {
         const v = num(s.skills[sk[0]]);
         const pen = PENALTY_SKILLS.indexOf(sk[0]) >= 0 ? m.pen : 0;
-        const total = h('span', 'skill__total', signed(s.attrs[at.id] + v - pen));
-        total.title = 'Atributo ' + signed(s.attrs[at.id]) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
+        const total = h('span', 'skill__total', signed(attrOf(s, at.id) + v - pen));
+        total.title = 'Atributo ' + signed(attrOf(s, at.id)) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
         const row = h('div', 'skill',
           h('span', 'skill__name', sk[1], pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
           total,
@@ -6006,7 +6018,7 @@ const FIREBASE_CONFIG = {
     const line = (k, v, bad) => h('div', 'equip-line' + (bad ? ' equip-line--bad' : ''), h('span', 'equip-line__k', k), h('span', 'equip-line__v', v));
     $('#equip-info').replaceChildren(
       line('Mãos', handText),
-      line('Defesa mínima', m.defMin + ' = ' + srcText(m.src.armadura) + ' · Corpo ' + signed(s.attrs.corpo) + ' · Resistência +' + num(s.skills.resistencia)),
+      line('Defesa mínima', m.defMin + ' = ' + srcText(m.src.armadura) + ' · Corpo ' + signed(attrOf(s, 'corpo')) + ' · Resistência +' + num(s.skills.resistencia)),
       line('Armadura', m.armor ? m.armor.name + (m.armorProf ? ' · proficiente' : ' · sem proficiência') + (m.pen ? ' · penalidade –' + m.pen : '') : 'nenhuma (vale a básica, ' + ARMOR_BASE + ')'),
       line('Núcleo', m.nucleo ? '+' + m.nucleo + ' ativo' : 'sem núcleo: próteses só substituem o órgão; módulos inativos'),
       line('Carga Cibernética', m.nucleo || m.acopla ? 'próteses ' + m.protUsed + (m.acopla ? ' · acoplados ' + fmtNum(m.attachUsed) : '') + ' / ' + m.ccMax + ' · módulos ' + m.modUsed + (m.modExtra ? ' (reserva +' + m.modExtra + ' da Essência)' : '') : '—', m.ccOver));
@@ -7035,13 +7047,13 @@ const FIREBASE_CONFIG = {
   Object.keys(SKILLS).forEach((a) => SKILLS[a].forEach((sk) => { SKILL_ATTR[sk[0]] = a; SKILL_LABEL[sk[0]] = sk[1]; }));
 
   function attrTest(s, attr) {
-    return { label: 'Teste de ' + ATTR_LABEL[attr], attrName: ATTR_LABEL[attr], attr: num(s.attrs[attr]) };
+    return { label: 'Teste de ' + ATTR_LABEL[attr], attrName: ATTR_LABEL[attr], attr: attrOf(s, attr) };
   }
   function skillTest(s, m, sk) {
     const attr = SKILL_ATTR[sk];
     const name = sk === 'oficio' && s.oficio ? 'Ofício (' + String(s.oficio).slice(0, 30) + ')' : SKILL_LABEL[sk];
     const pen = PENALTY_SKILLS.indexOf(sk) >= 0 ? m.pen : 0;
-    return { label: name, attrName: ATTR_LABEL[attr], attr: num(s.attrs[attr]), skillName: name, skill: num(s.skills[sk]), mods: pen ? [['armadura', -pen]] : [] };
+    return { label: name, attrName: ATTR_LABEL[attr], attr: attrOf(s, attr), skillName: name, skill: num(s.skills[sk]), mods: pen ? [['armadura', -pen]] : [] };
   }
 
   // formas de atacar com um item (ou desarmado), conforme as regras de Ataque e de cada tipo de arma
@@ -7127,7 +7139,7 @@ const FIREBASE_CONFIG = {
     const name = i ? i.name : 'Desarmado';
     return {
       label: ('Ataque: ' + name + (n > 1 ? ' · dano ×' + n : '')).slice(0, 60),
-      attrName: ATTR_LABEL[mode.attr], attr: num(s.attrs[mode.attr]),
+      attrName: ATTR_LABEL[mode.attr], attr: attrOf(s, mode.attr),
       skillName: SKILL_LABEL[mode.skill], skill: num(s.skills[mode.skill]), mods
     };
   }
@@ -7139,7 +7151,7 @@ const FIREBASE_CONFIG = {
     const s = c.sheet;
     const m = compute(c);
     const out = [];
-    ATTRS.forEach((at) => out.push({ group: 'Atributos', id: 'a:' + at.id, label: at.label + ' ' + signed(s.attrs[at.id]), make: () => attrTest(s, at.id) }));
+    ATTRS.forEach((at) => out.push({ group: 'Atributos', id: 'a:' + at.id, label: at.label + ' ' + signed(attrOf(s, at.id)), make: () => attrTest(s, at.id) }));
     ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => {
       const t = skillTest(s, m, sk[0]);
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
@@ -8168,7 +8180,7 @@ const FIREBASE_CONFIG = {
     });
     return [
       ['Espécime', c.species], ['Idade', c.age], ['Altura e peso', [s.height, s.weight].filter(Boolean).join(' · ')], ['Sexo', s.sex], ['Origem', c.origin],
-      ['Atributos', ATTRS.map((at) => at.label + ' ' + signed(s.attrs[at.id])).join(' · ')],
+      ['Atributos', ATTRS.map((at) => at.label + ' ' + signed(attrOf(s, at.id))).join(' · ')],
       ['Recursos', life.concat(['PE ' + getCur(s, 'pe', m.max.pe) + '/' + m.max.pe, 'PA ' + getCur(s, 'pa', m.max.pa) + '/' + m.max.pa]).join(' · ')],
       ['Defesa mínima', String(m.defMin)],
       ['Perícias', skills.join(' · ')],
@@ -8464,7 +8476,7 @@ const FIREBASE_CONFIG = {
     else pic.textContent = mb.name.trim().charAt(0).toUpperCase();
     $('#dock-title').textContent = mb.name;
     const def = charDef(c, m);
-    $('#dock-meta').textContent = [mb.species, mb.origin, 'Defesa ' + def, 'Corpo ' + signed(s.attrs.corpo) + ' · Precisão ' + signed(s.attrs.precisao) + ' · Essência ' + signed(s.attrs.essencia)].filter(Boolean).join(' · ');
+    $('#dock-meta').textContent = [mb.species, mb.origin, 'Defesa ' + def, 'Corpo ' + signed(attrOf(s, 'corpo')) + ' · Precisão ' + signed(attrOf(s, 'precisao')) + ' · Essência ' + signed(attrOf(s, 'essencia'))].filter(Boolean).join(' · ');
     const pinned = pinGet(currentCamp.id) === mb.characterId;
     const pin = $('#dock-pin');
     pin.textContent = pinned ? '★ Seu personagem nesta campanha' : '☆ Fixar como meu personagem';
@@ -10171,9 +10183,9 @@ const FIREBASE_CONFIG = {
     if (x.foe) { const v = foeVals(x.foe); attr = num(v.corpo); res = num(v.resistencia); }
     else {
       const s = normSheet(x.member.sheet);
-      attr = num(s.attrs.corpo); res = num(s.skills.resistencia);
+      attr = attrOf(s, 'corpo'); res = num(s.skills.resistencia);
       // Defensivas: Esquiva troca para Precisão + Reflexos; Explosiva soma a armadura
-      if (uses.some((u) => nameKey(u.name) === 'esquiva')) { attr = num(s.attrs.precisao); res = num(s.skills.reflexos); attrName = 'Precisão'; skillName = 'Reflexos'; }
+      if (uses.some((u) => nameKey(u.name) === 'esquiva')) { attr = attrOf(s, 'precisao'); res = num(s.skills.reflexos); attrName = 'Precisão'; skillName = 'Reflexos'; }
       if (uses.some((u) => nameKey(u.name) === 'explosiva')) mods.push(['armadura (Explosiva)', compute(sheetOf(x.member)).src.armadura.reduce((t, a) => t + a.val, 0)]);
     }
     const r = rollTest({ label: 'Defesa da cena', attrName, attr, skillName, skill: res, mods });
@@ -10335,7 +10347,7 @@ const FIREBASE_CONFIG = {
   function rollInitiative(x) {
     let attr, skill;
     if (x.foe) { const v = foeVals(x.foe); attr = num(v.precisao); skill = num(v.iniciativa); }
-    else { const s = normSheet(x.member.sheet); attr = num(s.attrs.precisao); skill = num(s.skills.iniciativa); }
+    else { const s = normSheet(x.member.sheet); attr = attrOf(s, 'precisao'); skill = num(s.skills.iniciativa); }
     const r = rollTest({ label: 'Iniciativa', attrName: 'Precisão', attr, skillName: 'Iniciativa', skill });
     // empate: maior Precisão primeiro, depois a sorte
     return { id: x.id, name: x.name, init: r.total, tie: attr + Math.random() / 10, detail: r.detail };
