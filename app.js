@@ -2785,7 +2785,7 @@ const FIREBASE_CONFIG = {
     const ok = h('button', 'btn btn--primary btn--sm', '');
     ok.type = 'button';
     ok.dataset.fid = 'multi-ok';
-    const tip = h('p', 'multi-tip', 'Dica: segure ou toque duas vezes num item para escolher vários de uma vez.');
+    const tip = h('p', 'multi-tip', window.matchMedia('(pointer: fine)').matches ? 'Dica: Ctrl + clique (ou dois cliques) num item para escolher vários de uma vez.' : 'Dica: segure ou toque duas vezes num item para escolher vários de uma vez.');
     const bar = h('div', 'multi-bar', count, h('span', 'multi-bar__acts', clear, ok));
     bar.hidden = true;
     const live = () => !cfg.enabled || cfg.enabled();
@@ -2833,7 +2833,7 @@ const FIREBASE_CONFIG = {
       if (!r || st.passing) return;
       if (ev.target.closest('.star')) { if (!st.on) return; }
       if (st.longed) { st.longed = false; ev.stopPropagation(); ev.preventDefault(); return; }
-      if (st.on) { ev.stopPropagation(); ev.preventDefault(); toggle(r); return; }
+      if (st.on || ev.ctrlKey || ev.metaKey) { ev.stopPropagation(); ev.preventDefault(); toggle(r); return; } // Ctrl/Cmd + clique: atalho do PC
       // fora do modo: dois cliques no corpo do item ligam o modo; um clique só abre a ficha, como antes
       const open = ev.target.closest('.row__open');
       if (!open) return;
