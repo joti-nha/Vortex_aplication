@@ -257,7 +257,7 @@ const FIREBASE_CONFIG = {
       rolls.splice(rolls.lastIndexOf(dropped), 1);
     }
     const ones = rolls.filter((v) => v === 1).length;
-    const sixes = rolls.filter((v) => v === 6).length;
+    const sixes = rolls.filter((v) => v === 6 || (o.critFive && v === 5)).length; // Certeiro: crítico com 5 e 6
     const crit = sixes > ones;
     const skillLost = ones > 0 && Boolean(o.skill);
     const mods = (o.mods || []).filter((x) => x && x[1]);
@@ -8191,6 +8191,93 @@ const FIREBASE_CONFIG = {
     });
   }
 
+  /* Poderes no combate: cada poder tem um momento (Ataque, Defesa, Ação bônus...). O campo "Quando usa"
+     da Oficina decide; sem ele, vale o efeito ("defesa", "ataque"). Os de ataque aparecem dentro do Atacar,
+     os de defesa dentro do Rolar defesa e os outros na aba Poderes. */
+  const POWER_MOMENTS = ['Ataque', 'Defesa', 'Ação bônus', 'Ação padrão', 'Reação', 'Passivo'];
+  function powerMoment(p) {
+    const v = (p && p.values) || {};
+    if (POWER_MOMENTS.indexOf(v.momento) >= 0) return v.momento;
+    const off = p && p.id ? BUILTINS.find((e) => e.id === p.id) : null;
+    if (off && off.values && off.values.momento) return off.values.momento;
+    const t = nameKey(v.efeito || '');
+    if (/defesa/.test(t)) return 'Defesa';
+    if (/\bataque|\batacar|\batacando/.test(t)) return 'Ataque';
+    return powerOpts(p).length || peCost(v.custoUso) ? 'Ação bônus' : 'Passivo';
+  }
+  // o que o personagem pode usar: as opções compradas de um poder-lista, ou o próprio poder
+  function powerUses(s) {
+    const out = [];
+    (s.powers || []).forEach((p) => {
+      const when = powerMoment(p);
+      const v = p.values || {};
+      const opts = powerOpts(p);
+      if (opts.length) opts.forEach((o) => { if (powerPicks(p).indexOf(o.name) >= 0) out.push({ key: (p.id || p.name) + '|' + o.name, p, name: o.name, from: p.name, text: o.text, pe: peCost(o.cost), when }); });
+      else out.push({ key: (p.id || p.name) + '|', p, name: p.name, from: '', text: v.efeito || '', pe: peCost(v.custoUso), when });
+    });
+    return out;
+  }
+  // paga o PE de uma lista de usos de uma vez; false se não der
+  async function payPowers(mb, uses) {
+    const pe = uses.reduce((t, u) => t + u.pe, 0);
+    if (!pe) return true;
+    const c = sheetOf(mb);
+    const cur = getCur(c.sheet, 'pe', compute(c).max.pe);
+    if (cur < pe) { toast('PE insuficiente: ' + uses.map((u) => u.name).join(', ') + ' custam ' + pe + ' PE e há ' + cur + '.'); return false; }
+    try { await patchMemberSheet(mb, (ss) => { const mm = compute(Object.assign({}, mb, { sheet: ss })); setCur(ss, 'pe', getCur(ss, 'pe', mm.max.pe) - pe, mm.max.pe); }); }
+    catch (err) { toast(errorMessage(err)); return false; }
+    return true;
+  }
+  const powerNote = (uses) => (uses.length ? 'Poderes: ' + uses.map((u) => u.name + (u.pe ? ' (−' + u.pe + ' PE)' : '')).join(', ') : '');
+  // marcar poderes de um momento antes de agir (Atacar, Rolar defesa)
+  function powerToggles(mb, when, set, onChange) {
+    const uses = powerUses(sheetOf(mb).sheet).filter((u) => u.when === when);
+    if (!uses.length) return null;
+    return h('div', 'cmd__pows', h('span', 'cmd__pows-title', when === 'Ataque' ? 'Poderes no ataque' : 'Poderes na defesa'),
+      h('div', 'cmd__chips', ...uses.map((u) => {
+        const on = set.has(u.key);
+        const b = h('button', 'man__opt pow__opt' + (on ? ' is-on' : ''), u.name, u.pe ? h('span', 'qtest__cost', u.pe + ' PE') : null);
+        b.type = 'button';
+        b.title = (u.from ? u.from + ': ' : '') + u.text;
+        b.dataset.fid = ('pow-' + nameKey(u.name)).replace(/\s+/g, '-');
+        b.setAttribute('aria-pressed', String(on));
+        b.addEventListener('click', () => { if (set.has(u.key)) set.delete(u.key); else set.add(u.key); onChange(); });
+        return b;
+      })),
+      h('p', 'cmd__note', uses.filter((u) => set.has(u.key)).map((u) => u.name + ': ' + u.text).join(' ') || 'Toque para ativar junto com a ação; o PE sai quando a ação acontece.'));
+  }
+  // aba Poderes: tudo o que o personagem tem, separado pelo momento de uso
+  function powersTab(actor) {
+    const mb = actor.member;
+    const uses = powerUses(sheetOf(mb).sheet);
+    if (!uses.length) return h('p', 'cmd__note', 'Este personagem não tem poderes.');
+    const go = (cmd, slot) => { battle.slot = slot; battle.cmd = cmd; battle.view = 'cfg'; renderBattle(); };
+    const groups = POWER_MOMENTS.map((when) => {
+      const list = uses.filter((u) => u.when === when);
+      if (!list.length) return null;
+      return h('section', 'pows__group', h('h4', 'pows__title', when),
+        ...list.map((u) => {
+          let act = null;
+          if (when === 'Ataque') act = gmBtn('Usar no Atacar', 'btn--ghost', () => { battle.atkPow.add(u.key); go('atacar', 'padrao'); });
+          else if (when === 'Defesa') act = gmBtn('Usar na defesa', 'btn--ghost', () => { battle.defPow.add(u.key); go('defesa', 'livre'); });
+          else if (when !== 'Passivo') {
+            const cost = when === 'Ação bônus' ? 'bonus' : when === 'Ação padrão' ? 'padrao' : '';
+            act = gmBtn('Usar' + (u.pe ? ' (−' + u.pe + ' PE)' : ''), 'btn--primary', async () => {
+              if (cost && slotUsed(actor, cost)) { toast(SLOT_LONG[cost] + ' já foi usada neste turno.'); return; }
+              if (!(await payPowers(mb, [u]))) return;
+              const paid = econPay(actor, cost);
+              await campaignRoll(mb, { expr: u.pe ? '−' + u.pe + ' PE' : 'poder', label: ('Poder: ' + u.name).slice(0, 60), detail: [paid, (u.from ? u.from + ' · ' : '') + u.text].filter(Boolean).join(' · ').slice(0, 1450), total: u.pe, flag: '' });
+              toast(u.name + (u.pe ? ': −' + u.pe + ' PE.' : ' usado.'));
+              renderBattle();
+            });
+          }
+          return h('div', 'pows__item', h('span', 'pows__head', h('strong', '', u.name), u.from ? h('span', 'tag', u.from) : null, u.pe ? h('span', 'qtest__cost', u.pe + ' PE') : h('span', 'tag', when === 'Passivo' ? 'sempre ativo' : 'sem custo')),
+            u.text ? h('span', 'pows__text', u.text) : null, act);
+        }));
+    }).filter(Boolean);
+    return h('div', 'pows', ...groups);
+  }
+
   function renderDock() {
     const dock = $('#dock');
     const mb = currentCamp && dockMember();
@@ -8410,7 +8497,7 @@ const FIREBASE_CONFIG = {
      Condições ficam na cena (scene.tags: id → [{ n, r }], r = rodadas restantes, 0 = até tirar);
      quem não entra no combate fica em scene.out. */
   const CONDITIONS = ['Atordoado', 'Caído', 'Sangrando', 'Em chamas', 'Envenenado', 'Cego', 'Imobilizado', 'Agarrado', 'Escondido', 'Assustado', 'Lento', 'Inspirado', 'Protegido', 'Concentrado'];
-  const battle = { actor: '', menu: 'acoes', cmd: 'atacar', duel: { mine: '', target: '', theirs: '' }, man: { id: '', target: '' }, heal: { target: '', key: '' }, test: '', advance: '', pin: { id: '', key: '' }, view: 'main', slot: '', aim: null, name: '', xp: '' };
+  const battle = { atkPow: new Set(), defPow: new Set(), actor: '', menu: 'acoes', cmd: 'atacar', duel: { mine: '', target: '', theirs: '' }, man: { id: '', target: '' }, heal: { target: '', key: '' }, test: '', advance: '', pin: { id: '', key: '' }, view: 'main', slot: '', aim: null, name: '', xp: '' };
   let lastRolls = [];
   const sceneTags = () => (scene && scene.tags) || {};
   const sceneOut = () => (scene && Array.isArray(scene.out) ? scene.out : []);
@@ -9148,6 +9235,7 @@ const FIREBASE_CONFIG = {
     } else if (battle.view === 'slot') body = slotView(actor, list, gm);
     else if (battle.view === 'cfg') body = cfgView(actor, list, gm);
     else if (battle.view === 'itens' && !actor.foe) body = h('div', 'cmd__panel', backBtn(battle.slot ? 'slot' : 'main'), itemsPanel(actor, list));
+    else if (battle.view === 'poderes' && !actor.foe) body = h('div', 'cmd__panel', backBtn('main'), h('div', 'cmd__about', h('strong', '', 'Poderes'), h('span', '', 'Os de ataque e de defesa entram junto com essas ações; os outros se usam daqui, com o custo da ação.')), powersTab(actor));
     else body = mainView(actor, gm);
     // a tela de comandos entra animada só quando muda (não a cada atualização da mesa)
     const viewKey = actor.id + '|' + battle.view + '|' + battle.slot + '|' + battle.cmd + '|' + Boolean(battle.aim);
@@ -9184,6 +9272,13 @@ const FIREBASE_CONFIG = {
       inv.dataset.fid = 'cmd-itens';
       inv.addEventListener('click', () => { battle.slot = ''; battle.view = 'itens'; renderBattle(); });
       extra.push(inv);
+      if (powerUses(sheetOf(actor.member).sheet).length) {
+        const pw = h('button', 'btn btn--ghost btn--sm', 'Poderes');
+        pw.type = 'button';
+        pw.dataset.fid = 'cmd-poderes-tab';
+        pw.addEventListener('click', () => { battle.slot = ''; battle.view = 'poderes'; renderBattle(); });
+        extra.push(pw);
+      }
     }
     if (live) {
       const reset = h('button', 'btn btn--ghost btn--sm', 'Repor ações');
@@ -9211,7 +9306,7 @@ const FIREBASE_CONFIG = {
       if (why && a.go !== 'itens') { b.disabled = true; b.title = why; }
       b.addEventListener('click', async () => {
         if (a.go === 'itens') { battle.view = 'itens'; renderBattle(); return; }
-        if (a.go === 'cfg') { battle.cmd = a.id; battle.view = 'cfg'; renderBattle(); return; }
+        if (a.go === 'cfg' || (a.id === 'defesa' && actor.member && powerUses(sheetOf(actor.member).sheet).some((u) => u.when === 'Defesa'))) { battle.cmd = a.id; battle.view = 'cfg'; renderBattle(); return; }
         if (a.go === 'aim') { aimFor(a.id, actor, list); return; }
         b.disabled = true;
         try { await doNow(a.id, actor, list, costOfAct(sl.id, a)); } catch (err) { toast(errorMessage(err)); }
@@ -9265,7 +9360,7 @@ const FIREBASE_CONFIG = {
   function cfgView(actor, list, gm) {
     const id = battle.cmd;
     const back = backBtn('slot');
-    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', teste: 'Teste da ficha', disputa: 'Disputa', poderes: 'Poderes' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
+    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', teste: 'Teste da ficha', disputa: 'Disputa', poderes: 'Poderes', defesa: 'Rolar defesa' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
     let body;
     if (id === 'atacar') body = attackCfg(actor, list);
     else if (id === 'manobra') body = maneuverCfg(actor, list);
@@ -9291,6 +9386,17 @@ const FIREBASE_CONFIG = {
       body = h('div', 'cmd__row', selField('cmd-test', 'Teste', tests.map((t) => [t.id, t.label]), battle.test, (v) => { battle.test = v; }),
         gmBtn('Rolar', 'btn--primary', async () => { const t = tests.find((y) => y.id === battle.test); if (t) await rollAs(actor, rollTest(t.make())); battle.view = 'main'; renderBattle(); }));
     } else if (id === 'disputa') body = duelCfg(actor, list);
+    else if (id === 'defesa') {
+      body = h('div', 'cmd__stack', actor.member ? powerToggles(actor.member, 'Defesa', battle.defPow, () => renderBattle()) : null,
+        h('div', 'cmd__row', gmBtn('Rolar defesa', 'btn--primary', async () => {
+          const uses = actor.member ? powerUses(sheetOf(actor.member).sheet).filter((u) => u.when === 'Defesa' && battle.defPow.has(u.key)) : [];
+          if (uses.length && !(await payPowers(actor.member, uses))) return;
+          battle.defPow.clear();
+          await rollDefense(actor, uses);
+          battle.view = 'main';
+          renderBattle();
+        })));
+    }
     else body = h('p', 'cmd__note', '');
     return h('div', 'cmd__panel', back, about, body);
   }
@@ -9316,6 +9422,12 @@ const FIREBASE_CONFIG = {
       st.per = shots;
       st.shots = Object.values(shots).reduce((t, n) => t + n, 0);
       const t = peekBuild();
+      // poderes de ataque marcados: pagam o PE agora e entram no teste (Certeiro: crítico com 5 e 6)
+      const uses = who.member && !adv ? powerUses(sheetOf(who.member).sheet).filter((u) => u.when === 'Ataque' && battle.atkPow.has(u.key)) : [];
+      if (uses.length && !(await payPowers(who.member, uses))) return;
+      battle.atkPow.clear();
+      if (uses.some((u) => nameKey(u.name) === 'certeiro')) t.critFive = true;
+      st.powNote = powerNote(uses);
       const paid = adv ? 'parte do avanço' : econPay(actor, cost);
       if (adv) battle.advance = '';
       await runAttack(who, t, st, h('button'), paid);
@@ -9347,7 +9459,7 @@ const FIREBASE_CONFIG = {
       renderBattle();
     };
     const base = Object.assign({}, c, { handsOnly: true, meleeOnly: adv, onReload });
-    return h('div', 'cmd__stack', note, attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
+    return h('div', 'cmd__stack', note, adv ? null : powerToggles(mb, 'Ataque', battle.atkPow, () => renderBattle()), attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
       const weapon = weaponsOf(c.sheet).find((w) => w.uid === st.uid) || null;
       const cad = st.cad === false ? 1 : maxShots(weapon);
       const prof = weapon ? isProficient(c.sheet, weapon) : false;
@@ -9884,11 +9996,20 @@ const FIREBASE_CONFIG = {
   }
 
   // Defesa da cena: 2d6 + Corpo + Resistência; abaixo da mínima, vale a mínima
-  async function rollDefense(x) {
-    let attr, res;
+  async function rollDefense(x, uses) {
+    uses = uses || [];
+    let attr, res, attrName = 'Corpo', skillName = 'Resistência';
+    const mods = [];
     if (x.foe) { const v = foeVals(x.foe); attr = num(v.corpo); res = num(v.resistencia); }
-    else { const s = normSheet(x.member.sheet); attr = num(s.attrs.corpo); res = num(s.skills.resistencia); }
-    const r = rollTest({ label: 'Defesa da cena', attrName: 'Corpo', attr, skillName: 'Resistência', skill: res });
+    else {
+      const s = normSheet(x.member.sheet);
+      attr = num(s.attrs.corpo); res = num(s.skills.resistencia);
+      // Defensivas: Esquiva troca para Precisão + Reflexos; Explosiva soma a armadura
+      if (uses.some((u) => nameKey(u.name) === 'esquiva')) { attr = num(s.attrs.precisao); res = num(s.skills.reflexos); attrName = 'Precisão'; skillName = 'Reflexos'; }
+      if (uses.some((u) => nameKey(u.name) === 'explosiva')) mods.push(['armadura (Explosiva)', compute(sheetOf(x.member)).src.armadura.reduce((t, a) => t + a.val, 0)]);
+    }
+    const r = rollTest({ label: 'Defesa da cena', attrName, attr, skillName, skill: res, mods });
+    if (uses.length) r.detail = powerNote(uses) + ' · ' + r.detail;
     const val = r.flag === 'falha' ? x.defMin : Math.max(r.total, x.defMin);
     r.detail += ' → defesa ' + val + (val > r.total || r.flag === 'falha' ? ' (vale a mínima ' + x.defMin + ')' : '');
     if (x.foe) await db.updateFoe(currentCamp.id, x.foe.id, { def: val });
@@ -10024,6 +10145,7 @@ const FIREBASE_CONFIG = {
       } catch (err) { toast(errorMessage(err)); }
     }
     r.label = t.label;
+    if (st.powNote) { r.detail = st.powNote + ' · ' + r.detail; st.powNote = ''; }
     if (paid) r.detail = paid + ' · ' + r.detail;
     r.detail += (types.length ? ' · ' + types.join(', ') : '') + ' · ' + lines.join(' | ');
     await postCombatRoll(who, r);

@@ -410,6 +410,7 @@ window.VORTEX_ITEMS = {
         { key: 'nome', label: 'Nome do poder', kind: 'text', big: true },
         { key: 'custo', label: 'Custo (UP; num poder-lista, por opção)', kind: 'number', min: 0, step: 1 },
         { key: 'custoUso', label: 'Custo de uso (PE, PA...)', kind: 'text' },
+        { key: 'momento', label: 'Quando usa (no combate)', kind: 'select', options: ['Ataque', 'Defesa', 'Ação bônus', 'Ação padrão', 'Reação', 'Passivo'], blank: 'Automático (pelo efeito)', hint: 'Ataque e Defesa aparecem dentro do Atacar e do Rolar defesa; os outros, na aba Poderes do combate.' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'opcoes', label: 'Poder-lista: opções', kind: 'powerlines', big: true, hint: 'Com opções, o poder vira uma lista: cada opção comprada custa o Custo acima. "+ Poder do banco" traz um poder pronto como opção, com efeito e script.' },
         { key: 'melhorias', label: 'Melhorias', kind: 'powerlines', big: true, hint: 'Somam ao poder, cada uma com seu custo em UP. Podem vir de poderes do banco.' },
@@ -573,9 +574,9 @@ window.VORTEX_ITEMS = {
     { id: 'of-npc-mecha', kind: 'npc', name: 'Mecha de Contenção', values: { categoria: 'Chefão', up: '10', corpo: '4', precisao: '2', essencia: '1', luta: '2', mira: '3', operacoes: '1', resistencia: '3', armadura: '9', pv: '20', escudo: '15', blindagem: '30', ataque: 'À distância', arma: 'Metralhadora rotativa', dano: 'Balístico, Explosivo', cadencia: '5', efetivo: 'Blindagem', descricao: 'Camadas de escudo e blindagem antes do piloto.', saque: 'Metralhadora rotativa\nPlaca de blindagem x3\nNúcleo de reator', cronos: '400' } },
 
     // Poderes (capítulo Habilidades)
-    { id: 'of-pod-defensivas', kind: 'poder', name: 'Defensivas', values: { custo: '1', efeito: 'Ativado durante a rolagem de defesa, pode ser ativado em apenas uma defesa, mas pode ser estendido por vários turnos ao critério e gasto proporcional do usuário.',
+    { id: 'of-pod-defensivas', kind: 'poder', name: 'Defensivas', values: { custo: '1', momento: 'Defesa', efeito: 'Ativado durante a rolagem de defesa, pode ser ativado em apenas uma defesa, mas pode ser estendido por vários turnos ao critério e gasto proporcional do usuário.',
       opcoes: 'Esquiva | Use precisão como atributo básico, e reflexo como perícia para os testes de defesa (incluindo defesa básica). | 1 PE\nExplosiva | Use sua reação: some sua armadura na defesa contra o ataque recebido. | 3 PE' } },
-    { id: 'of-pod-ataques', kind: 'poder', name: 'Ataques', values: { custo: '1', efeito: 'Ao realizar um ataque, você pode ativar essas vantagens ao custo citado.',
+    { id: 'of-pod-ataques', kind: 'poder', name: 'Ataques', values: { custo: '1', momento: 'Ataque', efeito: 'Ao realizar um ataque, você pode ativar essas vantagens ao custo citado.',
       opcoes: 'Avante | Você também se move 3 m na mesma ação (não usa um movimento); o ataque acontece após o movimento. | 1 PE\nCerteiro | Seu ataque causa acerto crítico com 5 e 6. | 1 PE' } },
     { id: 'of-pod-regeneracao', kind: 'poder', name: 'Regeneração', values: { custo: '2', efeito: 'Se for uma criatura biológica, recupere 3 PVs por turno. Se caído, pode recobrar a consciência quando recuperar todos os PV.',
       melhorias: 'Regeneração maior | +1 PV recuperado por turno (cada compra). | 1' } },
