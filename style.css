@@ -3220,3 +3220,24 @@ html, body { max-width: 100%; overflow-x: clip; }
 /* Armeiro: filtro de peças compatíveis com o espaço escolhido */
 .armory__modes { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.5rem 0 0.2rem; }
 .armory__modes .chip--toggle { min-height: 36px; }
+/* Tela de poder: tipo, como obter, opções e melhorias em cartões */
+.pwview { display: grid; gap: 0.5rem; margin-bottom: 0.9rem; }
+.pwview__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0; }
+.pwview__kind { padding: 0.15rem 0.6rem; border-radius: 999px; background: rgba(183, 155, 255, 0.16); color: var(--essencia); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.pwview__efeito { margin: 0; color: var(--nevoa); white-space: pre-line; }
+.pwview .entry__sub { margin: 0.6rem 0 0; }
+.pwview__list { display: grid; gap: 0.45rem; margin: 0; padding: 0; list-style: none; }
+.pwview__card { display: grid; gap: 0.2rem; padding: 0.55rem 0.75rem; border: 1px solid var(--linha-forte); border-left: 4px solid var(--essencia); border-radius: var(--r-s); background: rgba(183, 155, 255, 0.06); }
+.pwview--melhorias .pwview__card, .pwview__list + .entry__sub + .pwview__list .pwview__card { border-left-color: var(--ambar); }
+.pwview__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.pwview__text { color: var(--nevoa-2); font-size: 0.9rem; }
+.pwview__bank { border-color: var(--essencia); color: var(--essencia); }
+.pwview__how { margin: 0.3rem 0 0; padding: 0.5rem 0.7rem; border-radius: var(--r-s); background: var(--casco); font-size: 0.88rem; color: var(--nevoa-2); }
+/* Oficina: editor de opções e melhorias */
+.pwlines { display: grid; gap: 0.5rem; }
+.pwlines__list { display: grid; gap: 0.5rem; }
+.pwlines__list[hidden] { display: none; }
+.pwlines__row { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.7rem; border: 1px solid var(--linha); border-top: 3px solid var(--essencia); border-radius: var(--r-s); background: var(--casco); }
+.pwlines__row .racial3__head .icon-btn { margin-left: auto; }
+.pwlines__top { display: grid; grid-template-columns: minmax(0, 1fr) 8rem; gap: 0.4rem; }
+@media (max-width: 480px) { .pwlines__top { grid-template-columns: minmax(0, 1fr); } }

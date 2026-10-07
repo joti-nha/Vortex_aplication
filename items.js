@@ -411,8 +411,8 @@ window.VORTEX_ITEMS = {
         { key: 'custo', label: 'Custo (UP; num poder-lista, por opção)', kind: 'number', min: 0, step: 1 },
         { key: 'custoUso', label: 'Custo de uso (PE, PA...)', kind: 'text' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
-        { key: 'opcoes', label: 'Poder-lista: opções (uma por linha: Nome | efeito | custo de uso)', kind: 'textarea', big: true, placeholder: 'Esquiva | Use precisão como atributo básico na defesa. | 1 PE' },
-        { key: 'melhorias', label: 'Melhorias (uma por linha: Nome | efeito | custo em UP)', kind: 'textarea', big: true, placeholder: 'Regeneração maior | +1 PV recuperado por turno. | 1' },
+        { key: 'opcoes', label: 'Poder-lista: opções', kind: 'powerlines', big: true, hint: 'Com opções, o poder vira uma lista: cada opção comprada custa o Custo acima. "+ Poder do banco" traz um poder pronto como opção, com efeito e script.' },
+        { key: 'melhorias', label: 'Melhorias', kind: 'powerlines', big: true, hint: 'Somam ao poder, cada uma com seu custo em UP. Podem vir de poderes do banco.' },
         { key: 'script', label: 'Script', kind: 'script', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
@@ -579,9 +579,9 @@ window.VORTEX_ITEMS = {
       opcoes: 'Avante | Você também se move 3 m na mesma ação (não usa um movimento); o ataque acontece após o movimento. | 1 PE\nCerteiro | Seu ataque causa acerto crítico com 5 e 6. | 1 PE' } },
     { id: 'of-pod-regeneracao', kind: 'poder', name: 'Regeneração', values: { custo: '2', efeito: 'Se for uma criatura biológica, recupere 3 PVs por turno. Se caído, pode recobrar a consciência quando recuperar todos os PV.',
       melhorias: 'Regeneração maior | +1 PV recuperado por turno (cada compra). | 1' } },
-    { id: 'of-pod-doutor', kind: 'poder', name: 'Doutor', values: { custo: '1', efeito: 'Seu limite de modificador na perícia escolhida se torna 4. Pode ser comprado mais de uma vez, uma perícia por compra.' } },
-    { id: 'of-pod-prof-arma', kind: 'poder', name: 'Proficiência em arma', values: { custo: '1', efeito: 'Escolha um tipo de arma o qual é proficiente, para usar a regra de cadência proficiente. Ganha +1 de perícia para distribuir.' } },
-    { id: 'of-pod-prof-armadura', kind: 'poder', name: 'Proficiência em armadura', values: { custo: '1', efeito: 'Escolha um tipo de armadura o qual é proficiente: ganha +1 de armadura com ela e usa a regra de proficiência com a armadura. Ganha +1 de perícia para distribuir.' } },
+    { id: 'of-pod-doutor', kind: 'poder', name: 'Doutor', values: { custo: '1', efeito: 'Seu limite de modificador na perícia escolhida se torna 4. Também concede +1 em uma perícia à sua escolha. Pode ser comprado mais de uma vez, uma perícia por compra.' } },
+    { id: 'of-pod-prof-arma', kind: 'poder', name: 'Proficiência em arma', values: { custo: '1', efeito: 'Escolha um tipo de arma o qual é proficiente, para usar a regra de cadência proficiente. Também concede +1 em uma perícia à sua escolha.' } },
+    { id: 'of-pod-prof-armadura', kind: 'poder', name: 'Proficiência em armadura', values: { custo: '1', efeito: 'Escolha um tipo de armadura o qual é proficiente: ganha +1 de armadura com ela e usa a regra de proficiência com a armadura. Também concede +1 em uma perícia à sua escolha.' } },
     { id: 'of-pod-cria-eter', kind: 'poder', name: 'Cria do Éter', values: { custoUso: 'Concedido por origem ou espécime (Etheriano)', efeito: 'Quando é afetado por energia Ether pura, recupera uma quantidade de recursos igual ao tamanho do Ether: 10 de Resistência e PE para pequena, 25 de Resistência e PE para média, 50 de Resistência e PE para a grande. Recursos sobressalentes contam como recursos bônus até seu próximo descanso, e não são acumulados com outra fonte (considere o maior bônus).\nVocê pode tornar um Éter instável e forçar sua absorção, ainda dividindo a todos os indivíduos na área o XP cedido pelo Éter.' } },
     { id: 'of-pod-transformacao', kind: 'poder', name: 'Transformação', values: { efeito: 'Com uma ação completa você se transforma; cria uma transformação trocando seus Up points e os realocando como quiser. Seus itens caem ao chão no processo. Cada Up point equivale a uma transformação.' } },
     { id: 'of-pod-akimbo', kind: 'poder', name: 'Akimbo', values: { efeito: 'Empunhe pistolas ou submetralhadoras uma em cada mão. O tempo de recarga aumenta em uma categoria. Pode mirar em um único alvo com ambas ou escolher até dois alvos; faz um teste de ataque com cada arma, que aplicam dano separadamente.' } },
