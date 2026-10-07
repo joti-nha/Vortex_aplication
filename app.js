@@ -2788,10 +2788,12 @@ const FIREBASE_CONFIG = {
     if (pic) { const img = h('img', 'entry__img'); img.src = pic; img.alt = ''; body.append(img); }
     const dl = h('dl', 'member__data entry__data');
     const seen = new Set(['nome', 'lore', 'compraRacial']); // compraRacial: campo antigo, hoje é exclusivo do Etheriano
+    if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso'].forEach((k) => seen.add(k)); }
     ((cat && cat.fields) || []).forEach((f) => {
-      seen.add(f.key);
       const val = v[f.key];
       if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r) => dl.append(h('dt', '', r[0]), h('dd', 'entry__pre', r[1]))); return; }
+      if (seen.has(f.key)) return;
+      seen.add(f.key);
       if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
       if (f.kind === 'script') { dl.append(h('dt', '', 'Script'), h('dd', 'entry__pre entry__code', String(val))); return; }
       if (f.kind === 'racial3') { dl.append(h('dt', '', 'Habilidades raciais'), h('dd', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : '')))); return; }
@@ -2808,7 +2810,7 @@ const FIREBASE_CONFIG = {
     const parts = e.slots ? (e.slots.mods || []).concat(e.slots.props || [], e.slots.accs || []).map((x) => x.name) : [];
     if (parts.length) dl.append(h('dt', '', 'Encaixes'), h('dd', '', parts.join(', ')));
     if (dl.children.length) body.append(dl);
-    else body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
+    else if (e.kind !== 'poder') body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
     const lore = String(v.lore || '').trim();
     if (lore) body.append(h('h3', 'entry__sub', 'Lore'), ...lore.split(/\n+/).map((t) => h('p', 'entry__lore', t)));
     const attach = quickAttachBox(e);
@@ -2816,6 +2818,79 @@ const FIREBASE_CONFIG = {
     openDialog(entryDlg);
   }
   $('#entry-close').addEventListener('click', () => closeDialog(entryDlg));
+  /* Tela de um poder: o tipo (simples, lista, com escolha, com melhorias), como se obtém e
+     as opções e melhorias em cartões, em vez do texto cru "Nome | efeito | custo". */
+  function powerKind(e) {
+    if (CHOICE_POWERS[e.id]) return 'escolha';
+    if (powerOpts(e).length) return 'lista';
+    return powerUps(e).length ? 'melhorias' : 'simples';
+  }
+  function powerView(e) {
+    const v = e.values || {};
+    const kind = powerKind(e);
+    const cost = num(v.custo);
+    const opts = powerOpts(e);
+    const ups = powerUps(e);
+    const bank = (n) => BUILTINS.some((x) => x.kind === 'poder' && x.id !== e.id && nameKey(x.name) === nameKey(n));
+    const label = { lista: 'Poder-lista', escolha: 'Poder com escolha', melhorias: 'Poder com melhorias', simples: 'Poder' }[kind];
+    const what = { pericia: 'a perícia', arma: 'o tipo de arma', armadura: 'o tipo de armadura' }[CHOICE_POWERS[e.id]];
+    const how = kind === 'lista' ? 'Na ficha, em Poderes, "Adicionar poder" abre as opções: pegue quantas quiser, cada uma custa ' + cost + ' UP.'
+      : kind === 'escolha' ? 'Na ficha, ao adicionar, você escolhe ' + what + '. Cada compra custa ' + cost + ' UP, vale para uma escolha e dá +1 em uma perícia à sua escolha; dá para comprar de novo.'
+      : 'Na ficha, em Poderes, "Adicionar poder"' + (cost ? ' por ' + cost + ' UP' : '') + '.' + (kind === 'melhorias' ? ' Depois, as melhorias são compradas na lista de poderes.' : '');
+    const card = (t, tag, i) => h('li', 'pwview__card', h('span', 'pwview__head', h('strong', '', t.name), tag ? h('span', 'tag', tag) : null, bank(t.name) ? h('span', 'tag pwview__bank', 'Poder do banco') : null),
+      t.text ? h('span', 'pwview__text', t.text) : null);
+    return h('div', 'pwview pwview--' + kind,
+      h('p', 'pwview__chips', h('span', 'pwview__kind', label), h('span', 'tag', kind === 'lista' ? cost + ' UP por opção' : cost + ' UP'), v.custoUso ? h('span', 'tag', 'Uso: ' + v.custoUso) : null),
+      v.efeito ? h('p', 'pwview__efeito', v.efeito) : null,
+      opts.length ? h('h3', 'entry__sub', 'Opções') : null,
+      opts.length ? h('ul', 'pwview__list', ...opts.map((o) => card(o, o.cost ? 'Uso: ' + o.cost : ''))) : null,
+      ups.length ? h('h3', 'entry__sub', 'Melhorias') : null,
+      ups.length ? h('ul', 'pwview__list', ...ups.map((u) => card(u, '+' + (u.cost === '' ? 1 : num(u.cost)) + ' UP'))) : null,
+      h('p', 'pwview__how', h('strong', '', 'Como obter: '), how));
+  }
+
+  /* Escolha única em cartões (perícia do Doutor, tipo de arma ou armadura): no modelo das características raciais. */
+  let cardAskDlg = null;
+  function askCards(o) {
+    if (!cardAskDlg) { cardAskDlg = h('dialog', 'dialog pickchar racial powopt'); cardAskDlg.setAttribute('aria-labelledby', 'cardask-title'); document.body.append(cardAskDlg); }
+    const dlg = cardAskDlg;
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (val) => { if (done) return; done = true; resolve(val); if (dlg.open) closeDialog(dlg); };
+      const q = h('input', 'input');
+      q.type = 'search';
+      q.id = 'cardask-q';
+      q.autocomplete = 'off';
+      q.placeholder = 'Buscar';
+      const qLab = h('label', 'visually-hidden', 'Buscar');
+      qLab.htmlFor = 'cardask-q';
+      const list = h('ul', 'pickchar__list');
+      const draw = () => {
+        const shown = rankSearch(o.items, q.value, (x) => [[x.name, 10], [[x.meta, x.text].filter(Boolean).join(' '), 2]]);
+        list.replaceChildren(...shown.map((x) => {
+          const b = h('button', 'btn btn--sm btn--primary', o.ok || 'Escolher');
+          b.type = 'button';
+          b.dataset.fid = ('cardask-' + nameKey(x.name)).replace(/\s+/g, '-');
+          b.addEventListener('click', () => finish(x.value));
+          return h('li', 'pickchar__card racial__trait', h('span', 'pickchar__info', h('strong', 'pickchar__name', x.name), x.meta ? h('span', 'pickchar__meta', x.meta) : null, x.text ? h('span', 'racial__text', x.text) : null), b);
+        }));
+        if (!shown.length) list.append(h('li', 'empty', 'Nada com esse nome.'));
+      };
+      q.addEventListener('input', draw);
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      const title = h('h2', '', o.title);
+      title.id = 'cardask-title';
+      dlg.replaceChildren(h('div', 'pickchar__body', title, o.tag ? h('p', 'racial__only', o.tag) : null,
+        o.efeito ? h('p', 'powopt__efeito', o.efeito) : null, o.hint ? h('p', 'field__hint', o.hint) : null,
+        o.items.length > 6 ? h('div', 'field racial__search', qLab, q) : null, list, h('div', 'dialog__actions', cancel)));
+      dlg.onclose = () => finish(null);
+      draw();
+      openDialog(dlg);
+    });
+  }
+
 
   /* ---------- Slots: mods, propriedade e acessórios ----------
      Cada slot só aceita a peça do seu tipo. A raridade do item define quantos
@@ -3217,6 +3292,85 @@ const FIREBASE_CONFIG = {
     return box;
   }
 
+  /* Opções de um poder-lista e melhorias: um cartão por linha (nome, efeito, custo), guardado no
+     mesmo texto "Nome | efeito | custo | script". "Poder do banco" traz um poder real como opção,
+     com efeito, custo e script dele. */
+  function powerLinesField(field, value, onChange) {
+    const ups = field.key === 'melhorias';
+    const cur = powerLines(value);
+    const box = h('div', 'pwlines');
+    box.setAttribute('role', 'group');
+    const list = h('div', 'pwlines__list');
+    let lib = BUILTINS.filter((e) => e.kind === 'poder');
+    const oneLine = (x) => String(x || '').replace(/\s*\n\s*/g, ' ').replace(/\|/g, '/').trim();
+    const save = () => onChange(cur.filter((t) => cleanName(t.name)).map((t) => [cleanName(t.name).replace(/\|/g, '/'), oneLine(t.text), oneLine(t.cost)]
+      .concat(String(t.script || '').trim() ? [scriptOneLine(t.script)] : []).join(' | ')).join('\n'));
+    const fromBank = (t) => lib.find((e) => nameKey(e.name) === nameKey(t.name));
+    const paint = () => {
+      list.replaceChildren(...cur.map((t, i) => {
+        const fid = 'pwl-' + field.key + '-' + i;
+        const nm = h('input', 'input');
+        nm.type = 'text';
+        nm.maxLength = 60;
+        nm.autocomplete = 'off';
+        nm.value = t.name;
+        nm.placeholder = ups ? 'Ex.: Regeneração maior' : 'Ex.: Esquiva';
+        nm.dataset.fid = fid + '-nome';
+        nm.setAttribute('aria-label', (ups ? 'Nome da melhoria ' : 'Nome da opção ') + (i + 1));
+        nm.addEventListener('input', () => { t.name = nm.value; save(); });
+        const cost = h('input', 'input pwlines__cost');
+        cost.type = 'text';
+        cost.maxLength = 20;
+        cost.autocomplete = 'off';
+        cost.value = t.cost;
+        cost.placeholder = ups ? 'UP (1)' : 'Uso (1 PE)';
+        cost.dataset.fid = fid + '-custo';
+        cost.setAttribute('aria-label', (ups ? 'Custo em UP da melhoria ' : 'Custo de uso da opção ') + (i + 1));
+        cost.addEventListener('input', () => { t.cost = cost.value; save(); });
+        const tx = h('textarea', 'input');
+        tx.rows = 2;
+        tx.maxLength = 400;
+        tx.value = t.text;
+        tx.placeholder = 'O que ela faz.';
+        tx.dataset.fid = fid + '-efeito';
+        tx.setAttribute('aria-label', (ups ? 'Efeito da melhoria ' : 'Efeito da opção ') + (i + 1));
+        tx.addEventListener('input', () => { t.text = tx.value; save(); });
+        const rm = h('button', 'icon-btn', '×');
+        rm.type = 'button';
+        rm.dataset.fid = fid + '-tirar';
+        rm.setAttribute('aria-label', 'Tirar ' + (t.name || (ups ? 'melhoria ' : 'opção ') + (i + 1)));
+        rm.addEventListener('click', () => { cur.splice(i, 1); save(); paint(); });
+        const bank = fromBank(t);
+        const sc = scriptField(fid + '-script', String(t.script || '').split(/\s*;\s*/).filter(Boolean).join('\n'), (v) => { t.script = v; save(); });
+        return h('div', 'pwlines__row',
+          h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', ups ? 'Melhoria' : 'Opção'), bank ? h('span', 'tag', 'Poder do banco') : null, rm),
+          h('div', 'pwlines__top', nm, cost), tx, sc);
+      }));
+      list.hidden = !cur.length;
+    };
+    const add = h('button', 'btn btn--ghost btn--sm', ups ? '+ Melhoria' : '+ Opção');
+    add.type = 'button';
+    add.dataset.fid = 'pwl-' + field.key + '-add';
+    add.addEventListener('click', () => { cur.push({ name: '', text: '', cost: '', script: '' }); paint(); const el = $('[data-fid="pwl-' + field.key + '-' + (cur.length - 1) + '-nome"]', box); if (el) el.focus(); });
+    const pick = h('button', 'btn btn--ghost btn--sm', '+ Poder do banco');
+    pick.type = 'button';
+    pick.dataset.fid = 'pwl-' + field.key + '-bank';
+    pick.addEventListener('click', async () => {
+      const e = await openPicker({ title: ups ? 'Poder que vira melhoria' : 'Poder que vira opção', kinds: ['poder'], chips: ['Poder', 'sem opções'],
+        filter: (x) => x.kind === 'poder' && !powerOpts(x).length && !CHOICE_POWERS[x.id] && !cur.some((t) => nameKey(t.name) === nameKey(x.name)) });
+      if (!e) return;
+      if (!lib.some((x) => nameKey(x.name) === nameKey(e.name))) lib = lib.concat([e]);
+      const v = e.values || {};
+      cur.push({ name: e.name, text: v.efeito || '', cost: ups ? String(v.custo || '1') : String(v.custoUso || ''), script: powerScript(e) });
+      save();
+      paint();
+    });
+    libSearch(['poder'], '').then((l) => { lib = l; paint(); }).catch(() => { /* fica o catálogo oficial */ });
+    paint();
+    box.append(list, h('div', 'banklines__foot', add, pick));
+    return box;
+  }
+
   /* Texto com uma linha por item (ou poder) e um botão para trazer do banco.
      Com budget, soma o preço do que veio do banco e só deixa pegar o que cabe no dinheiro inicial. */
   function bankLinesField(field, value, onChange) {
@@ -3337,6 +3491,7 @@ const FIREBASE_CONFIG = {
     if (field.kind === 'racial3') return racial3Field(field, value, onChange);
     if (field.kind === 'script') return scriptField(id, value, onChange);
     if (field.kind === 'banklines') return bankLinesField(field, value, onChange);
+    if (field.kind === 'powerlines') return powerLinesField(field, value, onChange);
     if (field.kind === 'textarea') {
       const ta = h('textarea', 'input');
       ta.id = id;
@@ -3415,7 +3570,7 @@ const FIREBASE_CONFIG = {
         });
         if (f.key === 'raridade' || f.key === 'para') renderItemSlots();
       });
-      const grouped = f.kind === 'multi' || f.kind === 'rarity' || f.kind === 'cards' || f.kind === 'racial3';
+      const grouped = f.kind === 'multi' || f.kind === 'rarity' || f.kind === 'cards' || f.kind === 'racial3' || f.kind === 'powerlines';
       const label = h(grouped ? 'span' : 'label', 'field__label', f.label);
       if (!grouped) label.htmlFor = 'item-f-' + f.key;
       if (grouped) { const gid = 'item-l-' + f.key; label.id = gid; ctrl.setAttribute('aria-labelledby', gid); }
@@ -4043,9 +4198,14 @@ const FIREBASE_CONFIG = {
   // o script de um poder na ficha: o da cópia, ou o do poder oficial (fichas antigas não têm o script)
   function powerScript(p) {
     const v = (p && p.values) || {};
-    if (v.script) return v.script;
-    const off = p && p.id ? BUILTINS.find((e) => e.id === p.id) : null;
-    return off && off.values ? off.values.script || '' : '';
+    const off = !v.script && p && p.id ? BUILTINS.find((e) => e.id === p.id) : null;
+    const base = v.script || (off && off.values ? off.values.script || '' : '');
+    if (!p) return base;
+    // as opções compradas e as melhorias carregam o script do poder de onde vieram
+    const extra = [];
+    powerOpts(p).forEach((o) => { if (o.script && powerPicks(p).indexOf(o.name) >= 0) extra.push(o.script); });
+    powerUps(p).forEach((u) => { for (let n = upCount(p, u.name); u.script && n > 0; n--) extra.push(u.script); });
+    return [base].concat(extra).filter(Boolean).join('\n');
   }
   // espécimes criados antes do script guardam a mecânica em campos próprios: continuam valendo
   function legacySpecies(v) {
@@ -4169,7 +4329,7 @@ const FIREBASE_CONFIG = {
       upEarned, upTotal: upEarned + mech.up + num(s.upExtra),
       upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length,
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length, // Doutor e proficiências: +1 de perícia cada
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
   }
@@ -6054,7 +6214,7 @@ const FIREBASE_CONFIG = {
      mudam na hora (pente, recarga, alcance), e a munição fica no mesmo lugar. */
   let armDlg = null;
   // m: membro da campanha (Armeiro da campanha: mochila, armazéns e lojas); sem m, a ficha aberta (só a mochila)
-  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false };
+  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false, all: false };
   const armSheet = () => (arm.m ? arm.m.sheet : sheetChar && sheetChar.sheet);
   const ARM_SPOTS = {
     'arma-fogo': { Mira: 'top', Bocal: 'right', Carregador: 'bottom', Empunhadura: 'left' },
@@ -6078,6 +6238,7 @@ const FIREBASE_CONFIG = {
     arm.uid = u && guns.some((w) => w.uid === u) ? u : guns[0].uid;
     arm.sel = '';
     arm.q = '';
+    arm.all = false;
     arm.lib = null;
     arm.m = m || null;
     drawArmory();
@@ -6240,13 +6401,34 @@ const FIREBASE_CONFIG = {
       armSave();
     };
     const sources = armSources(s);
-    const candRows = (test) => sources.filter((src) => test(src.e) && match(src.e)).map((src, n) => {
-      const plan = planAttach(w, src.e);
-      if (!plan) return null;
+    // "Todas": mostra também as peças do mesmo tipo que não servem no espaço escolhido, com o motivo
+    const pos0 = arm.sel.indexOf('pos:') === 0 ? arm.sel.slice(4) : '';
+    const misfit = (e) => {
+      const v = e.values || {};
+      const para = (x) => 'É para ' + String(x).toLowerCase() + '; não serve em ' + w.name + '.';
+      if (e.kind === 'acessorio') {
+        if (!isWeapon(w.kind)) return w.name + ' não recebe acessórios.';
+        if (e.typeId !== w.kind) return para(WEAPON_PARA[e.typeId] || e.typeTitle || 'outra arma');
+        if (info.positions.indexOf(v.posicao) < 0) return w.name + ' não tem a posição ' + v.posicao + '.';
+        if (pos0 && v.posicao !== pos0) return 'Vai na posição ' + v.posicao + ', não em ' + pos0 + '.';
+      }
+      if (e.kind === 'mod-arma') return isWeapon(w.kind) ? para(v.para) : w.name + ' não recebe mods.';
+      if (e.kind === 'propriedade') return para(v.para);
+      return 'Não serve em ' + w.name + '.';
+    };
+    let hidden = 0; // peças do tipo que o filtro "Compatíveis" esconde
+    const candRows = (test, kind) => sources.filter((src) => (src.e.kind === kind || test(src.e)) && match(src.e)).map((src, n) => {
+      const plan = test(src.e) ? planAttach(w, src.e) : null;
+      if (!plan) {
+        if (!arm.all) { hidden += 1; return null; }
+        const li = row(src.e, false, { act: src.act, where: src.where, n: n + 1, why: misfit(src.e), run: () => {} });
+        li.dataset.misfit = '1';
+        return li;
+      }
       if (plan.already) return null;
       const poor = src.price !== undefined && arm.m && currentCamp && num((s.money || {})[currentCamp.id]) < src.price ? 'Dinheiro insuficiente.' : '';
       return row(src.e, false, { act: src.act, where: src.where, n: n + 1, why: plan.why || poor, swap: plan.slots && plan.removed.length ? plan.removed.join(', ') : '', run: mountFrom(src, plan) });
-    }).filter(Boolean);
+    }).filter(Boolean).sort((a, b) => Number(Boolean(a.dataset.misfit)) - Number(Boolean(b.dataset.misfit))); // as que servem primeiro
     let items = [];
     let title = '';
     let hint = '';
@@ -6257,16 +6439,16 @@ const FIREBASE_CONFIG = {
       if (t && t.mod) hint = 'Esta posição vem no mod ' + t.mod.name + '. Montar outro acessório aqui tira o mod.';
       else hint = 'Um acessório por posição. Cada slot de mod livre leva ' + per + ' acessórios.';
       if (t) items.push(row(t.acc, true, t.mod ? { why: 'Vem no mod ' + t.mod.name + '.', run: () => {} } : { run: unmount(w.slots.accs, t.acc) }));
-      items = items.concat(candRows((e) => e.kind === 'acessorio' && e.values.posicao === pos && e.typeId === w.kind));
+      items = items.concat(candRows((e) => e.kind === 'acessorio' && e.values.posicao === pos && e.typeId === w.kind, 'acessorio'));
     } else if (arm.sel === 'mod') {
       title = 'Mods';
       hint = 'Raridade ' + info.rar + ': ' + info.mods + (info.mods === 1 ? ' slot' : ' slots') + ' de mod. Mod Comum usa 1, Rara usa 2, Lendária usa 3.';
-      items = w.slots.mods.map((m) => row(m, true, { run: unmount(w.slots.mods, m) })).concat(candRows((e) => e.kind === 'mod-arma'));
+      items = w.slots.mods.map((m) => row(m, true, { run: unmount(w.slots.mods, m) })).concat(candRows((e) => e.kind === 'mod-arma', 'mod-arma'));
     } else {
       title = 'Propriedade';
       hint = info.props ? 'A raridade ' + info.rar + ' comporta ' + plural(info.props, 'propriedade', 'propriedades') + '.' : 'A raridade ' + info.rar + ' não comporta propriedade. Só Incomum, Épica e Lendária.';
       if (w.kind === 'armadura') hint += ' Armadura não recebe mods nem acessórios, só propriedade.';
-      items = w.slots.props.map((x) => row(x, true, { run: unmount(w.slots.props, x) })).concat(candRows((e) => e.kind === 'propriedade'));
+      items = w.slots.props.map((x) => row(x, true, { run: unmount(w.slots.props, x) })).concat(candRows((e) => e.kind === 'propriedade', 'propriedade'));
     }
     hint += arm.m ? ' Peças da mochila, dos armazéns liberados e das lojas (comprando).' : ' Só aparecem as peças que estão na mochila; armazéns e lojas ficam no Armeiro da campanha.';
     const q = h('input', 'input');
@@ -6279,8 +6461,19 @@ const FIREBASE_CONFIG = {
     q.addEventListener('input', () => { arm.q = q.value; drawArmory(); });
     const qLab = h('label', 'visually-hidden', 'Buscar peça');
     qLab.htmlFor = q.id;
-    panel.append(h('h3', 'armory__ptitle', title), h('p', 'field__hint', hint), qLab, q,
-      items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', arm.q ? 'Nenhuma peça com esse nome.' : arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.'));
+    const mode = (all, label) => {
+      const b = h('button', 'chip chip--toggle', label);
+      b.type = 'button';
+      b.dataset.fid = all ? 'arm-all' : 'arm-fit';
+      b.setAttribute('aria-pressed', String(arm.all === all));
+      b.addEventListener('click', () => { arm.all = all; drawArmory(); });
+      return b;
+    };
+    const modes = h('div', 'armory__modes', h('span', 'picker__filter-label', 'Peças para ' + title + ':'), mode(false, 'Compatíveis'), mode(true, 'Todas'));
+    const none = arm.q ? 'Nenhuma peça com esse nome.' : hidden ? 'Nenhuma peça compatível com ' + title + '. Toque em "Todas" para ver as outras ' + hidden + ' e por que não servem.'
+      : arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.';
+    panel.append(h('h3', 'armory__ptitle', title), h('p', 'field__hint', hint), qLab, q, modes,
+      items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', none));
 
     // números da arma e munição
     const stat = (k, v, changed) => h('div', 'armory__stat' + (changed ? ' is-changed' : ''), h('span', '', k), h('strong', '', v || '—'));
@@ -6366,11 +6559,13 @@ const FIREBASE_CONFIG = {
     const kind = CHOICE_POWERS[e.id];
     if (kind) {
       const s = ch.sheet;
-      const opts = kind === 'pericia'
-        ? Object.keys(SKILLS).reduce((all, k) => all.concat(SKILLS[k]), []).filter((sk) => doutorOf(s).indexOf(sk[0]) < 0).map((sk) => [sk[0], sk[1]])
-        : PROFS.filter((p) => (p.id.indexOf('armadura-') === 0) === (kind === 'armadura') && !hasProf(s, p.id)).map((p) => [p.id, p.label]);
-      if (!opts.length) { toast('Nada disponível para ' + e.name + ': o personagem já tem todas as opções.'); return; }
-      const choice = await askChoice(e.name, kind === 'pericia' ? 'Escolha a perícia' : kind === 'arma' ? 'Escolha o tipo de arma' : 'Escolha o tipo de armadura', (e.values && e.values.efeito) || '', opts, 'Adicionar');
+      const ATTR = { corpo: 'Corpo', precisao: 'Precisão', essencia: 'Essência' };
+      const items = kind === 'pericia'
+        ? Object.keys(SKILLS).reduce((all, k) => all.concat(SKILLS[k].map((sk) => ({ value: sk[0], name: sk[1], meta: ATTR[k] || k }))), []).filter((x) => doutorOf(s).indexOf(x.value) < 0)
+        : PROFS.filter((p) => (p.id.indexOf('armadura-') === 0) === (kind === 'armadura') && !hasProf(s, p.id)).map((p) => ({ value: p.id, name: p.label }));
+      if (!items.length) { toast('Nada disponível para ' + e.name + ': o personagem já tem todas as opções.'); return; }
+      const choice = await askCards({ title: e.name, tag: kind === 'pericia' ? 'Escolha a perícia' : kind === 'arma' ? 'Escolha o tipo de arma' : 'Escolha o tipo de armadura',
+        efeito: (e.values && e.values.efeito) || '', hint: 'Custa ' + num(e.values && e.values.custo) + ' UP por compra e dá +1 em uma perícia à sua escolha (o ponto entra em Perícias). Para outra escolha, compre o poder de novo.', items, ok: 'Pegar' });
       if (!choice || sheetChar !== ch) return;
       s.powers.push(choicePower(e, choice));
     } else if (powerOpts(e).length) {
@@ -7403,7 +7598,7 @@ const FIREBASE_CONFIG = {
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, null, isName ? d.name : d.values[f.key], (v) => { if (isName) d.name = v; else d.values[f.key] = v; });
       const fid = 'wzc-' + kind + '-' + f.key;
-      const grouped = f.kind === 'multi' || f.kind === 'racial3';
+      const grouped = f.kind === 'multi' || f.kind === 'racial3' || f.kind === 'powerlines';
       const label = h(grouped ? 'span' : 'label', 'field__label', f.label);
       if (grouped) { label.id = fid; ctrl.setAttribute('aria-labelledby', fid); }
       else { (f.kind === 'banklines' ? $('textarea', ctrl) : ctrl).id = fid; label.htmlFor = fid; }
