@@ -5204,22 +5204,28 @@ const FIREBASE_CONFIG = {
   const watch = { id: null, over: false, pending: 0, skills: 0, bad: 0 };
   let lastDmgType = '';
 
-  /* Pendências: pontos e recursos ainda por distribuir */
+  /* Avisos da Progressão: o que há para distribuir e o que está além do que as regras dão. Cada aviso traz
+     os botões que resolvem ali mesmo (escolher benefício, UP em perícias, desfazer), então a aba não precisa
+     de quadros de saldo. Podem ser desligados (s.alertsOff) ou dispensados um a um (s.hideAlerts). */
+  const toAttrs = () => { const b = $('#attr-band'); if (b) { b.scrollIntoView({ behavior: 'smooth', block: 'center' }); b.classList.remove('attr-band--flash'); void b.offsetWidth; b.classList.add('attr-band--flash'); } };
+  const toPowers = () => { showSheetTab($('#spanel-poderes')); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const toSel = (sel) => () => { const el = $(sel); if (!el) return; showSheetTab(el.closest('.sheet-panel')); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  const BEN = [['pv', '+5 PV'], ['pe', '+5 PE'], ['pa', '+1 PA']];
   function pendingList(m) {
     const s = sheetChar.sheet;
     const out = [];
     const picks = m.picksAllowed - m.picksUsed;
     const up = m.upTotal - m.upSpent;
     const skills = m.skillBudget - m.skillUsed;
-    if (!s.setup) out.push({ key: 'setup', n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', label: 'Fazer agora', go: () => openSetup() });
-    if (picks > 0) out.push({ key: 'picks', n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' para escolher: +5 PV, +5 PE ou +1 PA.', label: 'Escolher', go: '#prog-block' });
-    if (m.attrAllowed > m.attrUsed) out.push({ key: 'attr', n: m.attrAllowed - m.attrUsed, text: plural(m.attrAllowed - m.attrUsed, '+1 de atributo', '+1 de atributo') + ' para escolher (a cada 4 UP).', label: 'Escolher', go: '#prog-block' });
-    if (up > 0) out.push({ key: 'up', n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias.', label: 'Ver progressão', go: '#prog-block' });
-    if (skills > 0) out.push({ key: 'skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', label: 'Ver perícias', go: '#skills-block' });
+    const attr = m.attrAllowed - m.attrUsed;
+    const bump = (k) => () => { s.up[k] = num(s.up[k]) + 1; changed(); };
+    if (!s.setup) out.push({ key: 'setup', n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', acts: [{ label: 'Fazer agora', fid: 'al-setup', on: () => openSetup() }] });
+    if (picks > 0) out.push({ key: 'picks', n: picks, text: plural(picks, 'benefício para escolher', 'benefícios para escolher') + ' (a cada 2 UP, 2 benefícios; pode repetir).', acts: BEN.map((b) => ({ label: b[1], fid: 'al-ben-' + b[0], cls: 'btn--primary', on: bump(b[0]) })) });
+    if (attr > 0) out.push({ key: 'attr', n: attr, text: plural(attr, '+1 de atributo para escolher', '+1 de atributo para escolher') + ' (a cada 4 UP). Aumente o atributo no + da faixa de atributos.', acts: [{ label: 'Ir aos atributos', fid: 'al-attr', on: toAttrs }] });
+    if (up > 0) out.push({ key: 'up', n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias (cada UP em perícias dá +3 pontos).', acts: [{ label: 'Comprar poderes', fid: 'al-powers', on: toPowers }, { label: '+1 UP em perícias', fid: 'al-per', on: bump('per') }] });
+    if (skills > 0) out.push({ key: 'skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', acts: [{ label: 'Ver perícias', fid: 'al-skills', on: toSel('#skills-block') }] });
     return out;
   }
-
-  /* Compras sem fonte: o que está na ficha além do que as regras (ou um poder) concedem */
   function noSourceList(m) {
     const s = sheetChar.sheet;
     const out = [];
@@ -5227,35 +5233,54 @@ const FIREBASE_CONFIG = {
     const picks = m.picksUsed - m.picksAllowed;
     const skills = m.skillUsed - m.skillBudget;
     const extraProfs = s.profs.length - 4;
-    if (up > 0) out.push({ key: 'x-up', n: up, text: plural(up, 'UP gasto', 'UP gastos') + ' sem UP que os pague (poderes, melhorias ou UP em perícias). Ganhe XP ou desfaça uma compra.', label: 'Ver progressão', go: '#prog-block' });
-    if (picks > 0) out.push({ key: 'x-picks', n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' (+5 PV, +5 PE, +1 PA) sem UP par que os conceda.', label: 'Ver progressão', go: '#prog-block' });
-    if (m.attrUsed > m.attrAllowed) out.push({ key: 'x-attr', n: m.attrUsed - m.attrAllowed, text: 'Atributos com ' + plural(m.attrUsed - m.attrAllowed, 'ponto', 'pontos') + ' além dos 3 da distribuição inicial e do +1 a cada 4 UP.', label: 'Refazer distribuição', go: () => openSetup() });
-    if (skills > 0) out.push({ key: 'x-skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', label: 'Ver perícias', go: '#skills-block' });
-    if (extraProfs > 0) out.push({ key: 'x-profs', n: extraProfs, text: plural(extraProfs, 'proficiência', 'proficiências') + ' além das 4 iniciais. As extras vêm do poder Proficiência em arma ou armadura.', label: 'Ver proficiências', go: '#profs-block' });
+    const drop = (k) => () => { s.up[k] = Math.max(0, num(s.up[k]) - 1); changed(); };
+    if (up > 0) out.push({ key: 'x-up', n: up, text: plural(up, 'UP gasto', 'UP gastos') + ' sem UP que os pague (poderes, melhorias ou UP em perícias). Ganhe XP ou desfaça uma compra.',
+      acts: [{ label: 'Ver poderes', fid: 'al-x-powers', on: toPowers }].concat(s.up.per ? [{ label: '−1 UP em perícias', fid: 'al-x-per', on: drop('per') }] : []) });
+    if (picks > 0) out.push({ key: 'x-picks', n: picks, text: plural(picks, 'benefício', 'benefícios') + ' (+5 PV, +5 PE, +1 PA) sem UP par que os conceda.',
+      acts: BEN.filter((b) => num(s.up[b[0]]) > 0).map((b) => ({ label: 'Tirar ' + b[1], fid: 'al-x-ben-' + b[0], on: drop(b[0]) })) });
+    if (m.attrUsed > m.attrAllowed) {
+      const old = ATTRS.filter((at) => num((s.upAttr || {})[at.id]) > 0); // +1 escolhido na Progressão antiga
+      out.push({ key: 'x-attr', n: m.attrUsed - m.attrAllowed, text: 'Atributos com ' + plural(m.attrUsed - m.attrAllowed, 'ponto', 'pontos') + ' além dos 3 da distribuição inicial e do +1 a cada 4 UP. Baixe no − da faixa de atributos.',
+        acts: [{ label: 'Ir aos atributos', fid: 'al-x-attr', on: toAttrs }].concat(old.map((at) => ({ label: 'Tirar +1 de ' + at.label, fid: 'al-x-attr-' + at.id, on: () => { s.upAttr[at.id] = Math.max(0, num(s.upAttr[at.id]) - 1); changed(); } })), [{ label: 'Refazer distribuição', fid: 'al-x-setup', on: () => openSetup() }]) });
+    }
+    if (skills > 0) out.push({ key: 'x-skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', acts: [{ label: 'Ver perícias', fid: 'al-x-skills', on: toSel('#skills-block') }] });
+    if (extraProfs > 0) out.push({ key: 'x-profs', n: extraProfs, text: plural(extraProfs, 'proficiência', 'proficiências') + ' além das 4 iniciais. As extras vêm do poder Proficiência em arma ou armadura.', acts: [{ label: 'Ver proficiências', fid: 'al-x-profs', on: toSel('#profs-block') }] });
     return out;
   }
-  function alertGo(p) {
-    const b = h('button', 'link-btn', p.label);
-    b.type = 'button';
-    b.addEventListener('click', () => {
-      if (typeof p.go === 'function') { p.go(); return; }
-      const el = $(p.go);
-      if (el) showSheetTab(el.closest('.sheet-panel'));
-      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = $('button:not(:disabled), input', el); if (f) f.focus({ preventScroll: true }); }
-    });
-    return b;
-  }
-
   // aviso dispensado fica escondido enquanto a conta não piorar (guarda o tamanho dele na ficha)
   const alertHidden = (s, p) => Boolean(s.hideAlerts && s.hideAlerts[p.key] != null && num(s.hideAlerts[p.key]) >= p.n);
-  function alertDismiss(p) {
-    const b = h('button', 'alerts__x', '×');
-    b.type = 'button';
-    b.title = 'Dispensar este aviso';
-    b.setAttribute('aria-label', 'Dispensar: ' + p.text);
-    b.dataset.fid = 'alert-x-' + p.key;
-    b.addEventListener('click', () => { const s = sheetChar.sheet; s.hideAlerts = Object.assign({}, s.hideAlerts, { [p.key]: p.n }); changed(); });
-    return b;
+  function alertItem(p, bad) {
+    const x = h('button', 'alerts__x', '×');
+    x.type = 'button';
+    x.title = 'Dispensar este aviso';
+    x.setAttribute('aria-label', 'Dispensar: ' + p.text);
+    x.dataset.fid = 'alert-x-' + p.key;
+    x.addEventListener('click', () => { const s = sheetChar.sheet; s.hideAlerts = Object.assign({}, s.hideAlerts, { [p.key]: p.n }); changed(); });
+    const acts = (p.acts || []).map((a) => {
+      const b = h('button', 'btn btn--sm ' + (a.cls || 'btn--ghost'), a.label);
+      b.type = 'button';
+      b.dataset.fid = a.fid;
+      b.addEventListener('click', a.on);
+      return b;
+    });
+    return h('div', 'alerts__item' + (bad ? ' alerts__item--bad' : ''),
+      h('div', 'alerts__body', h('p', 'alerts__text', p.text), acts.length ? h('div', 'alerts__acts', ...acts) : null),
+      p.key === 'setup' ? null : x);
+  }
+  // o que já foi escolhido nos UP, com um × para desfazer (os quadros de saldo saíram da aba)
+  function choiceChips(s) {
+    const chip = (label, fid, undo) => {
+      const b = h('button', 'alerts__chip', label, h('span', 'alerts__chip-x', '×'));
+      b.type = 'button';
+      b.dataset.fid = fid;
+      b.title = 'Desfazer uma: ' + label;
+      b.addEventListener('click', () => { undo(); changed(); });
+      return b;
+    };
+    const out = BEN.filter((b) => num(s.up[b[0]]) > 0).map((b) => chip(b[1] + ' ×' + s.up[b[0]], 'undo-' + b[0], () => { s.up[b[0]] = num(s.up[b[0]]) - 1; }));
+    if (num(s.up.per)) out.push(chip('UP em perícias ×' + s.up.per, 'undo-per', () => { s.up.per = num(s.up.per) - 1; }));
+    ATTRS.forEach((at) => { const n = num((s.upAttr || {})[at.id]); if (n > 0) out.push(chip('+' + n + ' ' + at.label, 'undo-attr-' + at.id, () => { s.upAttr[at.id] = n - 1; })); });
+    return out.length ? h('div', 'alerts__chips', h('span', 'alerts__chips-label', 'Escolhidos nos UP:'), ...out) : null;
   }
   function renderAlerts(m) {
     const s = sheetChar.sheet;
@@ -5263,26 +5288,39 @@ const FIREBASE_CONFIG = {
     const allBad = noSourceList(m);
     // avisos que já não existem saem da lista de dispensados (se voltarem, aparecem de novo)
     if (s.hideAlerts) Object.keys(s.hideAlerts).forEach((k) => { if (!allList.concat(allBad).some((p) => p.key === k)) delete s.hideAlerts[k]; });
-    const list = allList.filter((p) => !alertHidden(s, p));
-    const bad = allBad.filter((p) => !alertHidden(s, p));
-    const hiddenN = allList.length + allBad.length - list.length - bad.length;
-    const box = $('#sheet-alerts');
-    box.hidden = !list.length && !bad.length && !hiddenN;
-    box.classList.toggle('alerts--bad', bad.length > 0);
-    box.classList.toggle('alerts--quiet', !list.length && !bad.length);
-    const restore = h('button', 'link-btn alerts__restore', 'Mostrar ' + plural(hiddenN, 'aviso dispensado', 'avisos dispensados'));
-    restore.type = 'button';
-    restore.dataset.fid = 'alert-restore';
-    restore.addEventListener('click', () => { s.hideAlerts = {}; changed(); });
-    box.replaceChildren(...(bad.length ? [h('p', 'alerts__title alerts__title--bad', 'Sem fonte reconhecida')] : []),
-      ...bad.map((p) => h('p', 'alerts__item alerts__item--bad', h('span', '', p.text + ' ', alertGo(p)), alertDismiss(p))),
-      ...(list.length ? [h('p', 'alerts__title', 'Há o que distribuir')] : []),
-      ...list.map((p) => h('p', 'alerts__item', h('span', '', p.text + ' ', alertGo(p)), p.key === 'setup' ? null : alertDismiss(p))),
-      ...(hiddenN ? [restore] : []));
+    const off = Boolean(s.alertsOff);
+    const list = off ? [] : allList.filter((p) => !alertHidden(s, p));
+    const bad = off ? [] : allBad.filter((p) => !alertHidden(s, p));
+    const hiddenN = off ? 0 : allList.length + allBad.length - list.length - bad.length;
+    const box = $('#prog-alerts');
+    if (box) {
+      const tog = h('button', 'alerts__toggle', h('span', 'alerts__toggle-knob'), off ? 'Desligados' : 'Ligados');
+      tog.type = 'button';
+      tog.dataset.fid = 'alerts-toggle';
+      tog.setAttribute('role', 'switch');
+      tog.setAttribute('aria-checked', String(!off));
+      tog.setAttribute('aria-label', 'Avisos');
+      tog.addEventListener('click', () => { s.alertsOff = !off; changed(); toast(off ? 'Avisos ligados.' : 'Avisos desligados. A ficha não aponta mais pendências nem compras sem fonte.'); });
+      const restore = h('button', 'link-btn alerts__restore', 'Mostrar ' + plural(hiddenN, 'aviso dispensado', 'avisos dispensados'));
+      restore.type = 'button';
+      restore.dataset.fid = 'alert-restore';
+      restore.addEventListener('click', () => { s.hideAlerts = {}; changed(); });
+      const total = allList.length + allBad.length;
+      box.classList.toggle('alerts--bad', bad.length > 0);
+      box.classList.toggle('alerts--quiet', !list.length && !bad.length);
+      box.replaceChildren(...[
+        h('div', 'alerts__head', h('h3', 'prog__title', 'Avisos'), tog),
+        off ? h('p', 'field__hint', 'Desligados.' + (total ? ' ' + plural(total, 'aviso escondido', 'avisos escondidos') + '.' : '')) : null,
+        ...(bad.length ? [h('p', 'alerts__title alerts__title--bad', 'Sem fonte reconhecida')] : []), ...bad.map((p) => alertItem(p, true)),
+        ...(list.length ? [h('p', 'alerts__title', 'Há o que distribuir')] : []), ...list.map((p) => alertItem(p, false)),
+        !off && !list.length && !bad.length && !hiddenN ? h('p', 'field__hint', 'Tudo em dia: nada para distribuir.') : null,
+        hiddenN ? restore : null,
+        choiceChips(s)].filter(Boolean));
+    }
     const count = list.reduce((t, p) => t + p.n, 0);
-    const skillsLeft = Math.max(0, m.skillBudget - m.skillUsed);
+    const skillsLeft = off ? 0 : Math.max(0, m.skillBudget - m.skillUsed);
     if (watch.id === sheetChar.id && count > watch.pending) {
-      const fresh = list.filter((p) => p.n).map((p) => p.text.replace(/[.:].*$/, '')).join(' · ');
+      const fresh = list.filter((p) => p.n).map((p) => p.text.replace(/[.:(].*$/, '').trim()).join(' · ');
       if (fresh) toast('Novos pontos para distribuir: ' + fresh + '.');
     } else if (watch.id === sheetChar.id && skillsLeft > watch.skills) {
       // ex.: comprar uma proficiência gasta 1 UP e dá 1 ponto de perícia (o total não muda, mas a perícia fica pendente)
@@ -5293,10 +5331,13 @@ const FIREBASE_CONFIG = {
     watch.pending = count;
     watch.skills = skillsLeft;
     watch.bad = badCount;
-    // abas com algo a distribuir ou sem fonte ganham um ponto
-    const dot = { 'stab-progressao': m.picksAllowed - m.picksUsed > 0 || m.upTotal - m.upSpent > 0 || m.attrAllowed > m.attrUsed, 'stab-pericias': m.skillBudget - m.skillUsed > 0 };
-    const red = { 'stab-progressao': m.upSpent > m.upTotal || m.picksUsed > m.picksAllowed || m.attrUsed > m.attrAllowed, 'stab-pericias': m.skillUsed > m.skillBudget || sheetChar.sheet.profs.length > 4 };
+    // abas com algo a distribuir ou sem fonte ganham um ponto (avisos desligados: nenhum)
+    const dot = { 'stab-progressao': list.some((p) => p.key !== 'skills'), 'stab-pericias': list.some((p) => p.key === 'skills') };
+    const red = { 'stab-progressao': bad.some((p) => p.key !== 'x-skills' && p.key !== 'x-profs'), 'stab-pericias': bad.some((p) => p.key === 'x-skills' || p.key === 'x-profs') };
     Object.keys(dot).forEach((id) => { const t = $('#' + id); t.classList.toggle('sheet-tab--dot', dot[id] && !red[id]); t.classList.toggle('sheet-tab--bad', red[id]); });
+    // +1 de atributo a escolher: os + da faixa de atributos ficam em destaque
+    const band = $('#attr-band');
+    if (band) band.classList.toggle('attr-band--pick', !off && m.attrAllowed > m.attrUsed);
   }
 
   // Redesenha a ficha inteira e devolve o foco ao controle que estava em uso
@@ -5523,8 +5564,10 @@ const FIREBASE_CONFIG = {
         h('section', 'adj__group', h('h3', 'adj__title', 'Recursos (máximo)'), ...resAdj)),
       h('div', 'adj__acts', clearAdj));
 
-    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm), extra);
+    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm));
+    adjPanel = extra; // fica na aba Progressão, abaixo dos avisos (renderProgress)
   }
+  let adjPanel = null;
 
   function renderSkills(m) {
     const s = sheetChar.sheet;
@@ -5566,8 +5609,6 @@ const FIREBASE_CONFIG = {
     const xp = num(s.xp);
     const base = m.upTotal - m.upEarned; // UP de origem, espécime e extras
     const free = m.upTotal - m.upSpent;
-    const picksLeft = m.picksAllowed - m.picksUsed;
-    const attrLeft = m.attrAllowed - m.attrUsed;
     const setXp = (v) => { s.xp = Math.max(0, Math.round(v)); changed(); };
     const card = (cls, ...kids) => h('section', 'prog__card ' + cls, ...kids);
     const title = (txt, extra) => h('h3', 'prog__title', txt, extra || null);
@@ -5609,57 +5650,17 @@ const FIREBASE_CONFIG = {
     extra.addEventListener('change', () => { s.upExtra = Math.max(0, Math.round(num(extra.value))); changed(); });
     const extraLab = h('label', 'prog__extra-lab', 'UP extras (dados pelo mestre)');
     extraLab.htmlFor = 'f-up-extra';
-    const level = card('prog__level',
+    const level = h('div', 'prog__level',
       h('div', 'prog__up', h('span', 'prog__up-kicker', 'UP'), h('strong', 'prog__up-n', String(m.upTotal)),
-        h('span', 'prog__up-from', m.upEarned + ' por XP' + (base ? ' + ' + base + ' de origem/extras' : ''))),
+        h('span', 'prog__up-from', m.upEarned + ' por XP' + (base ? ' + ' + base + ' de origem/extras' : '')),
+        h('span', 'prog__up-from' + (free < 0 ? ' is-bad' : ''), m.upSpent + ' gastos · ' + (free < 0 ? (-free) + ' a mais' : free + (free === 1 ? ' livre' : ' livres')))),
       h('div', 'prog__xp',
         h('div', 'prog__xp-head', h('span', '', 'XP'), xpIn, h('span', 'prog__xp-next', 'faltam ' + (10 - into) + ' XP para o UP ' + (m.upTotal + 1))),
         bar,
         h('div', 'prog__xp-quick', ...quick)),
       h('div', 'prog__extra', extraLab, extra));
 
-    // 2. saldo: livres, gastos (com de onde) e benefícios
-    const spentList = s.powers.map((p) => [p.name, powerUpCost(p)]).filter((x) => x[1] > 0);
-    if (s.up.per) spentList.push(['Perícias (+' + 3 * s.up.per + ' pontos)', s.up.per]);
-    const tile = (cls, label, value, note) => h('div', 'prog__tile ' + cls, h('span', 'prog__tile-label', label), h('strong', 'prog__tile-n', value), note ? h('span', 'prog__tile-note', note) : null);
-    const saldo = h('div', 'prog__tiles',
-      tile(free < 0 ? 'is-bad' : free > 0 ? 'is-go' : '', 'UP livres', String(free), free < 0 ? 'gastou mais do que tem' : free > 0 ? 'para poderes ou perícias' : 'tudo gasto'),
-      tile('', 'UP gastos', String(m.upSpent), 'de ' + m.upTotal),
-      tile(picksLeft < 0 ? 'is-bad' : picksLeft > 0 ? 'is-go' : '', 'Benefícios', m.picksUsed + '/' + m.picksAllowed, picksLeft > 0 ? 'faltam ' + picksLeft + ' para escolher' : picksLeft < 0 ? plural(-picksLeft, 'a mais', 'a mais') : 'em dia'));
-    const where = spentList.length
-      ? h('ul', 'prog__spent', ...spentList.map((x) => h('li', '', h('span', '', x[0]), h('strong', '', x[1] + ' UP'))))
-      : h('p', 'field__hint', 'Nenhum UP gasto ainda.');
-    const toPowers = h('button', 'btn btn--ghost btn--sm', 'Comprar poderes');
-    toPowers.type = 'button';
-    toPowers.dataset.fid = 'prog-to-powers';
-    toPowers.addEventListener('click', () => { showSheetTab($('#spanel-poderes')); window.scrollTo({ top: 0, behavior: 'smooth' }); });
-    const perBuy = h('div', 'prog__per', h('span', 'prog__per-label', h('strong', '', 'UP em perícias'), h('span', '', 'cada um dá +3 pontos de perícia')),
-      stepper(s.up.per, { min: 0, max: Math.max(s.up.per, s.up.per + free), label: 'UP em perícias', fid: 'up-per', onChange: (n) => { s.up.per = n; changed(); } }));
-    const spend = card('prog__spend', title('Saldo de UP'), saldo,
-      free < 0 ? h('p', 'prog__warn', 'Há ' + plural(-free, 'UP gasto', 'UP gastos') + ' sem UP que os pague. Ganhe XP ou desfaça uma compra abaixo ou em Poderes.') : null,
-      h('h4', 'prog__sub', 'Onde os UP foram'), where,
-      h('h4', 'prog__sub', 'Gastar UP'), perBuy,
-      h('div', 'prog__acts', toPowers));
-
-    // 3. benefícios dos UP pares, com o valor atual de cada recurso
-    const benefit = (key, label, gain, now) => h('div', 'prog__ben' + (s.up[key] ? ' is-on' : ''),
-      h('span', 'prog__ben-head', h('strong', '', label), h('span', 'prog__ben-now', key.toUpperCase() + ' máximo: ' + now)),
-      h('span', 'prog__ben-gain', s.up[key] ? 'escolhido ' + s.up[key] + '× (+' + gain * s.up[key] + ')' : 'ainda não escolhido'),
-      stepper(s.up[key], { min: 0, max: s.up[key] + Math.max(0, picksLeft), label, fid: 'up-' + key, onChange: (n) => { s.up[key] = n; changed(); } }));
-    const bens = card('prog__bens', title('Benefícios', h('span', 'prog__badge' + (picksLeft > 0 ? ' is-go' : picksLeft < 0 ? ' is-bad' : ''), picksLeft > 0 ? picksLeft + ' para escolher' : picksLeft < 0 ? (-picksLeft) + ' a mais' : m.picksAllowed ? 'em dia' : 'no UP 2')),
-      h('p', 'field__hint', 'A cada 2 UP ganhos por XP, escolha 2 benefícios. Pode repetir o mesmo.'),
-      h('div', 'prog__ben-grid', benefit('pv', '+5 PV', 5, m.max.pv), benefit('pe', '+5 PE', 5, m.max.pe), benefit('pa', '+1 PA', 1, m.max.pa)),
-      h('h4', 'prog__sub', 'Atributos', ' ', h('span', 'prog__badge' + (attrLeft > 0 ? ' is-go' : attrLeft < 0 ? ' is-bad' : ''), attrLeft > 0 ? attrLeft + ' para escolher' : attrLeft < 0 ? (-attrLeft) + ' a mais' : m.attrAllowed ? 'em dia' : 'no UP 4')),
-      h('p', 'field__hint', 'A cada 4 UP ganhos por XP, +1 em um atributo à sua escolha. Um ponto posto direto na faixa de atributos, acima dos 3 iniciais, também conta.'),
-      h('div', 'prog__ben-grid', ...ATTRS.map((at) => {
-        const n = Math.max(0, Math.round(num(s.upAttr[at.id])));
-        return h('div', 'prog__ben' + (n ? ' is-on' : ''),
-          h('span', 'prog__ben-head', h('strong', '', '+1 ' + at.label), h('span', 'prog__ben-now', 'vale ' + signed(attrOf(s, at.id)))),
-          h('span', 'prog__ben-gain', n ? 'escolhido ' + n + '×' : 'ainda não escolhido'),
-          stepper(n, { min: 0, max: n + Math.max(0, attrLeft), label: '+1 ' + at.label, fid: 'up-attr-' + at.id, onChange: (k) => { s.upAttr[at.id] = k; changed(); } }));
-      })));
-
-    // 4. trilha: o que cada UP ganho por XP dá, até alguns à frente
+    // trilha no topo: nível (UP, XP) e o que cada UP ganho por XP dá, até alguns à frente
     const last = Math.max(6, m.upEarned + 3);
     const steps = [];
     for (let n = 1; n <= last; n++) {
@@ -5671,11 +5672,16 @@ const FIREBASE_CONFIG = {
         h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'), n % 4 === 0 ? h('span', 'prog__step-gain prog__step-attr', '+1 atributo') : null,
         h('span', 'prog__step-state', got ? '✓ ganho' : 'faltam ' + xpLeft + ' XP')));
     }
-    const track = card('prog__track', title('Trilha de UP'),
-      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. A cada 4 UP: +1 num atributo. Só os UP ganhos por XP contam; os de origem não.'),
-      h('ol', 'prog__steps', ...steps));
+    const track = card('prog__track', title('Trilha de UP'), level,
+      h('ol', 'prog__steps', ...steps),
+      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. A cada 4 UP: +1 num atributo, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
+    // os avisos (escolher benefícios, UP livres, +1 de atributo, compras sem fonte) são desenhados por renderAlerts
+    const alerts = h('section', 'prog__card alerts', null);
+    alerts.id = 'prog-alerts';
+    alerts.setAttribute('role', 'status');
 
-    $('#prog-block').replaceChildren(h('div', 'prog', level, spend, bens, track));
+    if (adjPanel) adjPanel.classList.add('prog__card');
+    $('#prog-block').replaceChildren(h('div', 'prog', track, alerts, adjPanel));
     // a trilha abre mostrando o próximo UP (rola só a trilha, não a página)
     requestAnimationFrame(progTrackScroll);
   }
