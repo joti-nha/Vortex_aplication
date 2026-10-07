@@ -5210,6 +5210,7 @@ const FIREBASE_CONFIG = {
       $('#' + tab.getAttribute('aria-controls')).hidden = !on;
     });
     try { localStorage.setItem(SHEET_TAB_KEY, panel.id); } catch (e) { /* só nesta visita */ }
+    if (panel.id === 'spanel-progressao') requestAnimationFrame(progTrackScroll);
   }
   $$('.sheet-tab').forEach((tab, i, all) => {
     tab.addEventListener('click', () => showSheetTab($('#' + tab.getAttribute('aria-controls'))));
@@ -5422,37 +5423,116 @@ const FIREBASE_CONFIG = {
   }
 
   function renderProgress(m) {
-    const s = sheetChar.sheet;
-    const numField = (id, label, value, onSet) => {
-      const inp = h('input', 'input');
-      inp.type = 'number';
-      inp.min = '0';
-      inp.step = '1';
-      inp.id = id;
-      inp.dataset.fid = id;
-      inp.value = value || '';
-      inp.placeholder = '0';
-      inp.addEventListener('change', () => { onSet(Math.max(0, Math.round(num(inp.value)))); changed(); });
-      const lab = h('label', 'field__label', label);
-      lab.htmlFor = id;
-      return h('div', 'field', lab, inp);
-    };
+    const ch = sheetChar, s = ch.sheet;
+    const xp = num(s.xp);
+    const base = m.upTotal - m.upEarned; // UP de origem, espécime e extras
     const free = m.upTotal - m.upSpent;
     const picksLeft = m.picksAllowed - m.picksUsed;
-    const buy = (key, label, max) => h('div', 'buy',
-      h('span', 'buy__label', label),
-      stepper(s.up[key], { min: 0, max, label, fid: 'up-' + key, onChange: (n) => { s.up[key] = n; changed(); } }));
-    const pick = (key, label) => buy(key, label, s.up[key] + Math.max(0, picksLeft));
-    $('#prog-block').replaceChildren(
-      h('div', 'fields-grid',
-        numField('f-xp', 'XP (10 XP = 1 UP)', s.xp, (v) => { s.xp = v; }),
-        numField('f-up-extra', 'UP de origem ou extras', s.upExtra, (v) => { s.upExtra = v; })),
-      h('p', 'prog__sum' + (free < 0 ? ' prog__sum--over' : ''), 'UP: ' + m.upTotal + ' no total (' + m.upEarned + ' por XP) · ' + m.upSpent + ' gastos · ' + free + (free === 1 ? ' livre' : ' livres')),
-      h('p', 'prog__sum' + (picksLeft < 0 ? ' prog__sum--over' : ''), 'Benefícios: ' + m.picksUsed + ' de ' + m.picksAllowed + ' escolhidos'),
-      h('div', 'buys', pick('pv', '+5 PV'), pick('pe', '+5 PE'), pick('pa', '+1 PA')),
-      h('p', 'field__hint', 'A cada UP par alcançado (sem contar os de origem), escolha 2 benefícios. A cada UP ímpar, +1 ponto de perícia (já somado nos pontos de perícia).'),
-      h('div', 'buys', buy('per', 'UP investidos em perícias', 99)),
-      h('p', 'field__hint', 'Cada UP investido em perícias dá +3 pontos livres. Poderes custam UP conforme o custo de cada um; Doutor e as proficiências extras de arma e armadura ficam em Poderes.'));
+    const setXp = (v) => { s.xp = Math.max(0, Math.round(v)); changed(); };
+    const card = (cls, ...kids) => h('section', 'prog__card ' + cls, ...kids);
+    const title = (txt, extra) => h('h3', 'prog__title', txt, extra || null);
+
+    // 1. nível: UP atual, barra de XP até o próximo e botões rápidos
+    const xpIn = h('input', 'input prog__xp-in');
+    xpIn.type = 'number';
+    xpIn.min = '0';
+    xpIn.step = '1';
+    xpIn.id = 'f-xp';
+    xpIn.dataset.fid = 'f-xp';
+    xpIn.value = xp || '';
+    xpIn.placeholder = '0';
+    xpIn.setAttribute('aria-label', 'XP total');
+    xpIn.addEventListener('change', () => setXp(num(xpIn.value)));
+    const into = xp % 10;
+    const bar = h('div', 'prog__bar', h('span', 'prog__bar-fill'));
+    bar.firstChild.style.width = (into * 10) + '%';
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', '10');
+    bar.setAttribute('aria-valuenow', String(into));
+    bar.setAttribute('aria-label', 'XP até o próximo UP');
+    const quick = [1, 5, 10].map((n) => {
+      const b = h('button', 'btn btn--ghost btn--sm', '+' + n + ' XP');
+      b.type = 'button';
+      b.dataset.fid = 'xp-add-' + n;
+      b.addEventListener('click', () => { const was = m.upTotal; setXp(xp + n); const now = compute(ch).upTotal; if (now > was) { play('ok'); toast('Subiu para ' + now + ' UP!' + (compute(ch).upEarned % 2 === 0 ? ' Escolha 2 benefícios.' : ' +1 ponto de perícia.')); } });
+      return b;
+    });
+    const extra = h('input', 'input prog__extra-in');
+    extra.type = 'number';
+    extra.min = '0';
+    extra.step = '1';
+    extra.id = 'f-up-extra';
+    extra.dataset.fid = 'f-up-extra';
+    extra.value = s.upExtra || '';
+    extra.placeholder = '0';
+    extra.addEventListener('change', () => { s.upExtra = Math.max(0, Math.round(num(extra.value))); changed(); });
+    const extraLab = h('label', 'prog__extra-lab', 'UP extras (dados pelo mestre)');
+    extraLab.htmlFor = 'f-up-extra';
+    const level = card('prog__level',
+      h('div', 'prog__up', h('span', 'prog__up-kicker', 'UP'), h('strong', 'prog__up-n', String(m.upTotal)),
+        h('span', 'prog__up-from', m.upEarned + ' por XP' + (base ? ' + ' + base + ' de origem/extras' : ''))),
+      h('div', 'prog__xp',
+        h('div', 'prog__xp-head', h('span', '', 'XP'), xpIn, h('span', 'prog__xp-next', 'faltam ' + (10 - into) + ' XP para o UP ' + (m.upTotal + 1))),
+        bar,
+        h('div', 'prog__xp-quick', ...quick)),
+      h('div', 'prog__extra', extraLab, extra));
+
+    // 2. saldo: livres, gastos (com de onde) e benefícios
+    const spentList = s.powers.map((p) => [p.name, powerUpCost(p)]).filter((x) => x[1] > 0);
+    if (s.up.per) spentList.push(['Perícias (+' + 3 * s.up.per + ' pontos)', s.up.per]);
+    const tile = (cls, label, value, note) => h('div', 'prog__tile ' + cls, h('span', 'prog__tile-label', label), h('strong', 'prog__tile-n', value), note ? h('span', 'prog__tile-note', note) : null);
+    const saldo = h('div', 'prog__tiles',
+      tile(free < 0 ? 'is-bad' : free > 0 ? 'is-go' : '', 'UP livres', String(free), free < 0 ? 'gastou mais do que tem' : free > 0 ? 'para poderes ou perícias' : 'tudo gasto'),
+      tile('', 'UP gastos', String(m.upSpent), 'de ' + m.upTotal),
+      tile(picksLeft < 0 ? 'is-bad' : picksLeft > 0 ? 'is-go' : '', 'Benefícios', m.picksUsed + '/' + m.picksAllowed, picksLeft > 0 ? 'faltam ' + picksLeft + ' para escolher' : picksLeft < 0 ? plural(-picksLeft, 'a mais', 'a mais') : 'em dia'));
+    const where = spentList.length
+      ? h('ul', 'prog__spent', ...spentList.map((x) => h('li', '', h('span', '', x[0]), h('strong', '', x[1] + ' UP'))))
+      : h('p', 'field__hint', 'Nenhum UP gasto ainda.');
+    const toPowers = h('button', 'btn btn--ghost btn--sm', 'Comprar poderes');
+    toPowers.type = 'button';
+    toPowers.dataset.fid = 'prog-to-powers';
+    toPowers.addEventListener('click', () => { showSheetTab($('#spanel-poderes')); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    const perBuy = h('div', 'prog__per', h('span', 'prog__per-label', h('strong', '', 'UP em perícias'), h('span', '', 'cada um dá +3 pontos de perícia')),
+      stepper(s.up.per, { min: 0, max: Math.max(s.up.per, s.up.per + free), label: 'UP em perícias', fid: 'up-per', onChange: (n) => { s.up.per = n; changed(); } }));
+    const spend = card('prog__spend', title('Saldo de UP'), saldo,
+      free < 0 ? h('p', 'prog__warn', 'Há ' + plural(-free, 'UP gasto', 'UP gastos') + ' sem UP que os pague. Ganhe XP ou desfaça uma compra abaixo ou em Poderes.') : null,
+      h('h4', 'prog__sub', 'Onde os UP foram'), where,
+      h('h4', 'prog__sub', 'Gastar UP'), perBuy,
+      h('div', 'prog__acts', toPowers));
+
+    // 3. benefícios dos UP pares, com o valor atual de cada recurso
+    const benefit = (key, label, gain, now) => h('div', 'prog__ben' + (s.up[key] ? ' is-on' : ''),
+      h('span', 'prog__ben-head', h('strong', '', label), h('span', 'prog__ben-now', key.toUpperCase() + ' máximo: ' + now)),
+      h('span', 'prog__ben-gain', s.up[key] ? 'escolhido ' + s.up[key] + '× (+' + gain * s.up[key] + ')' : 'ainda não escolhido'),
+      stepper(s.up[key], { min: 0, max: s.up[key] + Math.max(0, picksLeft), label, fid: 'up-' + key, onChange: (n) => { s.up[key] = n; changed(); } }));
+    const bens = card('prog__bens', title('Benefícios', h('span', 'prog__badge' + (picksLeft > 0 ? ' is-go' : picksLeft < 0 ? ' is-bad' : ''), picksLeft > 0 ? picksLeft + ' para escolher' : picksLeft < 0 ? (-picksLeft) + ' a mais' : m.picksAllowed ? 'em dia' : 'no UP 2')),
+      h('p', 'field__hint', 'A cada 2 UP ganhos por XP, escolha 2 benefícios. Pode repetir o mesmo.'),
+      h('div', 'prog__ben-grid', benefit('pv', '+5 PV', 5, m.max.pv), benefit('pe', '+5 PE', 5, m.max.pe), benefit('pa', '+1 PA', 1, m.max.pa)));
+
+    // 4. trilha: o que cada UP ganho por XP dá, até alguns à frente
+    const last = Math.max(6, m.upEarned + 3);
+    const steps = [];
+    for (let n = 1; n <= last; n++) {
+      const got = n <= m.upEarned;
+      const next = n === m.upEarned + 1;
+      const xpLeft = n * 10 - xp;
+      steps.push(h('li', 'prog__step' + (got ? ' is-got' : next ? ' is-next' : ''),
+        h('span', 'prog__step-n', String(n)),
+        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'),
+        h('span', 'prog__step-state', got ? '✓ ganho' : 'faltam ' + xpLeft + ' XP')));
+    }
+    const track = card('prog__track', title('Trilha de UP'),
+      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. Só os UP ganhos por XP contam; os de origem não.'),
+      h('ol', 'prog__steps', ...steps));
+
+    $('#prog-block').replaceChildren(h('div', 'prog', level, spend, bens, track));
+    // a trilha abre mostrando o próximo UP (rola só a trilha, não a página)
+    requestAnimationFrame(progTrackScroll);
+  }
+  function progTrackScroll() {
+    const ol = $('#prog-block .prog__steps'), nx = ol && ol.querySelector('.is-next');
+    if (nx && ol.clientWidth) ol.scrollLeft = Math.max(0, nx.offsetLeft - ol.offsetLeft - ol.clientWidth / 2 + nx.offsetWidth / 2);
   }
 
   /* Folhas da build guiada: um livro, uma folha por UP */
