@@ -6214,7 +6214,7 @@ const FIREBASE_CONFIG = {
      mudam na hora (pente, recarga, alcance), e a munição fica no mesmo lugar. */
   let armDlg = null;
   // m: membro da campanha (Armeiro da campanha: mochila, armazéns e lojas); sem m, a ficha aberta (só a mochila)
-  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false, all: false };
+  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false, cat: false };
   const armSheet = () => (arm.m ? arm.m.sheet : sheetChar && sheetChar.sheet);
   const ARM_SPOTS = {
     'arma-fogo': { Mira: 'top', Bocal: 'right', Carregador: 'bottom', Empunhadura: 'left' },
@@ -6238,7 +6238,7 @@ const FIREBASE_CONFIG = {
     arm.uid = u && guns.some((w) => w.uid === u) ? u : guns[0].uid;
     arm.sel = '';
     arm.q = '';
-    arm.all = false;
+    arm.cat = false;
     arm.lib = null;
     arm.m = m || null;
     drawArmory();
@@ -6401,34 +6401,28 @@ const FIREBASE_CONFIG = {
       armSave();
     };
     const sources = armSources(s);
-    // "Todas": mostra também as peças do mesmo tipo que não servem no espaço escolhido, com o motivo
-    const pos0 = arm.sel.indexOf('pos:') === 0 ? arm.sel.slice(4) : '';
-    const misfit = (e) => {
-      const v = e.values || {};
-      const para = (x) => 'É para ' + String(x).toLowerCase() + '; não serve em ' + w.name + '.';
-      if (e.kind === 'acessorio') {
-        if (!isWeapon(w.kind)) return w.name + ' não recebe acessórios.';
-        if (e.typeId !== w.kind) return para(WEAPON_PARA[e.typeId] || e.typeTitle || 'outra arma');
-        if (info.positions.indexOf(v.posicao) < 0) return w.name + ' não tem a posição ' + v.posicao + '.';
-        if (pos0 && v.posicao !== pos0) return 'Vai na posição ' + v.posicao + ', não em ' + pos0 + '.';
+    // "Compatíveis": pesquisa no catálogo inteiro o que encaixa no espaço, tendo ou não a peça.
+    // O que a pessoa tem (mochila, armazém, loja) monta; o resto aparece só para consulta.
+    const libOf = (kind) => {
+      arm.lib = arm.lib || {};
+      if (!arm.lib[kind]) {
+        arm.lib[kind] = BUILTINS.filter((e) => e.kind === kind);
+        libSearch([kind], '').then((l) => { if (arm.lib) { arm.lib[kind] = l; drawArmory(); } }).catch(() => { /* fica o catálogo oficial */ });
       }
-      if (e.kind === 'mod-arma') return isWeapon(w.kind) ? para(v.para) : w.name + ' não recebe mods.';
-      if (e.kind === 'propriedade') return para(v.para);
-      return 'Não serve em ' + w.name + '.';
+      return arm.lib[kind];
     };
-    let hidden = 0; // peças do tipo que o filtro "Compatíveis" esconde
-    const candRows = (test, kind) => sources.filter((src) => (src.e.kind === kind || test(src.e)) && match(src.e)).map((src, n) => {
-      const plan = test(src.e) ? planAttach(w, src.e) : null;
-      if (!plan) {
-        if (!arm.all) { hidden += 1; return null; }
-        const li = row(src.e, false, { act: src.act, where: src.where, n: n + 1, why: misfit(src.e), run: () => {} });
-        li.dataset.misfit = '1';
-        return li;
-      }
-      if (plan.already) return null;
-      const poor = src.price !== undefined && arm.m && currentCamp && num((s.money || {})[currentCamp.id]) < src.price ? 'Dinheiro insuficiente.' : '';
-      return row(src.e, false, { act: src.act, where: src.where, n: n + 1, why: plan.why || poor, swap: plan.slots && plan.removed.length ? plan.removed.join(', ') : '', run: mountFrom(src, plan) });
-    }).filter(Boolean).sort((a, b) => Number(Boolean(a.dataset.misfit)) - Number(Boolean(b.dataset.misfit))); // as que servem primeiro
+    const candRows = (test, kind) => {
+      const own = sources.filter((src) => test(src.e) && match(src.e)).map((src, n) => {
+        const plan = planAttach(w, src.e);
+        if (!plan || plan.already) return null;
+        const poor = src.price !== undefined && arm.m && currentCamp && num((s.money || {})[currentCamp.id]) < src.price ? 'Dinheiro insuficiente.' : '';
+        return { e: src.e, li: row(src.e, false, { act: src.act, where: src.where, n: n + 1, why: plan.why || poor, swap: plan.slots && plan.removed.length ? plan.removed.join(', ') : '', run: mountFrom(src, plan) }) };
+      }).filter(Boolean);
+      if (!arm.cat) return own.map((x) => x.li);
+      const rest = libOf(kind).filter((e) => test(e) && match(e) && !sources.some((src) => samePiece(src.e, e))).filter((e) => { const plan = planAttach(w, e); return plan && !plan.already; })
+        .map((e) => row(e, false, { act: 'Sem a peça', where: 'Você não tem', n: 0, why: arm.m ? 'Não está na mochila, nos armazéns liberados nem nas lojas.' : 'Não está na mochila. Compre numa loja ou use o Armeiro da campanha.', run: () => {} }));
+      return own.map((x) => x.li).concat(rest);
+    };
     let items = [];
     let title = '';
     let hint = '';
@@ -6461,17 +6455,17 @@ const FIREBASE_CONFIG = {
     q.addEventListener('input', () => { arm.q = q.value; drawArmory(); });
     const qLab = h('label', 'visually-hidden', 'Buscar peça');
     qLab.htmlFor = q.id;
-    const mode = (all, label) => {
+    const mode = (cat, label) => {
       const b = h('button', 'chip chip--toggle', label);
       b.type = 'button';
-      b.dataset.fid = all ? 'arm-all' : 'arm-fit';
-      b.setAttribute('aria-pressed', String(arm.all === all));
-      b.addEventListener('click', () => { arm.all = all; drawArmory(); });
+      b.dataset.fid = cat ? 'arm-cat' : 'arm-own';
+      b.setAttribute('aria-pressed', String(arm.cat === cat));
+      b.addEventListener('click', () => { arm.cat = cat; drawArmory(); });
       return b;
     };
-    const modes = h('div', 'armory__modes', h('span', 'picker__filter-label', 'Peças para ' + title + ':'), mode(false, 'Compatíveis'), mode(true, 'Todas'));
-    const none = arm.q ? 'Nenhuma peça com esse nome.' : hidden ? 'Nenhuma peça compatível com ' + title + '. Toque em "Todas" para ver as outras ' + hidden + ' e por que não servem.'
-      : arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.';
+    const modes = h('div', 'armory__modes', h('span', 'picker__filter-label', 'Mostrar:'), mode(false, 'Minhas'), mode(true, 'Compatíveis'));
+    const none = arm.q ? 'Nenhuma peça com esse nome.' : arm.cat ? 'Nenhuma peça do catálogo encaixa em ' + title + '.'
+      : (arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.') + ' Toque em "Compatíveis" para ver tudo o que encaixa aqui.';
     panel.append(h('h3', 'armory__ptitle', title), h('p', 'field__hint', hint), qLab, q, modes,
       items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', none));
 
