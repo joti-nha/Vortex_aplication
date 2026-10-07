@@ -3399,3 +3399,11 @@ html, body { max-width: 100%; overflow-x: clip; }
   .facets__chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 0.25rem; scrollbar-width: thin; }
   .facets__chip { flex: none; }
 }
+
+/* avisos da ficha: cada um pode ser dispensado */
+.alerts__item { display: flex; align-items: flex-start; gap: 0.5rem; justify-content: space-between; }
+.alerts__x { flex: none; width: 28px; height: 28px; margin: -0.2rem -0.35rem 0 0; border: 0; border-radius: 50%; background: transparent; color: var(--nevoa-2); font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.alerts__x:hover, .alerts__x:focus-visible { background: rgba(255, 255, 255, 0.08); color: var(--nevoa); }
+.alerts__restore { font-size: var(--t-s); margin-top: 0.4rem; }
+.alerts--quiet { padding-block: 0.35rem; border-left-color: var(--linha-forte); background: transparent; }
+.alerts--quiet .alerts__restore { margin-top: 0; }
