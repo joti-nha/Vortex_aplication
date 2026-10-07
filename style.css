@@ -3217,3 +3217,6 @@ html, body { max-width: 100%; overflow-x: clip; }
 .two-col--even { align-items: stretch; }
 .row__pad { visibility: hidden; pointer-events: none; }
 @media (min-width: 861px) { .two-col--even .block__hint { min-height: 2lh; } }
+/* Armeiro: filtro de peças compatíveis com o espaço escolhido */
+.armory__modes { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.5rem 0 0.2rem; }
+.armory__modes .chip--toggle { min-height: 36px; }
