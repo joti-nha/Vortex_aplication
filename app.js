@@ -1998,7 +1998,7 @@ const FIREBASE_CONFIG = {
         h('dt', '', 'Carga'), h('dd', m.over ? 'member__warn' : '', fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + (m.over ? ' · sobrecarregado' : ''))];
       const weapons = s.inventory.filter((i) => i.slot && isWeapon(i.kind)).map((i) => i.name);
       if (weapons.length) out.push(h('dt', '', 'Em mãos'), h('dd', '', weapons.join(', ')));
-      const pend = Math.max(0, m.picksAllowed - m.picksUsed) + Math.max(0, m.upTotal - m.upSpent) + Math.max(0, m.skillBudget - m.skillUsed);
+      const pend = Math.max(0, m.picksAllowed - m.picksUsed) + Math.max(0, m.attrAllowed - m.attrUsed) + Math.max(0, m.upTotal - m.upSpent) + Math.max(0, m.skillBudget - m.skillUsed);
       if (pend > 0) out.push(h('dt', '', 'Pendências'), h('dd', 'member__warn', 'tem pontos para distribuir'));
     } catch (err) { console.warn(err); }
     return out;
@@ -4207,22 +4207,19 @@ const FIREBASE_CONFIG = {
   function blankSheet() {
     return {
       v: 2, setup: false, attrs: { corpo: 0, precisao: 0, essencia: 0 }, skills: {}, profs: [], oficio: '', height: '', weight: '', sex: '',
-      xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0, carga: 0, armadura: 0 }, attrMod: { corpo: 0, precisao: 0, essencia: 0 },
+      xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0, carga: 0, armadura: 0 }, attrMod: { corpo: 0, precisao: 0, essencia: 0 }, upAttr: { corpo: 0, precisao: 0, essencia: 0 },
       cur: {}, specimen: null, powers: [], inventory: [], originItems: '', doutor: [], upProfs: []
     };
   }
   // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
-  const attrOf = (s, id) => num(s.attrs[id]) + num((s.attrMod || {})[id]) + attrPower(s, id);
-  // poder "Aumento de atributo": cada melhoria comprada (4 UP) dá +1 no atributo dela
-  function attrPower(s, id) {
-    const label = nameKey({ corpo: 'Corpo', precisao: 'Precisão', essencia: 'Essência' }[id] || id);
-    return (s.powers || []).filter((p) => p && p.id === 'of-pod-atributo').reduce((t, p) => t + Object.keys(p.ups || {}).filter((n) => nameKey(n) === label).reduce((u, n) => u + upCount(p, n), 0), 0);
-  }
+  // atributo efetivo: o da ficha + o +1 dos UP (a cada 4) + o ajuste manual
+  const attrOf = (s, id) => num(s.attrs[id]) + num((s.upAttr || {})[id]) + num((s.attrMod || {})[id]);
+  const attrUpUsed = (s) => ['corpo', 'precisao', 'essencia'].reduce((t, k) => t + Math.max(0, Math.round(num((s.upAttr || {})[k]))), 0);
   function normSheet(raw) {
     const r = raw && typeof raw === 'object' ? raw : {};
     const b = blankSheet();
     const s = Object.assign({}, b, r);
-    ['attrs', 'attrMod', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
+    ['attrs', 'attrMod', 'upAttr', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
     s.powers = Array.isArray(r.powers) ? r.powers.slice() : [];
     s.profs = Array.isArray(r.profs) ? r.profs.filter((x) => typeof x === 'string') : [];
     // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
@@ -4481,6 +4478,7 @@ const FIREBASE_CONFIG = {
       upEarned, upTotal: upEarned + mech.up + num(s.upExtra),
       upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
+      attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s), // +1 num atributo a cada 4 UP
       skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length, // Doutor e proficiências: +1 de perícia cada
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
@@ -5107,6 +5105,7 @@ const FIREBASE_CONFIG = {
     const skills = m.skillBudget - m.skillUsed;
     if (!s.setup) out.push({ n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', label: 'Fazer agora', go: () => openSetup() });
     if (picks > 0) out.push({ n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' para escolher: +5 PV, +5 PE ou +1 PA.', label: 'Escolher', go: '#prog-block' });
+    if (m.attrAllowed > m.attrUsed) out.push({ n: m.attrAllowed - m.attrUsed, text: plural(m.attrAllowed - m.attrUsed, '+1 de atributo', '+1 de atributo') + ' para escolher (a cada 4 UP).', label: 'Escolher', go: '#prog-block' });
     if (up > 0) out.push({ n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias.', label: 'Ver progressão', go: '#prog-block' });
     if (skills > 0) out.push({ n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', label: 'Ver perícias', go: '#skills-block' });
     return out;
@@ -5122,6 +5121,7 @@ const FIREBASE_CONFIG = {
     const extraProfs = s.profs.length - 4;
     if (up > 0) out.push({ n: up, text: plural(up, 'UP gasto', 'UP gastos') + ' sem UP que os pague (poderes, melhorias ou UP em perícias). Ganhe XP ou desfaça uma compra.', label: 'Ver progressão', go: '#prog-block' });
     if (picks > 0) out.push({ n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' (+5 PV, +5 PE, +1 PA) sem UP par que os conceda.', label: 'Ver progressão', go: '#prog-block' });
+    if (m.attrUsed > m.attrAllowed) out.push({ n: m.attrUsed - m.attrAllowed, text: plural(m.attrUsed - m.attrAllowed, '+1 de atributo', '+1 de atributo') + ' sem os 4 UP que o concedam.', label: 'Ver progressão', go: '#prog-block' });
     if (skills > 0) out.push({ n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', label: 'Ver perícias', go: '#skills-block' });
     if (s.setup && attrPool(s.attrs).left < 0) out.push({ n: -attrPool(s.attrs).left, text: 'Atributos acima dos 3 pontos da distribuição inicial.', label: 'Refazer distribuição', go: () => openSetup() });
     if (extraProfs > 0) out.push({ n: extraProfs, text: plural(extraProfs, 'proficiência', 'proficiências') + ' além das 4 iniciais. As extras vêm do poder Proficiência em arma ou armadura.', label: 'Ver proficiências', go: '#profs-block' });
@@ -5173,8 +5173,8 @@ const FIREBASE_CONFIG = {
     watch.skills = skillsLeft;
     watch.bad = badCount;
     // abas com algo a distribuir ou sem fonte ganham um ponto
-    const dot = { 'stab-progressao': m.picksAllowed - m.picksUsed > 0 || m.upTotal - m.upSpent > 0, 'stab-pericias': m.skillBudget - m.skillUsed > 0 };
-    const red = { 'stab-progressao': m.upSpent > m.upTotal || m.picksUsed > m.picksAllowed, 'stab-pericias': m.skillUsed > m.skillBudget || sheetChar.sheet.profs.length > 4 };
+    const dot = { 'stab-progressao': m.picksAllowed - m.picksUsed > 0 || m.upTotal - m.upSpent > 0 || m.attrAllowed > m.attrUsed, 'stab-pericias': m.skillBudget - m.skillUsed > 0 };
+    const red = { 'stab-progressao': m.upSpent > m.upTotal || m.picksUsed > m.picksAllowed || m.attrUsed > m.attrAllowed, 'stab-pericias': m.skillUsed > m.skillBudget || sheetChar.sheet.profs.length > 4 };
     Object.keys(dot).forEach((id) => { const t = $('#' + id); t.classList.toggle('sheet-tab--dot', dot[id] && !red[id]); t.classList.toggle('sheet-tab--bad', red[id]); });
   }
 
@@ -5275,9 +5275,9 @@ const FIREBASE_CONFIG = {
     };
     $('#attr-band').replaceChildren(...ATTRS.map((at) => {
       const v = s.attrs[at.id];
-      const mod = num((s.attrMod || {})[at.id]) + attrPower(s, at.id);
+      const mod = num((s.attrMod || {})[at.id]) + num((s.upAttr || {})[at.id]);
       const tile = h('div', 'attr attr--' + at.id + (mod ? ' attr--mod' : ''),
-        h('span', 'attr__name', at.label, mod ? (() => { const t = h('span', 'attr__mod', (mod > 0 ? '+' : '') + mod); t.title = 'Bônus de ' + (mod > 0 ? '+' : '') + mod + ' (ajuste manual e poder Aumento de atributo; ficha ' + signed(v) + ')'; return t; })() : null),
+        h('span', 'attr__name', at.label, mod ? (() => { const t = h('span', 'attr__mod', (mod > 0 ? '+' : '') + mod); t.title = 'Bônus de ' + (mod > 0 ? '+' : '') + mod + ' (UP e ajuste manual; ficha ' + signed(v) + ')'; return t; })() : null),
         h('span', 'attr__value', signed(v + mod)),
         stepper(v, { min: -1, max: 6, label: at.label, fid: 'attr-' + at.id, text: '', onChange: (n) => { s.attrs[at.id] = n; changed(); } }),
         h('span', 'attr__feeds', feeds[at.id]));
@@ -5378,8 +5378,8 @@ const FIREBASE_CONFIG = {
       stepper(value, { min: o.min, max: o.max, label: 'ajuste de ' + label, fid: o.fid, text: value > 0 ? '+' + value : String(value), onChange: o.set }));
     const attrAdj = ATTRS.map((at) => {
       const mod = num(s.attrMod[at.id]);
-      const pw = attrPower(s, at.id);
-      return adjRow(at.label, mod, { min: -6, max: 6, fid: 'adj-' + at.id, note: 'ficha ' + signed(s.attrs[at.id]) + (pw ? ' · poder +' + pw : '') + ' → vale ' + signed(attrOf(s, at.id)), set: (n) => { s.attrMod[at.id] = n; changed(); } });
+      const pw = num(s.upAttr[at.id]);
+      return adjRow(at.label, mod, { min: -6, max: 6, fid: 'adj-' + at.id, note: 'ficha ' + signed(s.attrs[at.id]) + (pw ? ' · UP +' + pw : '') + ' → vale ' + signed(attrOf(s, at.id)), set: (n) => { s.attrMod[at.id] = n; changed(); } });
     });
     const resAdj = BONUS_KEYS.map((b) => {
       const v = Math.round(num(s.extra[b[0]]));
@@ -5446,6 +5446,7 @@ const FIREBASE_CONFIG = {
     const base = m.upTotal - m.upEarned; // UP de origem, espécime e extras
     const free = m.upTotal - m.upSpent;
     const picksLeft = m.picksAllowed - m.picksUsed;
+    const attrLeft = m.attrAllowed - m.attrUsed;
     const setXp = (v) => { s.xp = Math.max(0, Math.round(v)); changed(); };
     const card = (cls, ...kids) => h('section', 'prog__card ' + cls, ...kids);
     const title = (txt, extra) => h('h3', 'prog__title', txt, extra || null);
@@ -5526,7 +5527,16 @@ const FIREBASE_CONFIG = {
       stepper(s.up[key], { min: 0, max: s.up[key] + Math.max(0, picksLeft), label, fid: 'up-' + key, onChange: (n) => { s.up[key] = n; changed(); } }));
     const bens = card('prog__bens', title('Benefícios', h('span', 'prog__badge' + (picksLeft > 0 ? ' is-go' : picksLeft < 0 ? ' is-bad' : ''), picksLeft > 0 ? picksLeft + ' para escolher' : picksLeft < 0 ? (-picksLeft) + ' a mais' : m.picksAllowed ? 'em dia' : 'no UP 2')),
       h('p', 'field__hint', 'A cada 2 UP ganhos por XP, escolha 2 benefícios. Pode repetir o mesmo.'),
-      h('div', 'prog__ben-grid', benefit('pv', '+5 PV', 5, m.max.pv), benefit('pe', '+5 PE', 5, m.max.pe), benefit('pa', '+1 PA', 1, m.max.pa)));
+      h('div', 'prog__ben-grid', benefit('pv', '+5 PV', 5, m.max.pv), benefit('pe', '+5 PE', 5, m.max.pe), benefit('pa', '+1 PA', 1, m.max.pa)),
+      h('h4', 'prog__sub', 'Atributos', ' ', h('span', 'prog__badge' + (attrLeft > 0 ? ' is-go' : attrLeft < 0 ? ' is-bad' : ''), attrLeft > 0 ? attrLeft + ' para escolher' : attrLeft < 0 ? (-attrLeft) + ' a mais' : m.attrAllowed ? 'em dia' : 'no UP 4')),
+      h('p', 'field__hint', 'A cada 4 UP ganhos por XP, +1 em um atributo à sua escolha.'),
+      h('div', 'prog__ben-grid', ...ATTRS.map((at) => {
+        const n = Math.max(0, Math.round(num(s.upAttr[at.id])));
+        return h('div', 'prog__ben' + (n ? ' is-on' : ''),
+          h('span', 'prog__ben-head', h('strong', '', '+1 ' + at.label), h('span', 'prog__ben-now', 'vale ' + signed(attrOf(s, at.id)))),
+          h('span', 'prog__ben-gain', n ? 'escolhido ' + n + '×' : 'ainda não escolhido'),
+          stepper(n, { min: 0, max: n + Math.max(0, attrLeft), label: '+1 ' + at.label, fid: 'up-attr-' + at.id, onChange: (k) => { s.upAttr[at.id] = k; changed(); } }));
+      })));
 
     // 4. trilha: o que cada UP ganho por XP dá, até alguns à frente
     const last = Math.max(6, m.upEarned + 3);
@@ -5537,11 +5547,11 @@ const FIREBASE_CONFIG = {
       const xpLeft = n * 10 - xp;
       steps.push(h('li', 'prog__step' + (got ? ' is-got' : next ? ' is-next' : ''),
         h('span', 'prog__step-n', String(n)),
-        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'),
+        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'), n % 4 === 0 ? h('span', 'prog__step-gain prog__step-attr', '+1 atributo') : null,
         h('span', 'prog__step-state', got ? '✓ ganho' : 'faltam ' + xpLeft + ' XP')));
     }
     const track = card('prog__track', title('Trilha de UP'),
-      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. Só os UP ganhos por XP contam; os de origem não.'),
+      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. A cada 4 UP: +1 num atributo. Só os UP ganhos por XP contam; os de origem não.'),
       h('ol', 'prog__steps', ...steps));
 
     $('#prog-block').replaceChildren(h('div', 'prog', level, spend, bens, track));
