@@ -2673,6 +2673,102 @@ const FIREBASE_CONFIG = {
     if (line) anchor.after(line);
   }
   const hasQuery = (q) => words(q || '').length > 0;
+
+  /* ---------- Filtros por especificação ----------
+     Toda tela de busca põe, acima da lista, grupos de filtros tirados dos campos da categoria
+     (tipo, raridade, criadora, dano, empunhadura, quando usa...). Dentro de um grupo vale qualquer
+     marcado; entre grupos, todos. Só aparece grupo com 2 ou mais valores na lista atual, e o número
+     ao lado de cada valor diz quantos registros sobram ao marcá-lo. Sem categoria escolhida (lista
+     com muitas categorias), só os filtros comuns: categoria, raridade, criadora e origem. */
+  const FACET_LABEL = { fabricante: 'Criadora', raridade: 'Raridade', momento: 'Quando usa', dano: 'Dano', tipoUso: 'Uso', nucleo: 'Aceita núcleo', profs: 'Proficiências', efetivo: 'Efetivo contra', ataque: 'Ataque', posicao: 'Posição', para: 'Para' };
+  const FACET_KINDS = ['select', 'multi', 'rarity', 'cards'];
+  const FACET_BROAD = ['raridade', 'fabricante'];
+  const facetLabel = (f) => FACET_LABEL[f.key] || String(f.label || f.key).replace(/\(.*?\)/g, '').split(' / ')[0].trim();
+  function facetOrder(f) {
+    const o = f && f.options;
+    const list = Array.isArray(o) ? o : (typeof o === 'string' && Array.isArray(ITEM_DATA[o]) ? ITEM_DATA[o] : []);
+    return list.map((x) => (x && typeof x === 'object' ? x.title || x.label || x.id : x));
+  }
+  function facetDefs(kinds, skip) {
+    const cats = ITEM_DATA.categories.filter((c) => kinds.indexOf(c.id) >= 0);
+    const broad = cats.length > 3;
+    const defs = [];
+    const add = (d) => { if (!defs.some((x) => x.key === d.key) && (skip || []).indexOf(d.key) < 0) defs.push(d); };
+    if (cats.length > 1) add({ key: '_kind', label: 'Categoria', get: (e) => e.kindTitle || kindTitle(e.kind), order: cats.map((c) => c.title) });
+    if (!broad && cats.some((c) => c.types && c.types.length)) add({ key: '_type', label: 'Tipo', get: (e) => e.typeTitle || '', order: cats.reduce((t, c) => t.concat((c.types || []).map((x) => x.title)), []) });
+    if (kinds.indexOf('poder') >= 0 && !broad) {
+      add({ key: '_custo', label: 'Custo', get: (e) => (e.kind === 'poder' ? Math.max(0, num((e.values || {}).custo)) + ' UP' : ''), num: true });
+      add({ key: 'momento', label: 'Quando usa', get: (e) => (e.kind === 'poder' ? powerMoment(e) : ''), order: POWER_MOMENTS });
+    }
+    if (kinds.indexOf('npc') >= 0 && !broad) add({ key: '_up', label: 'UP', get: (e) => (e.kind === 'npc' && num((e.values || {}).up) ? 'UP ' + num((e.values || {}).up) : ''), num: true });
+    if (kinds.indexOf('build') >= 0 && !broad) add({ key: 'tipo', label: 'Tipo de build', get: (e) => (e.kind === 'build' ? (e.values || {}).tipo : ''), order: ITEM_DATA.buildTipos });
+    cats.forEach((c) => (c.fields || []).forEach((f) => {
+      if (FACET_KINDS.indexOf(f.kind) < 0 || f.options === 'pericias') return;
+      if (broad && FACET_BROAD.indexOf(f.key) < 0) return;
+      add({ key: f.key, label: facetLabel(f), multi: f.kind === 'multi', order: facetOrder(f), rarity: f.kind === 'rarity', get: (e) => (kinds.length > 1 && !(findCategory(e.kind) || { fields: [] }).fields.some((x) => x.key === f.key) ? '' : (e.values || {})[f.key]) });
+    }));
+    add({ key: '_src', label: 'Fonte', get: (e) => (e.oficial ? 'Oficial' : e.mine ? 'Meus' : 'Do banco'), order: ['Oficial', 'Meus', 'Do banco'] });
+    return defs;
+  }
+  const facetVals = (d, e) => {
+    const v = d.get(e);
+    const arr = Array.isArray(v) ? v : d.multi && typeof v === 'string' ? v.split(',') : [v];
+    return arr.map((x) => String(x == null ? '' : x).trim()).filter(Boolean);
+  };
+  // uma caixa de filtros: apply(lista, kinds) desenha os grupos e devolve a lista filtrada
+  function facetBox(onChange, cfg) {
+    const o = cfg || {};
+    const box = h('details', 'facets');
+    box.open = true; // aberto ao escolher a categoria; fechar fica valendo até sair da tela
+    const st = { on: {}, box };
+    const active = () => Object.keys(st.on).reduce((t, k) => t + st.on[k].size, 0);
+    st.reset = () => { st.on = {}; };
+    st.apply = (list, kinds) => {
+      const ks = kinds && kinds.length ? kinds : Array.from(new Set(list.map((e) => e.kind)));
+      const defs = facetDefs(ks, typeof o.skip === 'function' ? o.skip() : o.skip);
+      Object.keys(st.on).forEach((k) => { if (!defs.some((d) => d.key === k) || !st.on[k].size) delete st.on[k]; });
+      const pass = (e, skip) => defs.every((d) => d.key === skip || !st.on[d.key] || facetVals(d, e).some((v) => st.on[d.key].has(v)));
+      const groups = [];
+      defs.forEach((d) => {
+        const counts = new Map();
+        list.forEach((e) => { if (pass(e, d.key)) facetVals(d, e).forEach((v) => counts.set(v, (counts.get(v) || 0) + 1)); });
+        const sel = st.on[d.key] || new Set();
+        sel.forEach((v) => { if (!counts.has(v)) counts.set(v, 0); });
+        if (counts.size < 2 && !sel.size) return;
+        const ord = d.order || [];
+        const keys = Array.from(counts.keys()).sort((a, b) => {
+          const ia = ord.indexOf(a), ib = ord.indexOf(b);
+          if (ia >= 0 || ib >= 0) return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+          if (d.num) return num(a.replace(/\D+/g, '')) - num(b.replace(/\D+/g, ''));
+          return a.localeCompare(b, 'pt-BR');
+        });
+        groups.push(h('div', 'facets__group', h('span', 'facets__label', d.label), h('div', 'facets__chips', ...keys.map((v) => {
+          const on = sel.has(v);
+          const b = h('button', 'chip chip--toggle facets__chip', v, h('small', 'facets__n', String(counts.get(v))));
+          b.type = 'button';
+          b.dataset.facet = d.key + ':' + v;
+          b.setAttribute('aria-pressed', String(on));
+          if (d.rarity && ITEM_DATA.raridadeCor[v]) b.style.setProperty('--rar', ITEM_DATA.raridadeCor[v]);
+          if (!counts.get(v) && !on) b.disabled = true;
+          b.addEventListener('click', () => {
+            const s = st.on[d.key] || (st.on[d.key] = new Set());
+            if (s.has(v)) s.delete(v); else s.add(v);
+            onChange();
+          });
+          return b;
+        }))));
+      });
+      const n = active();
+      const clear = h('button', 'link-btn facets__clear', 'Limpar filtros');
+      clear.type = 'button';
+      clear.hidden = !n;
+      clear.addEventListener('click', (ev) => { ev.preventDefault(); st.reset(); onChange(); });
+      box.replaceChildren(h('summary', 'facets__sum', 'Filtrar por especificação', n ? h('span', 'facets__count', String(n)) : null), ...groups, clear);
+      box.hidden = !groups.length && !n;
+      return list.filter((e) => pass(e));
+    };
+    return st;
+  }
   // filtra cartões já desenhados: esconde quem não casa e põe os mais relevantes no topo
   function rankCards(cards, objs, q, fieldsOf) {
     const scores = objs.map((o) => searchScore(fieldsOf(o), q));
@@ -3230,6 +3326,7 @@ const FIREBASE_CONFIG = {
     const picked = (o.chips || []).filter((c) => c && c.kinds && pk.on.has(c.label));
     const allowed = picked.length ? picked.reduce((t, c) => t.concat(c.kinds), []) : null;
     list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)) && (!allowed || allowed.indexOf(e.kind) >= 0));
+    list = pkFacets.apply(list, allowed || o.kinds);
     // com texto, vale a relevância; sem texto, favoritos primeiro e o resto em ordem alfabética
     if (!hasQuery(q)) list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
     $('#picker-list').replaceChildren(...list.map((e) => libRow(e,
@@ -3248,6 +3345,8 @@ const FIREBASE_CONFIG = {
       pk.resolve = resolve;
       $('#picker-title').textContent = opts.title;
       pk.on = new Set();
+      pkFacets.reset();
+      pkFacets.box.hidden = true;
       const chips = (opts.chips || []).filter(Boolean);
       const toggles = chips.some((c) => c.kinds);
       $('#picker-chips').replaceChildren(h('span', 'picker__filter-label', toggles ? 'Filtro (toque para mostrar só as escolhidas):' : 'Filtro automático:'), ...chips.map((c) => {
@@ -3277,6 +3376,9 @@ const FIREBASE_CONFIG = {
     });
   }
   // seleção múltipla do picker: só nos menus que aceitam vários itens (openPickerMany)
+  // a categoria já tem os chips do topo quando o menu aceita mais de uma
+  const pkFacets = facetBox(() => runPicker(), { skip: () => ((pk.opts && pk.opts.chips) || []).some((c) => c && c.kinds) ? ['_kind'] : [] });
+  $('#picker-hint').before(pkFacets.box);
   const pkMulti = multiPick($('#picker-list'), { enabled: () => pk.multi, label: (n) => 'Adicionar ' + (n || ''), onConfirm: (list) => finishPicker(list) });
   $('#picker-list').before(pkMulti.tip);
   $('#picker-list').after(pkMulti.bar);
@@ -4063,8 +4165,7 @@ const FIREBASE_CONFIG = {
     const favs = favLoad();
     if ($('#lib-fav').checked) list = list.filter((e) => favs.has(e.id));
     if ($('#lib-mine').checked) list = list.filter((e) => e.mine);
-    const maker = $('#lib-maker').value;
-    if (maker) list = list.filter((e) => (e.values || {}).fabricante === maker);
+    list = libFacets.apply(list, kind ? [kind] : ITEM_KINDS);
     const suggest = list.length ? '' : libSearch.suggest;
     if (!hasQuery(q)) list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
@@ -4090,18 +4191,16 @@ const FIREBASE_CONFIG = {
       : plural(list.length, 'registro', 'registros') + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
   }
   $('#lib-q').addEventListener('input', debounce(runLib, 300));
-  ['#lib-kind', '#lib-maker', '#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
+  const libFacets = facetBox(() => runLib());
+  $('#lib-hint').before(libFacets.box);
+  $('#lib-kind').addEventListener('change', () => { libFacets.reset(); runLib(); });
+  ['#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
   (function fillLibKinds() {
     const sel = $('#lib-kind');
     const all = h('option', '', 'Todas');
     all.value = '';
     sel.append(all);
     ITEM_DATA.categories.filter((c) => ITEM_KINDS.indexOf(c.id) >= 0).forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
-    const mk = $('#lib-maker');
-    const any = h('option', '', 'Todas');
-    any.value = '';
-    mk.append(any);
-    (ITEM_DATA.fabricantes || []).forEach((f) => { const o = h('option', '', f); o.value = f; mk.append(o); });
   })();
 
   /* Catálogo na tela Personagens: ver todas as origens, espécimes, poderes e itens, só leitura */
@@ -4128,12 +4227,14 @@ const FIREBASE_CONFIG = {
       $('#cat-list').replaceChildren();
       $('#cat-empty').hidden = true;
       $('#cat-hint').textContent = '';
+      catFacets.box.hidden = true;
       return;
     }
     $('#cat-hint').textContent = 'Buscando...';
     let list = await libSearch(g ? g.kinds : null, q);
     if (seq !== catState.seq) return;
     const suggest = list.length ? '' : libSearch.suggest;
+    list = catFacets.apply(list, g && g.kinds ? g.kinds : ITEM_DATA.categories.map((c) => c.id));
     if (!hasQuery(q)) list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
     $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
@@ -4149,12 +4250,16 @@ const FIREBASE_CONFIG = {
       b.setAttribute('aria-pressed', 'false');
       b.addEventListener('click', () => {
         catState.group = catState.group === g ? null : g;
+        catFacets.reset();
         $$('#cat-chips .chip--toggle').forEach((x) => x.setAttribute('aria-pressed', String(x === b && catState.group === g)));
         runCatalog();
       });
       return b;
     }));
   })();
+  const catFacets = facetBox(() => runCatalog());
+  catFacets.box.hidden = true;
+  $('#cat-hint').before(catFacets.box);
   $('#cat-q').addEventListener('input', debounce(runCatalog, 300));
 
   // Itens da versão anterior (salvos só neste aparelho): entram no banco uma única vez
@@ -4221,6 +4326,7 @@ const FIREBASE_CONFIG = {
     const s = Object.assign({}, b, r);
     ['attrs', 'attrMod', 'upAttr', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
     s.powers = Array.isArray(r.powers) ? r.powers.slice() : [];
+    s.hideAlerts = r.hideAlerts && typeof r.hideAlerts === 'object' ? Object.assign({}, r.hideAlerts) : {};
     s.profs = Array.isArray(r.profs) ? r.profs.filter((x) => typeof x === 'string') : [];
     // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
     s.doutor = Array.isArray(r.doutor) ? r.doutor.filter((x) => typeof x === 'string') : [];
@@ -4478,7 +4584,9 @@ const FIREBASE_CONFIG = {
       upEarned, upTotal: upEarned + mech.up + num(s.upExtra),
       upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
-      attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s), // +1 num atributo a cada 4 UP
+      // +1 num atributo a cada 4 UP: vale o escolhido na Progressão e também o ponto posto direto na faixa
+      // de atributos (o que passa dos 3 da distribuição inicial)
+      attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
       skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length, // Doutor e proficiências: +1 de perícia cada
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
@@ -5103,11 +5211,11 @@ const FIREBASE_CONFIG = {
     const picks = m.picksAllowed - m.picksUsed;
     const up = m.upTotal - m.upSpent;
     const skills = m.skillBudget - m.skillUsed;
-    if (!s.setup) out.push({ n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', label: 'Fazer agora', go: () => openSetup() });
-    if (picks > 0) out.push({ n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' para escolher: +5 PV, +5 PE ou +1 PA.', label: 'Escolher', go: '#prog-block' });
-    if (m.attrAllowed > m.attrUsed) out.push({ n: m.attrAllowed - m.attrUsed, text: plural(m.attrAllowed - m.attrUsed, '+1 de atributo', '+1 de atributo') + ' para escolher (a cada 4 UP).', label: 'Escolher', go: '#prog-block' });
-    if (up > 0) out.push({ n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias.', label: 'Ver progressão', go: '#prog-block' });
-    if (skills > 0) out.push({ n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', label: 'Ver perícias', go: '#skills-block' });
+    if (!s.setup) out.push({ key: 'setup', n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', label: 'Fazer agora', go: () => openSetup() });
+    if (picks > 0) out.push({ key: 'picks', n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' para escolher: +5 PV, +5 PE ou +1 PA.', label: 'Escolher', go: '#prog-block' });
+    if (m.attrAllowed > m.attrUsed) out.push({ key: 'attr', n: m.attrAllowed - m.attrUsed, text: plural(m.attrAllowed - m.attrUsed, '+1 de atributo', '+1 de atributo') + ' para escolher (a cada 4 UP).', label: 'Escolher', go: '#prog-block' });
+    if (up > 0) out.push({ key: 'up', n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias.', label: 'Ver progressão', go: '#prog-block' });
+    if (skills > 0) out.push({ key: 'skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', label: 'Ver perícias', go: '#skills-block' });
     return out;
   }
 
@@ -5119,12 +5227,11 @@ const FIREBASE_CONFIG = {
     const picks = m.picksUsed - m.picksAllowed;
     const skills = m.skillUsed - m.skillBudget;
     const extraProfs = s.profs.length - 4;
-    if (up > 0) out.push({ n: up, text: plural(up, 'UP gasto', 'UP gastos') + ' sem UP que os pague (poderes, melhorias ou UP em perícias). Ganhe XP ou desfaça uma compra.', label: 'Ver progressão', go: '#prog-block' });
-    if (picks > 0) out.push({ n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' (+5 PV, +5 PE, +1 PA) sem UP par que os conceda.', label: 'Ver progressão', go: '#prog-block' });
-    if (m.attrUsed > m.attrAllowed) out.push({ n: m.attrUsed - m.attrAllowed, text: plural(m.attrUsed - m.attrAllowed, '+1 de atributo', '+1 de atributo') + ' sem os 4 UP que o concedam.', label: 'Ver progressão', go: '#prog-block' });
-    if (skills > 0) out.push({ n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', label: 'Ver perícias', go: '#skills-block' });
-    if (s.setup && attrPool(s.attrs).left < 0) out.push({ n: -attrPool(s.attrs).left, text: 'Atributos acima dos 3 pontos da distribuição inicial.', label: 'Refazer distribuição', go: () => openSetup() });
-    if (extraProfs > 0) out.push({ n: extraProfs, text: plural(extraProfs, 'proficiência', 'proficiências') + ' além das 4 iniciais. As extras vêm do poder Proficiência em arma ou armadura.', label: 'Ver proficiências', go: '#profs-block' });
+    if (up > 0) out.push({ key: 'x-up', n: up, text: plural(up, 'UP gasto', 'UP gastos') + ' sem UP que os pague (poderes, melhorias ou UP em perícias). Ganhe XP ou desfaça uma compra.', label: 'Ver progressão', go: '#prog-block' });
+    if (picks > 0) out.push({ key: 'x-picks', n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' (+5 PV, +5 PE, +1 PA) sem UP par que os conceda.', label: 'Ver progressão', go: '#prog-block' });
+    if (m.attrUsed > m.attrAllowed) out.push({ key: 'x-attr', n: m.attrUsed - m.attrAllowed, text: 'Atributos com ' + plural(m.attrUsed - m.attrAllowed, 'ponto', 'pontos') + ' além dos 3 da distribuição inicial e do +1 a cada 4 UP.', label: 'Refazer distribuição', go: () => openSetup() });
+    if (skills > 0) out.push({ key: 'x-skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', label: 'Ver perícias', go: '#skills-block' });
+    if (extraProfs > 0) out.push({ key: 'x-profs', n: extraProfs, text: plural(extraProfs, 'proficiência', 'proficiências') + ' além das 4 iniciais. As extras vêm do poder Proficiência em arma ou armadura.', label: 'Ver proficiências', go: '#profs-block' });
     return out;
   }
   function alertGo(p) {
@@ -5139,25 +5246,39 @@ const FIREBASE_CONFIG = {
     return b;
   }
 
+  // aviso dispensado fica escondido enquanto a conta não piorar (guarda o tamanho dele na ficha)
+  const alertHidden = (s, p) => Boolean(s.hideAlerts && s.hideAlerts[p.key] != null && num(s.hideAlerts[p.key]) >= p.n);
+  function alertDismiss(p) {
+    const b = h('button', 'alerts__x', '×');
+    b.type = 'button';
+    b.title = 'Dispensar este aviso';
+    b.setAttribute('aria-label', 'Dispensar: ' + p.text);
+    b.dataset.fid = 'alert-x-' + p.key;
+    b.addEventListener('click', () => { const s = sheetChar.sheet; s.hideAlerts = Object.assign({}, s.hideAlerts, { [p.key]: p.n }); changed(); });
+    return b;
+  }
   function renderAlerts(m) {
-    const list = pendingList(m);
-    const bad = noSourceList(m);
+    const s = sheetChar.sheet;
+    const allList = pendingList(m);
+    const allBad = noSourceList(m);
+    // avisos que já não existem saem da lista de dispensados (se voltarem, aparecem de novo)
+    if (s.hideAlerts) Object.keys(s.hideAlerts).forEach((k) => { if (!allList.concat(allBad).some((p) => p.key === k)) delete s.hideAlerts[k]; });
+    const list = allList.filter((p) => !alertHidden(s, p));
+    const bad = allBad.filter((p) => !alertHidden(s, p));
+    const hiddenN = allList.length + allBad.length - list.length - bad.length;
     const box = $('#sheet-alerts');
-    box.hidden = !list.length && !bad.length;
+    box.hidden = !list.length && !bad.length && !hiddenN;
     box.classList.toggle('alerts--bad', bad.length > 0);
+    box.classList.toggle('alerts--quiet', !list.length && !bad.length);
+    const restore = h('button', 'link-btn alerts__restore', 'Mostrar ' + plural(hiddenN, 'aviso dispensado', 'avisos dispensados'));
+    restore.type = 'button';
+    restore.dataset.fid = 'alert-restore';
+    restore.addEventListener('click', () => { s.hideAlerts = {}; changed(); });
     box.replaceChildren(...(bad.length ? [h('p', 'alerts__title alerts__title--bad', 'Sem fonte reconhecida')] : []),
-      ...bad.map((p) => h('p', 'alerts__item alerts__item--bad', p.text + ' ', alertGo(p))),
-      ...(list.length ? [h('p', 'alerts__title', 'Há o que distribuir')] : []), ...list.map((p) => {
-      const b = h('button', 'link-btn', p.label);
-      b.type = 'button';
-      b.addEventListener('click', () => {
-        if (typeof p.go === 'function') { p.go(); return; }
-        const el = $(p.go);
-        if (el) showSheetTab(el.closest('.sheet-panel'));
-        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = $('button:not(:disabled), input', el); if (f) f.focus({ preventScroll: true }); }
-      });
-      return h('p', 'alerts__item', p.text + ' ', b);
-    }));
+      ...bad.map((p) => h('p', 'alerts__item alerts__item--bad', h('span', '', p.text + ' ', alertGo(p)), alertDismiss(p))),
+      ...(list.length ? [h('p', 'alerts__title', 'Há o que distribuir')] : []),
+      ...list.map((p) => h('p', 'alerts__item', h('span', '', p.text + ' ', alertGo(p)), p.key === 'setup' ? null : alertDismiss(p))),
+      ...(hiddenN ? [restore] : []));
     const count = list.reduce((t, p) => t + p.n, 0);
     const skillsLeft = Math.max(0, m.skillBudget - m.skillUsed);
     if (watch.id === sheetChar.id && count > watch.pending) {
@@ -5529,7 +5650,7 @@ const FIREBASE_CONFIG = {
       h('p', 'field__hint', 'A cada 2 UP ganhos por XP, escolha 2 benefícios. Pode repetir o mesmo.'),
       h('div', 'prog__ben-grid', benefit('pv', '+5 PV', 5, m.max.pv), benefit('pe', '+5 PE', 5, m.max.pe), benefit('pa', '+1 PA', 1, m.max.pa)),
       h('h4', 'prog__sub', 'Atributos', ' ', h('span', 'prog__badge' + (attrLeft > 0 ? ' is-go' : attrLeft < 0 ? ' is-bad' : ''), attrLeft > 0 ? attrLeft + ' para escolher' : attrLeft < 0 ? (-attrLeft) + ' a mais' : m.attrAllowed ? 'em dia' : 'no UP 4')),
-      h('p', 'field__hint', 'A cada 4 UP ganhos por XP, +1 em um atributo à sua escolha.'),
+      h('p', 'field__hint', 'A cada 4 UP ganhos por XP, +1 em um atributo à sua escolha. Um ponto posto direto na faixa de atributos, acima dos 3 iniciais, também conta.'),
       h('div', 'prog__ben-grid', ...ATTRS.map((at) => {
         const n = Math.max(0, Math.round(num(s.upAttr[at.id])));
         return h('div', 'prog__ben' + (n ? ' is-on' : ''),
@@ -10650,7 +10771,7 @@ const FIREBASE_CONFIG = {
     const seq = ++itemsSeq;
     const r = await libFind(kinds, $('#gmlib-q').value);
     if (seq !== itemsSeq) return;
-    const list = r.list;
+    const list = gmFacets.apply(r.list, kinds);
     suggestAfter($('#gmlib-list'), r.suggest, $('#gmlib-q'), runItems);
     const noChars = !members.some((mb) => mb.sheet && mb.sheet.attrs);
     $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
@@ -10679,6 +10800,7 @@ const FIREBASE_CONFIG = {
       return b;
     }));
     if (gmlibCat) list = list.filter((e) => ((e.values && e.values.categoria) || 'Comum') === gmlibCat);
+    list = beastFacets.apply(list, kinds);
     $('#gmlib-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map(magPage));
     $('#beast-hint').textContent = r.warn || (!list.length ? 'Nenhuma criatura encontrada.' : plural(list.length, 'criatura', 'criaturas') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.');
   }
@@ -10788,7 +10910,12 @@ const FIREBASE_CONFIG = {
       toast(e.name + ' foi para a mochila de ' + mb.name + '.');
     } catch (err) { toast(errorMessage(err)); }
   }
-  $('#gmlib-kind').addEventListener('change', runItems);
+  const gmFacets = facetBox(() => runItems());
+  $('#gmlib-hint').before(gmFacets.box);
+  // a categoria do bestiário já tem os chips coloridos da revista
+  const beastFacets = facetBox(() => runBeast(), { skip: ['categoria'] });
+  $('#gmlib-cats').after(beastFacets.box);
+  $('#gmlib-kind').addEventListener('change', () => { gmFacets.reset(); runItems(); });
   $('#gmlib-q').addEventListener('input', debounce(runItems, 250));
   $('#beast-q').addEventListener('input', debounce(runBeast, 250));
 
