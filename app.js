@@ -257,7 +257,7 @@ const FIREBASE_CONFIG = {
       rolls.splice(rolls.lastIndexOf(dropped), 1);
     }
     const ones = rolls.filter((v) => v === 1).length;
-    const sixes = rolls.filter((v) => v === 6).length;
+    const sixes = rolls.filter((v) => v === 6 || (o.critFive && v === 5)).length; // Certeiro: crítico com 5 e 6
     const crit = sixes > ones;
     const skillLost = ones > 0 && Boolean(o.skill);
     const mods = (o.mods || []).filter((x) => x && x[1]);
@@ -2762,6 +2762,7 @@ const FIREBASE_CONFIG = {
     open.addEventListener('click', () => openEntry(e));
     open.addEventListener('keydown', (ev) => { if (ev.target === open && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openEntry(e); } });
     const row = h('li', 'row lib-row', open, starButton(e, onFav));
+    row.libEntry = e; // usado pela seleção múltipla
     (actions || []).forEach((a) => {
       const b = h('button', 'btn btn--sm ' + (a.cls || 'btn--ghost'), a.label);
       b.type = 'button';
@@ -2770,6 +2771,82 @@ const FIREBASE_CONFIG = {
       row.append(b);
     });
     return row;
+  }
+
+  /* Seleção múltipla numa lista de libRow: segurar (toque longo) ou dar dois cliques num item liga o modo;
+     daí cada toque marca ou desmarca, e a barra confirma todos de uma vez. A marcação sobrevive a novas buscas. */
+  const multiKey = (e) => e.id || e.uid || e.name;
+  function multiPick(ul, cfg) {
+    const st = { on: false, sel: new Map(), timer: 0, longed: false, clickT: 0, passing: false };
+    const count = h('strong', 'multi-bar__count', '');
+    const clear = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+    clear.type = 'button';
+    clear.dataset.fid = 'multi-cancel';
+    const ok = h('button', 'btn btn--primary btn--sm', '');
+    ok.type = 'button';
+    ok.dataset.fid = 'multi-ok';
+    const tip = h('p', 'multi-tip', 'Dica: segure ou toque duas vezes num item para escolher vários de uma vez.');
+    const bar = h('div', 'multi-bar', count, h('span', 'multi-bar__acts', clear, ok));
+    bar.hidden = true;
+    const live = () => !cfg.enabled || cfg.enabled();
+    const paint = () => {
+      ul.classList.toggle('is-multi', st.on);
+      ul.querySelectorAll('.lib-row').forEach((r) => {
+        const on = Boolean(r.libEntry && st.sel.has(multiKey(r.libEntry)));
+        r.classList.toggle('is-picked', on);
+        if (st.on) r.setAttribute('aria-selected', String(on)); else r.removeAttribute('aria-selected');
+      });
+      const n = st.sel.size;
+      bar.hidden = !st.on;
+      tip.hidden = st.on || !live();
+      count.textContent = plural(n, 'item selecionado', 'itens selecionados');
+      ok.textContent = cfg.label(n);
+      ok.disabled = !n;
+    };
+    const reset = () => { st.on = false; st.sel.clear(); paint(); };
+    const toggle = (row) => {
+      const e = row.libEntry;
+      if (!e) return;
+      const k = multiKey(e);
+      if (st.sel.has(k)) st.sel.delete(k); else st.sel.set(k, e);
+      st.on = true;
+      paint();
+    };
+    const rowOf = (t) => { if (!live()) return null; const r = t && t.closest ? t.closest('.lib-row') : null; return r && ul.contains(r) ? r : null; };
+    ul.addEventListener('pointerdown', (ev) => {
+      const r = rowOf(ev.target);
+      if (!r || ev.button > 0) return;
+      st.longed = false;
+      const x = ev.clientX, y = ev.clientY;
+      clearTimeout(st.timer);
+      st.timer = setTimeout(() => { st.longed = true; if (navigator.vibrate) navigator.vibrate(15); toggle(r); }, 450);
+      const stop = (e2) => {
+        if (e2.type === 'pointermove' && Math.hypot(e2.clientX - x, e2.clientY - y) < 10) return;
+        clearTimeout(st.timer);
+        ['pointermove', 'pointerup', 'pointercancel'].forEach((t) => window.removeEventListener(t, stop));
+      };
+      ['pointermove', 'pointerup', 'pointercancel'].forEach((t) => window.addEventListener(t, stop));
+    });
+    ul.addEventListener('contextmenu', (ev) => { if (rowOf(ev.target)) ev.preventDefault(); });
+    ul.addEventListener('click', (ev) => {
+      const r = rowOf(ev.target);
+      if (!r || st.passing) return;
+      if (ev.target.closest('.star')) { if (!st.on) return; }
+      if (st.longed) { st.longed = false; ev.stopPropagation(); ev.preventDefault(); return; }
+      if (st.on) { ev.stopPropagation(); ev.preventDefault(); toggle(r); return; }
+      // fora do modo: dois cliques no corpo do item ligam o modo; um clique só abre a ficha, como antes
+      const open = ev.target.closest('.row__open');
+      if (!open) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+      if (st.clickT && st.clickRow === r) { clearTimeout(st.clickT); st.clickT = 0; toggle(r); return; }
+      clearTimeout(st.clickT);
+      st.clickRow = r;
+      st.clickT = setTimeout(() => { st.clickT = 0; st.passing = true; open.click(); st.passing = false; }, 280);
+    }, true);
+    clear.addEventListener('click', reset);
+    ok.addEventListener('click', () => { const list = [...st.sel.values()].map(deep); reset(); cfg.onConfirm(list); });
+    return { bar, tip, paint, reset, get on() { return st.on; } };
   }
 
   // campos de mecânica que o espécime tinha antes do script dos poderes
@@ -2786,30 +2863,10 @@ const FIREBASE_CONFIG = {
     body.replaceChildren();
     const pic = e.image || e.thumb || itemArt(e);
     if (pic) { const img = h('img', 'entry__img'); img.src = pic; img.alt = ''; body.append(img); }
-    const dl = h('dl', 'member__data entry__data');
     const seen = new Set(['nome', 'lore', 'compraRacial']); // compraRacial: campo antigo, hoje é exclusivo do Etheriano
     if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso'].forEach((k) => seen.add(k)); }
-    ((cat && cat.fields) || []).forEach((f) => {
-      const val = v[f.key];
-      if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r) => dl.append(h('dt', '', r[0]), h('dd', 'entry__pre', r[1]))); return; }
-      if (seen.has(f.key)) return;
-      seen.add(f.key);
-      if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
-      if (f.kind === 'script') { dl.append(h('dt', '', 'Script'), h('dd', 'entry__pre entry__code', String(val))); return; }
-      if (f.kind === 'racial3') { dl.append(h('dt', '', 'Habilidades raciais'), h('dd', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : '')))); return; }
-      dl.append(h('dt', '', f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(val)) : f.key === 'preco' ? priceText(val) : String(val)));
-    });
-    // campos que não estão no formulário atual (registros antigos) também aparecem
-    Object.keys(v).forEach((k) => {
-      if (seen.has(k) || !String(v[k] || '').trim()) return;
-      if (e.kind === 'especime' && LEGACY_LABEL[k]) { if (v[k] !== 'Não' && v[k] !== '0') dl.append(h('dt', '', LEGACY_LABEL[k]), h('dd', '', String(v[k]))); return; }
-      dl.append(h('dt', '', k), h('dd', '', String(v[k])));
-    });
-    const b = bonusLine(entryBonus(e));
-    if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (cat && cat.inventory ? ' (quando equipado)' : '')));
-    const parts = e.slots ? (e.slots.mods || []).concat(e.slots.props || [], e.slots.accs || []).map((x) => x.name) : [];
-    if (parts.length) dl.append(h('dt', '', 'Encaixes'), h('dd', '', parts.join(', ')));
-    if (dl.children.length) body.append(dl);
+    const facts = entryFacts(e, seen, cat && cat.inventory ? ' (quando equipado)' : '');
+    if (facts) body.append(facts);
     else if (e.kind !== 'poder') body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
     const lore = String(v.lore || '').trim();
     if (lore) body.append(h('h3', 'entry__sub', 'Lore'), ...lore.split(/\n+/).map((t) => h('p', 'entry__lore', t)));
@@ -2818,6 +2875,82 @@ const FIREBASE_CONFIG = {
     openDialog(entryDlg);
   }
   $('#entry-close').addEventListener('click', () => closeDialog(entryDlg));
+  /* Ficha de detalhe (banco, bestiário, inventário): números curtos viram blocos agrupados
+     (atributos, perícias, defesas, ataque...), textos viram seções e listas viram etiquetas,
+     em vez de uma coluna crua de rótulo e valor. */
+  const FACT_GROUPS = {
+    npc: [['Ameaça', ['categoria', 'up', 'cronos']], ['Atributos', ['corpo', 'precisao', 'essencia']], ['Perícias', ['luta', 'mira', 'operacoes', 'resistencia']],
+      ['Defesas', ['defesa', 'armadura', 'pv', 'escudo', 'blindagem']], ['Ataque', ['arma', 'ataque', 'dano', 'cadencia', 'efetivo']]],
+    build: [['Build', ['tipo', 'papel']], ['Atributos', ['corpo', 'precisao', 'essencia']], ['Perícias e proficiências', ['pericia2a', 'pericia2b', 'pericia1', 'profs']]],
+    '*': [['Ficha', ['fabricante', 'modelo', 'raridade', 'preco', 'classe', 'tipo', 'subtipo', 'posicao', 'para', 'custoUso']],
+      ['Combate', ['dano', 'modo', 'cadencia', 'pente', 'municao', 'disparos', 'alcance']],
+      ['Proteção', ['armadura', 'penalidade', 'nucleo', 'capacidade', 'cc']],
+      ['Uso', ['empunhadura', 'carga', 'tipoUso', 'usos', 'bonusRec', 'bonus', 'encaixes']]]
+  };
+  const FACT_HI = { defesa: 1, arma: 1, dano: 1, armadura: 1, raridade: 1 };
+  function entryFacts(e, seen, bonusNote) {
+    const cat = findCategory(e.kind);
+    const v = e.values || {};
+    seen = seen || new Set(['nome', 'lore']);
+    const facts = [];
+    const add = (key, label, val, type, extra) => facts.push(Object.assign({ key, label, val, type }, extra || {}));
+    const classify = (f, val) => {
+      const txt = String(val).trim();
+      const lines = txt.split('\n').map((x) => x.trim()).filter(Boolean);
+      if (f && f.kind === 'textarea' && lines.length > 1 && lines.every((l) => l.length <= 40)) return ['list', lines];
+      if ((f && (f.kind === 'textarea' || f.big)) || txt.length > 40 || lines.length > 1) return ['text', txt];
+      return ['stat', txt];
+    };
+    ((cat && cat.fields) || []).forEach((f) => {
+      const val = v[f.key];
+      if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r, i) => add('roteiro' + i, r[0], r[1], 'text')); return; }
+      if (seen.has(f.key)) return;
+      seen.add(f.key);
+      if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
+      const label = f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '');
+      if (f.kind === 'script') { add(f.key, 'Script', String(val), 'text', { code: true }); return; }
+      if (f.kind === 'racial3') { add(f.key, 'Habilidades raciais', h('div', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : ''))), 'text'); return; }
+      if (f.key === 'fabricante') { add(f.key, label, makerTag(String(val)), 'stat'); return; }
+      if (f.key === 'preco') { add(f.key, label, priceText(val), 'stat'); return; }
+      const c = classify(f, val);
+      if (c[0] === 'list') add(f.key, label, null, 'list', { items: c[1] });
+      else add(f.key, label, c[1], c[0]);
+    });
+    // campos que não estão no formulário atual (registros antigos) também aparecem
+    Object.keys(v).forEach((k) => {
+      if (seen.has(k) || !String(v[k] || '').trim()) return;
+      if (e.kind === 'especime' && LEGACY_LABEL[k]) { if (v[k] !== 'Não' && v[k] !== '0') add(k, LEGACY_LABEL[k], String(v[k]), 'stat'); return; }
+      const c = classify(null, v[k]);
+      add(k, k, c[0] === 'list' ? null : c[1], c[0], c[0] === 'list' ? { items: c[1] } : null);
+    });
+    if (e.kind === 'npc') add('defesa', 'Defesa mínima', String(num(v.armadura) + num(v.corpo) + num(v.resistencia)), 'stat', { hint: 'armadura + Corpo + Resistência' });
+    const b = bonusLine(entryBonus(e));
+    if (b) add('bonus', 'Bônus', b + (bonusNote || ''), 'stat');
+    const parts = e.slots ? (e.slots.mods || []).concat(e.slots.props || [], e.slots.accs || []).map((x) => x.name) : [];
+    if (parts.length && !seen.has('encaixes')) add('encaixes', 'Encaixes', null, 'list', { items: parts });
+    if (!facts.length) return null;
+    const tile = (f) => {
+      const t = h('div', 'fact' + (FACT_HI[f.key] ? ' fact--hi' : ''), h('span', 'fact__k', f.label), h('span', 'fact__v', f.val), f.hint ? h('span', 'fact__hint', f.hint) : null);
+      const c = f.key === 'raridade' ? rarColor(f.val) : '';
+      if (c) { t.classList.add('fact--rar'); t.style.setProperty('--rar', c); }
+      return t;
+    };
+    const stats = facts.filter((f) => f.type === 'stat');
+    const used = new Set();
+    const out = [];
+    (FACT_GROUPS[e.kind] || FACT_GROUPS['*']).forEach((g) => {
+      const fs = g[1].map((k) => stats.find((f) => f.key === k && !used.has(f))).filter(Boolean);
+      if (!fs.length) return;
+      fs.forEach((f) => used.add(f));
+      out.push(h('section', 'facts__group', h('h3', 'facts__title', g[0]), h('div', 'facts__grid', ...fs.map(tile))));
+    });
+    const rest = stats.filter((f) => !used.has(f));
+    if (rest.length) out.push(h('section', 'facts__group', out.length ? h('h3', 'facts__title', 'Outros dados') : null, h('div', 'facts__grid', ...rest.map(tile))));
+    facts.filter((f) => f.type === 'text').forEach((f) => out.push(h('section', 'facts__group', h('h3', 'facts__title', f.label), h('div', 'facts__text' + (f.code ? ' entry__code' : ''), f.val))));
+    facts.filter((f) => f.type === 'list').forEach((f) => out.push(h('section', 'facts__group', h('h3', 'facts__title', f.label), h('ul', 'facts__chips', ...f.items.map((x) => h('li', 'facts__chip', x))))));
+    return h('div', 'facts', ...out);
+  }
+
   /* Tela de um poder: o tipo (simples, lista, com escolha, com melhorias), como se obtém e
      as opções e melhorias em cartões, em vez do texto cru "Nome | efeito | custo". */
   function powerKind(e) {
@@ -3103,6 +3236,7 @@ const FIREBASE_CONFIG = {
       [{ label: 'Escolher', cls: 'btn--primary', onClick: () => finishPicker(deep(e)) }],
       () => { if ($('#picker-fav').checked) runPicker(); })));
     $('#picker-empty').hidden = list.length > 0;
+    pkMulti.paint();
     suggestAfter($('#picker-list'), list.length ? '' : suggest, $('#picker-q'), runPicker);
     $('#picker-hint').textContent = warn || plural(list.length, 'opção compatível', 'opções compatíveis') + (favOnly ? ' entre os favoritos' : '');
   }
@@ -3131,6 +3265,8 @@ const FIREBASE_CONFIG = {
       $('#picker-q').value = '';
       $('#picker-fav').checked = false;
       $('#picker-list').replaceChildren();
+      pk.multi = Boolean(opts.multi);
+      pkMulti.reset();
       $('#picker-empty').hidden = true;
       $('#picker-create').hidden = !opts.create;
       if (opts.create) $('#picker-create-btn').textContent = opts.create.label;
@@ -3139,6 +3275,15 @@ const FIREBASE_CONFIG = {
       runPicker();
       if (window.matchMedia('(pointer: fine)').matches) $('#picker-q').focus();
     });
+  }
+  // seleção múltipla do picker: só nos menus que aceitam vários itens (openPickerMany)
+  const pkMulti = multiPick($('#picker-list'), { enabled: () => pk.multi, label: (n) => 'Adicionar ' + (n || ''), onConfirm: (list) => finishPicker(list) });
+  $('#picker-list').before(pkMulti.tip);
+  $('#picker-list').after(pkMulti.bar);
+  // como openPicker, mas devolve sempre uma lista (vazia se fechar sem escolher)
+  async function openPickerMany(opts) {
+    const r = await openPicker(Object.assign({}, opts, { multi: true }));
+    return !r ? [] : Array.isArray(r) ? r : [r];
   }
   $('#picker-q').addEventListener('input', debounce(runPicker, 250));
   $('#picker-fav').addEventListener('change', runPicker);
@@ -4676,11 +4821,11 @@ const FIREBASE_CONFIG = {
     add.type = 'button';
     add.dataset.fid = 'rt-item-add';
     add.addEventListener('click', async () => {
-      const e = await openPicker({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
+      const picked = await openPickerMany({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
         { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
         { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
-      if (!e || rt.r !== r) return;
-      r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) });
+      if (!picked.length || rt.r !== r) return;
+      picked.forEach((e) => r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) }));
       renderRoteiro();
     });
     return h('article', 'guide__page rt-page rt-page--itens',
@@ -5835,16 +5980,9 @@ const FIREBASE_CONFIG = {
     $('#inv-dialog-meta').textContent = [kindTitle(i.kind), i.typeTitle, i.values.raridade, i.slot ? 'Equipado: ' + slotDef(i.slot).full : 'Na mochila'].filter(Boolean).join(' · ');
     const body = $('#inv-dialog-body');
     const keepFocus = body.contains(document.activeElement) ? document.activeElement.id : '';
-    const dl = h('dl', 'member__data');
-    ((cat && cat.fields) || []).forEach((f) => {
-      const v = i.values[f.key];
-      if (f.key === 'nome' || f.key === 'lore' || v === undefined || v === '') return;
-      dl.append(h('dt', '', f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(v)) : String(v)));
-    });
-    const b = bonusLine(entryBonus(i));
-    if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (i.slot ? '' : ' (só quando equipado)')));
+    const facts = entryFacts(i, new Set(['nome', 'lore', 'encaixes']), i.slot ? '' : ' (só quando equipado)'); // os encaixes têm editor próprio logo abaixo
     body.replaceChildren();
-    if (dl.children.length) body.append(dl);
+    if (facts) body.append(facts);
     if (canArmory(i)) {
       const ab = h('button', 'btn btn--primary btn--sm', 'Abrir no Armeiro');
       ab.type = 'button';
@@ -6523,17 +6661,16 @@ const FIREBASE_CONFIG = {
   $('#inv-armory').addEventListener('click', () => openArmory(''));
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
-    const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
+    const picked = await openPickerMany({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
       { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
       { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
-    if (!e || sheetChar !== ch) return;
-    const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
+    if (!picked.length || sheetChar !== ch) return;
     const wasOver = compute(ch).over;
-    ch.sheet.inventory.push(entry);
+    picked.forEach((e) => ch.sheet.inventory.push(Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' })));
     changed();
     const m = compute(ch);
     // não impede: só avisa das desvantagens quando a carga passa do limite
-    toast(e.name + ' entrou no inventário.' + (m.over ? (wasOver ? ' Continua sobrecarregado (' : ' Agora está sobrecarregado (') + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '): deslocamento pela metade e ações físicas sobem uma categoria.' : ''));
+    toast((picked.length > 1 ? picked.length + ' itens entraram' : picked[0].name + ' entrou') + ' no inventário.' + (m.over ? (wasOver ? ' Continua sobrecarregado (' : ' Agora está sobrecarregado (') + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '): deslocamento pela metade e ações físicas sobem uma categoria.' : ''));
   });
 
   $('#form-quick-item').addEventListener('submit', (ev) => {
@@ -7524,11 +7661,11 @@ const FIREBASE_CONFIG = {
       const more = h('button', 'btn btn--ghost btn--sm', 'Adicionar item do banco');
       more.type = 'button';
       more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
-        const e = await openPicker({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
+        const picked = await openPickerMany({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
           { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
           { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
-        if (!e || !wz) return;
-        g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e });
+        if (!picked.length || !wz) return;
+        picked.forEach((e) => g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e }));
         renderSetup();
       });
       body.append(h('div', 'gear-line__acts', more));
@@ -8142,6 +8279,93 @@ const FIREBASE_CONFIG = {
     });
   }
 
+  /* Poderes no combate: cada poder tem um momento (Ataque, Defesa, Ação bônus...). O campo "Quando usa"
+     da Oficina decide; sem ele, vale o efeito ("defesa", "ataque"). Os de ataque aparecem dentro do Atacar,
+     os de defesa dentro do Rolar defesa e os outros na aba Poderes. */
+  const POWER_MOMENTS = ['Ataque', 'Defesa', 'Ação bônus', 'Ação padrão', 'Reação', 'Passivo'];
+  function powerMoment(p) {
+    const v = (p && p.values) || {};
+    if (POWER_MOMENTS.indexOf(v.momento) >= 0) return v.momento;
+    const off = p && p.id ? BUILTINS.find((e) => e.id === p.id) : null;
+    if (off && off.values && off.values.momento) return off.values.momento;
+    const t = nameKey(v.efeito || '');
+    if (/defesa/.test(t)) return 'Defesa';
+    if (/\bataque|\batacar|\batacando/.test(t)) return 'Ataque';
+    return powerOpts(p).length || peCost(v.custoUso) ? 'Ação bônus' : 'Passivo';
+  }
+  // o que o personagem pode usar: as opções compradas de um poder-lista, ou o próprio poder
+  function powerUses(s) {
+    const out = [];
+    (s.powers || []).forEach((p) => {
+      const when = powerMoment(p);
+      const v = p.values || {};
+      const opts = powerOpts(p);
+      if (opts.length) opts.forEach((o) => { if (powerPicks(p).indexOf(o.name) >= 0) out.push({ key: (p.id || p.name) + '|' + o.name, p, name: o.name, from: p.name, text: o.text, pe: peCost(o.cost), when }); });
+      else out.push({ key: (p.id || p.name) + '|', p, name: p.name, from: '', text: v.efeito || '', pe: peCost(v.custoUso), when });
+    });
+    return out;
+  }
+  // paga o PE de uma lista de usos de uma vez; false se não der
+  async function payPowers(mb, uses) {
+    const pe = uses.reduce((t, u) => t + u.pe, 0);
+    if (!pe) return true;
+    const c = sheetOf(mb);
+    const cur = getCur(c.sheet, 'pe', compute(c).max.pe);
+    if (cur < pe) { toast('PE insuficiente: ' + uses.map((u) => u.name).join(', ') + ' custam ' + pe + ' PE e há ' + cur + '.'); return false; }
+    try { await patchMemberSheet(mb, (ss) => { const mm = compute(Object.assign({}, mb, { sheet: ss })); setCur(ss, 'pe', getCur(ss, 'pe', mm.max.pe) - pe, mm.max.pe); }); }
+    catch (err) { toast(errorMessage(err)); return false; }
+    return true;
+  }
+  const powerNote = (uses) => (uses.length ? 'Poderes: ' + uses.map((u) => u.name + (u.pe ? ' (−' + u.pe + ' PE)' : '')).join(', ') : '');
+  // marcar poderes de um momento antes de agir (Atacar, Rolar defesa)
+  function powerToggles(mb, when, set, onChange) {
+    const uses = powerUses(sheetOf(mb).sheet).filter((u) => u.when === when);
+    if (!uses.length) return null;
+    return h('div', 'cmd__pows', h('span', 'cmd__pows-title', when === 'Ataque' ? 'Poderes no ataque' : 'Poderes na defesa'),
+      h('div', 'cmd__chips', ...uses.map((u) => {
+        const on = set.has(u.key);
+        const b = h('button', 'man__opt pow__opt' + (on ? ' is-on' : ''), u.name, u.pe ? h('span', 'qtest__cost', u.pe + ' PE') : null);
+        b.type = 'button';
+        b.title = (u.from ? u.from + ': ' : '') + u.text;
+        b.dataset.fid = ('pow-' + nameKey(u.name)).replace(/\s+/g, '-');
+        b.setAttribute('aria-pressed', String(on));
+        b.addEventListener('click', () => { if (set.has(u.key)) set.delete(u.key); else set.add(u.key); onChange(); });
+        return b;
+      })),
+      h('p', 'cmd__note', uses.filter((u) => set.has(u.key)).map((u) => u.name + ': ' + u.text).join(' ') || 'Toque para ativar junto com a ação; o PE sai quando a ação acontece.'));
+  }
+  // aba Poderes: tudo o que o personagem tem, separado pelo momento de uso
+  function powersTab(actor) {
+    const mb = actor.member;
+    const uses = powerUses(sheetOf(mb).sheet);
+    if (!uses.length) return h('p', 'cmd__note', 'Este personagem não tem poderes.');
+    const go = (cmd, slot) => { battle.slot = slot; battle.cmd = cmd; battle.view = 'cfg'; renderBattle(); };
+    const groups = POWER_MOMENTS.map((when) => {
+      const list = uses.filter((u) => u.when === when);
+      if (!list.length) return null;
+      return h('section', 'pows__group', h('h4', 'pows__title', when),
+        ...list.map((u) => {
+          let act = null;
+          if (when === 'Ataque') act = gmBtn('Usar no Atacar', 'btn--ghost', () => { battle.atkPow.add(u.key); go('atacar', 'padrao'); });
+          else if (when === 'Defesa') act = gmBtn('Usar na defesa', 'btn--ghost', () => { battle.defPow.add(u.key); go('defesa', 'livre'); });
+          else if (when !== 'Passivo') {
+            const cost = when === 'Ação bônus' ? 'bonus' : when === 'Ação padrão' ? 'padrao' : '';
+            act = gmBtn('Usar' + (u.pe ? ' (−' + u.pe + ' PE)' : ''), 'btn--primary', async () => {
+              if (cost && slotUsed(actor, cost)) { toast(SLOT_LONG[cost] + ' já foi usada neste turno.'); return; }
+              if (!(await payPowers(mb, [u]))) return;
+              const paid = econPay(actor, cost);
+              await campaignRoll(mb, { expr: u.pe ? '−' + u.pe + ' PE' : 'poder', label: ('Poder: ' + u.name).slice(0, 60), detail: [paid, (u.from ? u.from + ' · ' : '') + u.text].filter(Boolean).join(' · ').slice(0, 1450), total: u.pe, flag: '' });
+              toast(u.name + (u.pe ? ': −' + u.pe + ' PE.' : ' usado.'));
+              renderBattle();
+            });
+          }
+          return h('div', 'pows__item', h('span', 'pows__head', h('strong', '', u.name), u.from ? h('span', 'tag', u.from) : null, u.pe ? h('span', 'qtest__cost', u.pe + ' PE') : h('span', 'tag', when === 'Passivo' ? 'sempre ativo' : 'sem custo')),
+            u.text ? h('span', 'pows__text', u.text) : null, act);
+        }));
+    }).filter(Boolean);
+    return h('div', 'pows', ...groups);
+  }
+
   function renderDock() {
     const dock = $('#dock');
     const mb = currentCamp && dockMember();
@@ -8361,7 +8585,7 @@ const FIREBASE_CONFIG = {
      Condições ficam na cena (scene.tags: id → [{ n, r }], r = rodadas restantes, 0 = até tirar);
      quem não entra no combate fica em scene.out. */
   const CONDITIONS = ['Atordoado', 'Caído', 'Sangrando', 'Em chamas', 'Envenenado', 'Cego', 'Imobilizado', 'Agarrado', 'Escondido', 'Assustado', 'Lento', 'Inspirado', 'Protegido', 'Concentrado'];
-  const battle = { actor: '', menu: 'acoes', cmd: 'atacar', duel: { mine: '', target: '', theirs: '' }, man: { id: '', target: '' }, heal: { target: '', key: '' }, test: '', advance: '', pin: { id: '', key: '' }, view: 'main', slot: '', aim: null, name: '', xp: '' };
+  const battle = { atkPow: new Set(), defPow: new Set(), actor: '', menu: 'acoes', cmd: 'atacar', duel: { mine: '', target: '', theirs: '' }, man: { id: '', target: '' }, heal: { target: '', key: '' }, test: '', advance: '', pin: { id: '', key: '' }, view: 'main', slot: '', aim: null, name: '', xp: '' };
   let lastRolls = [];
   const sceneTags = () => (scene && scene.tags) || {};
   const sceneOut = () => (scene && Array.isArray(scene.out) ? scene.out : []);
@@ -9099,6 +9323,7 @@ const FIREBASE_CONFIG = {
     } else if (battle.view === 'slot') body = slotView(actor, list, gm);
     else if (battle.view === 'cfg') body = cfgView(actor, list, gm);
     else if (battle.view === 'itens' && !actor.foe) body = h('div', 'cmd__panel', backBtn(battle.slot ? 'slot' : 'main'), itemsPanel(actor, list));
+    else if (battle.view === 'poderes' && !actor.foe) body = h('div', 'cmd__panel', backBtn('main'), h('div', 'cmd__about', h('strong', '', 'Poderes'), h('span', '', 'Os de ataque e de defesa entram junto com essas ações; os outros se usam daqui, com o custo da ação.')), powersTab(actor));
     else body = mainView(actor, gm);
     // a tela de comandos entra animada só quando muda (não a cada atualização da mesa)
     const viewKey = actor.id + '|' + battle.view + '|' + battle.slot + '|' + battle.cmd + '|' + Boolean(battle.aim);
@@ -9135,6 +9360,13 @@ const FIREBASE_CONFIG = {
       inv.dataset.fid = 'cmd-itens';
       inv.addEventListener('click', () => { battle.slot = ''; battle.view = 'itens'; renderBattle(); });
       extra.push(inv);
+      if (powerUses(sheetOf(actor.member).sheet).length) {
+        const pw = h('button', 'btn btn--ghost btn--sm', 'Poderes');
+        pw.type = 'button';
+        pw.dataset.fid = 'cmd-poderes-tab';
+        pw.addEventListener('click', () => { battle.slot = ''; battle.view = 'poderes'; renderBattle(); });
+        extra.push(pw);
+      }
     }
     if (live) {
       const reset = h('button', 'btn btn--ghost btn--sm', 'Repor ações');
@@ -9162,7 +9394,7 @@ const FIREBASE_CONFIG = {
       if (why && a.go !== 'itens') { b.disabled = true; b.title = why; }
       b.addEventListener('click', async () => {
         if (a.go === 'itens') { battle.view = 'itens'; renderBattle(); return; }
-        if (a.go === 'cfg') { battle.cmd = a.id; battle.view = 'cfg'; renderBattle(); return; }
+        if (a.go === 'cfg' || (a.id === 'defesa' && actor.member && powerUses(sheetOf(actor.member).sheet).some((u) => u.when === 'Defesa'))) { battle.cmd = a.id; battle.view = 'cfg'; renderBattle(); return; }
         if (a.go === 'aim') { aimFor(a.id, actor, list); return; }
         b.disabled = true;
         try { await doNow(a.id, actor, list, costOfAct(sl.id, a)); } catch (err) { toast(errorMessage(err)); }
@@ -9216,7 +9448,7 @@ const FIREBASE_CONFIG = {
   function cfgView(actor, list, gm) {
     const id = battle.cmd;
     const back = backBtn('slot');
-    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', teste: 'Teste da ficha', disputa: 'Disputa', poderes: 'Poderes' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
+    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', teste: 'Teste da ficha', disputa: 'Disputa', poderes: 'Poderes', defesa: 'Rolar defesa' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
     let body;
     if (id === 'atacar') body = attackCfg(actor, list);
     else if (id === 'manobra') body = maneuverCfg(actor, list);
@@ -9242,6 +9474,17 @@ const FIREBASE_CONFIG = {
       body = h('div', 'cmd__row', selField('cmd-test', 'Teste', tests.map((t) => [t.id, t.label]), battle.test, (v) => { battle.test = v; }),
         gmBtn('Rolar', 'btn--primary', async () => { const t = tests.find((y) => y.id === battle.test); if (t) await rollAs(actor, rollTest(t.make())); battle.view = 'main'; renderBattle(); }));
     } else if (id === 'disputa') body = duelCfg(actor, list);
+    else if (id === 'defesa') {
+      body = h('div', 'cmd__stack', actor.member ? powerToggles(actor.member, 'Defesa', battle.defPow, () => renderBattle()) : null,
+        h('div', 'cmd__row', gmBtn('Rolar defesa', 'btn--primary', async () => {
+          const uses = actor.member ? powerUses(sheetOf(actor.member).sheet).filter((u) => u.when === 'Defesa' && battle.defPow.has(u.key)) : [];
+          if (uses.length && !(await payPowers(actor.member, uses))) return;
+          battle.defPow.clear();
+          await rollDefense(actor, uses);
+          battle.view = 'main';
+          renderBattle();
+        })));
+    }
     else body = h('p', 'cmd__note', '');
     return h('div', 'cmd__panel', back, about, body);
   }
@@ -9267,6 +9510,12 @@ const FIREBASE_CONFIG = {
       st.per = shots;
       st.shots = Object.values(shots).reduce((t, n) => t + n, 0);
       const t = peekBuild();
+      // poderes de ataque marcados: pagam o PE agora e entram no teste (Certeiro: crítico com 5 e 6)
+      const uses = who.member && !adv ? powerUses(sheetOf(who.member).sheet).filter((u) => u.when === 'Ataque' && battle.atkPow.has(u.key)) : [];
+      if (uses.length && !(await payPowers(who.member, uses))) return;
+      battle.atkPow.clear();
+      if (uses.some((u) => nameKey(u.name) === 'certeiro')) t.critFive = true;
+      st.powNote = powerNote(uses);
       const paid = adv ? 'parte do avanço' : econPay(actor, cost);
       if (adv) battle.advance = '';
       await runAttack(who, t, st, h('button'), paid);
@@ -9298,7 +9547,7 @@ const FIREBASE_CONFIG = {
       renderBattle();
     };
     const base = Object.assign({}, c, { handsOnly: true, meleeOnly: adv, onReload });
-    return h('div', 'cmd__stack', note, attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
+    return h('div', 'cmd__stack', note, adv ? null : powerToggles(mb, 'Ataque', battle.atkPow, () => renderBattle()), attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
       const weapon = weaponsOf(c.sheet).find((w) => w.uid === st.uid) || null;
       const cad = st.cad === false ? 1 : maxShots(weapon);
       const prof = weapon ? isProficient(c.sheet, weapon) : false;
@@ -9835,11 +10084,20 @@ const FIREBASE_CONFIG = {
   }
 
   // Defesa da cena: 2d6 + Corpo + Resistência; abaixo da mínima, vale a mínima
-  async function rollDefense(x) {
-    let attr, res;
+  async function rollDefense(x, uses) {
+    uses = uses || [];
+    let attr, res, attrName = 'Corpo', skillName = 'Resistência';
+    const mods = [];
     if (x.foe) { const v = foeVals(x.foe); attr = num(v.corpo); res = num(v.resistencia); }
-    else { const s = normSheet(x.member.sheet); attr = num(s.attrs.corpo); res = num(s.skills.resistencia); }
-    const r = rollTest({ label: 'Defesa da cena', attrName: 'Corpo', attr, skillName: 'Resistência', skill: res });
+    else {
+      const s = normSheet(x.member.sheet);
+      attr = num(s.attrs.corpo); res = num(s.skills.resistencia);
+      // Defensivas: Esquiva troca para Precisão + Reflexos; Explosiva soma a armadura
+      if (uses.some((u) => nameKey(u.name) === 'esquiva')) { attr = num(s.attrs.precisao); res = num(s.skills.reflexos); attrName = 'Precisão'; skillName = 'Reflexos'; }
+      if (uses.some((u) => nameKey(u.name) === 'explosiva')) mods.push(['armadura (Explosiva)', compute(sheetOf(x.member)).src.armadura.reduce((t, a) => t + a.val, 0)]);
+    }
+    const r = rollTest({ label: 'Defesa da cena', attrName, attr, skillName, skill: res, mods });
+    if (uses.length) r.detail = powerNote(uses) + ' · ' + r.detail;
     const val = r.flag === 'falha' ? x.defMin : Math.max(r.total, x.defMin);
     r.detail += ' → defesa ' + val + (val > r.total || r.flag === 'falha' ? ' (vale a mínima ' + x.defMin + ')' : '');
     if (x.foe) await db.updateFoe(currentCamp.id, x.foe.id, { def: val });
@@ -9975,6 +10233,7 @@ const FIREBASE_CONFIG = {
       } catch (err) { toast(errorMessage(err)); }
     }
     r.label = t.label;
+    if (st.powNote) { r.detail = st.powNote + ' · ' + r.detail; st.powNote = ''; }
     if (paid) r.detail = paid + ' · ' + r.detail;
     r.detail += (types.length ? ' · ' + types.join(', ') : '') + ' · ' + lines.join(' | ');
     await postCombatRoll(who, r);
@@ -10282,6 +10541,7 @@ const FIREBASE_CONFIG = {
     suggestAfter($('#gmlib-list'), r.suggest, $('#gmlib-q'), runItems);
     const noChars = !members.some((mb) => mb.sheet && mb.sheet.attrs);
     $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
+    gmMulti.paint();
     $('#gmlib-hint').textContent = r.warn || (!list.length ? 'Nada encontrado.'
       : plural(list.length, 'resultado', 'resultados') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
         + (noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" abre o grupo para você escolher quem recebe.'));
@@ -10391,6 +10651,20 @@ const FIREBASE_CONFIG = {
       openDialog(giveDlg);
       if (chars.length > 3) q.focus();
     });
+  }
+  // dar vários de uma vez: a mesma pessoa recebe todos
+  const gmMulti = multiPick($('#gmlib-list'), { enabled: () => members.some((mb) => mb.sheet && mb.sheet.attrs), label: (n) => 'Dar ' + (n || ''), onConfirm: (list) => giveItems(list) });
+  $('#gmlib-list').before(gmMulti.tip);
+  $('#gmlib-list').after(gmMulti.bar);
+  async function giveItems(list) {
+    if (list.length === 1) return giveItem(list[0]);
+    const mb = await askGiveTo({ name: list.length + ' itens' });
+    if (!mb) return;
+    try {
+      await patchMemberSheet(mb, (s) => { list.forEach((e) => s.inventory.push(Object.assign(invEntryFrom(e), { src: 'mestre' }))); });
+      play('ok');
+      toast(list.length + ' itens foram para a mochila de ' + mb.name + '.');
+    } catch (err) { toast(errorMessage(err)); }
   }
   async function giveItem(e) {
     const mb = await askGiveTo(e);
@@ -10680,11 +10954,13 @@ const FIREBASE_CONFIG = {
     toast(it.name + ' foi para ' + v.name + '.');
   }
   async function addLootItem(l) {
-    const e = await openPicker({ title: 'Item para ' + l.name, kinds: INVENTORY_KINDS, chips: ['Saque'] });
-    if (!e) return;
+    const picked = await openPickerMany({ title: 'Item para ' + l.name, kinds: INVENTORY_KINDS, chips: ['Saque'] });
+    if (!picked.length) return;
     const cur = freshLoot(l);
-    if ((cur.items || []).length >= 60) { toast('Uma lista de saque guarda até 60 itens.'); return; }
-    await saveCol('loot', l.id, { items: (cur.items || []).concat([Object.assign(invEntryFrom(e), { src: 'saque' })]) });
+    const room = 60 - (cur.items || []).length;
+    if (room <= 0) { toast('Uma lista de saque guarda até 60 itens.'); return; }
+    if (picked.length > room) toast('Uma lista de saque guarda até 60 itens: entraram só ' + room + ' de ' + picked.length + '.');
+    await saveCol('loot', l.id, { items: (cur.items || []).concat(picked.slice(0, room).map((e) => Object.assign(invEntryFrom(e), { src: 'saque' }))) });
   }
   async function dropLootItem(l, it) {
     if (!it) return;
@@ -10929,13 +11205,20 @@ const FIREBASE_CONFIG = {
     } catch (err) { await saveCol('vaults', v.id, { items: ((vaults.find((x) => x.id === v.id) || v).items || []).concat([it]) }); toast(errorMessage(err)); }
   }
   async function vaultAddItem(v) {
-    const e = await openPicker({ title: 'Item para ' + v.name, kinds: INVENTORY_KINDS, chips: ['Armazém'] });
-    if (!e) return;
+    const picked = await openPickerMany({ title: 'Item para ' + v.name, kinds: INVENTORY_KINDS, chips: ['Armazém'] });
+    if (!picked.length) return;
     const cur = vaults.find((x) => x.id === v.id) || v;
-    const it = invEntryFrom(e);
-    const full = vaultFits(cur, it);
-    if (full) { toast(full); return; }
-    await saveCol('vaults', v.id, { items: (cur.items || []).concat([it]) });
+    const items = (cur.items || []).slice();
+    let full = '';
+    picked.forEach((e) => { // entra na ordem escolhida até acabar o espaço ou a carga
+      if (full) return;
+      const it = invEntryFrom(e);
+      full = vaultFits(Object.assign({}, cur, { items }), it);
+      if (!full) items.push(it);
+    });
+    const added = items.length - (cur.items || []).length;
+    if (full) toast(added ? 'Entraram ' + added + ' de ' + picked.length + '. ' + full : full);
+    if (added) await saveCol('vaults', v.id, { items });
   }
   // criar (mestre), pedir (jogador) ou mudar a capacidade
   let vaultDlg = null;
@@ -11189,12 +11472,12 @@ const FIREBASE_CONFIG = {
   }
 
   async function addBankItem(sh) {
-    const e = await openPicker({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
+    const picked = await openPickerMany({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
       { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
       { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
-    if (!e) return;
+    if (!picked.length) return;
     const fresh = shops.find((x) => x.id === sh.id) || sh;
-    await saveShop(fresh, { items: fresh.items.concat([{ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }]) });
+    await saveShop(fresh, { items: fresh.items.concat(picked.map((e) => ({ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }))) });
   }
 
   // Descanso passado pelo mestre: NPCs podem comprar o que está à venda nas lojas com fluxo
