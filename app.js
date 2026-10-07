@@ -2762,6 +2762,7 @@ const FIREBASE_CONFIG = {
     open.addEventListener('click', () => openEntry(e));
     open.addEventListener('keydown', (ev) => { if (ev.target === open && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openEntry(e); } });
     const row = h('li', 'row lib-row', open, starButton(e, onFav));
+    row.libEntry = e; // usado pela seleção múltipla
     (actions || []).forEach((a) => {
       const b = h('button', 'btn btn--sm ' + (a.cls || 'btn--ghost'), a.label);
       b.type = 'button';
@@ -2770,6 +2771,82 @@ const FIREBASE_CONFIG = {
       row.append(b);
     });
     return row;
+  }
+
+  /* Seleção múltipla numa lista de libRow: segurar (toque longo) ou dar dois cliques num item liga o modo;
+     daí cada toque marca ou desmarca, e a barra confirma todos de uma vez. A marcação sobrevive a novas buscas. */
+  const multiKey = (e) => e.id || e.uid || e.name;
+  function multiPick(ul, cfg) {
+    const st = { on: false, sel: new Map(), timer: 0, longed: false, clickT: 0, passing: false };
+    const count = h('strong', 'multi-bar__count', '');
+    const clear = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+    clear.type = 'button';
+    clear.dataset.fid = 'multi-cancel';
+    const ok = h('button', 'btn btn--primary btn--sm', '');
+    ok.type = 'button';
+    ok.dataset.fid = 'multi-ok';
+    const tip = h('p', 'multi-tip', 'Dica: segure ou toque duas vezes num item para escolher vários de uma vez.');
+    const bar = h('div', 'multi-bar', count, h('span', 'multi-bar__acts', clear, ok));
+    bar.hidden = true;
+    const live = () => !cfg.enabled || cfg.enabled();
+    const paint = () => {
+      ul.classList.toggle('is-multi', st.on);
+      ul.querySelectorAll('.lib-row').forEach((r) => {
+        const on = Boolean(r.libEntry && st.sel.has(multiKey(r.libEntry)));
+        r.classList.toggle('is-picked', on);
+        if (st.on) r.setAttribute('aria-selected', String(on)); else r.removeAttribute('aria-selected');
+      });
+      const n = st.sel.size;
+      bar.hidden = !st.on;
+      tip.hidden = st.on || !live();
+      count.textContent = plural(n, 'item selecionado', 'itens selecionados');
+      ok.textContent = cfg.label(n);
+      ok.disabled = !n;
+    };
+    const reset = () => { st.on = false; st.sel.clear(); paint(); };
+    const toggle = (row) => {
+      const e = row.libEntry;
+      if (!e) return;
+      const k = multiKey(e);
+      if (st.sel.has(k)) st.sel.delete(k); else st.sel.set(k, e);
+      st.on = true;
+      paint();
+    };
+    const rowOf = (t) => { if (!live()) return null; const r = t && t.closest ? t.closest('.lib-row') : null; return r && ul.contains(r) ? r : null; };
+    ul.addEventListener('pointerdown', (ev) => {
+      const r = rowOf(ev.target);
+      if (!r || ev.button > 0) return;
+      st.longed = false;
+      const x = ev.clientX, y = ev.clientY;
+      clearTimeout(st.timer);
+      st.timer = setTimeout(() => { st.longed = true; if (navigator.vibrate) navigator.vibrate(15); toggle(r); }, 450);
+      const stop = (e2) => {
+        if (e2.type === 'pointermove' && Math.hypot(e2.clientX - x, e2.clientY - y) < 10) return;
+        clearTimeout(st.timer);
+        ['pointermove', 'pointerup', 'pointercancel'].forEach((t) => window.removeEventListener(t, stop));
+      };
+      ['pointermove', 'pointerup', 'pointercancel'].forEach((t) => window.addEventListener(t, stop));
+    });
+    ul.addEventListener('contextmenu', (ev) => { if (rowOf(ev.target)) ev.preventDefault(); });
+    ul.addEventListener('click', (ev) => {
+      const r = rowOf(ev.target);
+      if (!r || st.passing) return;
+      if (ev.target.closest('.star')) { if (!st.on) return; }
+      if (st.longed) { st.longed = false; ev.stopPropagation(); ev.preventDefault(); return; }
+      if (st.on) { ev.stopPropagation(); ev.preventDefault(); toggle(r); return; }
+      // fora do modo: dois cliques no corpo do item ligam o modo; um clique só abre a ficha, como antes
+      const open = ev.target.closest('.row__open');
+      if (!open) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+      if (st.clickT && st.clickRow === r) { clearTimeout(st.clickT); st.clickT = 0; toggle(r); return; }
+      clearTimeout(st.clickT);
+      st.clickRow = r;
+      st.clickT = setTimeout(() => { st.clickT = 0; st.passing = true; open.click(); st.passing = false; }, 280);
+    }, true);
+    clear.addEventListener('click', reset);
+    ok.addEventListener('click', () => { const list = [...st.sel.values()].map(deep); reset(); cfg.onConfirm(list); });
+    return { bar, tip, paint, reset, get on() { return st.on; } };
   }
 
   // campos de mecânica que o espécime tinha antes do script dos poderes
@@ -3159,6 +3236,7 @@ const FIREBASE_CONFIG = {
       [{ label: 'Escolher', cls: 'btn--primary', onClick: () => finishPicker(deep(e)) }],
       () => { if ($('#picker-fav').checked) runPicker(); })));
     $('#picker-empty').hidden = list.length > 0;
+    pkMulti.paint();
     suggestAfter($('#picker-list'), list.length ? '' : suggest, $('#picker-q'), runPicker);
     $('#picker-hint').textContent = warn || plural(list.length, 'opção compatível', 'opções compatíveis') + (favOnly ? ' entre os favoritos' : '');
   }
@@ -3187,6 +3265,8 @@ const FIREBASE_CONFIG = {
       $('#picker-q').value = '';
       $('#picker-fav').checked = false;
       $('#picker-list').replaceChildren();
+      pk.multi = Boolean(opts.multi);
+      pkMulti.reset();
       $('#picker-empty').hidden = true;
       $('#picker-create').hidden = !opts.create;
       if (opts.create) $('#picker-create-btn').textContent = opts.create.label;
@@ -3195,6 +3275,15 @@ const FIREBASE_CONFIG = {
       runPicker();
       if (window.matchMedia('(pointer: fine)').matches) $('#picker-q').focus();
     });
+  }
+  // seleção múltipla do picker: só nos menus que aceitam vários itens (openPickerMany)
+  const pkMulti = multiPick($('#picker-list'), { enabled: () => pk.multi, label: (n) => 'Adicionar ' + (n || ''), onConfirm: (list) => finishPicker(list) });
+  $('#picker-list').before(pkMulti.tip);
+  $('#picker-list').after(pkMulti.bar);
+  // como openPicker, mas devolve sempre uma lista (vazia se fechar sem escolher)
+  async function openPickerMany(opts) {
+    const r = await openPicker(Object.assign({}, opts, { multi: true }));
+    return !r ? [] : Array.isArray(r) ? r : [r];
   }
   $('#picker-q').addEventListener('input', debounce(runPicker, 250));
   $('#picker-fav').addEventListener('change', runPicker);
@@ -4732,11 +4821,11 @@ const FIREBASE_CONFIG = {
     add.type = 'button';
     add.dataset.fid = 'rt-item-add';
     add.addEventListener('click', async () => {
-      const e = await openPicker({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
+      const picked = await openPickerMany({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
         { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
         { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
-      if (!e || rt.r !== r) return;
-      r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) });
+      if (!picked.length || rt.r !== r) return;
+      picked.forEach((e) => r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) }));
       renderRoteiro();
     });
     return h('article', 'guide__page rt-page rt-page--itens',
@@ -6572,17 +6661,16 @@ const FIREBASE_CONFIG = {
   $('#inv-armory').addEventListener('click', () => openArmory(''));
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
-    const e = await openPicker({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
+    const picked = await openPickerMany({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
       { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
       { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
-    if (!e || sheetChar !== ch) return;
-    const entry = Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' });
+    if (!picked.length || sheetChar !== ch) return;
     const wasOver = compute(ch).over;
-    ch.sheet.inventory.push(entry);
+    picked.forEach((e) => ch.sheet.inventory.push(Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' })));
     changed();
     const m = compute(ch);
     // não impede: só avisa das desvantagens quando a carga passa do limite
-    toast(e.name + ' entrou no inventário.' + (m.over ? (wasOver ? ' Continua sobrecarregado (' : ' Agora está sobrecarregado (') + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '): deslocamento pela metade e ações físicas sobem uma categoria.' : ''));
+    toast((picked.length > 1 ? picked.length + ' itens entraram' : picked[0].name + ' entrou') + ' no inventário.' + (m.over ? (wasOver ? ' Continua sobrecarregado (' : ' Agora está sobrecarregado (') + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '): deslocamento pela metade e ações físicas sobem uma categoria.' : ''));
   });
 
   $('#form-quick-item').addEventListener('submit', (ev) => {
@@ -7573,11 +7661,11 @@ const FIREBASE_CONFIG = {
       const more = h('button', 'btn btn--ghost btn--sm', 'Adicionar item do banco');
       more.type = 'button';
       more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
-        const e = await openPicker({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
+        const picked = await openPickerMany({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
           { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
           { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
-        if (!e || !wz) return;
-        g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e });
+        if (!picked.length || !wz) return;
+        picked.forEach((e) => g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e }));
         renderSetup();
       });
       body.append(h('div', 'gear-line__acts', more));
@@ -10453,6 +10541,7 @@ const FIREBASE_CONFIG = {
     suggestAfter($('#gmlib-list'), r.suggest, $('#gmlib-q'), runItems);
     const noChars = !members.some((mb) => mb.sheet && mb.sheet.attrs);
     $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
+    gmMulti.paint();
     $('#gmlib-hint').textContent = r.warn || (!list.length ? 'Nada encontrado.'
       : plural(list.length, 'resultado', 'resultados') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
         + (noChars ? ' Nenhum personagem vinculado para receber itens.' : ' "Dar" abre o grupo para você escolher quem recebe.'));
@@ -10562,6 +10651,20 @@ const FIREBASE_CONFIG = {
       openDialog(giveDlg);
       if (chars.length > 3) q.focus();
     });
+  }
+  // dar vários de uma vez: a mesma pessoa recebe todos
+  const gmMulti = multiPick($('#gmlib-list'), { enabled: () => members.some((mb) => mb.sheet && mb.sheet.attrs), label: (n) => 'Dar ' + (n || ''), onConfirm: (list) => giveItems(list) });
+  $('#gmlib-list').before(gmMulti.tip);
+  $('#gmlib-list').after(gmMulti.bar);
+  async function giveItems(list) {
+    if (list.length === 1) return giveItem(list[0]);
+    const mb = await askGiveTo({ name: list.length + ' itens' });
+    if (!mb) return;
+    try {
+      await patchMemberSheet(mb, (s) => { list.forEach((e) => s.inventory.push(Object.assign(invEntryFrom(e), { src: 'mestre' }))); });
+      play('ok');
+      toast(list.length + ' itens foram para a mochila de ' + mb.name + '.');
+    } catch (err) { toast(errorMessage(err)); }
   }
   async function giveItem(e) {
     const mb = await askGiveTo(e);
@@ -10851,11 +10954,13 @@ const FIREBASE_CONFIG = {
     toast(it.name + ' foi para ' + v.name + '.');
   }
   async function addLootItem(l) {
-    const e = await openPicker({ title: 'Item para ' + l.name, kinds: INVENTORY_KINDS, chips: ['Saque'] });
-    if (!e) return;
+    const picked = await openPickerMany({ title: 'Item para ' + l.name, kinds: INVENTORY_KINDS, chips: ['Saque'] });
+    if (!picked.length) return;
     const cur = freshLoot(l);
-    if ((cur.items || []).length >= 60) { toast('Uma lista de saque guarda até 60 itens.'); return; }
-    await saveCol('loot', l.id, { items: (cur.items || []).concat([Object.assign(invEntryFrom(e), { src: 'saque' })]) });
+    const room = 60 - (cur.items || []).length;
+    if (room <= 0) { toast('Uma lista de saque guarda até 60 itens.'); return; }
+    if (picked.length > room) toast('Uma lista de saque guarda até 60 itens: entraram só ' + room + ' de ' + picked.length + '.');
+    await saveCol('loot', l.id, { items: (cur.items || []).concat(picked.slice(0, room).map((e) => Object.assign(invEntryFrom(e), { src: 'saque' }))) });
   }
   async function dropLootItem(l, it) {
     if (!it) return;
@@ -11100,13 +11205,20 @@ const FIREBASE_CONFIG = {
     } catch (err) { await saveCol('vaults', v.id, { items: ((vaults.find((x) => x.id === v.id) || v).items || []).concat([it]) }); toast(errorMessage(err)); }
   }
   async function vaultAddItem(v) {
-    const e = await openPicker({ title: 'Item para ' + v.name, kinds: INVENTORY_KINDS, chips: ['Armazém'] });
-    if (!e) return;
+    const picked = await openPickerMany({ title: 'Item para ' + v.name, kinds: INVENTORY_KINDS, chips: ['Armazém'] });
+    if (!picked.length) return;
     const cur = vaults.find((x) => x.id === v.id) || v;
-    const it = invEntryFrom(e);
-    const full = vaultFits(cur, it);
-    if (full) { toast(full); return; }
-    await saveCol('vaults', v.id, { items: (cur.items || []).concat([it]) });
+    const items = (cur.items || []).slice();
+    let full = '';
+    picked.forEach((e) => { // entra na ordem escolhida até acabar o espaço ou a carga
+      if (full) return;
+      const it = invEntryFrom(e);
+      full = vaultFits(Object.assign({}, cur, { items }), it);
+      if (!full) items.push(it);
+    });
+    const added = items.length - (cur.items || []).length;
+    if (full) toast(added ? 'Entraram ' + added + ' de ' + picked.length + '. ' + full : full);
+    if (added) await saveCol('vaults', v.id, { items });
   }
   // criar (mestre), pedir (jogador) ou mudar a capacidade
   let vaultDlg = null;
@@ -11360,12 +11472,12 @@ const FIREBASE_CONFIG = {
   }
 
   async function addBankItem(sh) {
-    const e = await openPicker({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
+    const picked = await openPickerMany({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
       { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
       { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
-    if (!e) return;
+    if (!picked.length) return;
     const fresh = shops.find((x) => x.id === sh.id) || sh;
-    await saveShop(fresh, { items: fresh.items.concat([{ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }]) });
+    await saveShop(fresh, { items: fresh.items.concat(picked.map((e) => ({ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }))) });
   }
 
   // Descanso passado pelo mestre: NPCs podem comprar o que está à venda nas lojas com fluxo

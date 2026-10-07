@@ -1119,6 +1119,17 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 .lib-icon--mod { background: var(--rar); color: var(--abismo); border-radius: 50%; }
 .lib-row { flex-wrap: wrap; }
 .lib-row .row__open { align-items: flex-start; }
+/* seleção múltipla (segurar ou dois cliques) */
+#picker-list .lib-row, #gmlib-list .lib-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.is-multi .lib-row { cursor: pointer; }
+.is-multi .lib-row > .btn { visibility: hidden; }
+.lib-row.is-picked { background: rgba(var(--ambar-rgb), 0.14); box-shadow: inset 3px 0 0 var(--ambar); }
+.is-multi .lib-row .row__open::before { content: ""; flex: none; align-self: center; width: 1.2rem; height: 1.2rem; border: 2px solid var(--linha-forte); border-radius: 0.3rem; }
+.is-multi .lib-row.is-picked .row__open::before { content: "✓"; display: grid; place-items: center; border-color: var(--ambar); background: var(--ambar); color: var(--ambar-tinta); font: 900 0.8rem/1 var(--fonte-ui); }
+.multi-tip { margin: 0 0 0.4rem; color: var(--nevoa-2); font-size: var(--t-s); }
+.multi-bar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.5rem; padding: 0.6rem 0.75rem; border: 1px solid rgba(var(--ambar-rgb), 0.55); border-radius: 0.7rem; background: var(--casco-2); box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35); }
+.multi-bar[hidden] { display: none; }
+.multi-bar__acts { display: flex; gap: 0.4rem; margin-left: auto; }
 .lib-row__open { cursor: pointer; }
 .lib-row__open:focus-visible { outline: 3px solid var(--mare); outline-offset: -3px; }
 .entry__img { display: block; max-width: 100%; max-height: 260px; margin: 0 auto 1rem; border-radius: 8px; object-fit: contain; }
@@ -3270,3 +3281,4 @@ html, body { max-width: 100%; overflow-x: clip; }
 @media (max-width: 480px) { .facts__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .fact--rar { border-color: var(--rar); background: color-mix(in srgb, var(--rar) 10%, transparent); }
 .fact--rar .fact__v { color: var(--rar); }
+@media (max-width: 1023px) { #gmlib-list + .multi-bar { bottom: calc(5.6rem + env(safe-area-inset-bottom)); } }
