@@ -3400,10 +3400,36 @@ html, body { max-width: 100%; overflow-x: clip; }
   .facets__chip { flex: none; }
 }
 
-/* avisos da ficha: cada um pode ser dispensado */
-.alerts__item { display: flex; align-items: flex-start; gap: 0.5rem; justify-content: space-between; }
-.alerts__x { flex: none; width: 28px; height: 28px; margin: -0.2rem -0.35rem 0 0; border: 0; border-radius: 50%; background: transparent; color: var(--nevoa-2); font-size: 1.15rem; line-height: 1; cursor: pointer; }
+/* Progressão: trilha (com o nível) no topo e avisos logo abaixo, que resolvem ali mesmo */
+.prog { grid-template-columns: minmax(0, 1fr); }
+.prog__track .prog__level { display: grid; padding: 0.75rem; border: 1px solid rgba(var(--ambar-rgb), 0.45); border-radius: 0.7rem; }
+.prog__up-from.is-bad { color: var(--erro); font-weight: 700; }
+.prog .alerts { margin: 0; border-left: 3px solid var(--ambar); background: rgba(var(--ambar-rgb), 0.06); }
+.prog .alerts--bad { border-left-color: var(--erro); }
+.prog .alerts--quiet { border-left-color: var(--linha-forte); background: rgba(var(--casco2-rgb), 0.45); padding-block: 0.9rem; }
+.alerts__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.alerts__title { margin: 0.2rem 0 0; }
+.alerts__item { display: flex; align-items: flex-start; gap: 0.5rem; justify-content: space-between; padding: 0.55rem 0.65rem; border-radius: 0.6rem; background: rgba(var(--abismo-rgb), 0.35); }
+.alerts__item + .alerts__item { margin-top: 0; }
+.alerts__item--bad { box-shadow: inset 3px 0 0 var(--erro); }
+.alerts__body { display: grid; gap: 0.45rem; min-width: 0; }
+.alerts__text { margin: 0; font-size: var(--t-s); }
+.alerts__acts { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.alerts__x { flex: none; width: 28px; height: 28px; margin: -0.2rem -0.3rem 0 0; border: 0; border-radius: 50%; background: transparent; color: var(--nevoa-2); font-size: 1.15rem; line-height: 1; cursor: pointer; }
 .alerts__x:hover, .alerts__x:focus-visible { background: rgba(255, 255, 255, 0.08); color: var(--nevoa); }
-.alerts__restore { font-size: var(--t-s); margin-top: 0.4rem; }
-.alerts--quiet { padding-block: 0.35rem; border-left-color: var(--linha-forte); background: transparent; }
-.alerts--quiet .alerts__restore { margin-top: 0; }
+.alerts__restore { justify-self: start; font-size: var(--t-s); }
+.alerts__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; padding-top: 0.5rem; border-top: 1px solid var(--linha); }
+.alerts__chips-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nevoa-2); margin-right: 0.2rem; }
+.alerts__chip { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 30px; padding: 0.1rem 0.6rem; border: 1px solid var(--linha-forte); border-radius: 999px; background: var(--casco-2); color: var(--nevoa); font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+.alerts__chip:hover { border-color: var(--erro); }
+.alerts__chip-x { color: var(--nevoa-2); }
+.alerts__toggle { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 32px; padding: 0.2rem 0.7rem 0.2rem 0.3rem; border: 1px solid var(--linha-forte); border-radius: 999px; background: var(--casco-2); color: var(--nevoa-2); font-size: var(--t-s); font-weight: 700; cursor: pointer; }
+.alerts__toggle-knob { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--linha); transition: background 0.15s; }
+.alerts__toggle-knob::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--nevoa-2); transition: transform 0.15s, background 0.15s; }
+.alerts__toggle[aria-checked="true"] { color: var(--nevoa); border-color: var(--ambar); }
+.alerts__toggle[aria-checked="true"] .alerts__toggle-knob { background: rgba(var(--ambar-rgb), 0.45); }
+.alerts__toggle[aria-checked="true"] .alerts__toggle-knob::after { transform: translateX(14px); background: var(--ambar); }
+/* +1 de atributo a escolher: os + da faixa ficam em destaque */
+.attr-band--pick .attr .stepper button[data-fid$="+"] { border-color: var(--ambar); box-shadow: 0 0 0 3px rgba(var(--ambar-rgb), 0.25); }
+.attr-band--flash { animation: attrFlash 1.2s ease-out; }
+@keyframes attrFlash { 0%, 40% { filter: drop-shadow(0 0 10px rgba(var(--ambar-rgb), 0.7)); } 100% { filter: none; } }
