@@ -3434,3 +3434,15 @@ html, body { max-width: 100%; overflow-x: clip; }
 .attr-band--flash { animation: attrFlash 1.2s ease-out; }
 @keyframes attrFlash { 0%, 40% { filter: drop-shadow(0 0 10px rgba(var(--ambar-rgb), 0.7)); } 100% { filter: none; } }
 .prog .adj { display: block; margin-top: 0; padding: 0; }
+
+/* Recursos mexidos direto nos anéis do topo da ficha */
+.vital__open { display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
+.vital__open:hover .vital__dial, .vital__open:focus-visible .vital__dial { box-shadow: 0 0 0 2px var(--c); }
+.vital__ctl { display: flex; gap: 0.35rem; margin-top: 0.25rem; }
+.vital__btn { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--linha-forte); border-radius: 50%; background: var(--casco-2); color: var(--nevoa); font-size: 1.05rem; font-weight: 700; line-height: 1; cursor: pointer; }
+.vital__btn:hover:not(:disabled) { border-color: var(--c); color: var(--c); }
+.vital__btn:disabled { opacity: 0.35; cursor: default; }
+.vitals-edit { display: grid; gap: 0.5rem; margin: -0.6rem 0 1.25rem; padding: 0.75rem 0.9rem; border: 1px solid var(--linha-forte); border-radius: var(--r-m); background: var(--casco); }
+.vitals-edit[hidden] { display: none; }
+.vitals-edit__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; }
+.vitals-edit__head .btn { margin-left: auto; }
