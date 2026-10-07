@@ -5908,7 +5908,7 @@ const FIREBASE_CONFIG = {
     if (text) card.append(h('p', 'cell__text cell__text--clamp', text));
 
     const actions = h('div', 'cell__actions');
-    if (i.slot) actions.append(act('Guardar na mochila', 'btn--ghost', () => { i.slot = ''; changed(); }));
+    if (i.slot) actions.append(act('Guardar', 'btn--primary', () => { i.slot = ''; changed(); }));
     else {
       const opts = slotsFor(i);
       if (opts[0] === 'modulo') actions.append(act('Instalar', 'btn--primary', () => { if (equipItem(i, 'modulo')) changed(); }));
@@ -5931,7 +5931,8 @@ const FIREBASE_CONFIG = {
       if (guns.length) card.append(h('p', 'cell__text', 'Serve em: ' + guns.slice(0, 3).map((x) => x.name).join(', ') + '. Gasta na recarga.'));
     }
     actions.append(act('Detalhes', 'btn--ghost', () => openInvDialog(i.uid)));
-    actions.append(act('Remover', 'btn--danger', () => removeInvItem(i)));
+    // equipado só volta para a mochila; remover fica para quando estiver guardado
+    if (!i.slot) actions.append(act('Remover', 'btn--danger', () => removeInvItem(i)));
     card.append(actions);
     return card;
   }
@@ -6123,9 +6124,13 @@ const FIREBASE_CONFIG = {
     qty.addEventListener('change', () => { i.qty = clamp(Math.round(num(qty.value)) || 1, 1, 999); changed(); });
     const qLab = h('label', 'field__label', i.slot ? 'Quantidade (equipado: 1)' : 'Quantidade');
     qLab.htmlFor = qty.id;
-    const del = h('button', 'btn btn--danger btn--sm', 'Tirar do inventário');
+    const del = h('button', 'btn btn--sm ' + (i.slot ? 'btn--primary' : 'btn--danger'), i.slot ? 'Guardar na mochila' : 'Tirar do inventário');
     del.type = 'button';
-    del.addEventListener('click', () => { s.inventory.splice(s.inventory.indexOf(i), 1); closeDialog(invDlg); changed(); });
+    del.id = 'inv-foot-act';
+    del.addEventListener('click', () => {
+      if (i.slot) { i.slot = ''; changed(); return; }
+      s.inventory.splice(s.inventory.indexOf(i), 1); closeDialog(invDlg); changed();
+    });
     body.append(h('div', 'inv__foot', h('div', 'field inv__qty', qLab, qty), del));
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el) el.focus({ preventScroll: true }); }
   }
