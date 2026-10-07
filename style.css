@@ -3212,3 +3212,8 @@ html, body { max-width: 100%; overflow-x: clip; }
 /* Opções de um poder-lista: mesmo modelo das características raciais */
 .powopt__efeito { margin: 0; color: var(--nevoa); font-size: 0.92rem; }
 .pw-sub__more { margin-left: 0.4rem; font-size: 0.78rem; letter-spacing: 0; text-transform: none; }
+/* Colunas lado a lado: o espaço vem do gap da grade (o margin entre blocos empurrava o segundo para baixo) */
+.two-col > .block + .block { margin-top: 0; }
+.two-col--even { align-items: stretch; }
+.row__pad { visibility: hidden; pointer-events: none; }
+@media (min-width: 861px) { .two-col--even .block__hint { min-height: 2lh; } }
