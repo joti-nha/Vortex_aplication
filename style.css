@@ -3433,3 +3433,4 @@ html, body { max-width: 100%; overflow-x: clip; }
 .attr-band--pick .attr .stepper button[data-fid$="+"] { border-color: var(--ambar); box-shadow: 0 0 0 3px rgba(var(--ambar-rgb), 0.25); }
 .attr-band--flash { animation: attrFlash 1.2s ease-out; }
 @keyframes attrFlash { 0%, 40% { filter: drop-shadow(0 0 10px rgba(var(--ambar-rgb), 0.7)); } 100% { filter: none; } }
+.prog .adj { display: block; margin-top: 0; padding: 0; }

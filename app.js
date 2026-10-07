@@ -5564,8 +5564,10 @@ const FIREBASE_CONFIG = {
         h('section', 'adj__group', h('h3', 'adj__title', 'Recursos (máximo)'), ...resAdj)),
       h('div', 'adj__acts', clearAdj));
 
-    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm), extra);
+    box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm));
+    adjPanel = extra; // fica na aba Progressão, abaixo dos avisos (renderProgress)
   }
+  let adjPanel = null;
 
   function renderSkills(m) {
     const s = sheetChar.sheet;
@@ -5678,7 +5680,8 @@ const FIREBASE_CONFIG = {
     alerts.id = 'prog-alerts';
     alerts.setAttribute('role', 'status');
 
-    $('#prog-block').replaceChildren(h('div', 'prog', track, alerts));
+    if (adjPanel) adjPanel.classList.add('prog__card');
+    $('#prog-block').replaceChildren(h('div', 'prog', track, alerts, adjPanel));
     // a trilha abre mostrando o próximo UP (rola só a trilha, não a página)
     requestAnimationFrame(progTrackScroll);
   }
