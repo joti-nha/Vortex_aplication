@@ -1998,7 +1998,7 @@ const FIREBASE_CONFIG = {
         h('dt', '', 'Carga'), h('dd', m.over ? 'member__warn' : '', fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + (m.over ? ' · sobrecarregado' : ''))];
       const weapons = s.inventory.filter((i) => i.slot && isWeapon(i.kind)).map((i) => i.name);
       if (weapons.length) out.push(h('dt', '', 'Em mãos'), h('dd', '', weapons.join(', ')));
-      const pend = Math.max(0, m.picksAllowed - m.picksUsed) + Math.max(0, m.upTotal - m.upSpent) + Math.max(0, m.skillBudget - m.skillUsed);
+      const pend = Math.max(0, m.picksAllowed - m.picksUsed) + Math.max(0, m.attrAllowed - m.attrUsed) + Math.max(0, m.upTotal - m.upSpent) + Math.max(0, m.skillBudget - m.skillUsed);
       if (pend > 0) out.push(h('dt', '', 'Pendências'), h('dd', 'member__warn', 'tem pontos para distribuir'));
     } catch (err) { console.warn(err); }
     return out;
@@ -4207,15 +4207,19 @@ const FIREBASE_CONFIG = {
   function blankSheet() {
     return {
       v: 2, setup: false, attrs: { corpo: 0, precisao: 0, essencia: 0 }, skills: {}, profs: [], oficio: '', height: '', weight: '', sex: '',
-      xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0 },
+      xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0, carga: 0, armadura: 0 }, attrMod: { corpo: 0, precisao: 0, essencia: 0 }, upAttr: { corpo: 0, precisao: 0, essencia: 0 },
       cur: {}, specimen: null, powers: [], inventory: [], originItems: '', doutor: [], upProfs: []
     };
   }
+  // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
+  // atributo efetivo: o da ficha + o +1 dos UP (a cada 4) + o ajuste manual
+  const attrOf = (s, id) => num(s.attrs[id]) + num((s.upAttr || {})[id]) + num((s.attrMod || {})[id]);
+  const attrUpUsed = (s) => ['corpo', 'precisao', 'essencia'].reduce((t, k) => t + Math.max(0, Math.round(num((s.upAttr || {})[k]))), 0);
   function normSheet(raw) {
     const r = raw && typeof raw === 'object' ? raw : {};
     const b = blankSheet();
     const s = Object.assign({}, b, r);
-    ['attrs', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
+    ['attrs', 'attrMod', 'upAttr', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
     s.powers = Array.isArray(r.powers) ? r.powers.slice() : [];
     s.profs = Array.isArray(r.profs) ? r.profs.filter((x) => typeof x === 'string') : [];
     // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
@@ -4393,7 +4397,7 @@ const FIREBASE_CONFIG = {
 
   function compute(c) {
     const s = c.sheet;
-    const a = s.attrs;
+    const a = { corpo: attrOf(s, 'corpo'), precisao: attrOf(s, 'precisao'), essencia: attrOf(s, 'essencia') };
     const sp = s.specimen;
     const spv = specimenVals(s);
     const mech = sheetMech(s);
@@ -4474,6 +4478,7 @@ const FIREBASE_CONFIG = {
       upEarned, upTotal: upEarned + mech.up + num(s.upExtra),
       upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
+      attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s), // +1 num atributo a cada 4 UP
       skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length, // Doutor e proficiências: +1 de perícia cada
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
@@ -5100,6 +5105,7 @@ const FIREBASE_CONFIG = {
     const skills = m.skillBudget - m.skillUsed;
     if (!s.setup) out.push({ n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', label: 'Fazer agora', go: () => openSetup() });
     if (picks > 0) out.push({ n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' para escolher: +5 PV, +5 PE ou +1 PA.', label: 'Escolher', go: '#prog-block' });
+    if (m.attrAllowed > m.attrUsed) out.push({ n: m.attrAllowed - m.attrUsed, text: plural(m.attrAllowed - m.attrUsed, '+1 de atributo', '+1 de atributo') + ' para escolher (a cada 4 UP).', label: 'Escolher', go: '#prog-block' });
     if (up > 0) out.push({ n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias.', label: 'Ver progressão', go: '#prog-block' });
     if (skills > 0) out.push({ n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', label: 'Ver perícias', go: '#skills-block' });
     return out;
@@ -5115,6 +5121,7 @@ const FIREBASE_CONFIG = {
     const extraProfs = s.profs.length - 4;
     if (up > 0) out.push({ n: up, text: plural(up, 'UP gasto', 'UP gastos') + ' sem UP que os pague (poderes, melhorias ou UP em perícias). Ganhe XP ou desfaça uma compra.', label: 'Ver progressão', go: '#prog-block' });
     if (picks > 0) out.push({ n: picks, text: plural(picks, 'benefício de recurso', 'benefícios de recurso') + ' (+5 PV, +5 PE, +1 PA) sem UP par que os conceda.', label: 'Ver progressão', go: '#prog-block' });
+    if (m.attrUsed > m.attrAllowed) out.push({ n: m.attrUsed - m.attrAllowed, text: plural(m.attrUsed - m.attrAllowed, '+1 de atributo', '+1 de atributo') + ' sem os 4 UP que o concedam.', label: 'Ver progressão', go: '#prog-block' });
     if (skills > 0) out.push({ n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', label: 'Ver perícias', go: '#skills-block' });
     if (s.setup && attrPool(s.attrs).left < 0) out.push({ n: -attrPool(s.attrs).left, text: 'Atributos acima dos 3 pontos da distribuição inicial.', label: 'Refazer distribuição', go: () => openSetup() });
     if (extraProfs > 0) out.push({ n: extraProfs, text: plural(extraProfs, 'proficiência', 'proficiências') + ' além das 4 iniciais. As extras vêm do poder Proficiência em arma ou armadura.', label: 'Ver proficiências', go: '#profs-block' });
@@ -5166,8 +5173,8 @@ const FIREBASE_CONFIG = {
     watch.skills = skillsLeft;
     watch.bad = badCount;
     // abas com algo a distribuir ou sem fonte ganham um ponto
-    const dot = { 'stab-progressao': m.picksAllowed - m.picksUsed > 0 || m.upTotal - m.upSpent > 0, 'stab-pericias': m.skillBudget - m.skillUsed > 0 };
-    const red = { 'stab-progressao': m.upSpent > m.upTotal || m.picksUsed > m.picksAllowed, 'stab-pericias': m.skillUsed > m.skillBudget || sheetChar.sheet.profs.length > 4 };
+    const dot = { 'stab-progressao': m.picksAllowed - m.picksUsed > 0 || m.upTotal - m.upSpent > 0 || m.attrAllowed > m.attrUsed, 'stab-pericias': m.skillBudget - m.skillUsed > 0 };
+    const red = { 'stab-progressao': m.upSpent > m.upTotal || m.picksUsed > m.picksAllowed || m.attrUsed > m.attrAllowed, 'stab-pericias': m.skillUsed > m.skillBudget || sheetChar.sheet.profs.length > 4 };
     Object.keys(dot).forEach((id) => { const t = $('#' + id); t.classList.toggle('sheet-tab--dot', dot[id] && !red[id]); t.classList.toggle('sheet-tab--bad', red[id]); });
   }
 
@@ -5268,9 +5275,10 @@ const FIREBASE_CONFIG = {
     };
     $('#attr-band').replaceChildren(...ATTRS.map((at) => {
       const v = s.attrs[at.id];
-      const tile = h('div', 'attr attr--' + at.id,
-        h('span', 'attr__name', at.label),
-        h('span', 'attr__value', signed(v)),
+      const mod = num((s.attrMod || {})[at.id]) + num((s.upAttr || {})[at.id]);
+      const tile = h('div', 'attr attr--' + at.id + (mod ? ' attr--mod' : ''),
+        h('span', 'attr__name', at.label, mod ? (() => { const t = h('span', 'attr__mod', (mod > 0 ? '+' : '') + mod); t.title = 'Bônus de ' + (mod > 0 ? '+' : '') + mod + ' (UP e ajuste manual; ficha ' + signed(v) + ')'; return t; })() : null),
+        h('span', 'attr__value', signed(v + mod)),
         stepper(v, { min: -1, max: 6, label: at.label, fid: 'attr-' + at.id, text: '', onChange: (n) => { s.attrs[at.id] = n; changed(); } }),
         h('span', 'attr__feeds', feeds[at.id]));
       tile.title = at.hint;
@@ -5364,25 +5372,35 @@ const FIREBASE_CONFIG = {
       changed();
       if (dmgType.value) toast(res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k)).join(', ') || 'Nenhum dano.');
     });
-    const wasOpen = Boolean($('#res-extra') && $('#res-extra').open);
-    const extra = h('details', 'bonus');
+    // ajustes manuais: bônus ou penalidades que não vêm de item, poder ou espécime
+    const adjRow = (label, value, o) => h('div', 'adj__row' + (value ? ' is-on' : ''),
+      h('span', 'adj__label', h('strong', '', label), o.note ? h('span', 'adj__note', o.note) : null),
+      stepper(value, { min: o.min, max: o.max, label: 'ajuste de ' + label, fid: o.fid, text: value > 0 ? '+' + value : String(value), onChange: o.set }));
+    const attrAdj = ATTRS.map((at) => {
+      const mod = num(s.attrMod[at.id]);
+      const pw = num(s.upAttr[at.id]);
+      return adjRow(at.label, mod, { min: -6, max: 6, fid: 'adj-' + at.id, note: 'ficha ' + signed(s.attrs[at.id]) + (pw ? ' · UP +' + pw : '') + ' → vale ' + signed(attrOf(s, at.id)), set: (n) => { s.attrMod[at.id] = n; changed(); } });
+    });
+    const resAdj = BONUS_KEYS.map((b) => {
+      const v = Math.round(num(s.extra[b[0]]));
+      return adjRow(b[1], v, { min: -99, max: 99, fid: 'extra-' + b[0], note: 'máximo ' + fmtNum(m.max[b[0]]), set: (n) => { s.extra[b[0]] = n; changed(); } });
+    });
+    const anyAdj = ATTRS.some((at) => num(s.attrMod[at.id])) || BONUS_KEYS.some((b) => num(s.extra[b[0]]));
+    const clearAdj = h('button', 'btn btn--ghost btn--sm', 'Zerar ajustes');
+    clearAdj.type = 'button';
+    clearAdj.dataset.fid = 'adj-clear';
+    clearAdj.disabled = !anyAdj;
+    clearAdj.addEventListener('click', () => { ATTRS.forEach((at) => { s.attrMod[at.id] = 0; }); BONUS_KEYS.forEach((b) => { s.extra[b[0]] = 0; }); changed(); toast('Ajustes manuais zerados.'); });
+    const wasOpen = $('#res-extra') ? $('#res-extra').open : anyAdj;
+    const extra = h('details', 'adj');
     extra.id = 'res-extra';
     extra.open = wasOpen;
-    extra.append(h('summary', '', 'Ajustes manuais (outras fontes)'),
-      h('p', 'field__hint', 'Para bônus que não vêm de item, poder ou espécime. Somam no máximo de cada recurso.'),
-      h('div', 'bonus__grid', ...BONUS_KEYS.filter((b) => b[0] in s.extra).map((b) => {
-        const inp = h('input', 'input');
-        inp.type = 'number';
-        inp.step = '1';
-        inp.id = 'extra-' + b[0];
-        inp.dataset.fid = 'extra-' + b[0];
-        inp.value = num(s.extra[b[0]]) || '';
-        inp.placeholder = '0';
-        inp.addEventListener('change', () => { s.extra[b[0]] = Math.round(num(inp.value)); changed(); });
-        const lab = h('label', 'field__label bonus__label bonus__label--' + b[0], b[1]);
-        lab.htmlFor = inp.id;
-        return h('div', 'field', lab, inp);
-      })));
+    extra.append(h('summary', 'adj__summary', h('span', '', 'Ajustes manuais'), h('span', 'adj__count', anyAdj ? 'com ajustes' : 'nenhum')),
+      h('p', 'field__hint', 'Aumente ou diminua atributos e recursos por coisas que a ficha não calcula sozinha: condições, efeitos da cena, decisões do mestre. O ajuste soma no valor e aparece nos testes e nos máximos.'),
+      h('div', 'adj__cols',
+        h('section', 'adj__group', h('h3', 'adj__title', 'Atributos'), ...attrAdj),
+        h('section', 'adj__group', h('h3', 'adj__title', 'Recursos (máximo)'), ...resAdj)),
+      h('div', 'adj__acts', clearAdj));
 
     box.replaceChildren(lifeBox, other, stats, h('div', 'res-actions', dmgForm), extra);
   }
@@ -5394,12 +5412,12 @@ const FIREBASE_CONFIG = {
       ...(left > 0 ? [h('strong', 'skills__pending', plural(left, 'ponto pendente', 'pontos pendentes') + ' para distribuir.')] : []),
       ...(left < 0 ? [h('strong', 'skills__pending', 'Passou ' + plural(-left, 'ponto', 'pontos') + ' do limite.')] : []));
     $('#skills-block').replaceChildren(...ATTRS.map((at) => {
-      const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(s.attrs[at.id]))));
+      const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(attrOf(s, at.id)))));
       SKILLS[at.id].forEach((sk) => {
         const v = num(s.skills[sk[0]]);
         const pen = PENALTY_SKILLS.indexOf(sk[0]) >= 0 ? m.pen : 0;
-        const total = h('span', 'skill__total', signed(s.attrs[at.id] + v - pen));
-        total.title = 'Atributo ' + signed(s.attrs[at.id]) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
+        const total = h('span', 'skill__total', signed(attrOf(s, at.id) + v - pen));
+        total.title = 'Atributo ' + signed(attrOf(s, at.id)) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
         const row = h('div', 'skill',
           h('span', 'skill__name', sk[1], pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
           total,
@@ -5428,6 +5446,7 @@ const FIREBASE_CONFIG = {
     const base = m.upTotal - m.upEarned; // UP de origem, espécime e extras
     const free = m.upTotal - m.upSpent;
     const picksLeft = m.picksAllowed - m.picksUsed;
+    const attrLeft = m.attrAllowed - m.attrUsed;
     const setXp = (v) => { s.xp = Math.max(0, Math.round(v)); changed(); };
     const card = (cls, ...kids) => h('section', 'prog__card ' + cls, ...kids);
     const title = (txt, extra) => h('h3', 'prog__title', txt, extra || null);
@@ -5508,7 +5527,16 @@ const FIREBASE_CONFIG = {
       stepper(s.up[key], { min: 0, max: s.up[key] + Math.max(0, picksLeft), label, fid: 'up-' + key, onChange: (n) => { s.up[key] = n; changed(); } }));
     const bens = card('prog__bens', title('Benefícios', h('span', 'prog__badge' + (picksLeft > 0 ? ' is-go' : picksLeft < 0 ? ' is-bad' : ''), picksLeft > 0 ? picksLeft + ' para escolher' : picksLeft < 0 ? (-picksLeft) + ' a mais' : m.picksAllowed ? 'em dia' : 'no UP 2')),
       h('p', 'field__hint', 'A cada 2 UP ganhos por XP, escolha 2 benefícios. Pode repetir o mesmo.'),
-      h('div', 'prog__ben-grid', benefit('pv', '+5 PV', 5, m.max.pv), benefit('pe', '+5 PE', 5, m.max.pe), benefit('pa', '+1 PA', 1, m.max.pa)));
+      h('div', 'prog__ben-grid', benefit('pv', '+5 PV', 5, m.max.pv), benefit('pe', '+5 PE', 5, m.max.pe), benefit('pa', '+1 PA', 1, m.max.pa)),
+      h('h4', 'prog__sub', 'Atributos', ' ', h('span', 'prog__badge' + (attrLeft > 0 ? ' is-go' : attrLeft < 0 ? ' is-bad' : ''), attrLeft > 0 ? attrLeft + ' para escolher' : attrLeft < 0 ? (-attrLeft) + ' a mais' : m.attrAllowed ? 'em dia' : 'no UP 4')),
+      h('p', 'field__hint', 'A cada 4 UP ganhos por XP, +1 em um atributo à sua escolha.'),
+      h('div', 'prog__ben-grid', ...ATTRS.map((at) => {
+        const n = Math.max(0, Math.round(num(s.upAttr[at.id])));
+        return h('div', 'prog__ben' + (n ? ' is-on' : ''),
+          h('span', 'prog__ben-head', h('strong', '', '+1 ' + at.label), h('span', 'prog__ben-now', 'vale ' + signed(attrOf(s, at.id)))),
+          h('span', 'prog__ben-gain', n ? 'escolhido ' + n + '×' : 'ainda não escolhido'),
+          stepper(n, { min: 0, max: n + Math.max(0, attrLeft), label: '+1 ' + at.label, fid: 'up-attr-' + at.id, onChange: (k) => { s.upAttr[at.id] = k; changed(); } }));
+      })));
 
     // 4. trilha: o que cada UP ganho por XP dá, até alguns à frente
     const last = Math.max(6, m.upEarned + 3);
@@ -5519,11 +5547,11 @@ const FIREBASE_CONFIG = {
       const xpLeft = n * 10 - xp;
       steps.push(h('li', 'prog__step' + (got ? ' is-got' : next ? ' is-next' : ''),
         h('span', 'prog__step-n', String(n)),
-        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'),
+        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'), n % 4 === 0 ? h('span', 'prog__step-gain prog__step-attr', '+1 atributo') : null,
         h('span', 'prog__step-state', got ? '✓ ganho' : 'faltam ' + xpLeft + ' XP')));
     }
     const track = card('prog__track', title('Trilha de UP'),
-      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. Só os UP ganhos por XP contam; os de origem não.'),
+      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. A cada 4 UP: +1 num atributo. Só os UP ganhos por XP contam; os de origem não.'),
       h('ol', 'prog__steps', ...steps));
 
     $('#prog-block').replaceChildren(h('div', 'prog', level, spend, bens, track));
@@ -5880,7 +5908,7 @@ const FIREBASE_CONFIG = {
     if (text) card.append(h('p', 'cell__text cell__text--clamp', text));
 
     const actions = h('div', 'cell__actions');
-    if (i.slot) actions.append(act('Guardar na mochila', 'btn--ghost', () => { i.slot = ''; changed(); }));
+    if (i.slot) actions.append(act('Guardar', 'btn--primary', () => { i.slot = ''; changed(); }));
     else {
       const opts = slotsFor(i);
       if (opts[0] === 'modulo') actions.append(act('Instalar', 'btn--primary', () => { if (equipItem(i, 'modulo')) changed(); }));
@@ -5903,7 +5931,8 @@ const FIREBASE_CONFIG = {
       if (guns.length) card.append(h('p', 'cell__text', 'Serve em: ' + guns.slice(0, 3).map((x) => x.name).join(', ') + '. Gasta na recarga.'));
     }
     actions.append(act('Detalhes', 'btn--ghost', () => openInvDialog(i.uid)));
-    actions.append(act('Remover', 'btn--danger', () => removeInvItem(i)));
+    // equipado só volta para a mochila; remover fica para quando estiver guardado
+    if (!i.slot) actions.append(act('Remover', 'btn--danger', () => removeInvItem(i)));
     card.append(actions);
     return card;
   }
@@ -6006,7 +6035,7 @@ const FIREBASE_CONFIG = {
     const line = (k, v, bad) => h('div', 'equip-line' + (bad ? ' equip-line--bad' : ''), h('span', 'equip-line__k', k), h('span', 'equip-line__v', v));
     $('#equip-info').replaceChildren(
       line('Mãos', handText),
-      line('Defesa mínima', m.defMin + ' = ' + srcText(m.src.armadura) + ' · Corpo ' + signed(s.attrs.corpo) + ' · Resistência +' + num(s.skills.resistencia)),
+      line('Defesa mínima', m.defMin + ' = ' + srcText(m.src.armadura) + ' · Corpo ' + signed(attrOf(s, 'corpo')) + ' · Resistência +' + num(s.skills.resistencia)),
       line('Armadura', m.armor ? m.armor.name + (m.armorProf ? ' · proficiente' : ' · sem proficiência') + (m.pen ? ' · penalidade –' + m.pen : '') : 'nenhuma (vale a básica, ' + ARMOR_BASE + ')'),
       line('Núcleo', m.nucleo ? '+' + m.nucleo + ' ativo' : 'sem núcleo: próteses só substituem o órgão; módulos inativos'),
       line('Carga Cibernética', m.nucleo || m.acopla ? 'próteses ' + m.protUsed + (m.acopla ? ' · acoplados ' + fmtNum(m.attachUsed) : '') + ' / ' + m.ccMax + ' · módulos ' + m.modUsed + (m.modExtra ? ' (reserva +' + m.modExtra + ' da Essência)' : '') : '—', m.ccOver));
@@ -6095,9 +6124,13 @@ const FIREBASE_CONFIG = {
     qty.addEventListener('change', () => { i.qty = clamp(Math.round(num(qty.value)) || 1, 1, 999); changed(); });
     const qLab = h('label', 'field__label', i.slot ? 'Quantidade (equipado: 1)' : 'Quantidade');
     qLab.htmlFor = qty.id;
-    const del = h('button', 'btn btn--danger btn--sm', 'Tirar do inventário');
+    const del = h('button', 'btn btn--sm ' + (i.slot ? 'btn--primary' : 'btn--danger'), i.slot ? 'Guardar na mochila' : 'Tirar do inventário');
     del.type = 'button';
-    del.addEventListener('click', () => { s.inventory.splice(s.inventory.indexOf(i), 1); closeDialog(invDlg); changed(); });
+    del.id = 'inv-foot-act';
+    del.addEventListener('click', () => {
+      if (i.slot) { i.slot = ''; changed(); return; }
+      s.inventory.splice(s.inventory.indexOf(i), 1); closeDialog(invDlg); changed();
+    });
     body.append(h('div', 'inv__foot', h('div', 'field inv__qty', qLab, qty), del));
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el) el.focus({ preventScroll: true }); }
   }
@@ -7035,13 +7068,13 @@ const FIREBASE_CONFIG = {
   Object.keys(SKILLS).forEach((a) => SKILLS[a].forEach((sk) => { SKILL_ATTR[sk[0]] = a; SKILL_LABEL[sk[0]] = sk[1]; }));
 
   function attrTest(s, attr) {
-    return { label: 'Teste de ' + ATTR_LABEL[attr], attrName: ATTR_LABEL[attr], attr: num(s.attrs[attr]) };
+    return { label: 'Teste de ' + ATTR_LABEL[attr], attrName: ATTR_LABEL[attr], attr: attrOf(s, attr) };
   }
   function skillTest(s, m, sk) {
     const attr = SKILL_ATTR[sk];
     const name = sk === 'oficio' && s.oficio ? 'Ofício (' + String(s.oficio).slice(0, 30) + ')' : SKILL_LABEL[sk];
     const pen = PENALTY_SKILLS.indexOf(sk) >= 0 ? m.pen : 0;
-    return { label: name, attrName: ATTR_LABEL[attr], attr: num(s.attrs[attr]), skillName: name, skill: num(s.skills[sk]), mods: pen ? [['armadura', -pen]] : [] };
+    return { label: name, attrName: ATTR_LABEL[attr], attr: attrOf(s, attr), skillName: name, skill: num(s.skills[sk]), mods: pen ? [['armadura', -pen]] : [] };
   }
 
   // formas de atacar com um item (ou desarmado), conforme as regras de Ataque e de cada tipo de arma
@@ -7127,7 +7160,7 @@ const FIREBASE_CONFIG = {
     const name = i ? i.name : 'Desarmado';
     return {
       label: ('Ataque: ' + name + (n > 1 ? ' · dano ×' + n : '')).slice(0, 60),
-      attrName: ATTR_LABEL[mode.attr], attr: num(s.attrs[mode.attr]),
+      attrName: ATTR_LABEL[mode.attr], attr: attrOf(s, mode.attr),
       skillName: SKILL_LABEL[mode.skill], skill: num(s.skills[mode.skill]), mods
     };
   }
@@ -7139,7 +7172,7 @@ const FIREBASE_CONFIG = {
     const s = c.sheet;
     const m = compute(c);
     const out = [];
-    ATTRS.forEach((at) => out.push({ group: 'Atributos', id: 'a:' + at.id, label: at.label + ' ' + signed(s.attrs[at.id]), make: () => attrTest(s, at.id) }));
+    ATTRS.forEach((at) => out.push({ group: 'Atributos', id: 'a:' + at.id, label: at.label + ' ' + signed(attrOf(s, at.id)), make: () => attrTest(s, at.id) }));
     ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => {
       const t = skillTest(s, m, sk[0]);
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
@@ -8168,7 +8201,7 @@ const FIREBASE_CONFIG = {
     });
     return [
       ['Espécime', c.species], ['Idade', c.age], ['Altura e peso', [s.height, s.weight].filter(Boolean).join(' · ')], ['Sexo', s.sex], ['Origem', c.origin],
-      ['Atributos', ATTRS.map((at) => at.label + ' ' + signed(s.attrs[at.id])).join(' · ')],
+      ['Atributos', ATTRS.map((at) => at.label + ' ' + signed(attrOf(s, at.id))).join(' · ')],
       ['Recursos', life.concat(['PE ' + getCur(s, 'pe', m.max.pe) + '/' + m.max.pe, 'PA ' + getCur(s, 'pa', m.max.pa) + '/' + m.max.pa]).join(' · ')],
       ['Defesa mínima', String(m.defMin)],
       ['Perícias', skills.join(' · ')],
@@ -8464,7 +8497,7 @@ const FIREBASE_CONFIG = {
     else pic.textContent = mb.name.trim().charAt(0).toUpperCase();
     $('#dock-title').textContent = mb.name;
     const def = charDef(c, m);
-    $('#dock-meta').textContent = [mb.species, mb.origin, 'Defesa ' + def, 'Corpo ' + signed(s.attrs.corpo) + ' · Precisão ' + signed(s.attrs.precisao) + ' · Essência ' + signed(s.attrs.essencia)].filter(Boolean).join(' · ');
+    $('#dock-meta').textContent = [mb.species, mb.origin, 'Defesa ' + def, 'Corpo ' + signed(attrOf(s, 'corpo')) + ' · Precisão ' + signed(attrOf(s, 'precisao')) + ' · Essência ' + signed(attrOf(s, 'essencia'))].filter(Boolean).join(' · ');
     const pinned = pinGet(currentCamp.id) === mb.characterId;
     const pin = $('#dock-pin');
     pin.textContent = pinned ? '★ Seu personagem nesta campanha' : '☆ Fixar como meu personagem';
@@ -10171,9 +10204,9 @@ const FIREBASE_CONFIG = {
     if (x.foe) { const v = foeVals(x.foe); attr = num(v.corpo); res = num(v.resistencia); }
     else {
       const s = normSheet(x.member.sheet);
-      attr = num(s.attrs.corpo); res = num(s.skills.resistencia);
+      attr = attrOf(s, 'corpo'); res = num(s.skills.resistencia);
       // Defensivas: Esquiva troca para Precisão + Reflexos; Explosiva soma a armadura
-      if (uses.some((u) => nameKey(u.name) === 'esquiva')) { attr = num(s.attrs.precisao); res = num(s.skills.reflexos); attrName = 'Precisão'; skillName = 'Reflexos'; }
+      if (uses.some((u) => nameKey(u.name) === 'esquiva')) { attr = attrOf(s, 'precisao'); res = num(s.skills.reflexos); attrName = 'Precisão'; skillName = 'Reflexos'; }
       if (uses.some((u) => nameKey(u.name) === 'explosiva')) mods.push(['armadura (Explosiva)', compute(sheetOf(x.member)).src.armadura.reduce((t, a) => t + a.val, 0)]);
     }
     const r = rollTest({ label: 'Defesa da cena', attrName, attr, skillName, skill: res, mods });
@@ -10335,7 +10368,7 @@ const FIREBASE_CONFIG = {
   function rollInitiative(x) {
     let attr, skill;
     if (x.foe) { const v = foeVals(x.foe); attr = num(v.precisao); skill = num(v.iniciativa); }
-    else { const s = normSheet(x.member.sheet); attr = num(s.attrs.precisao); skill = num(s.skills.iniciativa); }
+    else { const s = normSheet(x.member.sheet); attr = attrOf(s, 'precisao'); skill = num(s.skills.iniciativa); }
     const r = rollTest({ label: 'Iniciativa', attrName: 'Precisão', attr, skillName: 'Iniciativa', skill });
     // empate: maior Precisão primeiro, depois a sorte
     return { id: x.id, name: x.name, init: r.total, tie: attr + Math.random() / 10, detail: r.detail };
