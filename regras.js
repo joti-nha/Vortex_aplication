@@ -929,9 +929,14 @@ window.VORTEX_REGRAS = {
           ['p', 'A cada Up point utilizado para essa habilidade acima do primeiro, aumente em +1 a recuperação de PVs.']
         ]],
         ['card', 'Transformação', [
-          ['p', 'Você se transforma no que quiser!'],
-          ['p', 'Utilizando uma ação completa você pode se transformar; você cria uma transformação trocando seus Up points e os realocando como quiser. Seus itens caem ao chão no processo. Cada Up point equivale a uma transformação.'],
-          ['p', '**Única (1 UP cada):** você escolhe uma só transformação e monta a ficha dela. Não pode se transformar em nada além dela. Funciona como a transformação de 2 UP, pelo preço de 1 UP. Cada transformação escolhida assim custa 1 UP.']
+          ['p', 'Utilizando uma ação, você pode assumir uma nova forma, criando uma transformação, realocando seus Up Points livremente. Durante a transformação, os itens pertencentes à forma original tornam-se inutilizáveis.'],
+          ['p', 'Para se transformar mais de uma vez no mesmo dia, é necessário gastar 1 Ponto de Ação a cada transformação adicional.'],
+          ['p', 'Os recursos da nova forma não são diferenciados dos da forma original. Isso significa que, ao assumir a transformação, você passa a utilizar os valores atuais de seus recursos, aplicando apenas os ajustes positivos ou negativos próprios da nova forma. Ao retornar à forma original, os recursos permanecem nas quantidades em que se encontravam no momento da reversão. Recursos excedentes não são convertidos em recursos adicionais, e recursos que eram maiores antes da transformação voltam a ser contabilizados normalmente; caso tenham sido gastos durante a transformação, esse consumo é refletido nos pontos realocados.'],
+          ['p', 'A nova forma deve manter a mesma quantidade de pontos em desvantagens da forma original, e o custo deste poder permanece atrelado à forma transformada. Quando seus Pontos de Vida forem reduzidos a zero, o jogador pode escolher entre manter a forma atual ou retornar à forma original. Cada Up Point investido corresponde a uma transformação distinta.'],
+          ['p', '**Transformação de 2 UP.** Ao adquirir uma transformação de custo 2 Up Points, os itens da forma original permanecem utilizáveis. Nesse caso, não é necessário manter a mesma quantidade de perdas, embora também não haja ganho de pontos adicionais por isso. Além disso, os recursos passam a ser diferenciados entre a forma original e a forma transformada.'],
+          ['p', '**Melhorias**'],
+          ['p', '**Única (1 UP cada):** você escolhe uma só transformação e monta a ficha dela. Não pode se transformar em nada além dela. Funciona como a transformação de 2 UP, pelo preço de 1 UP. Cada transformação escolhida assim custa 1 UP.'],
+          ['p', '**Mutável (1 UP):** as transformações têm seus custos em UP diminuídos pela metade, e pode se transformar mais vezes ao dia usando 4 PE (ao invés de 1 PA); porém, os valores contabilizados na transformação não mudam e agora contabilizam essa habilidade. Pré-requisito: Transformação (1 ou 2).']
         ]],
         ['card', 'Akimbo', [
           ['p', 'Você pode empunhar pistolas ou submetralhadoras uma em cada mão (ou uma de cada, seja irado!). O tempo de recarga aumenta em uma categoria (ação livre para bônus, bônus para movimento, movimento para ação padrão, ação padrão para ação completa.)'],
