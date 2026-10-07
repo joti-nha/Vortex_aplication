@@ -4212,7 +4212,12 @@ const FIREBASE_CONFIG = {
     };
   }
   // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
-  const attrOf = (s, id) => num(s.attrs[id]) + num((s.attrMod || {})[id]);
+  const attrOf = (s, id) => num(s.attrs[id]) + num((s.attrMod || {})[id]) + attrPower(s, id);
+  // poder "Aumento de atributo": cada melhoria comprada (4 UP) dá +1 no atributo dela
+  function attrPower(s, id) {
+    const label = nameKey({ corpo: 'Corpo', precisao: 'Precisão', essencia: 'Essência' }[id] || id);
+    return (s.powers || []).filter((p) => p && p.id === 'of-pod-atributo').reduce((t, p) => t + Object.keys(p.ups || {}).filter((n) => nameKey(n) === label).reduce((u, n) => u + upCount(p, n), 0), 0);
+  }
   function normSheet(raw) {
     const r = raw && typeof raw === 'object' ? raw : {};
     const b = blankSheet();
@@ -5270,9 +5275,9 @@ const FIREBASE_CONFIG = {
     };
     $('#attr-band').replaceChildren(...ATTRS.map((at) => {
       const v = s.attrs[at.id];
-      const mod = num((s.attrMod || {})[at.id]);
+      const mod = num((s.attrMod || {})[at.id]) + attrPower(s, at.id);
       const tile = h('div', 'attr attr--' + at.id + (mod ? ' attr--mod' : ''),
-        h('span', 'attr__name', at.label, mod ? (() => { const t = h('span', 'attr__mod', (mod > 0 ? '+' : '') + mod); t.title = 'Ajuste manual de ' + (mod > 0 ? '+' : '') + mod + ' (ficha ' + signed(v) + ')'; return t; })() : null),
+        h('span', 'attr__name', at.label, mod ? (() => { const t = h('span', 'attr__mod', (mod > 0 ? '+' : '') + mod); t.title = 'Bônus de ' + (mod > 0 ? '+' : '') + mod + ' (ajuste manual e poder Aumento de atributo; ficha ' + signed(v) + ')'; return t; })() : null),
         h('span', 'attr__value', signed(v + mod)),
         stepper(v, { min: -1, max: 6, label: at.label, fid: 'attr-' + at.id, text: '', onChange: (n) => { s.attrs[at.id] = n; changed(); } }),
         h('span', 'attr__feeds', feeds[at.id]));
@@ -5373,7 +5378,8 @@ const FIREBASE_CONFIG = {
       stepper(value, { min: o.min, max: o.max, label: 'ajuste de ' + label, fid: o.fid, text: value > 0 ? '+' + value : String(value), onChange: o.set }));
     const attrAdj = ATTRS.map((at) => {
       const mod = num(s.attrMod[at.id]);
-      return adjRow(at.label, mod, { min: -6, max: 6, fid: 'adj-' + at.id, note: 'ficha ' + signed(s.attrs[at.id]) + ' → vale ' + signed(s.attrs[at.id] + mod), set: (n) => { s.attrMod[at.id] = n; changed(); } });
+      const pw = attrPower(s, at.id);
+      return adjRow(at.label, mod, { min: -6, max: 6, fid: 'adj-' + at.id, note: 'ficha ' + signed(s.attrs[at.id]) + (pw ? ' · poder +' + pw : '') + ' → vale ' + signed(attrOf(s, at.id)), set: (n) => { s.attrMod[at.id] = n; changed(); } });
     });
     const resAdj = BONUS_KEYS.map((b) => {
       const v = Math.round(num(s.extra[b[0]]));
