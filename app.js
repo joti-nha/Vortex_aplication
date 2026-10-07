@@ -2786,30 +2786,10 @@ const FIREBASE_CONFIG = {
     body.replaceChildren();
     const pic = e.image || e.thumb || itemArt(e);
     if (pic) { const img = h('img', 'entry__img'); img.src = pic; img.alt = ''; body.append(img); }
-    const dl = h('dl', 'member__data entry__data');
     const seen = new Set(['nome', 'lore', 'compraRacial']); // compraRacial: campo antigo, hoje é exclusivo do Etheriano
     if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso'].forEach((k) => seen.add(k)); }
-    ((cat && cat.fields) || []).forEach((f) => {
-      const val = v[f.key];
-      if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r) => dl.append(h('dt', '', r[0]), h('dd', 'entry__pre', r[1]))); return; }
-      if (seen.has(f.key)) return;
-      seen.add(f.key);
-      if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
-      if (f.kind === 'script') { dl.append(h('dt', '', 'Script'), h('dd', 'entry__pre entry__code', String(val))); return; }
-      if (f.kind === 'racial3') { dl.append(h('dt', '', 'Habilidades raciais'), h('dd', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : '')))); return; }
-      dl.append(h('dt', '', f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(val)) : f.key === 'preco' ? priceText(val) : String(val)));
-    });
-    // campos que não estão no formulário atual (registros antigos) também aparecem
-    Object.keys(v).forEach((k) => {
-      if (seen.has(k) || !String(v[k] || '').trim()) return;
-      if (e.kind === 'especime' && LEGACY_LABEL[k]) { if (v[k] !== 'Não' && v[k] !== '0') dl.append(h('dt', '', LEGACY_LABEL[k]), h('dd', '', String(v[k]))); return; }
-      dl.append(h('dt', '', k), h('dd', '', String(v[k])));
-    });
-    const b = bonusLine(entryBonus(e));
-    if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (cat && cat.inventory ? ' (quando equipado)' : '')));
-    const parts = e.slots ? (e.slots.mods || []).concat(e.slots.props || [], e.slots.accs || []).map((x) => x.name) : [];
-    if (parts.length) dl.append(h('dt', '', 'Encaixes'), h('dd', '', parts.join(', ')));
-    if (dl.children.length) body.append(dl);
+    const facts = entryFacts(e, seen, cat && cat.inventory ? ' (quando equipado)' : '');
+    if (facts) body.append(facts);
     else if (e.kind !== 'poder') body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
     const lore = String(v.lore || '').trim();
     if (lore) body.append(h('h3', 'entry__sub', 'Lore'), ...lore.split(/\n+/).map((t) => h('p', 'entry__lore', t)));
@@ -2818,6 +2798,82 @@ const FIREBASE_CONFIG = {
     openDialog(entryDlg);
   }
   $('#entry-close').addEventListener('click', () => closeDialog(entryDlg));
+  /* Ficha de detalhe (banco, bestiário, inventário): números curtos viram blocos agrupados
+     (atributos, perícias, defesas, ataque...), textos viram seções e listas viram etiquetas,
+     em vez de uma coluna crua de rótulo e valor. */
+  const FACT_GROUPS = {
+    npc: [['Ameaça', ['categoria', 'up', 'cronos']], ['Atributos', ['corpo', 'precisao', 'essencia']], ['Perícias', ['luta', 'mira', 'operacoes', 'resistencia']],
+      ['Defesas', ['defesa', 'armadura', 'pv', 'escudo', 'blindagem']], ['Ataque', ['arma', 'ataque', 'dano', 'cadencia', 'efetivo']]],
+    build: [['Build', ['tipo', 'papel']], ['Atributos', ['corpo', 'precisao', 'essencia']], ['Perícias e proficiências', ['pericia2a', 'pericia2b', 'pericia1', 'profs']]],
+    '*': [['Ficha', ['fabricante', 'modelo', 'raridade', 'preco', 'classe', 'tipo', 'subtipo', 'posicao', 'para', 'custoUso']],
+      ['Combate', ['dano', 'modo', 'cadencia', 'pente', 'municao', 'disparos', 'alcance']],
+      ['Proteção', ['armadura', 'penalidade', 'nucleo', 'capacidade', 'cc']],
+      ['Uso', ['empunhadura', 'carga', 'tipoUso', 'usos', 'bonusRec', 'bonus', 'encaixes']]]
+  };
+  const FACT_HI = { defesa: 1, arma: 1, dano: 1, armadura: 1, raridade: 1 };
+  function entryFacts(e, seen, bonusNote) {
+    const cat = findCategory(e.kind);
+    const v = e.values || {};
+    seen = seen || new Set(['nome', 'lore']);
+    const facts = [];
+    const add = (key, label, val, type, extra) => facts.push(Object.assign({ key, label, val, type }, extra || {}));
+    const classify = (f, val) => {
+      const txt = String(val).trim();
+      const lines = txt.split('\n').map((x) => x.trim()).filter(Boolean);
+      if (f && f.kind === 'textarea' && lines.length > 1 && lines.every((l) => l.length <= 40)) return ['list', lines];
+      if ((f && (f.kind === 'textarea' || f.big)) || txt.length > 40 || lines.length > 1) return ['text', txt];
+      return ['stat', txt];
+    };
+    ((cat && cat.fields) || []).forEach((f) => {
+      const val = v[f.key];
+      if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r, i) => add('roteiro' + i, r[0], r[1], 'text')); return; }
+      if (seen.has(f.key)) return;
+      seen.add(f.key);
+      if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
+      const label = f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '');
+      if (f.kind === 'script') { add(f.key, 'Script', String(val), 'text', { code: true }); return; }
+      if (f.kind === 'racial3') { add(f.key, 'Habilidades raciais', h('div', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : ''))), 'text'); return; }
+      if (f.key === 'fabricante') { add(f.key, label, makerTag(String(val)), 'stat'); return; }
+      if (f.key === 'preco') { add(f.key, label, priceText(val), 'stat'); return; }
+      const c = classify(f, val);
+      if (c[0] === 'list') add(f.key, label, null, 'list', { items: c[1] });
+      else add(f.key, label, c[1], c[0]);
+    });
+    // campos que não estão no formulário atual (registros antigos) também aparecem
+    Object.keys(v).forEach((k) => {
+      if (seen.has(k) || !String(v[k] || '').trim()) return;
+      if (e.kind === 'especime' && LEGACY_LABEL[k]) { if (v[k] !== 'Não' && v[k] !== '0') add(k, LEGACY_LABEL[k], String(v[k]), 'stat'); return; }
+      const c = classify(null, v[k]);
+      add(k, k, c[0] === 'list' ? null : c[1], c[0], c[0] === 'list' ? { items: c[1] } : null);
+    });
+    if (e.kind === 'npc') add('defesa', 'Defesa mínima', String(num(v.armadura) + num(v.corpo) + num(v.resistencia)), 'stat', { hint: 'armadura + Corpo + Resistência' });
+    const b = bonusLine(entryBonus(e));
+    if (b) add('bonus', 'Bônus', b + (bonusNote || ''), 'stat');
+    const parts = e.slots ? (e.slots.mods || []).concat(e.slots.props || [], e.slots.accs || []).map((x) => x.name) : [];
+    if (parts.length && !seen.has('encaixes')) add('encaixes', 'Encaixes', null, 'list', { items: parts });
+    if (!facts.length) return null;
+    const tile = (f) => {
+      const t = h('div', 'fact' + (FACT_HI[f.key] ? ' fact--hi' : ''), h('span', 'fact__k', f.label), h('span', 'fact__v', f.val), f.hint ? h('span', 'fact__hint', f.hint) : null);
+      const c = f.key === 'raridade' ? rarColor(f.val) : '';
+      if (c) { t.classList.add('fact--rar'); t.style.setProperty('--rar', c); }
+      return t;
+    };
+    const stats = facts.filter((f) => f.type === 'stat');
+    const used = new Set();
+    const out = [];
+    (FACT_GROUPS[e.kind] || FACT_GROUPS['*']).forEach((g) => {
+      const fs = g[1].map((k) => stats.find((f) => f.key === k && !used.has(f))).filter(Boolean);
+      if (!fs.length) return;
+      fs.forEach((f) => used.add(f));
+      out.push(h('section', 'facts__group', h('h3', 'facts__title', g[0]), h('div', 'facts__grid', ...fs.map(tile))));
+    });
+    const rest = stats.filter((f) => !used.has(f));
+    if (rest.length) out.push(h('section', 'facts__group', out.length ? h('h3', 'facts__title', 'Outros dados') : null, h('div', 'facts__grid', ...rest.map(tile))));
+    facts.filter((f) => f.type === 'text').forEach((f) => out.push(h('section', 'facts__group', h('h3', 'facts__title', f.label), h('div', 'facts__text' + (f.code ? ' entry__code' : ''), f.val))));
+    facts.filter((f) => f.type === 'list').forEach((f) => out.push(h('section', 'facts__group', h('h3', 'facts__title', f.label), h('ul', 'facts__chips', ...f.items.map((x) => h('li', 'facts__chip', x))))));
+    return h('div', 'facts', ...out);
+  }
+
   /* Tela de um poder: o tipo (simples, lista, com escolha, com melhorias), como se obtém e
      as opções e melhorias em cartões, em vez do texto cru "Nome | efeito | custo". */
   function powerKind(e) {
@@ -5835,16 +5891,9 @@ const FIREBASE_CONFIG = {
     $('#inv-dialog-meta').textContent = [kindTitle(i.kind), i.typeTitle, i.values.raridade, i.slot ? 'Equipado: ' + slotDef(i.slot).full : 'Na mochila'].filter(Boolean).join(' · ');
     const body = $('#inv-dialog-body');
     const keepFocus = body.contains(document.activeElement) ? document.activeElement.id : '';
-    const dl = h('dl', 'member__data');
-    ((cat && cat.fields) || []).forEach((f) => {
-      const v = i.values[f.key];
-      if (f.key === 'nome' || f.key === 'lore' || v === undefined || v === '') return;
-      dl.append(h('dt', '', f.label.replace(/\s*\(.*\)$/, '')), h('dd', '', f.key === 'fabricante' ? makerTag(String(v)) : String(v)));
-    });
-    const b = bonusLine(entryBonus(i));
-    if (b) dl.append(h('dt', '', 'Bônus'), h('dd', '', b + (i.slot ? '' : ' (só quando equipado)')));
+    const facts = entryFacts(i, new Set(['nome', 'lore', 'encaixes']), i.slot ? '' : ' (só quando equipado)'); // os encaixes têm editor próprio logo abaixo
     body.replaceChildren();
-    if (dl.children.length) body.append(dl);
+    if (facts) body.append(facts);
     if (canArmory(i)) {
       const ab = h('button', 'btn btn--primary btn--sm', 'Abrir no Armeiro');
       ab.type = 'button';
