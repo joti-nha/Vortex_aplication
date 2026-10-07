@@ -1969,7 +1969,11 @@ const FIREBASE_CONFIG = {
       h('code', 'code-tag', c.id));
     open.href = '#/campaign/' + encodeURIComponent(c.id);
     const kids = [open];
-    if (action) {
+    if (action && action.pad) { // ocupa o lugar do botão das outras linhas, para os códigos ficarem na mesma coluna
+      const pad = h('span', 'btn btn--danger btn--sm row__pad', action.label);
+      pad.setAttribute('aria-hidden', 'true');
+      kids.push(pad);
+    } else if (action) {
       const btn = h('button', 'btn btn--danger btn--sm', action.label);
       btn.type = 'button';
       btn.setAttribute('aria-label', action.label + ' ' + c.name);
@@ -2455,9 +2459,10 @@ const FIREBASE_CONFIG = {
     $('#form-create-campaign').hidden = !profile;
     const camps = await db.listMyCampaigns().catch((e) => { toast(errorMessage(e)); return []; });
     camps.push(...await profileCamps(camps.map((c) => c.id)));
+    const anyOwn = camps.some((c) => c.isOwner);
     $('#camp-list').replaceChildren(...camps.map((c) => campaignRow(c, c.isOwner
       ? { label: 'Excluir', onClick: async () => { if (await deleteCampaignFlow(c)) views.campanhas(); } }
-      : null)));
+      : anyOwn ? { label: 'Excluir', pad: true } : null)));
     $('#camp-empty').hidden = camps.length > 0;
     // campanhas públicas: qualquer um vê e abre (com senha, se o mestre pôs)
     const pub = await db.listPublicCampaigns().catch((e) => { console.warn(e); return []; });
