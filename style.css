@@ -3665,3 +3665,13 @@ html, body { max-width: 100%; overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) {
   .vx-veil, .vxtext, .vx-boom * { animation: none !important; }
 }
+
+/* prosa do glitch na tela hackeada: uma linha sorteada vira o botão */
+.vxprose { margin-top: 0.6rem; opacity: 0; animation: vx-type 0.4s forwards; }
+.vxprose__line { display: flex; align-items: center; min-height: 3.1rem; margin: 0.15rem 0; color: #b3a9d1; font-size: 0.86rem; line-height: 1.35; word-break: break-word; cursor: pointer; user-select: none; }
+.vxprose__line[data-vxm="phrase"] { color: #fff; text-shadow: 0 0 10px rgba(255, 255, 255, 0.6), 2px 0 #ff4fd8, -2px 0 #4ff7ff; animation: vx-win 0.6s ease-out; }
+.vxprose__line[data-vxm="lore"] { color: #7dffb5; font-style: italic; text-shadow: 0 0 8px rgba(125, 255, 181, 0.5); }
+.vxprose__line.is-miss { animation: vx-glitch 0.3s steps(2); }
+.vxprose .vxhack__switch { margin: 0; opacity: 1; animation: vx-transmute 0.35s steps(3); }
+@keyframes vx-transmute { 0% { opacity: 0; filter: blur(4px) hue-rotate(180deg); transform: skewX(-20deg) scaleY(0.4); } 60% { opacity: 1; transform: skewX(10deg); } 100% { filter: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .vxprose, .vxprose__line, .vxprose .vxhack__switch { animation: none !important; opacity: 1; } }
