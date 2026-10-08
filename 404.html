@@ -6,7 +6,7 @@
   <title>Vortex</title>
   <script>
     // O GitHub Pages mostra esta página para endereços que não existem.
-    // /Vortex_aplication/Tudotodosvocêeuninguemsaovortex volta para o app com a frase no ?, e o app abre a tela do Vórtex ∞.
+    // /Vortex_aplication/<frase secreta> volta para o app com a frase no ?, e o app abre a tela do Vórtex ∞ (só o hash dela fica aqui).
     (function () {
       var parts = location.pathname.split('/');
       var last = parts.pop() || parts.pop() || '';
@@ -14,7 +14,9 @@
       try { key = decodeURIComponent(last); } catch (e) { key = last; }
       key = key.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
       var base = parts.join('/') + '/';
-      if (key.indexOf('tudotodosvoceeuninguemsaovortex') >= 0) location.replace(base + '?' + last + location.hash);
+      var x = 0x811c9dc5;
+      for (var i = 0; i < key.length; i++) { x ^= key.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; }
+      if (x === 10166865) location.replace(base + '?' + last + location.hash);
       else location.replace(base + location.hash);
     })();
   </script>

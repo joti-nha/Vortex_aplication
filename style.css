@@ -3675,3 +3675,28 @@ html, body { max-width: 100%; overflow-x: clip; }
 .vxprose .vxhack__switch { margin: 0; opacity: 1; animation: vx-transmute 0.35s steps(3); }
 @keyframes vx-transmute { 0% { opacity: 0; filter: blur(4px) hue-rotate(180deg); transform: skewX(-20deg) scaleY(0.4); } 60% { opacity: 1; transform: skewX(10deg); } 100% { filter: none; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .vxprose, .vxprose__line, .vxprose .vxhack__switch { animation: none !important; opacity: 1; } }
+
+/* enigma do Vórtex: pedaço achado e o card trancado */
+.vx-clue { position: fixed; left: 50%; top: 38%; z-index: 2100; display: grid; gap: 0.35rem; justify-items: center; width: min(26rem, 88vw); padding: 1rem 1.25rem; transform: translate(-50%, -50%); border: 1px solid rgba(255, 79, 216, 0.6); border-radius: 10px; background: rgba(2, 1, 6, 0.92); color: #fff; text-align: center; pointer-events: none; box-shadow: 0 0 40px rgba(255, 79, 216, 0.35); animation: vx-clue 3.8s ease-in-out forwards; }
+.vx-clue--end { animation-duration: 6s; }
+.vx-clue__n { color: #4ff7ff; font: 600 0.75rem/1 ui-monospace, Menlo, monospace; letter-spacing: 0.2em; text-transform: uppercase; }
+.vx-clue__w { font: 900 clamp(1.4rem, 7vw, 2.4rem)/1.1 ui-monospace, Menlo, monospace; letter-spacing: 0.08em; text-shadow: 3px 0 #ff4fd8, -3px 0 #4ff7ff; }
+.vx-clue--end .vx-clue__w { font-size: 1.05rem; letter-spacing: 0; font-style: italic; }
+@keyframes vx-clue { 0% { opacity: 0; filter: blur(8px); } 8% { opacity: 1; filter: none; } 12% { transform: translate(-52%, -50%) skewX(10deg); } 14% { transform: translate(-50%, -50%); } 85% { opacity: 1; } 100% { opacity: 0; filter: blur(6px); } }
+.vx-clue-hint { display: grid; gap: 0.2rem; }
+.vx-clue-hint__slots { font: 700 0.72rem/1.4 ui-monospace, Menlo, monospace; letter-spacing: 0.04em; color: var(--ambar, #ff4fd8); word-break: break-word; }
+.vx-clue-hint__riddle { font-style: italic; }
+@media (prefers-reduced-motion: reduce) { .vx-clue { animation: none; } }
+
+/* o susto do vórtex: a tela trava, depois o rosto */
+:root.vx-freeze, :root.vx-freeze *, :root.vx-freeze *::before, :root.vx-freeze *::after { animation-play-state: paused !important; transition: none !important; }
+:root.vx-freeze { cursor: wait; }
+.vx-scare { position: fixed; inset: 0; width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; outline: none; cursor: wait; }
+.vx-scare::backdrop { background: transparent; }
+.vx-scare.is-scare { display: grid; place-items: center; background: #000; animation: vx-scare-bg 1.5s steps(1) !important; animation-play-state: running !important; }
+@keyframes vx-scare-bg { 0% { background: #fff; } 6% { background: #000; } 50% { background: #12000a; } }
+.vx-scare__face { --fs: min(135vw, 92vh); position: absolute; left: 50%; top: 50%; width: var(--fs); height: var(--fs); margin: calc(var(--fs) / -2) 0 0 calc(var(--fs) / -2); animation: vx-scare-in 1.5s cubic-bezier(0.1, 0.9, 0.2, 1) both, vx-scare-shake 0.07s steps(2) infinite !important; animation-play-state: running !important; }
+@keyframes vx-scare-in { 0% { transform: scale(0.15) rotate(-20deg); filter: brightness(4); } 18% { transform: scale(1.05) rotate(3deg); filter: none; } 100% { transform: scale(1.12) rotate(-2deg); } }
+@keyframes vx-scare-shake { 50% { translate: 6px -4px; } }
+.vx-scare__swirl { transform-origin: 0 0; animation: vx-spin 0.8s linear infinite !important; animation-play-state: running !important; }
+.vx-scare.is-out { opacity: 0; transition: opacity 0.5s !important; }
