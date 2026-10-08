@@ -3500,7 +3500,7 @@ const FIREBASE_CONFIG = {
     const check = () => {
       const r = parseScript(ta.value);
       state.classList.toggle('script__state--bad', r.bad.length > 0);
-      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
+      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.desloc ? signed(r.desloc) + ' m de deslocamento' : '', r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
     };
     ta.addEventListener('input', () => { onChange(ta.value); check(); });
     check();
@@ -5450,10 +5450,11 @@ const FIREBASE_CONFIG = {
     ['acopla', 'Engenharia: armas e armaduras acopladas ocupam a Carga Cibernética'],
     ['humanidade', 'testes contra efeitos de PE com CD; metade da Blindagem/Escudo regenera como PV'],
     ['eletronico', 'ser eletrônico: efeitos de PE atordoam'],
-    ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)']
+    ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)'],
+    ['deslocamento: 3', 'metros a mais de deslocamento (o padrão é 9 m)']
   ];
   function parseScript(txt) {
-    const out = { vida: '', up: 0, nucleo: 0, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
+    const out = { vida: '', up: 0, nucleo: 0, desloc: 0, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
     String(txt || '').split(/[\n;]/).forEach((raw) => {
       const line = raw.replace(/\/\/.*$|#.*$/, '').trim();
       if (!line) return;
@@ -5471,6 +5472,7 @@ const FIREBASE_CONFIG = {
       if (val === '' || !isFinite(n)) { out.bad.push(raw.trim()); return; }
       if (key === 'up' || key === 'ups' || key === 'upinicial' || key === 'upiniciais') out.up += Math.round(n);
       else if (key === 'nucleo' || key === 'nucleobase') out.nucleo = Math.max(out.nucleo, Math.round(n));
+      else if (key === 'deslocamento' || key === 'desloc' || key === 'movimento') out.desloc += n;
       else if (BONUS_KEYS.some((b) => b[0] === key)) out.bonus[key] = (out.bonus[key] || 0) + n;
       else out.bad.push(raw.trim());
     });
@@ -5501,16 +5503,17 @@ const FIREBASE_CONFIG = {
     return out;
   }
   function mergeMech(list) {
-    const m = { vida: 'PV', up: 0, nucleo: 0, acopla: false, humanidade: false, eletronico: false };
+    const m = { vida: 'PV', up: 0, nucleo: 0, desloc: 0, acopla: false, humanidade: false, eletronico: false };
     list.forEach((x) => {
       if (x.vida) m.vida = x.vida;
       m.up += x.up;
       m.nucleo = Math.max(m.nucleo, x.nucleo);
+      m.desloc += x.desloc || 0;
       ['acopla', 'humanidade', 'eletronico'].forEach((k) => { if (x[k]) m[k] = true; });
     });
     return m;
   }
-  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
+  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.desloc ? signed(m.desloc) + ' m de deslocamento' : '', m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
 
   /* Poderes com escolha: Doutor (uma perícia) e Proficiência em arma ou armadura (um tipo).
      Cada compra é um poder na lista, com a escolha guardada em choice. */
@@ -5604,6 +5607,7 @@ const FIREBASE_CONFIG = {
     return {
       max, src, base, pen, armor, armorProf, nucleo, core,
       cargaUsed: Math.round(cargaUsed * 100) / 100, cargaMax: max.carga, over: cargaUsed > max.carga,
+      desloc: Math.max(0, 9 + mech.desloc) / (cargaUsed > max.carga ? 2 : 1), // sobrecarregado: metade
       defMin: max.armadura + a.corpo + num(s.skills.resistencia),
       ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: mech.humanidade, eletronico: mech.eletronico,
       ccOver: (nucleo > 0 || attachUsed > 0) && (protUsed + attachUsed > ccMax || protUsed + attachUsed + modUsed > ccMax + modExtra),
@@ -6495,7 +6499,7 @@ const FIREBASE_CONFIG = {
       lifeRing,
       ctl('pe', 'PE', one('pe'), m.max.pe, bump('pe', -1), bump('pe', 1), one('pe') <= 0),
       ctl('pa', 'PA', one('pa'), m.max.pa, bump('pa', -1), bump('pa', 1), one('pa') <= 0),
-      box('move', 'Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarregado' : 'padrão'),
+      box('move', 'Deslocamento', fmtNum(m.desloc) + ' m', m.over ? 'sobrecarregado' : m.desloc !== 9 ? 'espécime' : 'padrão'),
       box('carga', 'Carga', fmtNum(m.cargaUsed) + '/' + fmtNum(m.cargaMax), m.over ? 'acima do limite' : 'mochila'),
       box('up', 'UP livres', String(free), 'XP ' + num(s.xp)));
     const old = $('#vitals-edit');
@@ -6580,7 +6584,7 @@ const FIREBASE_CONFIG = {
     const stat = (label, value, note) => h('div', 'stat', h('span', 'stat__label', label), h('span', 'stat__value', value), note ? h('span', 'stat__note', note) : null);
     const stats = h('div', 'stats',
       stat('Defesa mínima', String(m.defMin), 'Armadura ' + m.max.armadura + ' + Corpo + Resistência'),
-      stat('Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarregado: metade' : 'padrão'),
+      stat('Deslocamento', fmtNum(m.desloc) + ' m', m.over ? 'sobrecarregado: metade' : m.desloc !== 9 ? 'com o bônus do espécime' : 'padrão'),
       stat('Penalidade de armadura', m.pen ? '–' + m.pen : '—', m.pen ? 'Manha, Reflexos, Sentidos e Operações' + (m.armorProf ? '' : ' (dobrada: sem proficiência)') : (m.armor ? m.armor.name : 'sem armadura equipada')));
 
     // (o tipo escolhido aplica fraquezas e resistências; a última escolha fica lembrada)

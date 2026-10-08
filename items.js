@@ -557,8 +557,8 @@ window.VORTEX_ITEMS = {
     // espécime secreto: só aparece quando alguém pesquisa "neko" (secreto: true esconde nas listas)
     {
       id: 'of-esp-neko', kind: 'especime', name: 'Neko', secreto: true,
-      values: { descricao: 'Humanoide felino de orelhas atentas e cauda nervosa. Ninguém sabe de onde veio; dizem que caiu do vórtex de pé. Só uma Neko pode ter o sexo Myauuu.',
-        racial: 'Cair de pé | Sempre cai de pé: ignora dano de queda de até 9 m e não fica caído ao ser derrubado por queda. | 1\nSete vidas | Uma vez por descanso longo, ao chegar a 0 de Resistência, fica com 1 no lugar. Só funciona 7 vezes por campanha. | 1\nRonronar | +2 em Diplomacia ao ronronar para alguém; −2 em Vontade contra luzes que se mexem (lasers, miras, reflexos). | 1' }
+      values: { descricao: 'Humanoide felino de orelhas atentas e cauda nervosa. Ninguém sabe de onde veio; dizem que caiu do vórtex de pé, e que ainda tem vidas sobrando. Só uma Neko pode ter o sexo Myauuu.',
+        racial: 'Patas leves | Sempre cai de pé: ignora dano de queda de até 9 m, sofre só metade do dano de quedas maiores e nunca fica caído por queda. Ganha +3 m de deslocamento (12 m), escala e salta sem gastar deslocamento extra e salta o dobro da distância normal. | 1 | deslocamento: 3\nNove vidas | Uma vez por descanso longo, ao chegar a 0 de Resistência, fica com 1 no lugar e, como reação, se afasta até metade do deslocamento sem provocar ataques. Só funciona 9 vezes por campanha: marque cada vida gasta. | 1\nInstinto selvagem | Traços selvagens: garras que contam como arma corpo a corpo leve de dano Cortante, sempre à mão e impossíveis de desarmar; enxerga no escuro como na penumbra; +1 em Sentidos e Reflexos; vantagem para farejar, ouvir e perceber emboscadas. Ronrona para alguém e ganha +2 em Diplomacia, mas tem −2 em Vontade contra luzes que se mexem (lasers, miras, reflexos). | 1' }
     },
 
     // Builds (recomendações da distribuição inicial)
