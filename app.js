@@ -3954,53 +3954,88 @@ const FIREBASE_CONFIG = {
     vortexChaos(id === 'vortice');
     nyanExtras(id === 'nyan');
   }
-  /* Nyan Cat: o GIF oficial voando no fundo (carregado do nyan.cat, não fica no repositório; se não carregar,
-     fica o gato desenhado em CSS) e a música do YouTube num mini player no canto, que começa no primeiro toque
-     (o navegador não deixa tocar som antes) e respeita o botão de som. O × para a música até trocar de tema. */
-  var NYAN_VIDEO = 'QH2-TGUlwu4';
+  /* Nyan Cat: de tempos em tempos o gato atravessa o fundo vindo de uma direção sorteada, com o rastro de
+     arco-íris em degraus atrás dele. O gato é o GIF oficial (do nyan.cat); se não carregar, entra um gato em
+     pixel desenhado aqui. A música (audio/nyan-cat.mp3) toca em loop a partir do primeiro toque, respeita o
+     botão de som e o botão ♪ do canto pausa só ela. */
   var NYAN_GIF = 'https://www.nyan.cat/cats/original.gif';
-  var nyanOn = false, nyanMuted = false;
+  var NYAN_MP3 = 'audio/nyan-cat.mp3';
+  var nyanOn = false, nyanMuted = false, nyanAudio = null, nyanTimer = null, nyanGifOk = null;
+  const NYAN_PIXEL = (() => { // gato em pixel (34×21) para quando o GIF não carrega
+    const R = (x, y, w, hh, c) => '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + hh + '" fill="' + c + '"/>';
+    return '<svg class="nyan-fly__cat nyan-fly__cat--px" viewBox="0 0 34 21" shape-rendering="crispEdges" aria-hidden="true">' +
+      R(0, 9, 5, 3, '#9b9b9b') + // rabo
+      '<g class="nyan-px-legs">' + R(5, 17, 3, 3, '#9b9b9b') + R(10, 18, 3, 3, '#9b9b9b') + R(19, 18, 3, 3, '#9b9b9b') + R(24, 17, 3, 3, '#9b9b9b') + '</g>' +
+      R(4, 1, 21, 17, '#000') + R(5, 2, 19, 15, '#f6d39a') + R(7, 4, 15, 11, '#ff99cc') +
+      R(9, 6, 1, 1, '#ff3d8b') + R(13, 5, 1, 1, '#ff3d8b') + R(17, 7, 1, 1, '#ff3d8b') + R(11, 10, 1, 1, '#ff3d8b') + R(15, 12, 1, 1, '#ff3d8b') + R(19, 11, 1, 1, '#ff3d8b') + R(9, 13, 1, 1, '#ff3d8b') +
+      R(17, 4, 3, 3, '#9b9b9b') + R(27, 4, 3, 3, '#9b9b9b') + R(16, 6, 16, 12, '#000') + R(17, 7, 14, 10, '#9b9b9b') +
+      R(20, 10, 2, 2, '#000') + R(26, 10, 2, 2, '#000') + R(20, 10, 1, 1, '#fff') + R(26, 10, 1, 1, '#fff') +
+      R(18, 13, 2, 2, '#ff99cc') + R(28, 13, 2, 2, '#ff99cc') + R(22, 14, 5, 1, '#000') + '</svg>';
+  })();
   function nyanExtras(on) {
     if (on && !nyanOn) nyanMuted = false;
     nyanOn = on;
-    const root = document.documentElement;
-    const old = document.querySelector('.nyan-fly');
-    if (!on) { if (old) old.remove(); root.classList.remove('nyan-gif'); nyanMusic(); return; }
-    if (!old) {
-      const fly = h('div', 'nyan-fly', h('span', 'nyan-fly__rainbow'));
-      fly.setAttribute('aria-hidden', 'true');
-      const img = h('img', 'nyan-fly__cat');
-      img.alt = '';
-      img.decoding = 'async';
-      img.referrerPolicy = 'no-referrer';
-      img.onload = () => root.classList.add('nyan-gif');
-      img.onerror = () => { fly.remove(); root.classList.remove('nyan-gif'); };
-      img.src = NYAN_GIF;
-      fly.append(img);
-      document.body.append(fly);
+    clearTimeout(nyanTimer);
+    nyanTimer = null;
+    document.querySelectorAll('.nyan-fly').forEach((el) => el.remove());
+    const btn = document.querySelector('.nyan-music');
+    if (!on) { if (btn) btn.remove(); nyanMusic(); return; }
+    if (!btn) {
+      const b = h('button', 'nyan-music', '♪');
+      b.type = 'button';
+      b.addEventListener('click', () => { nyanMuted = !nyanMuted; nyanMusic(); });
+      document.body.append(b);
     }
+    if (!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) nyanTimer = setTimeout(nyanFly, 1500 + Math.random() * 5000);
     nyanMusic();
   }
+  function nyanFly() {
+    if (!nyanOn) return;
+    const next = () => { if (nyanOn) nyanTimer = setTimeout(nyanFly, 4000 + Math.random() * 12000); };
+    if (document.hidden) { next(); return; }
+    const W = window.innerWidth, H = window.innerHeight;
+    // direção sorteada: dos lados, nas diagonais ou de cima e de baixo
+    const ang = [0, 180, -20, 20, 160, 200, -35, 215, 90, 270][Math.floor(Math.random() * 10)] + (Math.random() * 16 - 8);
+    const rad = ang * Math.PI / 180, dx = Math.cos(rad), dy = Math.sin(rad);
+    const px = W * (0.2 + Math.random() * 0.6), py = H * (0.15 + Math.random() * 0.7);
+    const out = (sx, sy) => Math.min(sx > 0 ? (W - px) / sx : sx < 0 ? -px / sx : Infinity, sy > 0 ? (H - py) / sy : sy < 0 ? -py / sy : Infinity);
+    const back = out(-dx, -dy) + 10, fwd = out(dx, dy) + 480; // entra com o focinho na borda, sai com o rastro inteiro
+    const flip = dx < -0.01 ? ' scaleY(-1)' : '';
+    const T = (x, y) => 'translate(' + x.toFixed(0) + 'px,' + y.toFixed(0) + 'px) rotate(' + ang.toFixed(1) + 'deg)' + flip + ' translate(-100%,-50%)';
+    const rainbow = h('span', 'nyan-fly__rainbow');
+    for (let i = 0; i < 14; i++) rainbow.append(h('i'));
+    const fly = h('div', 'nyan-fly', rainbow);
+    fly.setAttribute('aria-hidden', 'true');
+    const usePixel = () => { const tmp = document.createElement('span'); tmp.innerHTML = NYAN_PIXEL; return tmp.firstChild; };
+    if (nyanGifOk === false) fly.append(usePixel());
+    else {
+      const img = h('img', 'nyan-fly__cat');
+      img.alt = '';
+      img.referrerPolicy = 'no-referrer';
+      img.onload = () => { nyanGifOk = true; };
+      img.onerror = () => { nyanGifOk = false; img.replaceWith(usePixel()); };
+      img.src = NYAN_GIF;
+      fly.append(img);
+    }
+    document.body.append(fly);
+    const dur = (back + fwd) / (180 + Math.random() * 160) * 1000; // 180 a 340 px por segundo
+    const anim = fly.animate([{ transform: T(px - dx * back, py - dy * back) }, { transform: T(px + dx * fwd, py + dy * fwd) }], { duration: dur, easing: 'linear' });
+    anim.onfinish = () => { fly.remove(); next(); };
+  }
   function nyanMusic() {
-    const box = document.querySelector('.nyan-music');
+    const btn = document.querySelector('.nyan-music');
     const soundOn = typeof sfx === 'undefined' || !sfx || sfx.on;
-    if (!nyanOn || nyanMuted || !soundOn) { if (box) box.remove(); return; }
-    if (box) return;
-    const start = () => {
-      if (document.querySelector('.nyan-music') || !nyanOn || nyanMuted || (sfx && !sfx.on)) return;
-      const fr = document.createElement('iframe');
-      fr.src = 'https://www.youtube-nocookie.com/embed/' + NYAN_VIDEO + '?autoplay=1&loop=1&playlist=' + NYAN_VIDEO + '&playsinline=1&modestbranding=1&rel=0';
-      fr.title = 'Nyan Cat (YouTube)';
-      fr.allow = 'autoplay; encrypted-media';
-      fr.referrerPolicy = 'strict-origin-when-cross-origin';
-      const x = h('button', 'nyan-music__close', '×');
-      x.type = 'button';
-      x.title = 'Parar a música';
-      x.setAttribute('aria-label', 'Parar a música do Nyan Cat');
-      const wrap = h('div', 'nyan-music', fr, x);
-      x.addEventListener('click', () => { nyanMuted = true; wrap.remove(); });
-      document.body.append(wrap);
-    };
+    const want = nyanOn && !nyanMuted && soundOn;
+    if (btn) {
+      btn.classList.toggle('is-off', !want);
+      btn.title = want ? 'Pausar a música do Nyan Cat' : (soundOn ? 'Tocar a música do Nyan Cat' : 'Som do site desligado');
+      btn.setAttribute('aria-label', btn.title);
+      btn.setAttribute('aria-pressed', String(want));
+    }
+    if (!want) { if (nyanAudio) nyanAudio.pause(); return; }
+    if (!nyanAudio) { nyanAudio = new Audio(NYAN_MP3); nyanAudio.loop = true; nyanAudio.volume = 0.45; }
+    const start = () => { if (nyanOn && !nyanMuted && (!sfx || sfx.on)) nyanAudio.play().catch(() => {}); };
+    // sem nenhum toque ainda o navegador não deixa tocar som: espera o primeiro
     if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
       const once = () => { ['pointerdown', 'keydown'].forEach((e) => document.removeEventListener(e, once, true)); start(); };
       ['pointerdown', 'keydown'].forEach((e) => document.addEventListener(e, once, true));
