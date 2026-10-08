@@ -3201,9 +3201,14 @@ html, body { max-width: 100%; overflow-x: clip; }
 .pick-wrap { position: relative; }
 .pick-wrap__row { display: flex; gap: 0.4rem; }
 .pick-wrap__row .input { flex: 1; min-width: 0; }
-.pick-btn { flex: none; min-height: 44px; }
-.pick-menu { position: absolute; z-index: 20; top: calc(100% + 0.3rem); right: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; width: max-content; max-width: min(20rem, 86vw); padding: 0.6rem; border: 1px solid var(--linha-forte); border-radius: var(--r-s); background: var(--casco); box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.6); }
+.pick-btn { flex: none; min-height: 44px; min-width: 44px; padding-inline: 0.6rem; font-size: 1rem; }
+.pick-wrap { min-width: 0; }
+/* o menu fica sempre na largura do campo: nunca vaza para os lados (e não é cortado por um painel no PC) */
+.pick-menu { position: absolute; z-index: 20; top: calc(100% + 0.3rem); left: 0; right: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(5.6rem, 1fr)); gap: 0.35rem; padding: 0.6rem; border: 1px solid var(--linha-forte); border-radius: var(--r-s); background: var(--casco); box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.6); }
 .pick-menu[hidden] { display: none; }
+.pick-menu .chip { justify-content: center; min-width: 0; padding-inline: 0.45rem; font-size: 0.82rem; white-space: normal; text-align: center; line-height: 1.15; }
+.pick-menu .chip[hidden] { display: none; }
+.pick-menu .chip--myau { white-space: nowrap; }
 .pick-menu__other { border-style: dashed; }
 .racial__more { align-self: flex-start; margin: 0.3rem 0 0; }
 .racial__only { width: fit-content; }
@@ -3704,11 +3709,11 @@ html, body { max-width: 100%; overflow-x: clip; }
 /* Nyan Cat: o gato atravessa a tela de direções sorteadas (o JS move o .nyan-fly; não pega toques), com o rastro em degraus */
 :root[data-theme="nyan"] body::after { display: none; }
 .nyan-fly { position: fixed; left: 0; top: 0; z-index: 40; opacity: 0.95; display: flex; align-items: center; pointer-events: none; will-change: transform; }
-.nyan-fly__rainbow { display: flex; align-items: center; margin-right: -14px; -webkit-mask: linear-gradient(90deg, transparent, #000 45%); mask: linear-gradient(90deg, transparent, #000 45%); }
+.nyan-fly__rainbow { display: flex; align-items: center; margin-right: -36px; -webkit-mask: linear-gradient(90deg, transparent, #000 45%); mask: linear-gradient(90deg, transparent, #000 45%); }
 .nyan-fly__rainbow i { width: 22px; height: 42px; background: linear-gradient(#ff2a2a 0 16.66%, #ff9a2a 0 33.33%, #ffee2a 0 50%, #33ff4a 0 66.66%, #2aa8ff 0 83.33%, #7a2aff 0); animation: nyan-step 0.36s steps(1) infinite; }
 .nyan-fly__rainbow i:nth-child(even) { animation-delay: -0.18s; }
 @keyframes nyan-step { 0% { transform: translateY(-3px); } 50% { transform: translateY(3px); } }
-.nyan-fly__cat { position: relative; height: 64px; width: auto; image-rendering: pixelated; animation: nyan-bob 0.36s steps(1) infinite; }
+.nyan-fly__cat { position: relative; z-index: 1; height: 64px; width: auto; image-rendering: pixelated; animation: nyan-bob 0.36s steps(1) infinite; }
 .nyan-fly__cat--px { width: 104px; height: 64px; }
 .nyan-px-legs { animation: nyan-legs 0.24s steps(1) infinite; }
 @keyframes nyan-bob { 50% { transform: translateY(-3px); } }
@@ -3717,3 +3722,10 @@ html, body { max-width: 100%; overflow-x: clip; }
 .nyan-music.is-off { background: #6b5a75; color: #2a2030; animation: none; text-decoration: line-through; }
 @media (min-width: 900px) { .nyan-music { bottom: 16px; right: 16px; } }
 @media (prefers-reduced-motion: reduce) { .nyan-fly, .nyan-music { animation: none !important; } }
+
+/* Vórtex ∞: botão da trilha gerada */
+.vx-music { position: fixed; right: 12px; bottom: 84px; z-index: 60; width: 44px; height: 44px; border: 2px solid #4ff7ff; border-radius: 50%; background: radial-gradient(circle, #000 35%, #24123d 70%, #784fff); color: #ff4fd8; font: 900 1.4rem/1 system-ui, sans-serif; box-shadow: 0 0 12px #ff4fd880, inset 0 0 8px #4ff7ff66; cursor: pointer; animation: vx-music-pulse 2.4s ease-in-out infinite; }
+.vx-music.is-off { border-color: #555; color: #777; box-shadow: none; animation: none; text-decoration: line-through; }
+@keyframes vx-music-pulse { 50% { box-shadow: 0 0 22px #ff4fd8, inset 0 0 12px #4ff7ff; } }
+@media (min-width: 900px) { .vx-music { bottom: 16px; right: 16px; } }
+@media (prefers-reduced-motion: reduce) { .vx-music { animation: none !important; } }

@@ -3500,7 +3500,7 @@ const FIREBASE_CONFIG = {
     const check = () => {
       const r = parseScript(ta.value);
       state.classList.toggle('script__state--bad', r.bad.length > 0);
-      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
+      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.desloc ? signed(r.desloc) + ' m de deslocamento' : '', r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
     };
     ta.addEventListener('input', () => { onChange(ta.value); check(); });
     check();
@@ -3953,6 +3953,7 @@ const FIREBASE_CONFIG = {
     saveThemes();
     vortexChaos(id === 'vortice');
     nyanExtras(id === 'nyan');
+    vxMusic(id === 'vortice');
   }
   /* Nyan Cat: de tempos em tempos o gato atravessa o fundo vindo de uma direção sorteada, com o rastro de
      arco-íris em degraus atrás dele. O gato é o GIF oficial (do nyan.cat); se não carregar, entra um gato em
@@ -3994,12 +3995,18 @@ const FIREBASE_CONFIG = {
     const next = () => { if (nyanOn) nyanTimer = setTimeout(nyanFly, 4000 + Math.random() * 12000); };
     if (document.hidden) { next(); return; }
     const W = window.innerWidth, H = window.innerHeight;
-    // direção sorteada: dos lados, nas diagonais ou de cima e de baixo
-    const ang = [0, 180, -20, 20, 160, 200, -35, 215, 90, 270][Math.floor(Math.random() * 10)] + (Math.random() * 16 - 8);
+    // direção sorteada (dos lados, nas diagonais, de cima ou de baixo), mas sempre cruzando a tela inteira:
+    // a inclinação é limitada para ele sair pelo lado oposto ao que entrou, e não pelo teto no meio do caminho
+    const horiz = Math.random() < (W >= H ? 0.8 : 0.55);
+    const A = horiz ? W : H, B = horiz ? H : W;
+    const t = (Math.random() * 2 - 1) * Math.min(Math.tan(35 * Math.PI / 180), 0.7 * B / A);
+    let ang = Math.atan(t) * 180 / Math.PI + (horiz ? 0 : 90);
+    if (Math.random() < 0.5) ang += 180;
     const rad = ang * Math.PI / 180, dx = Math.cos(rad), dy = Math.sin(rad);
-    const px = W * (0.2 + Math.random() * 0.6), py = H * (0.15 + Math.random() * 0.7);
+    const room = Math.max(0, 0.84 * B - Math.abs(t) * A) / 2; // folga para a linha não encostar nas outras bordas
+    const mid = B / 2 + (Math.random() * 2 - 1) * room;
+    const px = horiz ? W / 2 : mid, py = horiz ? mid : H / 2;
     const out = (sx, sy) => Math.min(sx > 0 ? (W - px) / sx : sx < 0 ? -px / sx : Infinity, sy > 0 ? (H - py) / sy : sy < 0 ? -py / sy : Infinity);
-    const back = out(-dx, -dy) + 10, fwd = out(dx, dy) + 480; // entra com o focinho na borda, sai com o rastro inteiro
     const flip = dx < -0.01 ? ' scaleY(-1)' : '';
     const T = (x, y) => 'translate(' + x.toFixed(0) + 'px,' + y.toFixed(0) + 'px) rotate(' + ang.toFixed(1) + 'deg)' + flip + ' translate(-100%,-50%)';
     const rainbow = h('span', 'nyan-fly__rainbow');
@@ -4012,15 +4019,31 @@ const FIREBASE_CONFIG = {
       const img = h('img', 'nyan-fly__cat');
       img.alt = '';
       img.referrerPolicy = 'no-referrer';
-      img.onload = () => { nyanGifOk = true; };
-      img.onerror = () => { nyanGifOk = false; img.replaceWith(usePixel()); };
-      img.src = NYAN_GIF;
       fly.append(img);
     }
+    fly.style.visibility = 'hidden';
     document.body.append(fly);
-    const dur = (back + fwd) / (180 + Math.random() * 160) * 1000; // 180 a 340 px por segundo
-    const anim = fly.animate([{ transform: T(px - dx * back, py - dy * back) }, { transform: T(px + dx * fwd, py + dy * fwd) }], { duration: dur, easing: 'linear' });
-    anim.onfinish = () => { fly.remove(); next(); };
+    let gone = false;
+    const go = () => { // só voa com o gato já carregado: aí dá para medir o tamanho de verdade
+      if (gone) return;
+      gone = true;
+      if (!nyanOn || !fly.isConnected) { fly.remove(); return; }
+      const img = fly.querySelector('img.nyan-fly__cat');
+      // o GIF tem um espaço vazio atrás do gato: o arco-íris entra por baixo da traseira
+      if (img) rainbow.style.marginRight = -Math.round(img.getBoundingClientRect().width * 0.5) + 'px';
+      const len = fly.getBoundingClientRect().width + fly.getBoundingClientRect().height; // comprimento + folga da inclinação
+      const back = out(-dx, -dy) + 10, fwd = out(dx, dy) + len + 20; // entra com o focinho na borda, sai com o rastro inteiro
+      fly.style.visibility = '';
+      const dur = (back + fwd) / (180 + Math.random() * 160) * 1000; // 180 a 340 px por segundo
+      const anim = fly.animate([{ transform: T(px - dx * back, py - dy * back) }, { transform: T(px + dx * fwd, py + dy * fwd) }], { duration: dur, easing: 'linear' });
+      anim.onfinish = () => { fly.remove(); next(); };
+    };
+    const img = fly.querySelector('img.nyan-fly__cat');
+    if (!img) { go(); return; }
+    img.onload = () => { nyanGifOk = true; go(); };
+    img.onerror = () => { nyanGifOk = false; img.replaceWith(usePixel()); go(); };
+    setTimeout(() => { if (!gone) { img.replaceWith(usePixel()); go(); } }, 4000); // GIF lento demais: vai o de pixel
+    img.src = NYAN_GIF;
   }
   function nyanMusic() {
     const btn = document.querySelector('.nyan-music');
@@ -4327,6 +4350,180 @@ const FIREBASE_CONFIG = {
     vxTimer = setTimeout(tick, 900);
     vxMaybeScare(0.2);
   }
+  /* Trilha do Vórtex ∞, gerada aqui mesmo (Web Audio, sem arquivo nenhum). Segue o relógio do instável
+     (VX_LIMIT = 8 min): começa num zumbido de fita VHS, entram drones graves, chiado, notas que desafinam e
+     batidas cada vez mais rápidas até a explosão. No estável fica para sempre na primeira fase. */
+  var vxMusOn = false, vxMusMuted = false, vxMus = null, vxMusWait = false;
+  function vxMusic(on) {
+    if (on !== undefined) {
+      if (on && !vxMusOn) vxMusMuted = false;
+      vxMusOn = on;
+      let btn = document.querySelector('.vx-music');
+      if (!on && btn) btn.remove();
+      if (on && !btn) {
+        btn = h('button', 'vx-music', '∿');
+        btn.type = 'button';
+        btn.addEventListener('click', () => { vxMusMuted = !vxMusMuted; vxMusic(); });
+        document.body.append(btn);
+      }
+    }
+    if (!sfx) { setTimeout(() => vxMusic(), 0); return; } // ao abrir o site o motor de som ainda não existe
+    const btn = document.querySelector('.vx-music');
+    const soundOn = sfx.on;
+    const want = vxMusOn && !vxMusMuted && soundOn;
+    if (btn) {
+      btn.classList.toggle('is-off', !want);
+      btn.title = want ? 'Pausar a trilha do vórtex' : (soundOn ? 'Tocar a trilha do vórtex' : 'Som do site desligado');
+      btn.setAttribute('aria-label', btn.title);
+      btn.setAttribute('aria-pressed', String(want));
+    }
+    if (!want) { vxMusStop(); return; }
+    // sem nenhum toque ainda o navegador não deixa tocar som: espera o primeiro
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+      if (vxMusWait) return;
+      vxMusWait = true;
+      const once = () => { ['pointerdown', 'keydown'].forEach((e) => document.removeEventListener(e, once, true)); vxMusWait = false; vxMusic(); };
+      ['pointerdown', 'keydown'].forEach((e) => document.addEventListener(e, once, true));
+    } else vxMusStart();
+  }
+  function vxMusStop(cut) {
+    if (!vxMus) return;
+    const m = vxMus;
+    vxMus = null;
+    clearInterval(m.timer);
+    const t = m.ac.currentTime;
+    m.out.gain.cancelScheduledValues(t);
+    m.out.gain.setValueAtTime(m.out.gain.value, t);
+    m.out.gain.linearRampToValueAtTime(0, t + (cut ? 0.04 : 0.6));
+    setTimeout(() => { m.nodes.forEach((n) => { try { n.stop(); } catch (e) { /* já parou */ } }); m.out.disconnect(); }, cut ? 120 : 800);
+  }
+  function vxMusStart() {
+    if (vxMus) return;
+    const ac = sfxCtx();
+    if (!ac) return;
+    const nodes = [];
+    const gain = (v, dest) => { const g = ac.createGain(); g.gain.value = v; if (dest) g.connect(dest); return g; };
+    const osc = (type, f, dest) => { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; if (dest) o.connect(dest); o.start(); nodes.push(o); return o; };
+    const filt = (type, f, q, dest) => { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; if (dest) b.connect(dest); return b; };
+    const out = gain(0);
+    const shaper = ac.createWaveShaper();
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.ratio.value = 5;
+    out.connect(shaper); shaper.connect(comp); comp.connect(ac.destination);
+    // eco de fita, com o tempo do eco oscilando (wow)
+    const echo = ac.createDelay(2); echo.delayTime.value = 0.42;
+    const fb = gain(0.38, echo); echo.connect(fb);
+    const echoF = filt('lowpass', 1800, 0.5, out); echo.connect(echoF);
+    // 1) zumbido VHS: 60 Hz e harmônicos, com wow e flutter
+    const humG = gain(0, out);
+    const humF = filt('lowpass', 380, 1, humG);
+    const h1 = osc('sawtooth', 60, humF), h2 = osc('sine', 120, gain(0.5, humF)), h3 = osc('sine', 180, gain(0.25, humF));
+    const wow = osc('sine', 0.55), wowG = gain(8); wow.connect(wowG);
+    [h1, h2, h3].forEach((o) => wowG.connect(o.detune));
+    // 2) chiado de fita (ruído em loop)
+    const nb = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+    const nd = nb.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const hiss = ac.createBufferSource(); hiss.buffer = nb; hiss.loop = true;
+    const hissG = gain(0, out);
+    hiss.connect(filt('bandpass', 3200, 0.6, hissG)); hiss.start(); nodes.push(hiss);
+    // 3) drones graves que vão desafinando (batimentos) e abrindo o filtro
+    const dG = gain(0, out);
+    const dF = filt('lowpass', 160, 5, dG);
+    const d1 = osc('sawtooth', 55, dF), d2 = osc('sawtooth', 55 * 1.4983, gain(0.6, dF)), d3 = osc('triangle', 27.5, gain(0.9, dF)), d4G = gain(0, dF), d4 = osc('sawtooth', 58.27, d4G);
+    const sweep = osc('sine', 0.07), sweepG = gain(50); sweep.connect(sweepG); sweepG.connect(dF.frequency);
+    // 4) a subida final (só nos últimos segundos)
+    const riseG = gain(0, out);
+    const rise = osc('sawtooth', 80, filt('lowpass', 2400, 2, riseG));
+    const m = { ac, out, nodes, timer: null, nextNote: ac.currentTime + 2, nextBeat: 0, nextCrack: 0, lastCurve: -1 };
+    const nodeEnv = (o, g, t, dur) => { o.start(t); o.stop(t + dur + 0.05); o.onended = () => { try { g.disconnect(); } catch (e) { /* ok */ } }; };
+    const note = (t, L) => { // caixinha de música que desafina
+      const SC = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22];
+      const f = 220 * Math.pow(2, (SC[Math.floor(Math.random() * SC.length)] + 12 * Math.floor(Math.random() * 2)) / 12);
+      const dur = 0.9 + Math.random() * 1.6;
+      const bend = (Math.random() < 0.8 ? -1 : 1) * Math.random() * (0.2 + L * 5); // semitons
+      const g = gain(0); g.connect(out); g.connect(echo);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.07 + L * 0.03, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+      ['triangle', 'sine'].forEach((type, i) => {
+        const o = ac.createOscillator(); o.type = type;
+        o.frequency.setValueAtTime(f * (i + 1), t);
+        o.frequency.exponentialRampToValueAtTime(f * (i + 1) * Math.pow(2, bend / 12), t + dur);
+        o.detune.value = (Math.random() * 2 - 1) * L * 70;
+        o.connect(i ? gain(0.35, g) : g);
+        nodeEnv(o, g, t, dur);
+      });
+    };
+    const kick = (t, v) => {
+      const g = gain(0, out), o = ac.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.18);
+      g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      o.connect(g); nodeEnv(o, g, t, 0.35);
+    };
+    const burst = (t, dur, v, f, q) => { // estalo, tique ou rasgo de estática
+      const s = ac.createBufferSource(); s.buffer = nb;
+      const g = gain(0, out);
+      s.connect(filt('bandpass', f, q, g));
+      g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.02);
+      s.onended = () => { try { g.disconnect(); } catch (e) { /* ok */ } };
+    };
+    const curve = (k) => { // distorção que cresce perto do fim
+      const c = new Float32Array(512);
+      for (let i = 0; i < 512; i++) { const x = i / 255.5 - 1; c[i] = k ? (1 + k) * x / (1 + k * Math.abs(x)) : x; }
+      return c;
+    };
+    const step = () => {
+      const now = ac.currentTime;
+      const L = vxLevel();
+      const sm = (a, b) => { const x = Math.min(1, Math.max(0, (L - a) / (b - a))); return x * x * (3 - 2 * x); };
+      const set = (p, v, k) => p.setTargetAtTime(v, now, k || 0.8);
+      set(out.gain, document.hidden || vxFrozen ? 0 : 0.6 - 0.3 * sm(0.6, 1), document.hidden || vxFrozen ? 0.05 : 0.4); // a tela travada fica em silêncio
+      set(humG.gain, 0.06 * (1 - 0.5 * L));
+      set(wowG.gain, 8 + 70 * L);
+      set(wow.frequency, 0.55 + L * 5);
+      set(hissG.gain, 0.012 + 0.08 * Math.pow(L, 1.5));
+      set(dG.gain, 0.03 + 0.16 * sm(0.04, 0.25) + 0.06 * L);
+      set(dF.frequency, 150 + 1100 * L * L);
+      set(d1.detune, 30 * L); set(d2.detune, -55 * L); set(d3.detune, Math.sin(now / 3) * 40 * L);
+      set(d4G.gain, 0.55 * sm(0.45, 0.9)); set(d4.frequency, 55 * Math.pow(2, (1 + L) / 12)); // o semitom de cima, para doer
+      set(sweepG.gain, 50 + 400 * L);
+      const r = sm(0.86, 1);
+      set(riseG.gain, 0.12 * r, 0.3);
+      set(rise.frequency, 80 * Math.pow(15, r), 0.3);
+      set(rise.detune, (Math.random() * 2 - 1) * 40 * r, 0.05);
+      const k = Math.round(sm(0.6, 1) * 10);
+      if (k !== m.lastCurve) { shaper.curve = curve(k * 0.6); m.lastCurve = k; }
+      if (document.hidden || vxFrozen) { m.nextNote = m.nextBeat = m.nextCrack = 0; return; }
+      const ahead = now + 0.25;
+      // notas: espaçadas no começo, cada vez mais juntas
+      if (m.nextNote < now) m.nextNote = now + 0.05;
+      while (m.nextNote < ahead) { note(m.nextNote, L); m.nextNote += Math.max(0.18, (4.5 - 4 * L) * (0.5 + Math.random())); }
+      // batidas: entram com um terço do caminho, de coração lento até 190 por minuto
+      if (L >= 0.3) {
+        if (m.nextBeat < now) m.nextBeat = now + 0.05;
+        const x = (L - 0.3) / 0.7, bpm = 44 + 146 * Math.pow(x, 1.3), beat = 60 / bpm;
+        while (m.nextBeat < ahead) {
+          const t = m.nextBeat;
+          kick(t, 0.35 + 0.35 * x);
+          if (L < 0.7) kick(t + beat * 0.28, 0.22 + 0.2 * x); // tum-tum de coração
+          if (L >= 0.6) burst(t + beat / 2, 0.04, 0.12 + 0.2 * x, 7000, 1.5);
+          if (L >= 0.85) { burst(t + beat / 4, 0.03, 0.12, 9000, 2); burst(t + beat * 3 / 4, 0.03, 0.12, 9000, 2); }
+          m.nextBeat += beat;
+        }
+      } else m.nextBeat = 0;
+      // estalos de fita e, mais adiante, rasgos de estática
+      if (m.nextCrack < now) m.nextCrack = now + 0.05;
+      while (m.nextCrack < ahead) {
+        const t = m.nextCrack;
+        burst(t, 0.012, 0.08 + 0.2 * L, 1500 + Math.random() * 4000, 4);
+        if (L > 0.5 && Math.random() < L * 0.18) burst(t, 0.08 + Math.random() * 0.3, 0.12 + 0.25 * L, 600 + Math.random() * 3000, 0.4);
+        m.nextCrack += (0.15 + Math.random() * 1.6) * (1.3 - L);
+      }
+    };
+    m.timer = setInterval(step, 100);
+    vxMus = m;
+    step();
+  }
   /* O susto do vórtex: quando o buraco aparece, há uma chance de a tela travar por alguns segundos
      e então um rosto feito do próprio vórtex pular na tela com um som alto. Só uma vez por pessoa (neste aparelho). */
   var VXS_KEY = 'vortex.vxscare.v1';
@@ -4389,6 +4586,7 @@ const FIREBASE_CONFIG = {
     if (document.querySelector('.vx-boom')) return;
     clearTimeout(vxTimer); clearInterval(vxClock);
     saveVx();
+    vxMusStop(true); // a trilha corta seco na explosão
     playThemeSound('boom');
     const flying = vxVisible('.block, .row, .prog__card, .theme-card, .btn, h1, h2, .topbar, .rail').slice(0, 80);
     flying.forEach((el) => {
@@ -4427,7 +4625,7 @@ const FIREBASE_CONFIG = {
   /* ---------- Sons e animações de toque ----------
      Sons curtos feitos na hora (Web Audio, sem arquivos). Cada tema tem a própria "banda":
      escala, camadas de onda, filtro, ruído, eco e um jeito de variar, então o mesmo toque
-     nunca soa duas vezes igual e cada tema soa diferente do outro.
+     cada função tem o seu som (só o tom varia um pouco) e cada tema soa diferente do outro.
      Vortex = gotas de chuva e madeira (pentatônica menor), Ether = vidro e energia (lídio, eco longo),
      Claptrap = bipes e tagarelice de robô, God = órgão e coro em quintas (maior, eco de catedral),
      Nyan = chiptune 8 bits com arpejo, Vórtex ∞ = serra, ruído e notas que caem fora da escala.
@@ -4437,33 +4635,44 @@ const FIREBASE_CONFIG = {
   // layers: [onda, multiplicador de frequência, volume]; drop: a nota cai (gota) no ataque
   var SFX_THEME = {
     '': { base: 440, scale: [0, 3, 5, 7, 10], layers: [['sine', 1, 1], ['triangle', 2, 0.18]], attack: 0.004, decay: 0.11, gain: 0.15,
-      drop: 1.5, filter: ['lowpass', 3200, 0.7], knock: 0.22, echo: [0.11, 0.18], jitter: 12 },
+      drop: 1.5, filter: ['lowpass', 3200, 0.7], knock: 0.22, echo: [0.11, 0.18], jitter: 35 },
     ether: { base: 660, scale: [0, 2, 4, 6, 7, 9, 11], layers: [['triangle', 1, 0.8], ['sine', 2.01, 0.35], ['sine', 3.003, 0.12]], attack: 0.01, decay: 0.2, gain: 0.11,
-      vibrato: [6.5, 0.012], filter: ['highpass', 300, 0.5], hiss: 0.05, echo: [0.19, 0.38], jitter: 6, sparkle: true },
+      vibrato: [6.5, 0.012], filter: ['highpass', 300, 0.5], hiss: 0.05, echo: [0.19, 0.38], jitter: 25, sparkle: true },
     claptrap: { base: 620, scale: [0, 2, 4, 5, 7, 9, 11], layers: [['square', 1, 1]], attack: 0.002, decay: 0.06, gain: 0.06,
-      bits: 1.5, filter: ['bandpass', 1800, 1.2], chatter: 0.45, jitter: 40 },
+      bits: 1.5, filter: ['bandpass', 1800, 1.2], chatter: true, jitter: 60 },
     god: { base: 392, scale: [0, 2, 4, 5, 7, 9, 11], layers: [['sine', 1, 0.7], ['sine', 1.5, 0.35], ['sine', 2, 0.3], ['triangle', 4, 0.06]], attack: 0.03, decay: 0.3, gain: 0.1,
-      filter: ['lowpass', 2600, 0.4], echo: [0.23, 0.45], jitter: 3, chorus: 4 },
+      filter: ['lowpass', 2600, 0.4], echo: [0.23, 0.45], jitter: 20, chorus: 4 },
     nyan: { base: 784, scale: [0, 2, 4, 7, 9], layers: [['square', 1, 1], ['square', 0.5, 0.25]], attack: 0.002, decay: 0.07, gain: 0.05,
-      arp: [0, 4, 7], vibrato: [9, 0.008], filter: ['lowpass', 5200, 0.5], jitter: 0 },
+      arp: [0, 4, 7], vibrato: [9, 0.008], filter: ['lowpass', 5200, 0.5], jitter: 25 },
     vortice: { base: 230, scale: [0, 1, 3, 6, 7, 8, 11], layers: [['sawtooth', 1, 0.7], ['square', 1.007, 0.25], ['sine', 0.5, 0.5]], attack: 0.006, decay: 0.15, gain: 0.07,
-      filter: ['lowpass', 1400, 6, true], hiss: 0.12, echo: [0.13, 0.5], jitter: 80, glitch: 0.35, warp: true }
+      filter: ['lowpass', 1400, 6, true], hiss: 0.12, echo: [0.13, 0.5], jitter: 90, glitch: true, warp: true }
   };
-  // cada som tem variações; uma é sorteada a cada toque. Nota: [grau da escala, início, duração, deslize]
+  // um som fixo para cada função; a cada toque só o tom varia um pouco (jitter do tema).
+  // Nota: [grau da escala, início, duração, deslize]
   var SFX = {
-    tap: [[[0, 0, 1]], [[2, 0, 1]], [[4, 0, 0.9]], [[1, 0, 1]]],
-    tab: [[[2, 0, 0.8], [4, 0.045, 0.8]], [[4, 0, 0.8], [5, 0.04, 0.8]], [[0, 0, 0.8], [2, 0.05, 0.9]]],
-    link: [[[5, 0, 0.7], [7, 0.035, 0.7]], [[3, 0, 0.7], [6, 0.035, 0.8]]],
-    toggle: [[[3, 0, 0.6], [5, 0.03, 0.5]], [[5, 0, 0.6], [3, 0.03, 0.5]]],
-    fold: [[[1, 0, 1.1, 1.12]], [[3, 0, 1.1, 0.9]]],
-    open: [[[-2, 0, 1.2], [2, 0.06, 1.4]], [[-1, 0, 1.2], [3, 0.07, 1.5]], [[0, 0, 1], [2, 0.05, 1], [4, 0.1, 1.5]]],
-    close: [[[2, 0, 0.9], [-2, 0.05, 1.1]], [[4, 0, 0.8], [0, 0.05, 1.1]], [[3, 0, 0.8], [1, 0.04, 0.8], [-1, 0.08, 1]]],
-    drag: [[[-3, 0, 1.6, 1.6]], [[-2, 0, 1.5, 1.4]]],
-    drop: [[[5, 0, 1.4, 0.45]], [[4, 0, 1.2, 0.5], [0, 0.06, 1]]],
-    ok: [[[0, 0, 1], [2, 0.07, 1], [4, 0.14, 1.6]], [[0, 0, 1], [4, 0.07, 1], [7, 0.14, 1.8]], [[2, 0, 0.9], [4, 0.06, 0.9], [5, 0.12, 0.9], [7, 0.18, 1.7]]],
-    bad: [[[-1, 0, 1.4, 0.7]], [[1, 0, 0.8], [-2, 0.09, 1.4, 0.8]]],
-    dice: [[[6, 0, 0.5], [4, 0.05, 0.5], [7, 0.1, 0.5], [3, 0.16, 0.7]], [[5, 0, 0.4], [8, 0.04, 0.4], [4, 0.08, 0.4], [6, 0.12, 0.4], [2, 0.18, 0.8]]],
-    hit: [[[-5, 0, 1.8, 0.5]], [[-4, 0, 1.6, 0.45], [-7, 0.05, 1.8, 0.6]]]
+    tap: [[2, 0, 1]], // botão comum
+    go: [[0, 0, 0.8], [7, 0.05, 1.3]], // ação principal: começar, entrar, abrir, jogar
+    add: [[3, 0, 0.7], [7, 0.05, 1.1]], // criar, adicionar, pôr, comprar
+    save: [[4, 0, 0.7], [5, 0.05, 0.7], [7, 0.1, 1.4]], // salvar, aplicar, pronto
+    del: [[0, 0, 0.7], [-3, 0.05, 1.3, 0.75]], // excluir, apagar, remover, tirar
+    cancel: [[1, 0, 0.9, 0.85]], // cancelar, fechar, voltar, ×
+    roll: [[6, 0, 0.4], [4, 0.04, 0.4], [7, 0.08, 0.6]], // rolar, sortear
+    star: [[7, 0, 0.6], [9, 0.04, 0.6], [11, 0.08, 1.2]], // favoritar
+    nav: [[0, 0, 0.7], [4, 0.04, 0.9]], // menu do site
+    link: [[5, 0, 0.7], [7, 0.035, 0.7]],
+    tab: [[2, 0, 0.8], [4, 0.045, 0.8]],
+    toggle: [[3, 0, 0.6], [5, 0.03, 0.5]], // liga: sobe
+    toggleOff: [[5, 0, 0.6], [3, 0.03, 0.5]], // desliga: desce
+    expand: [[1, 0, 1.1, 1.12]], // abre a seção ou a lista
+    collapse: [[3, 0, 1.1, 0.9]], // fecha a seção
+    open: [[-1, 0, 1.2], [3, 0.07, 1.5]],
+    close: [[4, 0, 0.8], [0, 0.05, 1.1]],
+    drag: [[-3, 0, 1.6, 1.6]],
+    drop: [[5, 0, 1.4, 0.45]],
+    ok: [[0, 0, 1], [2, 0.07, 1], [4, 0.14, 1.6]],
+    bad: [[1, 0, 0.8], [-2, 0.09, 1.4, 0.8]],
+    dice: [[6, 0, 0.5], [4, 0.05, 0.5], [7, 0.1, 0.5], [3, 0.16, 0.7]],
+    hit: [[-4, 0, 1.6, 0.45], [-7, 0.05, 1.8, 0.6]]
   };
   function sfxCtx() {
     if (!sfx.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; sfx.ctx = new AC(); }
@@ -4501,30 +4710,28 @@ const FIREBASE_CONFIG = {
     bus.gain.value = 1;
     const flt = ac.createBiquadFilter();
     flt.type = th.filter[0];
-    flt.frequency.value = th.filter[1] * sfxRnd(0.85, 1.15);
+    flt.frequency.value = th.filter[1];
     flt.Q.value = th.filter[2];
     if (th.filter[3]) { // filtro que varre (Vórtex ∞): abre e fecha num instante
-      flt.frequency.setValueAtTime(sfxRnd(300, 900), t0);
-      flt.frequency.exponentialRampToValueAtTime(sfxRnd(1800, 5200), t0 + 0.08);
-      flt.frequency.exponentialRampToValueAtTime(sfxRnd(250, 700), t0 + 0.3);
+      flt.frequency.setValueAtTime(600, t0);
+      flt.frequency.exponentialRampToValueAtTime(3500, t0 + 0.08);
+      flt.frequency.exponentialRampToValueAtTime(450, t0 + 0.3);
     }
     bus.connect(flt).connect(ac.destination);
     if (th.echo) {
       const dl = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
-      dl.delayTime.value = th.echo[0] * sfxRnd(0.9, 1.1);
+      dl.delayTime.value = th.echo[0];
       fb.gain.value = th.echo[1];
       wet.gain.value = 0.45;
       flt.connect(dl); dl.connect(fb).connect(dl); dl.connect(wet).connect(ac.destination);
       setTimeout(() => { try { flt.disconnect(dl); } catch (e) { /* já foi */ } }, 2500);
     }
-    const shift = th.warp && Math.random() < 0.3 ? sfxPick([-12, -7, 6, 12]) : 0; // o vórtex às vezes puxa a nota pra outro lugar
-    const notes = sfxPick(SFX[name]);
-    const extra = th.chatter && name === 'tap' && Math.random() < th.chatter
-      ? [[Math.floor(sfxRnd(0, 7)), 0.05, 0.6], [Math.floor(sfxRnd(0, 7)), 0.1, 0.5]] : [];
-    notes.concat(extra).forEach((n) => {
-      const len = th.decay * n[2] * sfxRnd(0.9, 1.12);
-      const start = t0 + n[1] * sfxRnd(0.92, 1.08);
-      const cents = sfxRnd(-th.jitter, th.jitter) + shift * 100;
+    // a única coisa sorteada: o tom do som inteiro (o vórtex às vezes ainda puxa para outra oitava ou um trítono)
+    const cents = sfxRnd(-th.jitter, th.jitter) + (th.warp && Math.random() < 0.3 ? sfxPick([-12, -7, 6, 12]) * 100 : 0);
+    const extra = th.chatter && name === 'tap' ? [[5, 0.05, 0.6], [1, 0.1, 0.5]] : []; // tagarelice do robô
+    SFX[name].concat(extra).forEach((n) => {
+      const len = th.decay * n[2];
+      const start = t0 + n[1];
       const f = degFreq(th, n[0]) * Math.pow(2, cents / 1200);
       const env = ac.createGain();
       env.gain.setValueAtTime(0.0001, start);
@@ -4546,10 +4753,10 @@ const FIREBASE_CONFIG = {
           if (n[3]) o.frequency.exponentialRampToValueAtTime(fl * n[3], start + len);
           if (th.bits) o.frequency.setValueAtTime(fl * th.bits, start + len * 0.5); // bipe em dois tons
           if (th.arp) th.arp.forEach((st, i) => o.frequency.setValueAtTime(fl * Math.pow(2, st / 12), start + i * 0.022)); // arpejo 8 bits
-          if (th.glitch && Math.random() < th.glitch) o.frequency.setValueAtTime(fl * sfxPick([0.5, 0.71, 1.41, 2, 3]), start + len * sfxRnd(0.2, 0.7));
+          if (th.glitch) o.frequency.setValueAtTime(fl * 0.71, start + len * 0.45); // a nota quebra no meio
           if (th.vibrato) {
             const lfo = ac.createOscillator(), lfoG = ac.createGain();
-            lfo.frequency.value = th.vibrato[0] * sfxRnd(0.9, 1.1);
+            lfo.frequency.value = th.vibrato[0];
             lfoG.gain.value = fl * th.vibrato[1];
             lfo.connect(lfoG).connect(o.frequency);
             lfo.start(start); lfo.stop(stop);
@@ -4559,10 +4766,10 @@ const FIREBASE_CONFIG = {
           o.start(start); o.stop(stop);
         });
       });
-      if (th.sparkle && Math.random() < 0.5) { // faísca de vidro bem aguda
+      if (th.sparkle) { // faísca de vidro bem aguda
         const o = ac.createOscillator(), g = ac.createGain();
         o.type = 'sine';
-        o.frequency.setValueAtTime(f * sfxPick([4, 5, 6]), start + 0.02);
+        o.frequency.setValueAtTime(f * 5, start + 0.02);
         g.gain.setValueAtTime(0.0001, start + 0.02);
         g.gain.exponentialRampToValueAtTime(th.gain * 0.25, start + 0.03);
         g.gain.exponentialRampToValueAtTime(0.0001, start + 0.02 + len * 1.4);
@@ -4575,14 +4782,13 @@ const FIREBASE_CONFIG = {
       const src = ac.createBufferSource(), nf = ac.createBiquadFilter(), ng = ac.createGain();
       src.buffer = sfxNoise(ac);
       nf.type = th.knock ? 'bandpass' : 'highpass';
-      nf.frequency.value = th.knock ? sfxRnd(700, 1400) : sfxRnd(3000, 7000);
+      nf.frequency.value = (th.knock ? 1000 : 5000) * Math.pow(2, cents / 1200);
       nf.Q.value = th.knock ? 4 : 0.7;
       const amt = th.knock || th.hiss, nl = th.knock ? 0.03 : th.decay * 1.2;
       ng.gain.setValueAtTime(amt * th.gain * 4, t0);
       ng.gain.exponentialRampToValueAtTime(0.0001, t0 + nl);
       src.connect(nf).connect(ng).connect(bus);
-      const off = Math.random() * 0.4;
-      src.start(t0, off, nl + 0.02);
+      src.start(t0, 0, nl + 0.02);
     }
   }
   function renderSoundBtn() {
@@ -4601,19 +4807,39 @@ const FIREBASE_CONFIG = {
     try { localStorage.setItem(SFX_KEY, sfx.on ? 'on' : 'off'); } catch (e) { /* vale até fechar */ }
     renderSoundBtn();
     nyanMusic();
+    vxMusic();
     play('ok');
   });
   renderSoundBtn();
 
   // toques: som conforme o que foi tocado, e a onda (ripple) nos botões
+  // qual som cada botão faz, pela função dele (classe, papel ou a primeira palavra do texto)
+  function sfxKind(el) {
+    if (el.getAttribute('role') === 'tab' || el.classList.contains('cmd__tab')) return 'tab';
+    if (el.matches('input[type="checkbox"], input[type="radio"], label.check, [role="switch"]')) {
+      const box = el.matches('input') ? el : el.querySelector('input');
+      const on = box ? box.checked : el.getAttribute('aria-checked') === 'true' || el.getAttribute('aria-pressed') === 'true';
+      return on && (!box || box.type !== 'radio') ? 'toggleOff' : 'toggle';
+    }
+    if (el.matches('summary')) return el.parentElement && el.parentElement.open ? 'collapse' : 'expand';
+    if (el.matches('select')) return 'expand';
+    const txt = (el.getAttribute('aria-label') || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const cls = el.className && typeof el.className === 'string' ? el.className : '';
+    if (/(^|\s)star\b/.test(cls) || /^[☆★]|favoritar/.test(txt)) return 'star';
+    if (/btn--danger/.test(cls) || /^(excluir|apagar|remover|tirar|desvincular|limpar|zerar|descartar|esquecer)/.test(txt)) return 'del';
+    if (/__x\b|__close|__back|icon-btn/.test(cls) || /^(cancelar|fechar|voltar|sair|nao$|◀|×|✕)/.test(txt)) return 'cancel';
+    if (/^(rolar|sortear|🎲)|rolagem/.test(txt)) return 'roll';
+    if (/^(salvar|guardar|pronto|aplicar|confirmar|concluir|ok\b)/.test(txt)) return 'save';
+    if (/^(\+|criar|adicionar|novo|nova|por\b|dar\b|comprar|trazer|incluir|abastecer)/.test(txt)) return 'add';
+    if (el.matches('a[href]')) return el.closest('.app-nav, nav') ? 'nav' : 'link';
+    if (/btn--primary/.test(cls) || /^(comecar|jogar|entrar|abrir|disparar|iniciar)/.test(txt)) return 'go';
+    return 'tap';
+  }
   const TAP_SEL = 'button, a[href], [role="tab"], summary, select, input[type="checkbox"], input[type="radio"], label.check';
   document.addEventListener('pointerdown', (ev) => {
     const el = ev.target.closest && ev.target.closest(TAP_SEL);
     if (!el || el.disabled || el.id === 'sound-btn') return;
-    play(el.getAttribute('role') === 'tab' || el.classList.contains('cmd__tab') ? 'tab'
-      : el.matches('input[type="checkbox"], input[type="radio"], label.check, [role="switch"]') ? 'toggle'
-        : el.matches('summary, select') ? 'fold'
-          : el.matches('a[href]') ? 'link' : 'tap');
+    play(sfxKind(el));
     if (el.matches('button, a.btn') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const r = el.getBoundingClientRect();
       const dot = document.createElement('span');
@@ -5246,10 +5472,11 @@ const FIREBASE_CONFIG = {
     ['acopla', 'Engenharia: armas e armaduras acopladas ocupam a Carga Cibernética'],
     ['humanidade', 'testes contra efeitos de PE com CD; metade da Blindagem/Escudo regenera como PV'],
     ['eletronico', 'ser eletrônico: efeitos de PE atordoam'],
-    ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)']
+    ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)'],
+    ['deslocamento: 3', 'metros a mais de deslocamento (o padrão é 9 m)']
   ];
   function parseScript(txt) {
-    const out = { vida: '', up: 0, nucleo: 0, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
+    const out = { vida: '', up: 0, nucleo: 0, desloc: 0, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
     String(txt || '').split(/[\n;]/).forEach((raw) => {
       const line = raw.replace(/\/\/.*$|#.*$/, '').trim();
       if (!line) return;
@@ -5267,6 +5494,7 @@ const FIREBASE_CONFIG = {
       if (val === '' || !isFinite(n)) { out.bad.push(raw.trim()); return; }
       if (key === 'up' || key === 'ups' || key === 'upinicial' || key === 'upiniciais') out.up += Math.round(n);
       else if (key === 'nucleo' || key === 'nucleobase') out.nucleo = Math.max(out.nucleo, Math.round(n));
+      else if (key === 'deslocamento' || key === 'desloc' || key === 'movimento') out.desloc += n;
       else if (BONUS_KEYS.some((b) => b[0] === key)) out.bonus[key] = (out.bonus[key] || 0) + n;
       else out.bad.push(raw.trim());
     });
@@ -5297,16 +5525,17 @@ const FIREBASE_CONFIG = {
     return out;
   }
   function mergeMech(list) {
-    const m = { vida: 'PV', up: 0, nucleo: 0, acopla: false, humanidade: false, eletronico: false };
+    const m = { vida: 'PV', up: 0, nucleo: 0, desloc: 0, acopla: false, humanidade: false, eletronico: false };
     list.forEach((x) => {
       if (x.vida) m.vida = x.vida;
       m.up += x.up;
       m.nucleo = Math.max(m.nucleo, x.nucleo);
+      m.desloc += x.desloc || 0;
       ['acopla', 'humanidade', 'eletronico'].forEach((k) => { if (x[k]) m[k] = true; });
     });
     return m;
   }
-  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
+  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.desloc ? signed(m.desloc) + ' m de deslocamento' : '', m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
 
   /* Poderes com escolha: Doutor (uma perícia) e Proficiência em arma ou armadura (um tipo).
      Cada compra é um poder na lista, com a escolha guardada em choice. */
@@ -5400,6 +5629,7 @@ const FIREBASE_CONFIG = {
     return {
       max, src, base, pen, armor, armorProf, nucleo, core,
       cargaUsed: Math.round(cargaUsed * 100) / 100, cargaMax: max.carga, over: cargaUsed > max.carga,
+      desloc: Math.max(0, 9 + mech.desloc) / (cargaUsed > max.carga ? 2 : 1), // sobrecarregado: metade
       defMin: max.armadura + a.corpo + num(s.skills.resistencia),
       ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: mech.humanidade, eletronico: mech.eletronico,
       ccOver: (nucleo > 0 || attachUsed > 0) && (protUsed + attachUsed > ccMax || protUsed + attachUsed + modUsed > ccMax + modExtra),
@@ -6291,7 +6521,7 @@ const FIREBASE_CONFIG = {
       lifeRing,
       ctl('pe', 'PE', one('pe'), m.max.pe, bump('pe', -1), bump('pe', 1), one('pe') <= 0),
       ctl('pa', 'PA', one('pa'), m.max.pa, bump('pa', -1), bump('pa', 1), one('pa') <= 0),
-      box('move', 'Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarregado' : 'padrão'),
+      box('move', 'Deslocamento', fmtNum(m.desloc) + ' m', m.over ? 'sobrecarregado' : m.desloc !== 9 ? 'espécime' : 'padrão'),
       box('carga', 'Carga', fmtNum(m.cargaUsed) + '/' + fmtNum(m.cargaMax), m.over ? 'acima do limite' : 'mochila'),
       box('up', 'UP livres', String(free), 'XP ' + num(s.xp)));
     const old = $('#vitals-edit');
@@ -6376,7 +6606,7 @@ const FIREBASE_CONFIG = {
     const stat = (label, value, note) => h('div', 'stat', h('span', 'stat__label', label), h('span', 'stat__value', value), note ? h('span', 'stat__note', note) : null);
     const stats = h('div', 'stats',
       stat('Defesa mínima', String(m.defMin), 'Armadura ' + m.max.armadura + ' + Corpo + Resistência'),
-      stat('Deslocamento', m.over ? '4,5 m' : '9 m', m.over ? 'sobrecarregado: metade' : 'padrão'),
+      stat('Deslocamento', fmtNum(m.desloc) + ' m', m.over ? 'sobrecarregado: metade' : m.desloc !== 9 ? 'com o bônus do espécime' : 'padrão'),
       stat('Penalidade de armadura', m.pen ? '–' + m.pen : '—', m.pen ? 'Manha, Reflexos, Sentidos e Operações' + (m.armorProf ? '' : ' (dobrada: sem proficiência)') : (m.armor ? m.armor.name : 'sem armadura equipada')));
 
     // (o tipo escolhido aplica fraquezas e resistências; a última escolha fica lembrada)
@@ -8390,11 +8620,12 @@ const FIREBASE_CONFIG = {
   const MYAU = 'Myauuu';
   const myauFlag = () => { const f = h('span', 'flag-myau'); f.setAttribute('aria-hidden', 'true'); return f; };
   function sexPicker(inp, nekoNow) {
-    const btn = h('button', 'btn btn--ghost btn--sm pick-btn', 'Opções');
+    const btn = h('button', 'btn btn--ghost btn--sm pick-btn', '▾'); // só a setinha: sobra espaço para o texto
     btn.type = 'button';
     btn.setAttribute('aria-haspopup', 'true');
     btn.setAttribute('aria-expanded', 'false');
     btn.setAttribute('aria-label', 'Opções de sexo');
+    btn.title = 'Opções de sexo';
     const menu = h('div', 'pick-menu');
     menu.hidden = true;
     const set = (v) => {
