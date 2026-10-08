@@ -3952,6 +3952,59 @@ const FIREBASE_CONFIG = {
     if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--abismo').trim() || '#0f1c26';
     saveThemes();
     vortexChaos(id === 'vortice');
+    nyanExtras(id === 'nyan');
+  }
+  /* Nyan Cat: o GIF oficial voando no fundo (carregado do nyan.cat, não fica no repositório; se não carregar,
+     fica o gato desenhado em CSS) e a música do YouTube num mini player no canto, que começa no primeiro toque
+     (o navegador não deixa tocar som antes) e respeita o botão de som. O × para a música até trocar de tema. */
+  var NYAN_VIDEO = 'QH2-TGUlwu4';
+  var NYAN_GIF = 'https://www.nyan.cat/cats/original.gif';
+  var nyanOn = false, nyanMuted = false;
+  function nyanExtras(on) {
+    if (on && !nyanOn) nyanMuted = false;
+    nyanOn = on;
+    const root = document.documentElement;
+    const old = document.querySelector('.nyan-fly');
+    if (!on) { if (old) old.remove(); root.classList.remove('nyan-gif'); nyanMusic(); return; }
+    if (!old) {
+      const fly = h('div', 'nyan-fly', h('span', 'nyan-fly__rainbow'));
+      fly.setAttribute('aria-hidden', 'true');
+      const img = h('img', 'nyan-fly__cat');
+      img.alt = '';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.onload = () => root.classList.add('nyan-gif');
+      img.onerror = () => { fly.remove(); root.classList.remove('nyan-gif'); };
+      img.src = NYAN_GIF;
+      fly.append(img);
+      document.body.append(fly);
+    }
+    nyanMusic();
+  }
+  function nyanMusic() {
+    const box = document.querySelector('.nyan-music');
+    const soundOn = typeof sfx === 'undefined' || !sfx || sfx.on;
+    if (!nyanOn || nyanMuted || !soundOn) { if (box) box.remove(); return; }
+    if (box) return;
+    const start = () => {
+      if (document.querySelector('.nyan-music') || !nyanOn || nyanMuted || (sfx && !sfx.on)) return;
+      const fr = document.createElement('iframe');
+      fr.src = 'https://www.youtube-nocookie.com/embed/' + NYAN_VIDEO + '?autoplay=1&loop=1&playlist=' + NYAN_VIDEO + '&playsinline=1&modestbranding=1&rel=0';
+      fr.title = 'Nyan Cat (YouTube)';
+      fr.allow = 'autoplay; encrypted-media';
+      fr.referrerPolicy = 'strict-origin-when-cross-origin';
+      const x = h('button', 'nyan-music__close', '×');
+      x.type = 'button';
+      x.title = 'Parar a música';
+      x.setAttribute('aria-label', 'Parar a música do Nyan Cat');
+      const wrap = h('div', 'nyan-music', fr, x);
+      x.addEventListener('click', () => { nyanMuted = true; wrap.remove(); });
+      document.body.append(wrap);
+    };
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+      const once = () => { ['pointerdown', 'keydown'].forEach((e) => document.removeEventListener(e, once, true)); start(); };
+      ['pointerdown', 'keydown'].forEach((e) => document.addEventListener(e, once, true));
+    } else start();
   }
   /* Vórtex ∞: o horizonte de eventos. De tempos em tempos um bloco glitcha, desmorona, desliza, inverte ou derrete.
      Versão instável: quanto mais tempo com o tema ligado, mais bugado o site fica (textos corrompidos, rasgos na tela,
@@ -4512,6 +4565,7 @@ const FIREBASE_CONFIG = {
     sfx.on = !sfx.on;
     try { localStorage.setItem(SFX_KEY, sfx.on ? 'on' : 'off'); } catch (e) { /* vale até fechar */ }
     renderSoundBtn();
+    nyanMusic();
     play('ok');
   });
   renderSoundBtn();
