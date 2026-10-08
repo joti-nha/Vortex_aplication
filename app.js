@@ -3975,7 +3975,9 @@ const FIREBASE_CONFIG = {
     'Sua ficha também está do lado de cá. Por enquanto.',
     'Ninguém viu o fundo. O fundo viu todo mundo.',
     'Tudo, todos, você, eu, ninguém: são vórtex.',
-    'Ali dentro, o antes e o depois brigam pelo mesmo lugar.'
+    'Ali dentro, o antes e o depois brigam pelo mesmo lugar.',
+    'Ele corrompe, abstrai e apaga tudo o que encosta nele, só por existir.',
+    'Do horizonte de eventos qualquer coisa pode sair: um presente, ou pura desgraça.'
   ];
   var VX_BITS = ['ERR_0x', 'NULL', '∞', 'Ω', '∅', '▓▓', '░▒▓', '◢◤', 'nãoestá', '???', 'ψ', 'sol', 'fome', 'olhe', 'aqui', 'dentro', 'NaN', 'void', 'ETHER', '⌁⌁', 'socorro', 'é bom', 'é desgraça', '#̷̛', 'você'];
   var VX_GLYPHS = '▓▒░█▚▞◢◣◤◥∞Ω∅⌁⍉⍟☍';
@@ -4025,7 +4027,7 @@ const FIREBASE_CONFIG = {
       if (mode === 'window') {
         if (now > modeEnd) { mode = 'noise'; nextWin = now + vxR(2500, 5500); } else return;
       }
-      if (now > nextWin) { mode = 'window'; modeEnd = now + 1000; set('∞', 'window'); return; }
+      if (now > nextWin) { mode = 'window'; modeEnd = now + vxR(500, 1800); set('∞', 'window'); return; } // cada janela dura um tempo diferente
       if (Math.random() < 0.75) set(vxNoise(), 'noise');
     };
     const id = setInterval(tick, 120);
@@ -4559,6 +4561,60 @@ const FIREBASE_CONFIG = {
     setTimeout(openVortexHack, 400);
   }
   let vxDlg = null;
+  /* Prosa do glitch na tela hackeada: várias linhas que se corrompem sem parar. Às vezes uma linha fica legível
+     por um tempo diferente a cada vez; tocar nela nessa hora segura a frase. E, sorteada, uma linha de cada vez
+     se transmuta no botão do vórtex, também por um tempo variável. */
+  function vxProse(btn, delay) {
+    const wrap = h('div', 'vxprose');
+    wrap.style.animationDelay = delay + 's';
+    const lines = [];
+    for (let i = 0; i < 6; i++) {
+      const el = h('p', 'vxprose__line');
+      const L = { el, mode: 'noise', until: 0, start: 0, phrase: '' };
+      el.addEventListener('click', () => {
+        if (L.mode === 'phrase') { L.mode = 'lore'; L.start = performance.now(); L.until = L.start + 5200; play('ok'); }
+        else if (L.mode === 'noise') { el.classList.remove('is-miss'); void el.offsetWidth; el.classList.add('is-miss'); play('bad'); }
+      });
+      lines.push(L);
+      wrap.append(el);
+    }
+    const set = (L, txt, m) => { L.el.textContent = txt; L.el.dataset.vxm = m; };
+    let seen = false, btnLine = null, btnAt = performance.now() + delay * 1000 + vxR(600, 2200);
+    const tick = () => {
+      if (wrap.isConnected) seen = true; else if (seen) { clearInterval(id); return; }
+      const now = performance.now();
+      if (!btnLine && now > btnAt) {
+        const free = lines.filter((L) => L.mode === 'noise');
+        if (free.length) {
+          btnLine = vxPick(free);
+          btnLine.mode = 'button'; btnLine.until = now + vxR(1400, 4200);
+          btnLine.el.dataset.vxm = 'button';
+          btnLine.el.replaceChildren(btn);
+        }
+      }
+      lines.forEach((L) => {
+        if (L.mode === 'button') {
+          if (now < L.until) return;
+          L.mode = 'noise'; btnLine = null; btnAt = now + vxR(900, 3800);
+        } else if (L.mode === 'lore') {
+          if (now < L.until) { const k = Math.min(1, (now - L.start) / 500); set(L, k < 1 ? vxCorrupt(L.phrase, 1 - k) : L.phrase, 'lore'); return; }
+          L.mode = 'noise';
+        } else if (L.mode === 'phrase') {
+          if (now < L.until) return;
+          L.mode = 'noise';
+        } else if (Math.random() < 0.012) { // a linha fica legível e clicável por um tempo sorteado
+          L.mode = 'phrase'; L.phrase = vxPick(VX_LORE); L.until = now + vxR(500, 2800);
+          set(L, L.phrase, 'phrase');
+          return;
+        }
+        if (Math.random() < 0.6) set(L, vxNoise(), 'noise');
+      });
+    };
+    const id = setInterval(tick, 120);
+    tick();
+    return wrap;
+  }
+
   function openVortexHack() {
     if (!vxDlg) {
       vxDlg = h('dialog', 'vxhack');
@@ -4571,9 +4627,6 @@ const FIREBASE_CONFIG = {
       '> acesso: NEGADO',
       '> acesso: ... concedido?',
       '> abrindo horizonte_de_eventos.log',
-      'Não é tecnologia. Não é magia. É o que sobra quando as duas desistem.',
-      'Ele corrompe, abstrai e apaga tudo o que encosta nele, só por existir.',
-      'Do horizonte de eventos qualquer coisa pode sair: um presente, ou pura desgraça.',
       '> aviso: quanto mais tempo aberto, mais a interface apodrece. Os dados ficam intactos.'
     ];
     const sw = h('button', 'vxhack__switch', h('span', 'vxhack__knob'), h('span', 'vxhack__state', on ? 'VÓRTEX ATIVO' : 'ATIVAR VÓRTEX'));
@@ -4596,8 +4649,7 @@ const FIREBASE_CONFIG = {
         h('p', 'vxhack__top', h('span', '', 'root@vortex:~'), close),
         h('h2', 'vxhack__title', 'HORIZONTE DE EVENTOS'),
         ...LINES.map((t, i) => { const p = h('p', 'vxhack__line' + (t.charAt(0) === '>' ? ' is-cmd' : ''), t); p.style.animationDelay = (0.25 + i * 0.32) + 's'; return p; }),
-        (() => { const p = h('p', 'vxhack__line', '> sinal: ', vxText()); p.style.animationDelay = (0.25 + LINES.length * 0.32) + 's'; return p; })(),
-        sw)));
+        vxProse(sw, 0.25 + LINES.length * 0.32))));
     $('.vxhack__title', vxDlg).id = 'vx-title';
     if (!vxDlg.open) openDialog(vxDlg);
   }
