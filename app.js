@@ -4048,7 +4048,23 @@ const FIREBASE_CONFIG = {
     'Bem-vindo de volta. Você nunca saiu.',
     'Carregando realidade... 99%... 99%... 99%...',
     'Erro 404: universo não encontrado.',
-    'Última atualização do mundo: desconhecida.'
+    'Última atualização do mundo: desconhecida.',
+    // diário dos pesquisadores
+    'Diário de campo, dia 3: os instrumentos medem o vórtex. O vórtex mede de volta.',
+    'Relatório 7-B: a amostra voltou mais velha que o universo. A coleta foi ontem.',
+    'Nota da Dra. Ilsa: não registrem sonhos com ele. Os sonhos se registram sozinhos.',
+    'Experimento 41 cancelado. O experimento 41 não aceitou.',
+    'A sonda mandou uma foto da Terra. Ela foi lançada da Terra há dez minutos e nunca saiu.',
+    'Leitura do espectrômetro: todas as cores, mais uma que não tem nome.',
+    'Pedimos verba para estudar o vórtex. A verba chegou assinada por um de nós que ainda não nasceu.',
+    'Protocolo de contenção: não existe. Protocolo de despedida: em revisão.',
+    'O assistente 2 jura que o horizonte sorriu. O assistente 2 não tem mais boca.',
+    'Medimos a gravidade perto da borda: ela cai para os lados, para dentro e para ontem.',
+    'O cronômetro marcou −4 segundos. Repetimos. Marcou o meu nome.',
+    'Conclusão preliminar: não é um buraco. É uma pupila.',
+    'Se este relatório chegar inteiro, a equipe está viva. Se chegar ao contrário, não leia em voz alta.',
+    'O Ether dispara, o sol cede, o vórtex nasce. A equação fecha. A sala onde a escrevemos, não.',
+    'Turno da noite: a câmera 3 filmou a equipe dormindo. A equipe estava acordada, olhando a câmera 3.'
   ];
   var VX_BITS = ['ERR_0x', 'NULL', '∞', 'Ω', '∅', '▓▓', '░▒▓', '◢◤', 'nãoestá', '???', 'ψ', 'sol', 'fome', 'olhe', 'aqui', 'dentro', 'NaN', 'void', 'ETHER', '⌁⌁', 'socorro', 'é bom', 'é desgraça', '#̷̛', 'você'];
   var VX_GLYPHS = '▓▒░█▚▞◢◣◤◥∞Ω∅⌁⍉⍟☍';
@@ -4086,6 +4102,7 @@ const FIREBASE_CONFIG = {
     let nextWin = born + vxR(2200, 4500);
     const set = (txt, m) => { el.textContent = txt; el.dataset.vxm = m; };
     const tick = () => {
+      if (vxFrozen) return;
       if (el.isConnected) seen = true;
       else if (seen || performance.now() - born > 10000) { clearInterval(id); return; }
       const now = performance.now();
@@ -4203,14 +4220,14 @@ const FIREBASE_CONFIG = {
     };
     level();
     vxClock = setInterval(() => { // o relógio do vórtex só anda com a página à vista
-      if (document.hidden || vxState.stable || document.querySelector('.vx-boom')) return;
+      if (document.hidden || vxFrozen || vxState.stable || document.querySelector('.vx-boom')) return;
       vxState.t += 1;
       if (vxState.t % 5 === 0) saveVx();
       if (level() >= 1) vortexExplode();
     }, 1000);
     const tick = () => {
       const L = vxLevel();
-      if (!document.hidden && !document.querySelector('.vx-boom')) {
+      if (!document.hidden && !vxFrozen && !document.querySelector('.vx-boom')) {
         const n = 1 + Math.floor(L * 3.5);
         for (let i = 0; i < n; i++) vxHit(L);
         if (L > 0.2 && Math.random() < 0.3 + L * 0.6) vxScramble(L);
@@ -4220,6 +4237,65 @@ const FIREBASE_CONFIG = {
       vxTimer = setTimeout(tick, 1700 - 1300 * L + Math.random() * 400);
     };
     vxTimer = setTimeout(tick, 900);
+    vxMaybeScare(0.2);
+  }
+  /* O susto do vórtex: quando o buraco aparece, há uma chance de a tela travar por alguns segundos
+     e então um rosto feito do próprio vórtex pular na tela com um som alto. Só uma vez por pessoa (neste aparelho). */
+  var VXS_KEY = 'vortex.vxscare.v1';
+  var vxFrozen = false;
+  function vxMaybeScare(chance) {
+    if (vxFrozen || Math.random() >= chance) return;
+    try { if (localStorage.getItem(VXS_KEY)) return; localStorage.setItem(VXS_KEY, String(Date.now())); } catch (e) { return; }
+    const go = () => setTimeout(vxScare, vxR(700, 1800));
+    // sem nenhum toque ainda o navegador não deixa tocar som: o susto espera o primeiro toque
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+      const once = () => { ['pointerdown', 'keydown'].forEach((e) => document.removeEventListener(e, once, true)); go(); };
+      ['pointerdown', 'keydown'].forEach((e) => document.addEventListener(e, once, true));
+    } else go();
+  }
+  function vxFaceSvg() {
+    const teeth = [];
+    for (let i = 0; i <= 18; i++) { // dentes em volta da boca, de tamanhos tortos
+      const a = Math.PI * 2 * i / 18;
+      const r1 = 1, r2 = i % 2 ? 0.72 - Math.random() * 0.2 : 1;
+      teeth.push((Math.cos(a) * 32 * (i % 2 ? r2 : r1)).toFixed(1) + ',' + (42 + Math.sin(a) * 20 * (i % 2 ? r2 : r1)).toFixed(1));
+    }
+    const swirl = [];
+    for (let i = 0; i < 9; i++) swirl.push('<ellipse rx="' + (40 + i * 7) + '" ry="' + (60 + i * 5) + '" transform="rotate(' + (i * 23) + ')" fill="none" stroke="' + ['#ff4fd8', '#4ff7ff', '#fff04f', '#784fff'][i % 4] + '" stroke-opacity="' + (0.55 - i * 0.05).toFixed(2) + '" stroke-width="' + (3 - i * 0.25).toFixed(2) + '"/>');
+    return '<svg class="vx-scare__face" viewBox="-100 -100 200 200" aria-hidden="true">' +
+      '<defs><filter id="vx-face-warp" x="-25%" y="-25%" width="150%" height="150%"><feTurbulence type="turbulence" baseFrequency="0.02 0.05" numOctaves="2" seed="7">' +
+      '<animate attributeName="baseFrequency" dur="0.35s" values="0.02 0.05;0.06 0.02;0.02 0.09;0.02 0.05" repeatCount="indefinite"/></feTurbulence>' +
+      '<feDisplacementMap in="SourceGraphic" scale="16"/></filter>' +
+      '<radialGradient id="vx-face-eye"><stop offset="0" stop-color="#000"/><stop offset=".5" stop-color="#000"/><stop offset=".58" stop-color="#fff"/><stop offset=".72" stop-color="#ff4fd8"/><stop offset="1" stop-color="#4ff7ff" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="vx-face-skin"><stop offset="0" stop-color="#24123d"/><stop offset=".7" stop-color="#0a0612"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>' +
+      '<g filter="url(#vx-face-warp)"><ellipse rx="72" ry="92" fill="url(#vx-face-skin)"/><g class="vx-scare__swirl">' + swirl.join('') + '</g>' +
+      '<circle cx="-30" cy="-24" r="24" fill="url(#vx-face-eye)"/><circle cx="31" cy="-21" r="21" fill="url(#vx-face-eye)"/>' +
+      '<circle cx="-30" cy="-24" r="2.6" fill="#fff"/><circle cx="31" cy="-21" r="2" fill="#fff"/>' +
+      '<ellipse cx="0" cy="42" rx="34" ry="22" fill="#000" stroke="#fff" stroke-width="2.5"/>' +
+      '<polygon points="' + teeth.join(' ') + '" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="bevel"/>' +
+      '<ellipse cx="0" cy="44" rx="10" ry="6" fill="#000" stroke="#ff4fd8" stroke-width="1"/></g></svg>';
+  }
+  function vxScare() {
+    if (vxFrozen) return;
+    vxFrozen = true;
+    const root = document.documentElement;
+    const dlg = h('dialog', 'vx-scare');
+    dlg.setAttribute('aria-label', 'Vórtex');
+    dlg.addEventListener('cancel', (ev) => ev.preventDefault()); // nem o Esc tira
+    document.body.append(dlg);
+    root.classList.add('vx-freeze');
+    try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
+    setTimeout(() => {
+      root.classList.remove('vx-freeze');
+      dlg.innerHTML = vxFaceSvg();
+      dlg.classList.add('is-scare');
+      playThemeSound('scare');
+      setTimeout(() => {
+        dlg.classList.add('is-out');
+        vxFrozen = false;
+        setTimeout(() => { if (dlg.open) dlg.close(); dlg.remove(); }, 600);
+      }, 1500);
+    }, vxR(2200, 4000));
   }
   function vortexExplode() {
     if (document.querySelector('.vx-boom')) return;
@@ -4495,10 +4571,10 @@ const FIREBASE_CONFIG = {
       const ac = new AC();
       const now = ac.currentTime + 0.02;
       const out = ac.createGain();
-      out.gain.value = 0.2;
+      out.gain.value = id === 'scare' ? 0.6 : 0.2;
       out.connect(ac.destination);
       // eco próprio de cada tema e um tom sorteado, para o desbloqueio não soar sempre igual
-      const ECHO = { ether: [0.21, 0.4], god: [0.27, 0.5], nyan: [0.11, 0.15], vortice: [0.17, 0.55], claptrap: [0.07, 0.2], boom: [0.31, 0.45] }[id];
+      const ECHO = { ether: [0.21, 0.4], god: [0.27, 0.5], nyan: [0.11, 0.15], vortice: [0.17, 0.55], claptrap: [0.07, 0.2], boom: [0.31, 0.45], scare: [0.09, 0.5] }[id];
       if (ECHO) {
         const dl = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
         dl.delayTime.value = ECHO[0]; fb.gain.value = ECHO[1]; wet.gain.value = 0.4;
@@ -4534,6 +4610,17 @@ const FIREBASE_CONFIG = {
         tone('sine', 2093, 2096, 1.0, 1.4, 0.12);
       } else if (id === 'nyan') { // melodia de 8 bits
         [740, 831, 622, 659, 554, 587, 554, 494, 494, 554, 587, 587, 554, 494, 554, 622].forEach((f, i) => tone('square', f, f, i * 0.11, 0.1, 0.22));
+      } else if (id === 'scare') { // o grito: ruído cheio, um cacho de serras desafinadas caindo e um baque grave
+        [620, 655, 701, 980, 1040, 1390].forEach((f) => tone('sawtooth', f, f * 0.55, 0, 1.5, 0.35));
+        tone('square', 2400, 900, 0, 0.9, 0.2);
+        tone('sine', 70, 28, 0, 1.4, 1);
+        const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 1.5), ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+        const n = ac.createBufferSource(), ng = ac.createGain();
+        n.buffer = buf; ng.gain.value = 0.9;
+        n.connect(ng); ng.connect(out);
+        n.start(now);
       } else if (id === 'boom') { // explosão: estrondo grave, ruído rasgando e um apito que cai
         tone('sine', 90, 22, 0, 2.6, 1);
         tone('sawtooth', 3200, 40, 0.05, 1.6, 0.25);
@@ -4722,6 +4809,7 @@ const FIREBASE_CONFIG = {
     const set = (L, txt, m) => { L.el.textContent = txt; L.el.dataset.vxm = m; };
     let seen = false, btnLine = null, btnAt = performance.now() + delay * 1000 + vxR(600, 2200);
     const tick = () => {
+      if (vxFrozen) return;
       if (wrap.isConnected) seen = true; else if (seen) { clearInterval(id); return; }
       const now = performance.now();
       if (!btnLine && now > btnAt) {
@@ -4792,7 +4880,7 @@ const FIREBASE_CONFIG = {
         ...LINES.map((t, i) => { const p = h('p', 'vxhack__line' + (t.charAt(0) === '>' ? ' is-cmd' : ''), t); p.style.animationDelay = (0.25 + i * 0.32) + 's'; return p; }),
         vxProse(sw, 0.25 + LINES.length * 0.32))));
     $('.vxhack__title', vxDlg).id = 'vx-title';
-    if (!vxDlg.open) openDialog(vxDlg);
+    if (!vxDlg.open) { openDialog(vxDlg); vxMaybeScare(0.25); }
   }
 
   /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
