@@ -8598,11 +8598,12 @@ const FIREBASE_CONFIG = {
   const MYAU = 'Myauuu';
   const myauFlag = () => { const f = h('span', 'flag-myau'); f.setAttribute('aria-hidden', 'true'); return f; };
   function sexPicker(inp, nekoNow) {
-    const btn = h('button', 'btn btn--ghost btn--sm pick-btn', 'Opções');
+    const btn = h('button', 'btn btn--ghost btn--sm pick-btn', '▾'); // só a setinha: sobra espaço para o texto
     btn.type = 'button';
     btn.setAttribute('aria-haspopup', 'true');
     btn.setAttribute('aria-expanded', 'false');
     btn.setAttribute('aria-label', 'Opções de sexo');
+    btn.title = 'Opções de sexo';
     const menu = h('div', 'pick-menu');
     menu.hidden = true;
     const set = (v) => {
