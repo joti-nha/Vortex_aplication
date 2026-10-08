@@ -245,6 +245,7 @@ const FIREBASE_CONFIG = {
      - Vantagem/desvantagem: rola um dado a mais e fica com os melhores/piores (não soma o extra).
      o: { label, attrName, attr, skillName, skill, mods: [[nome, valor]], dice, adv: 'vantagem'|'desvantagem' } */
   function rollTest(o) {
+    if (++vxDice >= 13) vxClue(6); // enigma do Vórtex: treze rolagens numa visita
     const n = clamp(Math.round(o.dice || 2), 1, 4);
     const adv = o.adv === 'vantagem' || o.adv === 'desvantagem' ? o.adv : '';
     const all = Array.from({ length: n + (adv ? 1 : 0) }, () => randInt(6));
@@ -3927,8 +3928,8 @@ const FIREBASE_CONFIG = {
      Claptrap: busque o nome dele entre os personagens e abra a ficha (que não salva).
      God: uma ficha com todas as perícias em +3 sem quebrar as regras (abrir uma assim também vale).
      Nyan Cat: um personagem da espécime Neko (só aparece pesquisando "neko") com o sexo Myauuu.
-     Vórtex ∞: abra o site com "Tudotodosvocêeuninguemsaovortex" no fim da URL e ligue o tema na tela que abre
-     (o 404.html devolve /Tudotodos... para o app com ?Tudotodos...). Desbloqueados ficam neste aparelho;
+     Vórtex ∞: uma frase secreta no fim da URL abre a tela; o tema liga lá. A frase nunca aparece inteira:
+     sete pedaços saem de ações escondidas pelo site (o enigma), e o código só guarda o hash dela. Desbloqueados ficam neste aparelho;
      a troca de tema fica no Perfil. O <head> do index.html aplica o tema antes de desenhar. */
   const THEME_KEY = 'vortex.themes.v1';
   const THEMES = [
@@ -3937,7 +3938,7 @@ const FIREBASE_CONFIG = {
     { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante aparece quando alguém busca o nome dele entre os personagens.', unlock: 'CL4P-TP online! Pronto para servir, caçador.' },
     { id: 'god', name: 'God', text: 'Ouro divino, raios de luz e uma auréola em tudo.', hint: 'Dizem que uma ficha perfeita, com todas as perícias em +3 sem quebrar nenhuma regra, toca o divino.', unlock: 'Todas as perícias em +3. Essa ficha transcendeu.' },
     { id: 'nyan', name: 'Nyan Cat', text: 'Espaço, estrelas e um arco-íris que não acaba.', hint: 'Uma espécime felina só aparece para quem a procura pelo nome. E ela tem um sexo só dela.', unlock: 'Myauuu! Uma Neko entrou no Vortex voando num arco-íris.' },
-    { id: 'vortice', name: 'Vórtex ∞', text: 'O horizonte de eventos: cores girando, blocos se desfazendo, qualquer coisa pode acontecer.', hint: 'Tudo, todos, você, eu, ninguém... são vórtex. Diga isso ao próprio endereço do site.' }
+    { id: 'vortice', name: 'Vórtex ∞', text: 'O horizonte de eventos: cores girando, blocos se desfazendo, qualquer coisa pode acontecer.', hint: 'Sete pedaços dele estão espalhados pelo site. Quem juntar sabe o que dizer ao endereço.' }
   ];
   const themeState = (() => {
     try { const v = JSON.parse(localStorage.getItem(THEME_KEY)) || {}; return { unlocked: Array.isArray(v.unlocked) ? v.unlocked : [], active: v.active || '' }; }
@@ -3974,7 +3975,6 @@ const FIREBASE_CONFIG = {
     'O que entra vira ideia. O que sai, ninguém pediu.',
     'Sua ficha também está do lado de cá. Por enquanto.',
     'Ninguém viu o fundo. O fundo viu todo mundo.',
-    'Tudo, todos, você, eu, ninguém: são vórtex.',
     'Ali dentro, o antes e o depois brigam pelo mesmo lugar.',
     'Ele corrompe, abstrai e apaga tudo o que encosta nele, só por existir.',
     'Do horizonte de eventos qualquer coisa pode sair: um presente, ou pura desgraça.',
@@ -4428,7 +4428,11 @@ const FIREBASE_CONFIG = {
     b.setAttribute('aria-pressed', String(sfx.on));
     b.title = sfx.on ? 'Sons ligados (toque para desligar)' : 'Sons desligados (toque para ligar)';
   }
+  var sndTaps = [];
   $('#sound-btn').addEventListener('click', () => {
+    const now = Date.now();
+    sndTaps = sndTaps.filter((t) => now - t < 4000).concat(now);
+    if (sndTaps.length >= 6) vxClue(3); // enigma: cale e fale três vezes
     sfx.on = !sfx.on;
     try { localStorage.setItem(SFX_KEY, sfx.on ? 'on' : 'off'); } catch (e) { /* vale até fechar */ }
     renderSoundBtn();
@@ -4467,6 +4471,7 @@ const FIREBASE_CONFIG = {
 
   function secretHit(q) {
     const k = nameKey(q || '');
+    if (/\bvort(ex|ice)\b/.test(k)) vxClue(1); // enigma: procurar o nome dele
     return /elemento\s*115|element\s*115|^115$/.test(k) ? 'ether' : '';
   }
   function secretRow(id) {
@@ -4586,7 +4591,11 @@ const FIREBASE_CONFIG = {
       const on = themeState.active === t.id;
       const card = h('div', 'theme-card theme-card--' + (t.id || 'vortex') + (open ? '' : ' is-locked') + (on ? ' is-on' : ''),
         h('span', 'theme-card__swatch', h('i'), h('i'), h('i')),
-        h('span', 'theme-card__main', h('strong', '', open ? t.name : '???'), open && t.id === 'vortice' ? vxText() : h('span', '', open ? t.text : t.hint)));
+        h('span', 'theme-card__main', h('strong', '', open ? t.name : '???'), open && t.id === 'vortice' ? vxText() : (!open && t.id === 'vortice' && vxClueHint()) || h('span', '', open ? t.text : t.hint)));
+      if (!open && t.id === 'vortice') { // enigma: bater no cadeado
+        let n = 0, t0 = 0;
+        card.addEventListener('click', () => { const now = Date.now(); n = now - t0 < 900 ? n + 1 : 1; t0 = now; if (n >= 5) vxClue(4); });
+      }
       if (open) {
         const b = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Em uso' : 'Usar');
         b.type = 'button';
@@ -4614,8 +4623,68 @@ const FIREBASE_CONFIG = {
     }
   }
 
+  /* Enigma do Vórtex: sete ações escondidas pelo site, cada uma solta um pedaço da frase (com a posição dele).
+     O card trancado do tema no Perfil mostra os pedaços achados e uma charada para um que falta. */
+  var VXC_KEY = 'vortex.vxclue.v1';
+  var VXC_WORDS = ['TUDO', 'TODOS', 'VOCÊ', 'EU', 'NINGUÉM', 'SÃO', 'VÓRTEX'];
+  var VXC_RIDDLES = [
+    'Bata sete vezes na porta de casa.',
+    'Procure o nome dele onde se procura.',
+    'Leia as regras até o fim. O fim lê de volta.',
+    'Cale e fale, cale e fale, cale e fale.',
+    'Bata no cadeado até ele responder.',
+    'Fique quieto. Ele fala quando ninguém mexe.',
+    'Treze vezes os dados, numa visita só.'
+  ];
+  var vxClues = (() => { try { return JSON.parse(localStorage.getItem(VXC_KEY)) || []; } catch (e) { return []; } })();
+  function vxClue(i) {
+    if (vxClues.indexOf(i) >= 0 || document.querySelector('.vx-clue')) return;
+    vxClues.push(i);
+    try { localStorage.setItem(VXC_KEY, JSON.stringify(vxClues)); } catch (e) { /* só nesta visita */ }
+    play('ok');
+    const box = h('div', 'vx-clue', h('span', 'vx-clue__n', 'fragmento ' + (i + 1) + ' de 7'), h('strong', 'vx-clue__w', VXC_WORDS[i]));
+    box.setAttribute('role', 'status');
+    document.body.append(box);
+    setTimeout(() => box.remove(), 3800);
+    if (vxClues.length === 7) setTimeout(() => {
+      const end = h('div', 'vx-clue vx-clue--end', h('span', 'vx-clue__n', 'sete pedaços'), h('strong', 'vx-clue__w', 'Uma frase. Nenhum espaço. O endereço do site escuta.'));
+      end.setAttribute('role', 'status');
+      document.body.append(end);
+      setTimeout(() => end.remove(), 6000);
+    }, 4000);
+    if (document.getElementById('theme-list') && location.hash.indexOf('#/perfil') === 0) renderThemes();
+  }
+  function vxClueHint() { // texto do card trancado: pedaços achados e a charada de um que falta
+    if (!vxClues.length) return null;
+    const missing = VXC_WORDS.map((w, i) => i).filter((i) => vxClues.indexOf(i) < 0);
+    return h('span', 'vx-clue-hint',
+      h('span', 'vx-clue-hint__slots', VXC_WORDS.map((w, i) => (vxClues.indexOf(i) >= 0 ? w : '▓▓▓')).join(' · ')),
+      h('span', 'vx-clue-hint__riddle', missing.length ? VXC_RIDDLES[vxPick(missing)] : 'Uma frase. Nenhum espaço. O endereço do site escuta.'));
+  }
+  // 1: sete toques seguidos no logo (a "porta de casa")
+  (() => {
+    let n = 0, t0 = 0;
+    const brand = document.querySelector('.brand');
+    if (brand) brand.addEventListener('click', () => { const now = Date.now(); n = now - t0 < 900 ? n + 1 : 1; t0 = now; if (n >= 7) vxClue(0); });
+  })();
+  // 3: chegar ao fim do Compêndio
+  document.addEventListener('scroll', (ev) => {
+    if (location.hash.indexOf('#/rules') !== 0) return;
+    const el = ev.target === document ? document.scrollingElement : ev.target;
+    if (el && el.scrollHeight > el.clientHeight + 300 && el.scrollHeight - el.scrollTop - el.clientHeight < 30) vxClue(2);
+  }, { capture: true, passive: true });
+  // 6: noventa segundos sem mexer em nada, com a página à vista
+  (() => {
+    let last = Date.now();
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((e) => document.addEventListener(e, () => { last = Date.now(); }, { capture: true, passive: true }));
+    setInterval(() => { if (document.hidden) last = Date.now(); else if (Date.now() - last > 90000) { last = Date.now(); vxClue(5); } }, 5000);
+  })();
+  // 7: treze testes de dados na mesma visita (contados em rollTest)
+  var vxDice = 0;
+
   // Vórtex ∞: a tela "hackeada" que abre pela URL secreta; o interruptor liga e desliga o tema
-  const VORTEX_KEY = 'tudotodosvoceeuninguemsaovortex';
+  const VORTEX_HASH = 10166865; // FNV-1a da frase normalizada; a frase em si não fica no código
+  const vxHash = (t) => { let x = 0x811c9dc5; for (const c of t) { x ^= c.charCodeAt(0); x = Math.imul(x, 0x01000193) >>> 0; } return x; };
   const vxKey = (str) => {
     let t = String(str || '');
     try { t = decodeURIComponent(t); } catch (e) { /* fica cru */ }
@@ -4624,10 +4693,11 @@ const FIREBASE_CONFIG = {
   // abre a tela se a URL (fim do caminho, ?busca ou #) tiver a frase, e limpa a frase da barra de endereço
   function vortexUrlCheck() {
     const parts = [location.pathname.split('/').pop(), location.search, location.hash];
-    if (!parts.some((x) => vxKey(x).includes(VORTEX_KEY))) return;
-    const path = vxKey(parts[0]).includes(VORTEX_KEY) ? location.pathname.replace(/[^/]*$/, '') : location.pathname;
-    const search = vxKey(location.search).includes(VORTEX_KEY) ? '' : location.search;
-    const hash = vxKey(location.hash).includes(VORTEX_KEY) ? '' : location.hash;
+    const hit = (x) => vxHash(vxKey(x)) === VORTEX_HASH;
+    if (!parts.some(hit)) return;
+    const path = hit(parts[0]) ? location.pathname.replace(/[^/]*$/, '') : location.pathname;
+    const search = hit(location.search) ? '' : location.search;
+    const hash = hit(location.hash) ? '' : location.hash;
     history.replaceState(null, '', path + search + hash);
     setTimeout(openVortexHack, 400);
   }
