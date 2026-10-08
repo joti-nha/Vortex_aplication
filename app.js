@@ -3927,8 +3927,8 @@ const FIREBASE_CONFIG = {
      Claptrap: busque o nome dele entre os personagens e abra a ficha (que não salva).
      God: uma ficha com todas as perícias em +3 sem quebrar as regras (abrir uma assim também vale).
      Nyan Cat: um personagem da espécime Neko (só aparece pesquisando "neko") com o sexo Myauuu.
-     Vórtex ∞: abra o site com "Todotodosvocêeuninguemsaovortex" no fim da URL e ligue o tema na tela que abre
-     (o 404.html devolve /Todotodos... para o app com ?Todotodos...). Desbloqueados ficam neste aparelho;
+     Vórtex ∞: abra o site com "Tudotodosvocêeuninguemsaovortex" no fim da URL e ligue o tema na tela que abre
+     (o 404.html devolve /Tudotodos... para o app com ?Tudotodos...). Desbloqueados ficam neste aparelho;
      a troca de tema fica no Perfil. O <head> do index.html aplica o tema antes de desenhar. */
   const THEME_KEY = 'vortex.themes.v1';
   const THEMES = [
@@ -3937,7 +3937,7 @@ const FIREBASE_CONFIG = {
     { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante aparece quando alguém busca o nome dele entre os personagens.', unlock: 'CL4P-TP online! Pronto para servir, caçador.' },
     { id: 'god', name: 'God', text: 'Ouro divino, raios de luz e uma auréola em tudo.', hint: 'Dizem que uma ficha perfeita, com todas as perícias em +3 sem quebrar nenhuma regra, toca o divino.', unlock: 'Todas as perícias em +3. Essa ficha transcendeu.' },
     { id: 'nyan', name: 'Nyan Cat', text: 'Espaço, estrelas e um arco-íris que não acaba.', hint: 'Uma espécime felina só aparece para quem a procura pelo nome. E ela tem um sexo só dela.', unlock: 'Myauuu! Uma Neko entrou no Vortex voando num arco-íris.' },
-    { id: 'vortice', name: 'Vórtex ∞', text: 'O horizonte de eventos: cores girando, blocos se desfazendo, qualquer coisa pode acontecer.', hint: 'Todo, todos, você, eu, ninguém... são vórtex. Diga isso ao próprio endereço do site.', unlock: 'O disparo atingiu o sol. O vórtex se abriu.' }
+    { id: 'vortice', name: 'Vórtex ∞', text: 'O horizonte de eventos: cores girando, blocos se desfazendo, qualquer coisa pode acontecer.', hint: 'Tudo, todos, você, eu, ninguém... são vórtex. Diga isso ao próprio endereço do site.' }
   ];
   const themeState = (() => {
     try { const v = JSON.parse(localStorage.getItem(THEME_KEY)) || {}; return { unlocked: Array.isArray(v.unlocked) ? v.unlocked : [], active: v.active || '' }; }
@@ -3952,26 +3952,238 @@ const FIREBASE_CONFIG = {
     saveThemes();
     vortexChaos(id === 'vortice');
   }
-  /* Vórtex ∞: de tempos em tempos um bloco visível glitcha, desmorona, desliza ou inverte as cores
-     (nada disso mexe nos dados; com "reduzir movimento" no aparelho, fica só a paleta) */
-  var vxTimer = null;
+  /* Vórtex ∞: o horizonte de eventos. De tempos em tempos um bloco glitcha, desmorona, desliza, inverte ou derrete.
+     Versão instável: quanto mais tempo com o tema ligado, mais bugado o site fica (textos corrompidos, rasgos na tela,
+     sussurros), até "explodir" e voltar ao tema normal. Depois da primeira explosão, escolher o tema pergunta se é
+     a versão estável (sem piorar) ou a instável. Nada disso mexe nos dados; com "reduzir movimento" fica só a paleta. */
+  var VX_KEY = 'vortex.vx.v1';
+  var VX_LIMIT = 480; // segundos de tema instável até explodir
+  var vxState = (() => { const d = { t: 0, exploded: false, stable: false }; try { return Object.assign(d, JSON.parse(localStorage.getItem(VX_KEY)) || {}); } catch (e) { return d; } })();
+  function saveVx() { try { localStorage.setItem(VX_KEY, JSON.stringify(vxState)); } catch (e) { /* só nesta visita */ } }
+  var vxTimer = null, vxClock = null;
+  var VX_LORE = [
+    'Ele não chegou. Ele sempre esteve aqui, esperando você olhar.',
+    'Do horizonte saiu uma flor. Depois saiu o que comeu a flor.',
+    'Não é tecnologia. Não é magia. É o que sobra quando as duas desistem.',
+    'Tudo o que fica perto dele começa a lembrar que nunca existiu.',
+    'Às vezes ele devolve um sol. Às vezes devolve o grito de quem morava nele.',
+    'Ele não destrói por querer. Ele existe, e existir já basta.',
+    'Você piscou. Três estrelas a menos.',
+    'Um presente, uma praga e um nome que ninguém sabe ler. Tudo sai do mesmo buraco.',
+    'A corrupção não tem vontade. Tem fome de forma.',
+    'O que entra vira ideia. O que sai, ninguém pediu.',
+    'Sua ficha também está do lado de cá. Por enquanto.',
+    'Ninguém viu o fundo. O fundo viu todo mundo.',
+    'Tudo, todos, você, eu, ninguém: são vórtex.',
+    'Ali dentro, o antes e o depois brigam pelo mesmo lugar.'
+  ];
+  var VX_BITS = ['ERR_0x', 'NULL', '∞', 'Ω', '∅', '▓▓', '░▒▓', '◢◤', 'nãoestá', '???', 'ψ', 'sol', 'fome', 'olhe', 'aqui', 'dentro', 'NaN', 'void', 'ETHER', '⌁⌁', 'socorro', 'é bom', 'é desgraça', '#̷̛', 'você'];
+  var VX_GLYPHS = '▓▒░█▚▞◢◣◤◥∞Ω∅⌁⍉⍟☍';
+  const vxR = (a, b) => a + Math.random() * (b - a);
+  const vxPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const vxZalgo = (n) => { let z = ''; for (let i = 0; i < n; i++) z += String.fromCharCode(0x300 + Math.floor(Math.random() * 0x6f)); return z; };
+  function vxCorrupt(str, amt) {
+    return Array.from(String(str)).map((c) => {
+      const r = Math.random();
+      if (c === ' ') return r < amt * 0.25 ? vxPick(VX_GLYPHS) : ' ';
+      if (r < amt * 0.35) return vxPick(VX_GLYPHS);
+      if (r < amt * 0.7) return c + vxZalgo(1 + Math.floor(Math.random() * 3));
+      return Math.random() < 0.5 ? c.toUpperCase() : c.toLowerCase();
+    }).join('');
+  }
+  function vxNoise() {
+    const words = vxPick(VX_LORE).split(' ');
+    const parts = [];
+    const n = 3 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) {
+      const r = Math.random();
+      if (r < 0.4) parts.push(vxPick(words));
+      else if (r < 0.55) parts.push(vxPick(words).split('').reverse().join(''));
+      else if (r < 0.65) parts.push('0x' + Math.floor(Math.random() * 0xffff).toString(16).toUpperCase());
+      else parts.push(vxPick(VX_BITS));
+    }
+    return vxCorrupt(parts.join(vxPick([' ', ' / ', '_', ' :: ', '…'])), 0.45);
+  }
+  /* Texto do vórtex: muda sem parar. De vez em quando aparece um ∞ brilhando por um instante;
+     quem toca nessa hora vê, por alguns segundos, uma frase sobre o vórtex. Tocar fora da hora só glitcha. */
+  function vxText(cls) {
+    const el = h('span', 'vxtext' + (cls ? ' ' + cls : ''));
+    el.setAttribute('aria-live', 'off');
+    let mode = 'noise', modeEnd = 0, seen = false, born = performance.now(), phrase = '';
+    let nextWin = born + vxR(2200, 4500);
+    const set = (txt, m) => { el.textContent = txt; el.dataset.vxm = m; };
+    const tick = () => {
+      if (el.isConnected) seen = true;
+      else if (seen || performance.now() - born > 10000) { clearInterval(id); return; }
+      const now = performance.now();
+      if (mode === 'lore') {
+        const k = Math.min(1, (now - (modeEnd - 4800)) / 600); // decifra em 0,6 s
+        set(k < 1 ? vxCorrupt(phrase, 1 - k) : phrase, 'lore');
+        if (now > modeEnd) { mode = 'noise'; nextWin = now + vxR(2500, 5500); }
+        return;
+      }
+      if (mode === 'window') {
+        if (now > modeEnd) { mode = 'noise'; nextWin = now + vxR(2500, 5500); } else return;
+      }
+      if (now > nextWin) { mode = 'window'; modeEnd = now + 1000; set('∞', 'window'); return; }
+      if (Math.random() < 0.75) set(vxNoise(), 'noise');
+    };
+    const id = setInterval(tick, 120);
+    tick();
+    el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (mode === 'window') {
+        phrase = vxPick(VX_LORE);
+        mode = 'lore'; modeEnd = performance.now() + 4800;
+        play('ok');
+        tick();
+      } else if (mode === 'noise') {
+        el.classList.remove('is-miss'); void el.offsetWidth; el.classList.add('is-miss');
+        play('bad');
+      }
+    });
+    return el;
+  }
+  const vxReduced = () => Boolean(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const vxLevel = () => (vxState.stable ? 0 : Math.min(1, vxState.t / VX_LIMIT));
+  const vxVisible = (sel) => $$(sel).filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < window.innerHeight; });
+  function vxWarpFilter() { // distorção de "calor" com ruído (SVG), sorteada a cada uso
+    let svg = document.getElementById('vx-svg');
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.id = 'vx-svg';
+      svg.setAttribute('aria-hidden', 'true');
+      svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+      svg.innerHTML = '<filter id="vx-warp"><feTurbulence type="fractalNoise" baseFrequency="0.004 0.09" numOctaves="2" seed="1"/><feDisplacementMap in="SourceGraphic" scale="24" xChannelSelector="R" yChannelSelector="G"/></filter>';
+      document.body.append(svg);
+    }
+    svg.querySelector('feTurbulence').setAttribute('seed', String(Math.floor(Math.random() * 999)));
+    svg.querySelector('feDisplacementMap').setAttribute('scale', String(Math.round(vxR(10, 40))));
+  }
+  function vxHit(L) {
+    const pool = vxVisible('.block, .row, .prog__card, .vital, .attr, .theme-card, .sheet-tab, .item-card, .cell, .btn');
+    if (!pool.length) return;
+    const el = vxPick(pool);
+    const FX = ['vx-glitch', 'vx-crumble', 'vx-shift', 'vx-invert'].concat(L > 0.2 ? ['vx-warp', 'vx-melt', 'vx-split'] : []).concat(L > 0.6 ? ['vx-void', 'vx-warp'] : []);
+    const fx = vxPick(FX);
+    if (fx === 'vx-warp') vxWarpFilter();
+    el.classList.add(fx);
+    setTimeout(() => el.classList.remove(fx), 950);
+  }
+  function vxScramble(L) { // um texto da tela se corrompe por um instante e volta
+    const pool = vxVisible('h1, h2, h3, .block__title, .row__title, .tag, .btn, .theme-card strong, .field__label, .vital__label')
+      .filter((el) => el.children.length === 0 && !el.dataset.vxs && el.textContent.trim().length > 1 && el.textContent.length < 80);
+    if (!pool.length) return;
+    const el = vxPick(pool);
+    const orig = el.textContent;
+    el.dataset.vxs = '1';
+    let last = '', n = 0;
+    const id = setInterval(() => {
+      if (el.textContent !== last && last) { clearInterval(id); delete el.dataset.vxs; return; } // a tela redesenhou: deixa como está
+      if (++n > 8) { el.textContent = orig; clearInterval(id); delete el.dataset.vxs; return; }
+      last = vxCorrupt(orig, 0.3 + L * 0.6);
+      el.textContent = last;
+    }, 70);
+  }
+  function vxTear(L) { // faixas da tela rasgam para o lado, com as cores trocadas
+    const box = h('div', 'vx-tear');
+    box.setAttribute('aria-hidden', 'true');
+    const n = 2 + Math.floor(L * 5);
+    for (let i = 0; i < n; i++) {
+      const b = h('i');
+      b.style.top = vxR(0, 96) + '%';
+      b.style.height = Math.round(vxR(4, 40 + L * 60)) + 'px';
+      b.style.setProperty('--dx', Math.round(vxR(-40, 40) * (0.5 + L)) + 'px');
+      b.className = vxPick(['', 'is-inv', 'is-hue', 'is-blur']);
+      box.append(b);
+    }
+    document.body.append(box);
+    setTimeout(() => box.remove(), vxR(120, 380));
+  }
+  function vxWhisper() { // uma frase aparece num canto e se desfaz
+    const w = h('div', 'vx-whisper', vxCorrupt(vxPick(VX_LORE), 0.15));
+    w.setAttribute('aria-hidden', 'true');
+    w.style.left = vxR(4, 60) + 'vw';
+    w.style.top = vxR(8, 85) + 'vh';
+    w.style.setProperty('--rot', vxR(-8, 8).toFixed(1) + 'deg');
+    document.body.append(w);
+    setTimeout(() => w.remove(), 3200);
+  }
   function vortexChaos(on) {
-    clearInterval(vxTimer);
-    vxTimer = null;
-    if (!on || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
-    const FX = ['vx-glitch', 'vx-crumble', 'vx-shift', 'vx-invert'];
-    vxTimer = setInterval(() => {
-      if (document.hidden) return;
-      const pool = $$('.block, .row, .prog__card, .vital, .attr, .theme-card, .sheet-tab, .item-card, .cell, .btn').filter((el) => {
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.bottom > 0 && r.top < window.innerHeight;
-      });
-      if (!pool.length) return;
-      const el = pool[Math.floor(Math.random() * pool.length)];
-      const fx = FX[Math.floor(Math.random() * FX.length)];
-      el.classList.add(fx);
-      setTimeout(() => el.classList.remove(fx), 950);
-    }, 1700);
+    clearTimeout(vxTimer); clearInterval(vxClock);
+    vxTimer = vxClock = null;
+    const root = document.documentElement;
+    root.style.removeProperty('--vx');
+    root.classList.remove('vx-hot', 'vx-critical');
+    const veil = document.querySelector('.vx-veil');
+    if (veil) veil.remove();
+    if (!on || vxReduced()) return;
+    const v = h('div', 'vx-veil');
+    v.setAttribute('aria-hidden', 'true');
+    document.body.append(v);
+    const level = () => {
+      const L = vxLevel();
+      root.style.setProperty('--vx', L.toFixed(3));
+      root.classList.toggle('vx-hot', L >= 0.5);
+      root.classList.toggle('vx-critical', L >= 0.85);
+      return L;
+    };
+    level();
+    vxClock = setInterval(() => { // o relógio do vórtex só anda com a página à vista
+      if (document.hidden || vxState.stable || document.querySelector('.vx-boom')) return;
+      vxState.t += 1;
+      if (vxState.t % 5 === 0) saveVx();
+      if (level() >= 1) vortexExplode();
+    }, 1000);
+    const tick = () => {
+      const L = vxLevel();
+      if (!document.hidden && !document.querySelector('.vx-boom')) {
+        const n = 1 + Math.floor(L * 3.5);
+        for (let i = 0; i < n; i++) vxHit(L);
+        if (L > 0.2 && Math.random() < 0.3 + L * 0.6) vxScramble(L);
+        if (L > 0.4 && Math.random() < L * 0.8) vxTear(L);
+        if (L > 0.6 && Math.random() < L * 0.45) vxWhisper();
+      }
+      vxTimer = setTimeout(tick, 1700 - 1300 * L + Math.random() * 400);
+    };
+    vxTimer = setTimeout(tick, 900);
+  }
+  function vortexExplode() {
+    if (document.querySelector('.vx-boom')) return;
+    clearTimeout(vxTimer); clearInterval(vxClock);
+    saveVx();
+    playThemeSound('boom');
+    const flying = vxVisible('.block, .row, .prog__card, .theme-card, .btn, h1, h2, .topbar, .rail').slice(0, 80);
+    flying.forEach((el) => {
+      el.style.setProperty('--dx', Math.round(vxR(-120, 120)) + 'vw');
+      el.style.setProperty('--dy', Math.round(vxR(-90, 120)) + 'vh');
+      el.style.setProperty('--rot', Math.round(vxR(-540, 540)) + 'deg');
+      el.style.setProperty('--d', vxR(0, 0.35).toFixed(2) + 's');
+      el.classList.add('vx-fly');
+    });
+    const boom = h('div', 'vx-boom', h('span', 'vx-boom__flash'), h('span', 'vx-boom__ring'), h('p', 'vx-boom__text', 'HORIZONTE ROMPIDO'));
+    boom.setAttribute('role', 'status');
+    document.body.append(boom);
+    setTimeout(() => {
+      flying.forEach((el) => { el.classList.remove('vx-fly'); ['--dx', '--dy', '--rot', '--d'].forEach((p) => el.style.removeProperty(p)); });
+      vxState.t = 0; vxState.exploded = true; vxState.stable = false;
+      saveVx();
+      applyTheme('');
+      boom.classList.add('is-out');
+      setTimeout(() => boom.remove(), 900);
+      if (document.getElementById('theme-list')) renderThemes();
+      toast('O site explodiu e voltou ao tema normal. Agora o Vórtex ∞ também tem uma versão estável.');
+    }, 2600);
+  }
+  // depois da primeira explosão, cada vez que o tema é escolhido: estável ou instável? (false = desistiu)
+  async function chooseVortex() {
+    if (!vxState.exploded) { vxState.stable = false; saveVx(); return true; }
+    const r = await askChoice('Vórtex ∞', 'Qual vórtex?', 'O instável vai bugando o site com o tempo até explodir de novo. O estável fica nas cores e em alguns glitches, sem piorar.',
+      [['instavel', 'Instável (até explodir)'], ['estavel', 'Estável']], 'Abrir o vórtex');
+    if (!r) return false;
+    vxState.stable = r === 'estavel';
+    saveVx();
+    return true;
   }
   applyTheme(themeState.unlocked.indexOf(themeState.active) >= 0 ? themeState.active : '');
 
@@ -4208,7 +4420,7 @@ const FIREBASE_CONFIG = {
       out.gain.value = 0.2;
       out.connect(ac.destination);
       // eco próprio de cada tema e um tom sorteado, para o desbloqueio não soar sempre igual
-      const ECHO = { ether: [0.21, 0.4], god: [0.27, 0.5], nyan: [0.11, 0.15], vortice: [0.17, 0.55], claptrap: [0.07, 0.2] }[id];
+      const ECHO = { ether: [0.21, 0.4], god: [0.27, 0.5], nyan: [0.11, 0.15], vortice: [0.17, 0.55], claptrap: [0.07, 0.2], boom: [0.31, 0.45] }[id];
       if (ECHO) {
         const dl = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
         dl.delayTime.value = ECHO[0]; fb.gain.value = ECHO[1]; wet.gain.value = 0.4;
@@ -4244,6 +4456,17 @@ const FIREBASE_CONFIG = {
         tone('sine', 2093, 2096, 1.0, 1.4, 0.12);
       } else if (id === 'nyan') { // melodia de 8 bits
         [740, 831, 622, 659, 554, 587, 554, 494, 494, 554, 587, 587, 554, 494, 554, 622].forEach((f, i) => tone('square', f, f, i * 0.11, 0.1, 0.22));
+      } else if (id === 'boom') { // explosão: estrondo grave, ruído rasgando e um apito que cai
+        tone('sine', 90, 22, 0, 2.6, 1);
+        tone('sawtooth', 3200, 40, 0.05, 1.6, 0.25);
+        tone('square', 60, 30, 0.1, 1.2, 0.3);
+        const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 2.2), ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+        const n = ac.createBufferSource(), lp = ac.createBiquadFilter(), ng = ac.createGain();
+        n.buffer = buf; lp.type = 'lowpass'; lp.frequency.value = 1200; ng.gain.value = 1.2;
+        n.connect(lp); lp.connect(ng); ng.connect(out);
+        n.start(now);
       } else if (id === 'vortice') { // sucção grave, rasgo de ruído e um eco agudo invertido
         tone('sawtooth', 40, 25, 0, 2.6, 0.7);
         tone('sine', 2400, 60, 0.1, 1.8, 0.3);
@@ -4276,7 +4499,7 @@ const FIREBASE_CONFIG = {
       h('div', 'unlock__card',
         h('p', 'unlock__kicker', first ? 'Tema desbloqueado' : 'Tema equipado'),
         h('p', 'unlock__name', t.name),
-        h('p', 'unlock__sub', t.unlock || '')));
+        id === 'vortice' ? h('p', 'unlock__sub', vxText()) : h('p', 'unlock__sub', t.unlock || '')));
     ov.setAttribute('role', 'status');
     document.body.append(ov);
     setTimeout(() => applyTheme(id), 900);
@@ -4290,12 +4513,15 @@ const FIREBASE_CONFIG = {
       const on = themeState.active === t.id;
       const card = h('div', 'theme-card theme-card--' + (t.id || 'vortex') + (open ? '' : ' is-locked') + (on ? ' is-on' : ''),
         h('span', 'theme-card__swatch', h('i'), h('i'), h('i')),
-        h('span', 'theme-card__main', h('strong', '', open ? t.name : '???'), h('span', '', open ? t.text : t.hint)));
+        h('span', 'theme-card__main', h('strong', '', open ? t.name : '???'), open && t.id === 'vortice' ? vxText() : h('span', '', open ? t.text : t.hint)));
       if (open) {
         const b = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Em uso' : 'Usar');
         b.type = 'button';
         b.disabled = on;
-        b.addEventListener('click', () => { applyTheme(t.id); renderThemes(); toast('Tema ' + t.name + '.'); });
+        b.addEventListener('click', async () => {
+          if (t.id === 'vortice' && !(await chooseVortex())) return;
+          applyTheme(t.id); renderThemes(); toast('Tema ' + t.name + (t.id === 'vortice' && vxState.stable ? ' (estável).' : '.'));
+        });
         card.append(b);
       } else card.append(h('span', 'theme-card__lock', '🔒'));
       return card;
@@ -4316,7 +4542,7 @@ const FIREBASE_CONFIG = {
   }
 
   // Vórtex ∞: a tela "hackeada" que abre pela URL secreta; o interruptor liga e desliga o tema
-  const VORTEX_KEY = 'todotodosvoceeuninguemsaovortex';
+  const VORTEX_KEY = 'tudotodosvoceeuninguemsaovortex';
   const vxKey = (str) => {
     let t = String(str || '');
     try { t = decodeURIComponent(t); } catch (e) { /* fica cru */ }
@@ -4345,10 +4571,10 @@ const FIREBASE_CONFIG = {
       '> acesso: NEGADO',
       '> acesso: ... concedido?',
       '> abrindo horizonte_de_eventos.log',
-      'Uma arma antiplanetas, energizada com Ether, foi disparada contra um sol.',
-      'O sol não morreu. Virou o vórtex: buraco negro, buraco branco e matéria estranha, tudo ao mesmo tempo.',
-      'Do horizonte de eventos, qualquer coisa pode sair. Cores, formas, blocos inteiros.',
-      '> aviso: ativar desestabiliza a interface. Os dados ficam intactos.'
+      'Não é tecnologia. Não é magia. É o que sobra quando as duas desistem.',
+      'Ele corrompe, abstrai e apaga tudo o que encosta nele, só por existir.',
+      'Do horizonte de eventos qualquer coisa pode sair: um presente, ou pura desgraça.',
+      '> aviso: quanto mais tempo aberto, mais a interface apodrece. Os dados ficam intactos.'
     ];
     const sw = h('button', 'vxhack__switch', h('span', 'vxhack__knob'), h('span', 'vxhack__state', on ? 'VÓRTEX ATIVO' : 'ATIVAR VÓRTEX'));
     sw.type = 'button';
@@ -4358,7 +4584,7 @@ const FIREBASE_CONFIG = {
     sw.addEventListener('click', () => {
       if (themeState.active === 'vortice') { applyTheme(''); toast('O vórtex se fechou. Tema Vortex de volta.'); openVortexHack(); return; }
       closeDialog(vxDlg);
-      unlockTheme('vortice');
+      chooseVortex().then((go) => { if (go) unlockTheme('vortice'); });
     });
     const close = h('button', 'vxhack__close', 'sair');
     close.type = 'button';
@@ -4370,6 +4596,7 @@ const FIREBASE_CONFIG = {
         h('p', 'vxhack__top', h('span', '', 'root@vortex:~'), close),
         h('h2', 'vxhack__title', 'HORIZONTE DE EVENTOS'),
         ...LINES.map((t, i) => { const p = h('p', 'vxhack__line' + (t.charAt(0) === '>' ? ' is-cmd' : ''), t); p.style.animationDelay = (0.25 + i * 0.32) + 's'; return p; }),
+        (() => { const p = h('p', 'vxhack__line', '> sinal: ', vxText()); p.style.animationDelay = (0.25 + LINES.length * 0.32) + 's'; return p; })(),
         sw)));
     $('.vxhack__title', vxDlg).id = 'vx-title';
     if (!vxDlg.open) openDialog(vxDlg);
