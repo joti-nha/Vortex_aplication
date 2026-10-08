@@ -3995,12 +3995,18 @@ const FIREBASE_CONFIG = {
     const next = () => { if (nyanOn) nyanTimer = setTimeout(nyanFly, 4000 + Math.random() * 12000); };
     if (document.hidden) { next(); return; }
     const W = window.innerWidth, H = window.innerHeight;
-    // direção sorteada: dos lados, nas diagonais ou de cima e de baixo
-    const ang = [0, 180, -20, 20, 160, 200, -35, 215, 90, 270][Math.floor(Math.random() * 10)] + (Math.random() * 16 - 8);
+    // direção sorteada (dos lados, nas diagonais, de cima ou de baixo), mas sempre cruzando a tela inteira:
+    // a inclinação é limitada para ele sair pelo lado oposto ao que entrou, e não pelo teto no meio do caminho
+    const horiz = Math.random() < (W >= H ? 0.8 : 0.55);
+    const A = horiz ? W : H, B = horiz ? H : W;
+    const t = (Math.random() * 2 - 1) * Math.min(Math.tan(35 * Math.PI / 180), 0.7 * B / A);
+    let ang = Math.atan(t) * 180 / Math.PI + (horiz ? 0 : 90);
+    if (Math.random() < 0.5) ang += 180;
     const rad = ang * Math.PI / 180, dx = Math.cos(rad), dy = Math.sin(rad);
-    const px = W * (0.2 + Math.random() * 0.6), py = H * (0.15 + Math.random() * 0.7);
+    const room = Math.max(0, 0.84 * B - Math.abs(t) * A) / 2; // folga para a linha não encostar nas outras bordas
+    const mid = B / 2 + (Math.random() * 2 - 1) * room;
+    const px = horiz ? W / 2 : mid, py = horiz ? mid : H / 2;
     const out = (sx, sy) => Math.min(sx > 0 ? (W - px) / sx : sx < 0 ? -px / sx : Infinity, sy > 0 ? (H - py) / sy : sy < 0 ? -py / sy : Infinity);
-    const back = out(-dx, -dy) + 10, fwd = out(dx, dy) + 480; // entra com o focinho na borda, sai com o rastro inteiro
     const flip = dx < -0.01 ? ' scaleY(-1)' : '';
     const T = (x, y) => 'translate(' + x.toFixed(0) + 'px,' + y.toFixed(0) + 'px) rotate(' + ang.toFixed(1) + 'deg)' + flip + ' translate(-100%,-50%)';
     const rainbow = h('span', 'nyan-fly__rainbow');
@@ -4013,15 +4019,31 @@ const FIREBASE_CONFIG = {
       const img = h('img', 'nyan-fly__cat');
       img.alt = '';
       img.referrerPolicy = 'no-referrer';
-      img.onload = () => { nyanGifOk = true; };
-      img.onerror = () => { nyanGifOk = false; img.replaceWith(usePixel()); };
-      img.src = NYAN_GIF;
       fly.append(img);
     }
+    fly.style.visibility = 'hidden';
     document.body.append(fly);
-    const dur = (back + fwd) / (180 + Math.random() * 160) * 1000; // 180 a 340 px por segundo
-    const anim = fly.animate([{ transform: T(px - dx * back, py - dy * back) }, { transform: T(px + dx * fwd, py + dy * fwd) }], { duration: dur, easing: 'linear' });
-    anim.onfinish = () => { fly.remove(); next(); };
+    let gone = false;
+    const go = () => { // só voa com o gato já carregado: aí dá para medir o tamanho de verdade
+      if (gone) return;
+      gone = true;
+      if (!nyanOn || !fly.isConnected) { fly.remove(); return; }
+      const img = fly.querySelector('img.nyan-fly__cat');
+      // o GIF tem um espaço vazio atrás do gato: o arco-íris entra por baixo da traseira
+      if (img) rainbow.style.marginRight = -Math.round(img.getBoundingClientRect().width * 0.5) + 'px';
+      const len = fly.getBoundingClientRect().width + fly.getBoundingClientRect().height; // comprimento + folga da inclinação
+      const back = out(-dx, -dy) + 10, fwd = out(dx, dy) + len + 20; // entra com o focinho na borda, sai com o rastro inteiro
+      fly.style.visibility = '';
+      const dur = (back + fwd) / (180 + Math.random() * 160) * 1000; // 180 a 340 px por segundo
+      const anim = fly.animate([{ transform: T(px - dx * back, py - dy * back) }, { transform: T(px + dx * fwd, py + dy * fwd) }], { duration: dur, easing: 'linear' });
+      anim.onfinish = () => { fly.remove(); next(); };
+    };
+    const img = fly.querySelector('img.nyan-fly__cat');
+    if (!img) { go(); return; }
+    img.onload = () => { nyanGifOk = true; go(); };
+    img.onerror = () => { nyanGifOk = false; img.replaceWith(usePixel()); go(); };
+    setTimeout(() => { if (!gone) { img.replaceWith(usePixel()); go(); } }, 4000); // GIF lento demais: vai o de pixel
+    img.src = NYAN_GIF;
   }
   function nyanMusic() {
     const btn = document.querySelector('.nyan-music');
