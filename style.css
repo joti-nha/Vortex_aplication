@@ -3701,14 +3701,19 @@ html, body { max-width: 100%; overflow-x: clip; }
 .vx-scare__swirl { transform-origin: 0 0; animation: vx-spin 0.8s linear infinite !important; animation-play-state: running !important; }
 .vx-scare.is-out { opacity: 0; transition: opacity 0.5s !important; }
 
-/* Nyan Cat: GIF oficial voando com o arco-íris e o mini player da música */
-:root.nyan-gif[data-theme="nyan"] body::after { display: none; }
-.nyan-fly { position: fixed; bottom: 16vh; left: 0; z-index: -1; display: flex; align-items: center; pointer-events: none; animation: nyan-fly 14s linear infinite; }
-.nyan-fly__rainbow { width: 260px; height: 40px; margin-right: -30px; background: linear-gradient(#ff2a2a 0 16.6%, #ff9a2a 0 33.3%, #ffee2a 0 50%, #33ff4a 0 66.6%, #2aa8ff 0 83.3%, #7a2aff 0); -webkit-mask: repeating-linear-gradient(90deg, #000 0 26px, rgba(0, 0, 0, 0.75) 26px 52px); mask: repeating-linear-gradient(90deg, #000 0 26px, rgba(0, 0, 0, 0.75) 26px 52px); animation: nyan-wave 0.4s steps(2) infinite; }
-.nyan-fly__cat { position: relative; height: 72px; width: auto; image-rendering: pixelated; }
-:root:not(.nyan-gif) .nyan-fly { display: none; }
-.nyan-music { position: fixed; right: 12px; bottom: 84px; z-index: 60; width: 136px; height: 77px; border: 3px solid #000; border-radius: 10px; background: #000; box-shadow: 4px 4px 0 #000, 0 0 0 2px #ff99cc; overflow: visible; }
-.nyan-music iframe { width: 100%; height: 100%; border: 0; border-radius: 7px; }
-.nyan-music__close { position: absolute; top: -12px; right: -12px; width: 28px; height: 28px; border: 2px solid #000; border-radius: 50%; background: #ff99cc; color: #3a0029; font: 800 1rem/1 system-ui, sans-serif; cursor: pointer; }
-@media (min-width: 900px) { .nyan-music { bottom: 16px; right: 16px; width: 192px; height: 108px; } }
-@media (prefers-reduced-motion: reduce) { .nyan-fly, .nyan-fly__rainbow { animation: none !important; } .nyan-fly { left: 12px; } }
+/* Nyan Cat: o gato atravessa a tela de direções sorteadas (o JS move o .nyan-fly; não pega toques), com o rastro em degraus */
+:root[data-theme="nyan"] body::after { display: none; }
+.nyan-fly { position: fixed; left: 0; top: 0; z-index: 40; opacity: 0.95; display: flex; align-items: center; pointer-events: none; will-change: transform; }
+.nyan-fly__rainbow { display: flex; align-items: center; margin-right: -14px; -webkit-mask: linear-gradient(90deg, transparent, #000 45%); mask: linear-gradient(90deg, transparent, #000 45%); }
+.nyan-fly__rainbow i { width: 22px; height: 42px; background: linear-gradient(#ff2a2a 0 16.66%, #ff9a2a 0 33.33%, #ffee2a 0 50%, #33ff4a 0 66.66%, #2aa8ff 0 83.33%, #7a2aff 0); animation: nyan-step 0.36s steps(1) infinite; }
+.nyan-fly__rainbow i:nth-child(even) { animation-delay: -0.18s; }
+@keyframes nyan-step { 0% { transform: translateY(-3px); } 50% { transform: translateY(3px); } }
+.nyan-fly__cat { position: relative; height: 64px; width: auto; image-rendering: pixelated; animation: nyan-bob 0.36s steps(1) infinite; }
+.nyan-fly__cat--px { width: 104px; height: 64px; }
+.nyan-px-legs { animation: nyan-legs 0.24s steps(1) infinite; }
+@keyframes nyan-bob { 50% { transform: translateY(-3px); } }
+@keyframes nyan-legs { 50% { transform: translateX(1px); } }
+.nyan-music { position: fixed; right: 12px; bottom: 84px; z-index: 60; width: 44px; height: 44px; border: 3px solid #000; border-radius: 50%; background: #ff99cc; color: #3a0029; font: 900 1.3rem/1 system-ui, sans-serif; box-shadow: 3px 3px 0 #000; cursor: pointer; animation: nyan-bob 0.5s steps(1) infinite; }
+.nyan-music.is-off { background: #6b5a75; color: #2a2030; animation: none; text-decoration: line-through; }
+@media (min-width: 900px) { .nyan-music { bottom: 16px; right: 16px; } }
+@media (prefers-reduced-motion: reduce) { .nyan-fly, .nyan-music { animation: none !important; } }
