@@ -3927,7 +3927,8 @@ const FIREBASE_CONFIG = {
      Claptrap: busque o nome dele entre os personagens e abra a ficha (que não salva).
      God: uma ficha com todas as perícias em +3 sem quebrar as regras (abrir uma assim também vale).
      Nyan Cat: um personagem da espécime Neko (só aparece pesquisando "neko") com o sexo Myauuu.
-     Vórtex ∞: pesquise o endereço do repositório (ou "hackeado") e ligue o tema na tela que abre. Desbloqueados ficam neste aparelho;
+     Vórtex ∞: abra o site com "Todotodosvocêeuninguemsaovortex" no fim da URL e ligue o tema na tela que abre
+     (o 404.html devolve /Todotodos... para o app com ?Todotodos...). Desbloqueados ficam neste aparelho;
      a troca de tema fica no Perfil. O <head> do index.html aplica o tema antes de desenhar. */
   const THEME_KEY = 'vortex.themes.v1';
   const THEMES = [
@@ -3936,7 +3937,7 @@ const FIREBASE_CONFIG = {
     { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante aparece quando alguém busca o nome dele entre os personagens.', unlock: 'CL4P-TP online! Pronto para servir, caçador.' },
     { id: 'god', name: 'God', text: 'Ouro divino, raios de luz e uma auréola em tudo.', hint: 'Dizem que uma ficha perfeita, com todas as perícias em +3 sem quebrar nenhuma regra, toca o divino.', unlock: 'Todas as perícias em +3. Essa ficha transcendeu.' },
     { id: 'nyan', name: 'Nyan Cat', text: 'Espaço, estrelas e um arco-íris que não acaba.', hint: 'Uma espécime felina só aparece para quem a procura pelo nome. E ela tem um sexo só dela.', unlock: 'Myauuu! Uma Neko entrou no Vortex voando num arco-íris.' },
-    { id: 'vortice', name: 'Vórtex ∞', text: 'O horizonte de eventos: cores girando, blocos se desfazendo, qualquer coisa pode acontecer.', hint: 'O código-fonte guarda uma porta. Quem procura pelo endereço dele, ou por algo hackeado, encontra.', unlock: 'O disparo atingiu o sol. O vórtex se abriu.' }
+    { id: 'vortice', name: 'Vórtex ∞', text: 'O horizonte de eventos: cores girando, blocos se desfazendo, qualquer coisa pode acontecer.', hint: 'Todo, todos, você, eu, ninguém... são vórtex. Diga isso ao próprio endereço do site.', unlock: 'O disparo atingiu o sol. O vórtex se abriu.' }
   ];
   const themeState = (() => {
     try { const v = JSON.parse(localStorage.getItem(THEME_KEY)) || {}; return { unlocked: Array.isArray(v.unlocked) ? v.unlocked : [], active: v.active || '' }; }
@@ -3975,36 +3976,66 @@ const FIREBASE_CONFIG = {
   applyTheme(themeState.unlocked.indexOf(themeState.active) >= 0 ? themeState.active : '');
 
   /* ---------- Sons e animações de toque ----------
-     Sons curtos feitos na hora (Web Audio, sem arquivos), com o timbre do tema atual:
-     Vortex = gotas e madeira, Ether = vidro e energia, Claptrap = bipes de robô.
+     Sons curtos feitos na hora (Web Audio, sem arquivos). Cada tema tem a própria "banda":
+     escala, camadas de onda, filtro, ruído, eco e um jeito de variar, então o mesmo toque
+     nunca soa duas vezes igual e cada tema soa diferente do outro.
+     Vortex = gotas de chuva e madeira (pentatônica menor), Ether = vidro e energia (lídio, eco longo),
+     Claptrap = bipes e tagarelice de robô, God = órgão e coro em quintas (maior, eco de catedral),
+     Nyan = chiptune 8 bits com arpejo, Vórtex ∞ = serra, ruído e notas que caem fora da escala.
      O botão 🔊 na barra liga e desliga; a escolha fica neste aparelho. */
   var SFX_KEY = 'vortex.sfx.v1';
-  var sfx = { on: (() => { try { return localStorage.getItem(SFX_KEY) !== 'off'; } catch (e) { return true; } })(), ctx: null, last: {} };
+  var sfx = { on: (() => { try { return localStorage.getItem(SFX_KEY) !== 'off'; } catch (e) { return true; } })(), ctx: null, last: {}, noise: null };
+  // layers: [onda, multiplicador de frequência, volume]; drop: a nota cai (gota) no ataque
   var SFX_THEME = {
-    '': { wave: 'sine', base: 520, decay: 0.09, gain: 0.16 },
-    ether: { wave: 'triangle', base: 880, decay: 0.16, gain: 0.12, shimmer: true },
-    claptrap: { wave: 'square', base: 660, decay: 0.07, gain: 0.07, bits: true },
-    god: { wave: 'sine', base: 660, decay: 0.2, gain: 0.12, shimmer: true },
-    nyan: { wave: 'square', base: 880, decay: 0.06, gain: 0.06, bits: true },
-    vortice: { wave: 'sawtooth', base: 300, decay: 0.12, gain: 0.07, shimmer: true }
+    '': { base: 440, scale: [0, 3, 5, 7, 10], layers: [['sine', 1, 1], ['triangle', 2, 0.18]], attack: 0.004, decay: 0.11, gain: 0.15,
+      drop: 1.5, filter: ['lowpass', 3200, 0.7], knock: 0.22, echo: [0.11, 0.18], jitter: 12 },
+    ether: { base: 660, scale: [0, 2, 4, 6, 7, 9, 11], layers: [['triangle', 1, 0.8], ['sine', 2.01, 0.35], ['sine', 3.003, 0.12]], attack: 0.01, decay: 0.2, gain: 0.11,
+      vibrato: [6.5, 0.012], filter: ['highpass', 300, 0.5], hiss: 0.05, echo: [0.19, 0.38], jitter: 6, sparkle: true },
+    claptrap: { base: 620, scale: [0, 2, 4, 5, 7, 9, 11], layers: [['square', 1, 1]], attack: 0.002, decay: 0.06, gain: 0.06,
+      bits: 1.5, filter: ['bandpass', 1800, 1.2], chatter: 0.45, jitter: 40 },
+    god: { base: 392, scale: [0, 2, 4, 5, 7, 9, 11], layers: [['sine', 1, 0.7], ['sine', 1.5, 0.35], ['sine', 2, 0.3], ['triangle', 4, 0.06]], attack: 0.03, decay: 0.3, gain: 0.1,
+      filter: ['lowpass', 2600, 0.4], echo: [0.23, 0.45], jitter: 3, chorus: 4 },
+    nyan: { base: 784, scale: [0, 2, 4, 7, 9], layers: [['square', 1, 1], ['square', 0.5, 0.25]], attack: 0.002, decay: 0.07, gain: 0.05,
+      arp: [0, 4, 7], vibrato: [9, 0.008], filter: ['lowpass', 5200, 0.5], jitter: 0 },
+    vortice: { base: 230, scale: [0, 1, 3, 6, 7, 8, 11], layers: [['sawtooth', 1, 0.7], ['square', 1.007, 0.25], ['sine', 0.5, 0.5]], attack: 0.006, decay: 0.15, gain: 0.07,
+      filter: ['lowpass', 1400, 6, true], hiss: 0.12, echo: [0.13, 0.5], jitter: 80, glitch: 0.35, warp: true }
   };
-  // cada som: notas [frequência relativa, início, duração], e se desliza
+  // cada som tem variações; uma é sorteada a cada toque. Nota: [grau da escala, início, duração, deslize]
   var SFX = {
-    tap: [[1, 0, 1]],
-    tab: [[1.25, 0, 0.8], [1.5, 0.04, 0.8]],
-    open: [[0.75, 0, 1.2], [1.12, 0.06, 1.4]],
-    close: [[1.12, 0, 0.9], [0.75, 0.05, 1.1]],
-    drag: [[0.6, 0, 1.6, 1.6]],
-    drop: [[1.4, 0, 1.4, 0.45]],
-    ok: [[1, 0, 1], [1.26, 0.07, 1], [1.5, 0.14, 1.6]],
-    bad: [[0.8, 0, 1.4, 0.7]],
-    dice: [[1.7, 0, 0.5], [1.4, 0.05, 0.5], [1.9, 0.1, 0.5], [1.2, 0.16, 0.7]],
-    hit: [[0.5, 0, 1.8, 0.5]]
+    tap: [[[0, 0, 1]], [[2, 0, 1]], [[4, 0, 0.9]], [[1, 0, 1]]],
+    tab: [[[2, 0, 0.8], [4, 0.045, 0.8]], [[4, 0, 0.8], [5, 0.04, 0.8]], [[0, 0, 0.8], [2, 0.05, 0.9]]],
+    link: [[[5, 0, 0.7], [7, 0.035, 0.7]], [[3, 0, 0.7], [6, 0.035, 0.8]]],
+    toggle: [[[3, 0, 0.6], [5, 0.03, 0.5]], [[5, 0, 0.6], [3, 0.03, 0.5]]],
+    fold: [[[1, 0, 1.1, 1.12]], [[3, 0, 1.1, 0.9]]],
+    open: [[[-2, 0, 1.2], [2, 0.06, 1.4]], [[-1, 0, 1.2], [3, 0.07, 1.5]], [[0, 0, 1], [2, 0.05, 1], [4, 0.1, 1.5]]],
+    close: [[[2, 0, 0.9], [-2, 0.05, 1.1]], [[4, 0, 0.8], [0, 0.05, 1.1]], [[3, 0, 0.8], [1, 0.04, 0.8], [-1, 0.08, 1]]],
+    drag: [[[-3, 0, 1.6, 1.6]], [[-2, 0, 1.5, 1.4]]],
+    drop: [[[5, 0, 1.4, 0.45]], [[4, 0, 1.2, 0.5], [0, 0.06, 1]]],
+    ok: [[[0, 0, 1], [2, 0.07, 1], [4, 0.14, 1.6]], [[0, 0, 1], [4, 0.07, 1], [7, 0.14, 1.8]], [[2, 0, 0.9], [4, 0.06, 0.9], [5, 0.12, 0.9], [7, 0.18, 1.7]]],
+    bad: [[[-1, 0, 1.4, 0.7]], [[1, 0, 0.8], [-2, 0.09, 1.4, 0.8]]],
+    dice: [[[6, 0, 0.5], [4, 0.05, 0.5], [7, 0.1, 0.5], [3, 0.16, 0.7]], [[5, 0, 0.4], [8, 0.04, 0.4], [4, 0.08, 0.4], [6, 0.12, 0.4], [2, 0.18, 0.8]]],
+    hit: [[[-5, 0, 1.8, 0.5]], [[-4, 0, 1.6, 0.45], [-7, 0.05, 1.8, 0.6]]]
   };
   function sfxCtx() {
     if (!sfx.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; sfx.ctx = new AC(); }
     if (sfx.ctx.state === 'suspended') sfx.ctx.resume();
     return sfx.ctx;
+  }
+  function sfxNoise(ac) { // meio segundo de ruído branco, reaproveitado
+    if (!sfx.noise) {
+      const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.5), ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      sfx.noise = buf;
+    }
+    return sfx.noise;
+  }
+  const sfxRnd = (a, b) => a + Math.random() * (b - a);
+  const sfxPick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  function degFreq(th, deg) {
+    const n = th.scale.length;
+    const oct = Math.floor(deg / n);
+    return th.base * Math.pow(2, (th.scale[((deg % n) + n) % n] + 12 * oct) / 12);
   }
   function play(name) {
     if (!sfx || !sfx.on || !SFX[name]) return;
@@ -4016,35 +4047,94 @@ const FIREBASE_CONFIG = {
     if (!ac) return;
     const th = SFX_THEME[themeState.active] || SFX_THEME[''];
     const t0 = ac.currentTime + 0.005;
-    SFX[name].forEach((n) => {
-      const len = th.decay * n[2];
-      const start = t0 + n[1];
-      const f = th.base * n[0];
-      const osc = ac.createOscillator();
-      const g = ac.createGain();
-      osc.type = th.wave;
-      osc.frequency.setValueAtTime(f, start);
-      if (n[3]) osc.frequency.exponentialRampToValueAtTime(f * n[3], start + len);
-      if (th.bits) osc.frequency.setValueAtTime(f * 1.5, start + len * 0.5); // bipe em dois tons
-      g.gain.setValueAtTime(0.0001, start);
-      g.gain.exponentialRampToValueAtTime(th.gain, start + 0.008);
-      g.gain.exponentialRampToValueAtTime(0.0001, start + len);
-      osc.connect(g).connect(ac.destination);
-      osc.start(start);
-      osc.stop(start + len + 0.02);
-      if (th.shimmer) { // brilho de vidro: uma oitava acima, bem baixinho
-        const o2 = ac.createOscillator();
-        const g2 = ac.createGain();
-        o2.type = 'sine';
-        o2.frequency.setValueAtTime(f * 2.01, start);
-        g2.gain.setValueAtTime(0.0001, start);
-        g2.gain.exponentialRampToValueAtTime(th.gain * 0.35, start + 0.01);
-        g2.gain.exponentialRampToValueAtTime(0.0001, start + len * 1.6);
-        o2.connect(g2).connect(ac.destination);
-        o2.start(start);
-        o2.stop(start + len * 1.6 + 0.02);
+    // saída do toque: filtro do tema e, se houver, eco
+    const bus = ac.createGain();
+    bus.gain.value = 1;
+    const flt = ac.createBiquadFilter();
+    flt.type = th.filter[0];
+    flt.frequency.value = th.filter[1] * sfxRnd(0.85, 1.15);
+    flt.Q.value = th.filter[2];
+    if (th.filter[3]) { // filtro que varre (Vórtex ∞): abre e fecha num instante
+      flt.frequency.setValueAtTime(sfxRnd(300, 900), t0);
+      flt.frequency.exponentialRampToValueAtTime(sfxRnd(1800, 5200), t0 + 0.08);
+      flt.frequency.exponentialRampToValueAtTime(sfxRnd(250, 700), t0 + 0.3);
+    }
+    bus.connect(flt).connect(ac.destination);
+    if (th.echo) {
+      const dl = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
+      dl.delayTime.value = th.echo[0] * sfxRnd(0.9, 1.1);
+      fb.gain.value = th.echo[1];
+      wet.gain.value = 0.45;
+      flt.connect(dl); dl.connect(fb).connect(dl); dl.connect(wet).connect(ac.destination);
+      setTimeout(() => { try { flt.disconnect(dl); } catch (e) { /* já foi */ } }, 2500);
+    }
+    const shift = th.warp && Math.random() < 0.3 ? sfxPick([-12, -7, 6, 12]) : 0; // o vórtex às vezes puxa a nota pra outro lugar
+    const notes = sfxPick(SFX[name]);
+    const extra = th.chatter && name === 'tap' && Math.random() < th.chatter
+      ? [[Math.floor(sfxRnd(0, 7)), 0.05, 0.6], [Math.floor(sfxRnd(0, 7)), 0.1, 0.5]] : [];
+    notes.concat(extra).forEach((n) => {
+      const len = th.decay * n[2] * sfxRnd(0.9, 1.12);
+      const start = t0 + n[1] * sfxRnd(0.92, 1.08);
+      const cents = sfxRnd(-th.jitter, th.jitter) + shift * 100;
+      const f = degFreq(th, n[0]) * Math.pow(2, cents / 1200);
+      const env = ac.createGain();
+      env.gain.setValueAtTime(0.0001, start);
+      env.gain.exponentialRampToValueAtTime(th.gain, start + th.attack);
+      env.gain.exponentialRampToValueAtTime(0.0001, start + th.attack + len);
+      env.connect(bus);
+      const stop = start + th.attack + len + 0.03;
+      th.layers.forEach((L, li) => {
+        const voices = th.chorus && li === 0 ? [-th.chorus, th.chorus] : [0];
+        voices.forEach((dt) => {
+          const o = ac.createOscillator(), lg = ac.createGain();
+          o.type = L[0];
+          o.detune.value = dt;
+          const fl = f * L[1];
+          if (th.drop) { // gota: começa acima e cai na nota
+            o.frequency.setValueAtTime(fl * th.drop, start);
+            o.frequency.exponentialRampToValueAtTime(fl, start + 0.025);
+          } else o.frequency.setValueAtTime(fl, start);
+          if (n[3]) o.frequency.exponentialRampToValueAtTime(fl * n[3], start + len);
+          if (th.bits) o.frequency.setValueAtTime(fl * th.bits, start + len * 0.5); // bipe em dois tons
+          if (th.arp) th.arp.forEach((st, i) => o.frequency.setValueAtTime(fl * Math.pow(2, st / 12), start + i * 0.022)); // arpejo 8 bits
+          if (th.glitch && Math.random() < th.glitch) o.frequency.setValueAtTime(fl * sfxPick([0.5, 0.71, 1.41, 2, 3]), start + len * sfxRnd(0.2, 0.7));
+          if (th.vibrato) {
+            const lfo = ac.createOscillator(), lfoG = ac.createGain();
+            lfo.frequency.value = th.vibrato[0] * sfxRnd(0.9, 1.1);
+            lfoG.gain.value = fl * th.vibrato[1];
+            lfo.connect(lfoG).connect(o.frequency);
+            lfo.start(start); lfo.stop(stop);
+          }
+          lg.gain.value = L[2] / voices.length;
+          o.connect(lg).connect(env);
+          o.start(start); o.stop(stop);
+        });
+      });
+      if (th.sparkle && Math.random() < 0.5) { // faísca de vidro bem aguda
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f * sfxPick([4, 5, 6]), start + 0.02);
+        g.gain.setValueAtTime(0.0001, start + 0.02);
+        g.gain.exponentialRampToValueAtTime(th.gain * 0.25, start + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, start + 0.02 + len * 1.4);
+        o.connect(g).connect(bus);
+        o.start(start + 0.02); o.stop(start + 0.05 + len * 1.4);
       }
     });
+    // ruído: batida de madeira (Vortex) ou chiado de energia (Ether, Vórtex ∞)
+    if (th.knock || th.hiss) {
+      const src = ac.createBufferSource(), nf = ac.createBiquadFilter(), ng = ac.createGain();
+      src.buffer = sfxNoise(ac);
+      nf.type = th.knock ? 'bandpass' : 'highpass';
+      nf.frequency.value = th.knock ? sfxRnd(700, 1400) : sfxRnd(3000, 7000);
+      nf.Q.value = th.knock ? 4 : 0.7;
+      const amt = th.knock || th.hiss, nl = th.knock ? 0.03 : th.decay * 1.2;
+      ng.gain.setValueAtTime(amt * th.gain * 4, t0);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t0 + nl);
+      src.connect(nf).connect(ng).connect(bus);
+      const off = Math.random() * 0.4;
+      src.start(t0, off, nl + 0.02);
+    }
   }
   function renderSoundBtn() {
     const b = $('#sound-btn');
@@ -4066,7 +4156,10 @@ const FIREBASE_CONFIG = {
   document.addEventListener('pointerdown', (ev) => {
     const el = ev.target.closest && ev.target.closest(TAP_SEL);
     if (!el || el.disabled || el.id === 'sound-btn') return;
-    play(el.getAttribute('role') === 'tab' || el.classList.contains('cmd__tab') ? 'tab' : 'tap');
+    play(el.getAttribute('role') === 'tab' || el.classList.contains('cmd__tab') ? 'tab'
+      : el.matches('input[type="checkbox"], input[type="radio"], label.check, [role="switch"]') ? 'toggle'
+        : el.matches('summary, select') ? 'fold'
+          : el.matches('a[href]') ? 'link' : 'tap');
     if (el.matches('button, a.btn') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const r = el.getBoundingClientRect();
       const dot = document.createElement('span');
@@ -4089,25 +4182,11 @@ const FIREBASE_CONFIG = {
 
   function secretHit(q) {
     const k = nameKey(q || '');
-    const raw = String(q || '').toLowerCase();
-    if (/github\.com\/joti-nha|joti-nha\.github\.io|vortex_aplication/.test(raw) || /\bhackead/.test(k)) return 'vortice';
     return /elemento\s*115|element\s*115|^115$/.test(k) ? 'ether' : '';
   }
   function secretRow(id) {
     const t = THEMES.find((x) => x.id === id);
     const got = themeState.unlocked.indexOf(id) >= 0;
-    if (id === 'vortice') {
-      const b = h('button', 'row__open secret secret--vortice',
-        h('span', 'secret__icon', '∞'),
-        h('span', 'row__main',
-          h('span', 'row__title', 'Vortex_aplication', ' ', h('span', 'tag', got ? 'Tema ' + t.name : 'acesso não autorizado')),
-          h('span', 'row__meta', 'repositório · horizonte_de_eventos.log · 1 arquivo corrompido'),
-          h('span', 'row__text', 'Toque para abrir.')));
-      b.type = 'button';
-      b.dataset.fid = 'secret-vortice';
-      b.addEventListener('click', openVortexHack);
-      return h('li', 'row secret-row', b);
-    }
     const btn = h('button', 'row__open secret secret--' + id,
       h('span', 'secret__icon', id === 'ether' ? '115' : ''),
       h('span', 'row__main',
@@ -4128,11 +4207,19 @@ const FIREBASE_CONFIG = {
       const out = ac.createGain();
       out.gain.value = 0.2;
       out.connect(ac.destination);
+      // eco próprio de cada tema e um tom sorteado, para o desbloqueio não soar sempre igual
+      const ECHO = { ether: [0.21, 0.4], god: [0.27, 0.5], nyan: [0.11, 0.15], vortice: [0.17, 0.55], claptrap: [0.07, 0.2] }[id];
+      if (ECHO) {
+        const dl = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
+        dl.delayTime.value = ECHO[0]; fb.gain.value = ECHO[1]; wet.gain.value = 0.4;
+        out.connect(dl); dl.connect(fb).connect(dl); dl.connect(wet).connect(ac.destination);
+      }
+      const tr = Math.pow(2, (id === 'nyan' ? 0 : Math.round(Math.random() * 4 - 2)) / 12);
       const tone = (type, f0, f1, t0, dur, vol) => {
         const o = ac.createOscillator(), g = ac.createGain();
         o.type = type;
-        o.frequency.setValueAtTime(f0, now + t0);
-        o.frequency.exponentialRampToValueAtTime(f1, now + t0 + dur);
+        o.frequency.setValueAtTime(f0 * tr, now + t0);
+        o.frequency.exponentialRampToValueAtTime(f1 * tr, now + t0 + dur);
         g.gain.setValueAtTime(0.0001, now + t0);
         g.gain.exponentialRampToValueAtTime(vol, now + t0 + 0.04);
         g.gain.exponentialRampToValueAtTime(0.0001, now + t0 + dur);
@@ -4173,7 +4260,7 @@ const FIREBASE_CONFIG = {
         tone('sine', 260, 920, 0.7, 0.22, 0.5);
         tone('sine', 920, 340, 0.95, 0.25, 0.4);
       }
-      setTimeout(() => ac.close().catch(() => {}), 3200);
+      setTimeout(() => ac.close().catch(() => {}), 4500);
     } catch (e) { /* sem áudio: só a animação */ }
   }
 
@@ -4228,7 +4315,23 @@ const FIREBASE_CONFIG = {
     }
   }
 
-  // Vórtex ∞: a tela "hackeada" que abre pela busca do repositório; o interruptor liga e desliga o tema
+  // Vórtex ∞: a tela "hackeada" que abre pela URL secreta; o interruptor liga e desliga o tema
+  const VORTEX_KEY = 'todotodosvoceeuninguemsaovortex';
+  const vxKey = (str) => {
+    let t = String(str || '');
+    try { t = decodeURIComponent(t); } catch (e) { /* fica cru */ }
+    return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+  };
+  // abre a tela se a URL (fim do caminho, ?busca ou #) tiver a frase, e limpa a frase da barra de endereço
+  function vortexUrlCheck() {
+    const parts = [location.pathname.split('/').pop(), location.search, location.hash];
+    if (!parts.some((x) => vxKey(x).includes(VORTEX_KEY))) return;
+    const path = vxKey(parts[0]).includes(VORTEX_KEY) ? location.pathname.replace(/[^/]*$/, '') : location.pathname;
+    const search = vxKey(location.search).includes(VORTEX_KEY) ? '' : location.search;
+    const hash = vxKey(location.hash).includes(VORTEX_KEY) ? '' : location.hash;
+    history.replaceState(null, '', path + search + hash);
+    setTimeout(openVortexHack, 400);
+  }
   let vxDlg = null;
   function openVortexHack() {
     if (!vxDlg) {
@@ -12776,7 +12879,8 @@ const FIREBASE_CONFIG = {
     profileKey = 'vortex.profile.v1.' + (db.mode === 'firebase' ? 'fb.' + FIREBASE_CONFIG.projectId : 'local');
     await profileRestore();
     await migrateOldItems();
-    window.addEventListener('hashchange', render);
+    window.addEventListener('hashchange', () => { vortexUrlCheck(); render(); });
+    vortexUrlCheck();
     render();
   }
 
