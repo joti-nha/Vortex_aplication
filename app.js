@@ -2641,6 +2641,9 @@ const FIREBASE_CONFIG = {
   // pixel art dos itens oficiais (pixelart.js), achada pela id: não vai para o banco e vale para fichas antigas
   const itemArt = (e) => (window.VORTEX_ART ? window.VORTEX_ART.itemArt(e) : '');
   const BUILTINS = (ITEM_DATA.catalogo || []).map((e) => Object.assign(decorate(e), { oficial: true, mine: false }));
+  // registros secretos (a espécime Neko) só aparecem quando a busca pede por eles
+  const secretOk = (e, q) => !e.secreto || /\b(neko|nyan)/.test(nameKey(q || ''));
+  const isNeko = (sp) => Boolean(sp && (sp.id === 'of-esp-neko' || nameKey(sp.name || '') === 'neko'));
 
   // Catálogo oficial sempre aparece; se o banco compartilhado falhar, o aviso fica em libSearch.warn
   /* Busca do banco (oficiais + criados), já ordenada por relevância quando há texto.
@@ -2652,7 +2655,7 @@ const FIREBASE_CONFIG = {
     let own = [];
     try { own = (await db.searchLibrary({ kinds, query: '' })).map(decorate); }
     catch (err) { console.warn(err); libSearch.warn = errorMessage(err); }
-    const all = BUILTINS.filter(inKinds).concat(own.filter(inKinds));
+    const all = BUILTINS.filter(inKinds).filter((e) => secretOk(e, q)).concat(own.filter(inKinds));
     const found = rankSearch(all, q, entryFields);
     if (!found.length && words(q || '').length) libSearch.suggest = suggestQuery(q, all.map((e) => [e.name, e.typeTitle, e.kindTitle].join(' ')));
     return found;
@@ -3921,13 +3924,19 @@ const FIREBASE_CONFIG = {
 
   /* ---------- Temas secretos ----------
      Ether: pesquise "elemento 115" nos itens e toque no item escondido que aparece.
-     Claptrap: busque o nome dele entre os personagens e abra a ficha (que não salva). Desbloqueados ficam neste aparelho;
+     Claptrap: busque o nome dele entre os personagens e abra a ficha (que não salva).
+     God: uma ficha com todas as perícias em +3 sem quebrar as regras (abrir uma assim também vale).
+     Nyan Cat: um personagem da espécime Neko (só aparece pesquisando "neko") com o sexo Myauuu.
+     Vórtex ∞: pesquise o endereço do repositório (ou "hackeado") e ligue o tema na tela que abre. Desbloqueados ficam neste aparelho;
      a troca de tema fica no Perfil. O <head> do index.html aplica o tema antes de desenhar. */
   const THEME_KEY = 'vortex.themes.v1';
   const THEMES = [
     { id: '', name: 'Vortex', text: 'O de sempre: tempestade e lanterna.' },
-    { id: 'ether', name: 'Ether', text: 'Elemento 115: violeta, ciano e energia instável.', hint: 'Dizem que um elemento perdido, de número 115, se esconde entre os itens.' },
-    { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante aparece quando alguém busca o nome dele entre os personagens.' }
+    { id: 'ether', name: 'Ether', text: 'Elemento 115: violeta, ciano e energia instável.', hint: 'Dizem que um elemento perdido, de número 115, se esconde entre os itens.', unlock: 'Elemento 115 absorvido. A energia Ether toma conta do Vortex.' },
+    { id: 'claptrap', name: 'Claptrap', text: 'Amarelo de lata, capacete verde e fumaça de guerra.', hint: 'Um robô muito falante aparece quando alguém busca o nome dele entre os personagens.', unlock: 'CL4P-TP online! Pronto para servir, caçador.' },
+    { id: 'god', name: 'God', text: 'Ouro divino, raios de luz e uma auréola em tudo.', hint: 'Dizem que uma ficha perfeita, com todas as perícias em +3 sem quebrar nenhuma regra, toca o divino.', unlock: 'Todas as perícias em +3. Essa ficha transcendeu.' },
+    { id: 'nyan', name: 'Nyan Cat', text: 'Espaço, estrelas e um arco-íris que não acaba.', hint: 'Uma espécime felina só aparece para quem a procura pelo nome. E ela tem um sexo só dela.', unlock: 'Myauuu! Uma Neko entrou no Vortex voando num arco-íris.' },
+    { id: 'vortice', name: 'Vórtex ∞', text: 'O horizonte de eventos: cores girando, blocos se desfazendo, qualquer coisa pode acontecer.', hint: 'O código-fonte guarda uma porta. Quem procura pelo endereço dele, ou por algo hackeado, encontra.', unlock: 'O disparo atingiu o sol. O vórtex se abriu.' }
   ];
   const themeState = (() => {
     try { const v = JSON.parse(localStorage.getItem(THEME_KEY)) || {}; return { unlocked: Array.isArray(v.unlocked) ? v.unlocked : [], active: v.active || '' }; }
@@ -3940,6 +3949,28 @@ const FIREBASE_CONFIG = {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--abismo').trim() || '#0f1c26';
     saveThemes();
+    vortexChaos(id === 'vortice');
+  }
+  /* Vórtex ∞: de tempos em tempos um bloco visível glitcha, desmorona, desliza ou inverte as cores
+     (nada disso mexe nos dados; com "reduzir movimento" no aparelho, fica só a paleta) */
+  var vxTimer = null;
+  function vortexChaos(on) {
+    clearInterval(vxTimer);
+    vxTimer = null;
+    if (!on || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const FX = ['vx-glitch', 'vx-crumble', 'vx-shift', 'vx-invert'];
+    vxTimer = setInterval(() => {
+      if (document.hidden) return;
+      const pool = $$('.block, .row, .prog__card, .vital, .attr, .theme-card, .sheet-tab, .item-card, .cell, .btn').filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.bottom > 0 && r.top < window.innerHeight;
+      });
+      if (!pool.length) return;
+      const el = pool[Math.floor(Math.random() * pool.length)];
+      const fx = FX[Math.floor(Math.random() * FX.length)];
+      el.classList.add(fx);
+      setTimeout(() => el.classList.remove(fx), 950);
+    }, 1700);
   }
   applyTheme(themeState.unlocked.indexOf(themeState.active) >= 0 ? themeState.active : '');
 
@@ -3952,7 +3983,10 @@ const FIREBASE_CONFIG = {
   var SFX_THEME = {
     '': { wave: 'sine', base: 520, decay: 0.09, gain: 0.16 },
     ether: { wave: 'triangle', base: 880, decay: 0.16, gain: 0.12, shimmer: true },
-    claptrap: { wave: 'square', base: 660, decay: 0.07, gain: 0.07, bits: true }
+    claptrap: { wave: 'square', base: 660, decay: 0.07, gain: 0.07, bits: true },
+    god: { wave: 'sine', base: 660, decay: 0.2, gain: 0.12, shimmer: true },
+    nyan: { wave: 'square', base: 880, decay: 0.06, gain: 0.06, bits: true },
+    vortice: { wave: 'sawtooth', base: 300, decay: 0.12, gain: 0.07, shimmer: true }
   };
   // cada som: notas [frequência relativa, início, duração], e se desliza
   var SFX = {
@@ -4055,11 +4089,25 @@ const FIREBASE_CONFIG = {
 
   function secretHit(q) {
     const k = nameKey(q || '');
+    const raw = String(q || '').toLowerCase();
+    if (/github\.com\/joti-nha|joti-nha\.github\.io|vortex_aplication/.test(raw) || /\bhackead/.test(k)) return 'vortice';
     return /elemento\s*115|element\s*115|^115$/.test(k) ? 'ether' : '';
   }
   function secretRow(id) {
     const t = THEMES.find((x) => x.id === id);
     const got = themeState.unlocked.indexOf(id) >= 0;
+    if (id === 'vortice') {
+      const b = h('button', 'row__open secret secret--vortice',
+        h('span', 'secret__icon', '∞'),
+        h('span', 'row__main',
+          h('span', 'row__title', 'Vortex_aplication', ' ', h('span', 'tag', got ? 'Tema ' + t.name : 'acesso não autorizado')),
+          h('span', 'row__meta', 'repositório · horizonte_de_eventos.log · 1 arquivo corrompido'),
+          h('span', 'row__text', 'Toque para abrir.')));
+      b.type = 'button';
+      b.dataset.fid = 'secret-vortice';
+      b.addEventListener('click', openVortexHack);
+      return h('li', 'row secret-row', b);
+    }
     const btn = h('button', 'row__open secret secret--' + id,
       h('span', 'secret__icon', id === 'ether' ? '115' : ''),
       h('span', 'row__main',
@@ -4103,6 +4151,23 @@ const FIREBASE_CONFIG = {
         n.buffer = buf; hp.type = 'highpass'; hp.frequency.value = 2500; ng.gain.value = 0.6;
         n.connect(hp); hp.connect(ng); ng.connect(out);
         n.start(now + 0.2);
+      } else if (id === 'god') { // acorde de coro subindo e um sino
+        [262, 330, 392, 523].forEach((f, i) => tone('sine', f, f * 1.002, i * 0.12, 2.2 - i * 0.2, 0.32));
+        tone('triangle', 1047, 1050, 0.9, 1.6, 0.25);
+        tone('sine', 2093, 2096, 1.0, 1.4, 0.12);
+      } else if (id === 'nyan') { // melodia de 8 bits
+        [740, 831, 622, 659, 554, 587, 554, 494, 494, 554, 587, 587, 554, 494, 554, 622].forEach((f, i) => tone('square', f, f, i * 0.11, 0.1, 0.22));
+      } else if (id === 'vortice') { // sucção grave, rasgo de ruído e um eco agudo invertido
+        tone('sawtooth', 40, 25, 0, 2.6, 0.7);
+        tone('sine', 2400, 60, 0.1, 1.8, 0.3);
+        tone('square', 120, 3000, 1.2, 0.5, 0.15);
+        const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 1.2), ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+        const n = ac.createBufferSource(), bp = ac.createBiquadFilter(), ng = ac.createGain();
+        n.buffer = buf; bp.type = 'bandpass'; bp.frequency.value = 900; ng.gain.value = 0.5;
+        n.connect(bp); bp.connect(ng); ng.connect(out);
+        n.start(now + 0.4);
       } else { // bipes de robô animado
         [523, 659, 784, 1047, 880, 1319, 1568].forEach((f, i) => tone('square', f, f * 1.03, i * 0.085, 0.075, 0.3));
         tone('sine', 260, 920, 0.7, 0.22, 0.5);
@@ -4124,7 +4189,7 @@ const FIREBASE_CONFIG = {
       h('div', 'unlock__card',
         h('p', 'unlock__kicker', first ? 'Tema desbloqueado' : 'Tema equipado'),
         h('p', 'unlock__name', t.name),
-        h('p', 'unlock__sub', id === 'ether' ? 'Elemento 115 absorvido. A energia Ether toma conta do Vortex.' : 'CL4P-TP online! Pronto para servir, caçador.')));
+        h('p', 'unlock__sub', t.unlock || '')));
     ov.setAttribute('role', 'status');
     document.body.append(ov);
     setTimeout(() => applyTheme(id), 900);
@@ -4148,6 +4213,63 @@ const FIREBASE_CONFIG = {
       } else card.append(h('span', 'theme-card__lock', '🔒'));
       return card;
     }));
+  }
+
+  // God e Nyan Cat: conquistas conferidas a cada desenho da ficha (e ao mudar o sexo)
+  function checkSecretThemes(mm) {
+    if (!sheetChar || !sheetChar.sheet || document.querySelector('.unlock')) return;
+    const s = sheetChar.sheet;
+    const has = (id) => themeState.unlocked.indexOf(id) >= 0;
+    if (!has('nyan') && isNeko(s.specimen) && String(s.sex || '').trim() === MYAU) { unlockTheme('nyan'); return; }
+    if (!has('god') && s.setup) {
+      const m = mm || compute(sheetChar);
+      const all = ATTRS.every((at) => SKILLS[at.id].every((sk) => num(s.skills[sk[0]]) >= 3));
+      if (all && m.skillUsed <= m.skillBudget) unlockTheme('god'); // +3 em tudo, sem ponto de perícia além do que as regras dão
+    }
+  }
+
+  // Vórtex ∞: a tela "hackeada" que abre pela busca do repositório; o interruptor liga e desliga o tema
+  let vxDlg = null;
+  function openVortexHack() {
+    if (!vxDlg) {
+      vxDlg = h('dialog', 'vxhack');
+      vxDlg.setAttribute('aria-labelledby', 'vx-title');
+      document.body.append(vxDlg);
+    }
+    const on = themeState.active === 'vortice';
+    const LINES = [
+      '> conectando a github.com/joti-nha/Vortex_aplication ...',
+      '> acesso: NEGADO',
+      '> acesso: ... concedido?',
+      '> abrindo horizonte_de_eventos.log',
+      'Uma arma antiplanetas, energizada com Ether, foi disparada contra um sol.',
+      'O sol não morreu. Virou o vórtex: buraco negro, buraco branco e matéria estranha, tudo ao mesmo tempo.',
+      'Do horizonte de eventos, qualquer coisa pode sair. Cores, formas, blocos inteiros.',
+      '> aviso: ativar desestabiliza a interface. Os dados ficam intactos.'
+    ];
+    const sw = h('button', 'vxhack__switch', h('span', 'vxhack__knob'), h('span', 'vxhack__state', on ? 'VÓRTEX ATIVO' : 'ATIVAR VÓRTEX'));
+    sw.type = 'button';
+    sw.dataset.fid = 'vx-switch';
+    sw.setAttribute('role', 'switch');
+    sw.setAttribute('aria-checked', String(on));
+    sw.addEventListener('click', () => {
+      if (themeState.active === 'vortice') { applyTheme(''); toast('O vórtex se fechou. Tema Vortex de volta.'); openVortexHack(); return; }
+      closeDialog(vxDlg);
+      unlockTheme('vortice');
+    });
+    const close = h('button', 'vxhack__close', 'sair');
+    close.type = 'button';
+    close.dataset.fid = 'vx-close';
+    close.addEventListener('click', () => closeDialog(vxDlg));
+    vxDlg.replaceChildren(h('div', 'vxhack__screen',
+      h('div', 'vxhack__hole', h('span'), h('span'), h('span')),
+      h('div', 'vxhack__term',
+        h('p', 'vxhack__top', h('span', '', 'root@vortex:~'), close),
+        h('h2', 'vxhack__title', 'HORIZONTE DE EVENTOS'),
+        ...LINES.map((t, i) => { const p = h('p', 'vxhack__line' + (t.charAt(0) === '>' ? ' is-cmd' : ''), t); p.style.animationDelay = (0.25 + i * 0.32) + 's'; return p; }),
+        sw)));
+    $('.vxhack__title', vxDlg).id = 'vx-title';
+    if (!vxDlg.open) openDialog(vxDlg);
   }
 
   /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
@@ -5358,6 +5480,7 @@ const FIREBASE_CONFIG = {
     renderInventory(m);
     renderAlerts(m);
     renderVitals(m);
+    checkSecretThemes(m);
     // avisa quando a carga passa do limite (colocar ou tirar itens nunca é bloqueado)
     if (watch.id === sheetChar.id && m.over && !watch.over) toast('Carga ' + fmtNum(m.cargaUsed) + ' / ' + fmtNum(m.cargaMax) + '. ' + OVERLOAD_TEXT);
     watch.over = m.over;
@@ -7156,7 +7279,7 @@ const FIREBASE_CONFIG = {
     if (!isEtheriano(ch.sheet.specimen)) { toast('Características raciais de outros espécimes são exclusivas do Etheriano.'); return; }
     if (!racialDlg) { racialDlg = h('dialog', 'dialog pickchar racial'); racialDlg.setAttribute('aria-labelledby', 'racial-title'); document.body.append(racialDlg); }
     const dlg = racialDlg;
-    let list = BUILTINS.filter((e) => e.kind === 'especime');
+    let list = BUILTINS.filter((e) => e.kind === 'especime' && !e.secreto);
     try { list = await libSearch(['especime'], ''); } catch (err) { /* fica o catálogo oficial */ }
     const mine = ch.sheet.specimen;
     list = list.filter((e) => racialLines(e.values).length && !isEtheriano(e) && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
@@ -7563,7 +7686,10 @@ const FIREBASE_CONFIG = {
   });
   /* Caixa de sexo: um botãozinho com opções prontas; a caixa continua aceitando qualquer texto. */
   const SEX_OPTS = ['Masculino', 'Feminino', 'Não-binário', 'Agênero', 'Gênero fluido', 'Intersexo'];
-  function sexPicker(inp) {
+  // Myauuu: sexo exclusivo da Neko, com a bandeira rosinha (aparece no menu só quando a espécime é Neko)
+  const MYAU = 'Myauuu';
+  const myauFlag = () => { const f = h('span', 'flag-myau'); f.setAttribute('aria-hidden', 'true'); return f; };
+  function sexPicker(inp, nekoNow) {
     const btn = h('button', 'btn btn--ghost btn--sm pick-btn', 'Opções');
     btn.type = 'button';
     btn.setAttribute('aria-haspopup', 'true');
@@ -7578,8 +7704,8 @@ const FIREBASE_CONFIG = {
       if (v) btn.focus(); else inp.focus();
     };
     const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
-    SEX_OPTS.concat(['Outro']).forEach((o) => {
-      const c = h('button', 'chip chip--toggle' + (o === 'Outro' ? ' pick-menu__other' : ''), o);
+    SEX_OPTS.concat([MYAU, 'Outro']).forEach((o) => {
+      const c = h('button', 'chip chip--toggle' + (o === 'Outro' ? ' pick-menu__other' : o === MYAU ? ' chip--myau' : ''), o === MYAU ? myauFlag() : null, o);
       c.type = 'button';
       c.dataset.fid = 'sex-' + nameKey(o).replace(/\s+/g, '-');
       c.addEventListener('click', () => set(o === 'Outro' ? '' : o));
@@ -7590,19 +7716,24 @@ const FIREBASE_CONFIG = {
       menu.hidden = !open;
       btn.setAttribute('aria-expanded', String(open));
       $$('.chip', menu).forEach((c) => c.classList.toggle('is-on', c.textContent === inp.value));
+      const my = $('.chip--myau', menu);
+      if (my) my.hidden = !(nekoNow && nekoNow());
     });
     menu.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); btn.focus(); } });
     document.addEventListener('click', (ev) => { if (!menu.hidden && !wrap.contains(ev.target)) close(); });
     const wrap = h('div', 'pick-wrap');
     inp.replaceWith(wrap);
     wrap.append(h('div', 'pick-wrap__row', inp, btn), menu);
+    const flag = () => wrap.classList.toggle('is-myau', inp.value.trim() === MYAU);
+    inp.addEventListener('input', flag);
+    inp.syncFlag = flag;
     inp.placeholder = inp.placeholder || 'Escreva ou escolha';
     return wrap;
   }
-  sexPicker(fSex);
+  sexPicker(fSex, () => Boolean(sheetChar && isNeko(sheetChar.sheet.specimen)));
 
   [['height', fHeight], ['weight', $('#f-weight')], ['sex', fSex], ['lore', $('#f-lore')]].forEach((pair) => {
-    pair[1].addEventListener('input', () => { sheetChar.sheet[pair[0]] = pair[1].value; touchSheet(); });
+    pair[1].addEventListener('input', () => { sheetChar.sheet[pair[0]] = pair[1].value; touchSheet(); if (pair[0] === 'sex') checkSecretThemes(); });
   });
 
   // Imagem
@@ -8153,7 +8284,7 @@ const FIREBASE_CONFIG = {
     }
 
     if (wz.step === STEP.especime) {
-      const species = BUILTINS.filter((e) => e.kind === 'especime');
+      const species = BUILTINS.filter((e) => e.kind === 'especime' && secretOk(e, wz.q));
       if (wz.specimen && !species.some((e) => e.id === wz.specimen.id)) species.push(wz.specimen);
       const grid = h('div', 'pick-grid', ...rankSearch(species, wz.q, (e) => wzFields([e.name, racialLines(e.values).map((t) => t.name).join(' '), e.values.descricao, e.values.tracos])).map((e) => pickCard(e.name, [specimenLine(e), e.values.descricao],
         Boolean(wz.specimen && wz.specimen.id === e.id), () => { wz.specimen = slotSnap(e); wz.specimen.thumb = e.thumb || ''; renderSetup(); })));
@@ -8185,7 +8316,8 @@ const FIREBASE_CONFIG = {
           setupField('wz-age', 'Idade', wz.age, 'Ex.: 27 anos', (v) => { wz.age = v; }, 20),
           setupField('wz-height', 'Altura', wz.height, 'Ex.: 1,78 m', (v) => { wz.height = v; }, 20),
           setupField('wz-sex', 'Sexo', wz.sex, '', (v) => { wz.sex = v; }, 20)));
-      sexPicker($('#wz-sex', body));
+      sexPicker($('#wz-sex', body), () => Boolean(wz && isNeko(wz.specimen)));
+      if ($('#wz-sex', body).syncFlag) $('#wz-sex', body).syncFlag();
     }
 
     if (wz.step === STEP.equip) renderGear(body);
@@ -8417,6 +8549,7 @@ const FIREBASE_CONFIG = {
     fHeight.value = c.sheet.height || '';
     $('#f-weight').value = c.sheet.weight || '';
     fSex.value = c.sheet.sex || '';
+    if (fSex.syncFlag) fSex.syncFlag();
     $('#f-lore').value = c.sheet.lore || '';
   }
   $('#origin-list').replaceChildren(...ORIGINS.map((o) => { const op = h('option'); op.value = o.name; return op; }));
