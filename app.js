@@ -3956,10 +3956,10 @@ const FIREBASE_CONFIG = {
     vxMusic(id === 'vortice');
   }
   /* Nyan Cat: de tempos em tempos o gato atravessa o fundo vindo de uma direção sorteada, com o rastro de
-     arco-íris em degraus atrás dele. O gato é um GIF em pixel guardado no site (img/nyan-cat.gif); se não carregar, entra um gato em
+     arco-íris em degraus atrás dele. O gato é o GIF oficial (do nyan.cat); se não carregar, entra um gato em
      pixel desenhado aqui. A música (audio/nyan-cat.mp3) toca em loop a partir do primeiro toque, respeita o
      botão de som e o botão ♪ do canto pausa só ela. */
-  var NYAN_GIF = 'img/nyan-cat.gif'; // desenhado aqui e guardado no site: não depende de outro servidor
+  var NYAN_GIF = 'https://www.nyan.cat/cats/original.gif';
   var NYAN_MP3 = 'audio/nyan-cat.mp3';
   var nyanOn = false, nyanMuted = false, nyanAudio = null, nyanTimer = null, nyanGifOk = null;
   const NYAN_PIXEL = (() => { // gato em pixel (34×21) para quando o GIF não carrega
