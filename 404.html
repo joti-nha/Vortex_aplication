@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vortex</title>
+  <script>
+    // O GitHub Pages mostra esta página para endereços que não existem.
+    // /Vortex_aplication/Todotodosvocêeuninguemsaovortex volta para o app com a frase no ?, e o app abre a tela do Vórtex ∞.
+    (function () {
+      var parts = location.pathname.split('/');
+      var last = parts.pop() || parts.pop() || '';
+      var key = '';
+      try { key = decodeURIComponent(last); } catch (e) { key = last; }
+      key = key.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+      var base = parts.join('/') + '/';
+      if (key.indexOf('todotodosvoceeuninguemsaovortex') >= 0) location.replace(base + '?' + last + location.hash);
+      else location.replace(base + location.hash);
+    })();
+  </script>
+</head>
+<body style="background:#0b0d12;color:#cfd6e4;font-family:system-ui,sans-serif">
+  <p style="padding:16px"><a href="./" style="color:#8fb3ff">Voltar ao Vortex</a></p>
+</body>
+</html>

@@ -554,6 +554,12 @@ window.VORTEX_ITEMS = {
       values: { descricao: 'Cria do Éter.',
         racial: 'Cria do Éter | Quando é afetado por energia Ether pura, recupera recursos iguais ao tamanho do Ether (10 de Resistência e PE para pequena, 25 para média, 50 para grande); o excesso conta como recurso bônus até o próximo descanso. Pode tornar um Éter instável e forçar sua absorção. | 1\nDom do Éter | 2 Up points extras iniciais, que também podem comprar características raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais). Só o Etheriano faz isso. | 1 | up: 2' }
     },
+    // espécime secreto: só aparece quando alguém pesquisa "neko" (secreto: true esconde nas listas)
+    {
+      id: 'of-esp-neko', kind: 'especime', name: 'Neko', secreto: true,
+      values: { descricao: 'Humanoide felino de orelhas atentas e cauda nervosa. Ninguém sabe de onde veio; dizem que caiu do vórtex de pé. Só uma Neko pode ter o sexo Myauuu.',
+        racial: 'Cair de pé | Sempre cai de pé: ignora dano de queda de até 9 m e não fica caído ao ser derrubado por queda. | 1\nSete vidas | Uma vez por descanso longo, ao chegar a 0 de Resistência, fica com 1 no lugar. Só funciona 7 vezes por campanha. | 1\nRonronar | +2 em Diplomacia ao ronronar para alguém; −2 em Vontade contra luzes que se mexem (lasers, miras, reflexos). | 1' }
+    },
 
     // Builds (recomendações da distribuição inicial)
     { id: 'of-build-atirador', kind: 'build', name: 'Atirador', values: { papel: 'Dano à distância', descricao: 'Precisão alta para fuzis e rifles; age cedo e reage rápido.', corpo: '0', precisao: '3', essencia: '0', pericia2a: 'Mira', pericia2b: 'Reflexos', pericia1: 'Iniciativa', profs: 'Fuzil, Rifle de precisão, Pistola, Armadura leve' } },
