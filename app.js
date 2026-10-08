@@ -3500,7 +3500,7 @@ const FIREBASE_CONFIG = {
     const check = () => {
       const r = parseScript(ta.value);
       state.classList.toggle('script__state--bad', r.bad.length > 0);
-      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.desloc ? signed(r.desloc) + ' m de deslocamento' : '', r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
+      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.desloc ? signed(r.desloc) + ' m de deslocamento' : '', Object.keys(r.skills).map((k) => '+' + r.skills[k] + ' em ' + skillLabel(k)).join(', '), r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
     };
     ta.addEventListener('input', () => { onChange(ta.value); check(); });
     check();
@@ -5367,6 +5367,20 @@ const FIREBASE_CONFIG = {
   // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
   // atributo efetivo: o da ficha + o +1 dos UP (a cada 4) + o ajuste manual
   const attrOf = (s, id) => num(s.attrs[id]) + num((s.upAttr || {})[id]) + num((s.attrMod || {})[id]);
+  /* perícias dadas pela espécime (script "pericia:"): somam por fora dos pontos da ficha, até o limite da perícia;
+     o que passar do limite vira ponto livre para investir em outra perícia */
+  function skillGrant(s) {
+    const give = sheetMech(s).skills || {};
+    const grant = {};
+    let over = 0;
+    Object.keys(give).forEach((k) => {
+      const g = Math.min(give[k], Math.max(0, skillCap(s, k) - num(s.skills[k])));
+      if (g > 0) grant[k] = g;
+      over += give[k] - g;
+    });
+    return { grant, over };
+  }
+  const skillOf = (s, id) => num(s.skills[id]) + (skillGrant(s).grant[id] || 0);
   const attrUpUsed = (s) => ['corpo', 'precisao', 'essencia'].reduce((t, k) => t + Math.max(0, Math.round(num((s.upAttr || {})[k]))), 0);
   function normSheet(raw) {
     const r = raw && typeof raw === 'object' ? raw : {};
@@ -5473,10 +5487,11 @@ const FIREBASE_CONFIG = {
     ['humanidade', 'testes contra efeitos de PE com CD; metade da Blindagem/Escudo regenera como PV'],
     ['eletronico', 'ser eletrônico: efeitos de PE atordoam'],
     ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)'],
-    ['deslocamento: 3', 'metros a mais de deslocamento (o padrão é 9 m)']
+    ['deslocamento: 3', 'metros a mais de deslocamento (o padrão é 9 m)'],
+    ['pericia: Reflexos +1', 'perícia de graça; se passar do limite, vira um ponto livre para outra perícia']
   ];
   function parseScript(txt) {
-    const out = { vida: '', up: 0, nucleo: 0, desloc: 0, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
+    const out = { vida: '', up: 0, nucleo: 0, desloc: 0, skills: {}, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
     String(txt || '').split(/[\n;]/).forEach((raw) => {
       const line = raw.replace(/\/\/.*$|#.*$/, '').trim();
       if (!line) return;
@@ -5488,6 +5503,12 @@ const FIREBASE_CONFIG = {
       if (key === 'vida' || key === 'vidabase') {
         const v = (ITEM_DATA.vidaBase || ['PV', 'Blindagem', 'Escudo']).find((x) => nameKey(x) === nameKey(val));
         if (v) out.vida = v; else out.bad.push(raw.trim());
+        return;
+      }
+      if (key === 'pericia' || key === 'pericias') { // "pericia: Reflexos +1, Sentidos"
+        const parts = val.split(',').map((x) => /^(.+?)\s*(?:\+\s*(\d+))?$/.exec(x.trim())).filter(Boolean);
+        if (!parts.length) { out.bad.push(raw.trim()); return; }
+        parts.forEach((p) => { const id = skillIdOf(p[1]); if (!id) { out.bad.push(raw.trim()); return; } out.skills[id] = (out.skills[id] || 0) + Number(p[2] || 1); });
         return;
       }
       const n = Number(val.replace(',', '.'));
@@ -5525,17 +5546,18 @@ const FIREBASE_CONFIG = {
     return out;
   }
   function mergeMech(list) {
-    const m = { vida: 'PV', up: 0, nucleo: 0, desloc: 0, acopla: false, humanidade: false, eletronico: false };
+    const m = { vida: 'PV', up: 0, nucleo: 0, desloc: 0, skills: {}, acopla: false, humanidade: false, eletronico: false };
     list.forEach((x) => {
       if (x.vida) m.vida = x.vida;
       m.up += x.up;
       m.nucleo = Math.max(m.nucleo, x.nucleo);
       m.desloc += x.desloc || 0;
+      Object.keys(x.skills || {}).forEach((k) => { m.skills[k] = (m.skills[k] || 0) + x.skills[k]; });
       ['acopla', 'humanidade', 'eletronico'].forEach((k) => { if (x[k]) m[k] = true; });
     });
     return m;
   }
-  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.desloc ? signed(m.desloc) + ' m de deslocamento' : '', m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
+  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.desloc ? signed(m.desloc) + ' m de deslocamento' : '', Object.keys(m.skills).map((k) => '+' + m.skills[k] + ' em ' + skillLabel(k)).join(', '), m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
 
   /* Poderes com escolha: Doutor (uma perícia) e Proficiência em arma ou armadura (um tipo).
      Cada compra é um poder na lista, com a escolha guardada em choice. */
@@ -5639,7 +5661,8 @@ const FIREBASE_CONFIG = {
       // +1 num atributo a cada 4 UP: vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
       attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length, // Doutor e proficiências: +1 de perícia cada
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over, // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
+      skillGrant: skillGrant(s).grant,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
   }
@@ -6778,13 +6801,15 @@ const FIREBASE_CONFIG = {
       const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(attrOf(s, at.id)))));
       SKILLS[at.id].forEach((sk) => {
         const v = num(s.skills[sk[0]]);
+        const gift = (m.skillGrant || {})[sk[0]] || 0; // de graça, da espécime
         const pen = PENALTY_SKILLS.indexOf(sk[0]) >= 0 ? m.pen : 0;
-        const total = h('span', 'skill__total', signed(attrOf(s, at.id) + v - pen));
-        total.title = 'Atributo ' + signed(attrOf(s, at.id)) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
+        const total = h('span', 'skill__total', signed(attrOf(s, at.id) + v + gift - pen));
+        total.title = 'Atributo ' + signed(attrOf(s, at.id)) + ', perícia +' + (v + gift) + (gift ? ' (+' + gift + ' da espécime)' : '') + (pen ? ', armadura –' + pen : '');
         const row = h('div', 'skill',
-          h('span', 'skill__name', sk[1], pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
+          h('span', 'skill__name', sk[1], gift ? h('span', 'skill__gift', ' +' + gift + ' espécime') : null, pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
           total,
-          stepper(v, { min: 0, max: Math.max(v, skillCap(s, sk[0])), label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
+          // subir até o limite tira o ponto da espécime desta perícia e devolve como ponto livre
+          stepper(v, { min: 0, max: Math.max(v, skillCap(s, sk[0])), label: sk[1], fid: 'sk-' + sk[0], text: '+' + (v + gift), onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
         if (skillCap(s, sk[0]) > 3) row.querySelector('.skill__name').append(h('span', 'skill__doc', ' Doutor'));
         group.append(row);
         if (sk[0] === 'oficio') {
@@ -8400,7 +8425,7 @@ const FIREBASE_CONFIG = {
     const attr = SKILL_ATTR[sk];
     const name = sk === 'oficio' && s.oficio ? 'Ofício (' + String(s.oficio).slice(0, 30) + ')' : SKILL_LABEL[sk];
     const pen = PENALTY_SKILLS.indexOf(sk) >= 0 ? m.pen : 0;
-    return { label: name, attrName: ATTR_LABEL[attr], attr: attrOf(s, attr), skillName: name, skill: num(s.skills[sk]), mods: pen ? [['armadura', -pen]] : [] };
+    return { label: name, attrName: ATTR_LABEL[attr], attr: attrOf(s, attr), skillName: name, skill: skillOf(s, sk), mods: pen ? [['armadura', -pen]] : [] };
   }
 
   // formas de atacar com um item (ou desarmado), conforme as regras de Ataque e de cada tipo de arma
@@ -8487,7 +8512,7 @@ const FIREBASE_CONFIG = {
     return {
       label: ('Ataque: ' + name + (n > 1 ? ' · dano ×' + n : '')).slice(0, 60),
       attrName: ATTR_LABEL[mode.attr], attr: attrOf(s, mode.attr),
-      skillName: SKILL_LABEL[mode.skill], skill: num(s.skills[mode.skill]), mods
+      skillName: SKILL_LABEL[mode.skill], skill: skillOf(s, mode.skill), mods
     };
   }
   const weaponsOf = (s) => s.inventory.filter((i) => isWeapon(i.kind))
@@ -9529,7 +9554,7 @@ const FIREBASE_CONFIG = {
     const s = normSheet(c.sheet);
     const m = compute({ sheet: s });
     const skills = [];
-    ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (num(s.skills[sk[0]])) skills.push(sk[1] + (sk[0] === 'oficio' && s.oficio ? ' (' + s.oficio + ')' : '') + ' +' + num(s.skills[sk[0]])); }));
+    ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (skillOf(s, sk[0])) skills.push(sk[1] + (sk[0] === 'oficio' && s.oficio ? ' (' + s.oficio + ')' : '') + ' +' + skillOf(s, sk[0])); }));
     const life = LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + getCur(s, l[0], m.max[l[0]]) + '/' + m.max[l[0]]);
     const inv = s.inventory.map((i) => {
       const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);

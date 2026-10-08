@@ -1081,6 +1081,7 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 .skill { display: grid; grid-template-columns: minmax(0, 1fr) 2.6rem auto; align-items: center; gap: 0.6rem; padding: 0.25rem 0; border-top: 1px solid var(--linha); }
 .skill__name { font-weight: 600; }
 .skill__pen { font-size: 0.78rem; font-weight: 500; color: var(--erro); }
+.skill__gift { font-size: 0.78rem; font-weight: 700; color: #7fe0a0; }
 .skill__total { text-align: center; font: 800 1.2rem/1 var(--fonte-titulo); font-variant-numeric: lining-nums tabular-nums; color: var(--c); }
 .skill .stepper__btn { width: 2rem; height: 2rem; font-size: 1rem; }
 .skill__job { margin: 0.35rem 0 0.25rem; min-height: 40px; }
