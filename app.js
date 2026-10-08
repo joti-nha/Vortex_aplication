@@ -5669,6 +5669,7 @@ const FIREBASE_CONFIG = {
       if (kind === 'melhoria') return { type: 'melhoria', name: arg, text: t };
       if (kind === 'doutor') return { type: 'doutor', id: skillIdOf(arg), text: t };
       if (kind === 'proficiencia') return { type: 'prof', id: profByLabel(arg), text: t };
+      if (kind === 'atributo') { const at = ATTRS.find((x) => nameKey(x.label) === nameKey(arg.replace(/\s*\+?\s*1\s*$/, ''))); return { type: 'atributo', id: at ? at.id : '', text: t }; }
       if (kind === 'pericias' || kind === 'pericia') {
         const list = arg.split(',').map((x) => /^(.+?)\s*\+?(\d)?$/.exec(x.trim())).filter(Boolean).map((p) => [skillIdOf(p[1]), Number(p[2] || 1)]).filter((x) => x[0]);
         return { type: 'pericias', list, text: t };
@@ -5721,6 +5722,14 @@ const FIREBASE_CONFIG = {
       s.powers.push(choicePower(e, a.id));
       return true;
     }
+    if (a.type === 'atributo') { // o +1 a cada 4 UP: só entra se a ficha já tiver direito a ele
+      if (!a.id) return false;
+      const m = compute({ sheet: s });
+      if (attrUpUsed(s) >= m.attrAllowed) return false;
+      s.upAttr = Object.assign({ corpo: 0, precisao: 0, essencia: 0 }, s.upAttr);
+      s.upAttr[a.id] = num(s.upAttr[a.id]) + 1;
+      return true;
+    }
     if (a.type === 'pericias') {
       s.up.per += 1;
       a.list.forEach((x) => { s.skills[x[0]] = Math.min(skillCap(s, x[0]), num(s.skills[x[0]]) + x[1]); });
@@ -5728,10 +5737,19 @@ const FIREBASE_CONFIG = {
     }
     return false;
   }
-  function applyGuidePage(s, pg) { // devolve o texto do que entrou
+  function applyGuidePage(s, pg, auto) { // devolve o texto do que entrou
     const g = s.guide;
     const ok = [], miss = [];
-    pg.acts.forEach((a) => { if (a.type === 'nota') return; if (applyGuideAction(s, a)) ok.push(a.text); else miss.push(a.text); });
+    g.attrDone = Array.isArray(g.attrDone) ? g.attrDone : [];
+    pg.acts.forEach((a) => {
+      if (a.type === 'nota') return;
+      if (a.type === 'atributo') { // na atualização automática o atributo espera a ficha ter direito (fila em guideSync)
+        if (auto || g.attrDone.indexOf(pg.n) >= 0) return;
+        if (applyGuideAction(s, a)) { g.attrDone.push(pg.n); ok.push(a.text); } else miss.push(a.text);
+        return;
+      }
+      if (applyGuideAction(s, a)) ok.push(a.text); else miss.push(a.text);
+    });
     if (g.done.indexOf(pg.n) < 0) g.done.push(pg.n);
     g.miss = Object.assign({}, g.miss);
     if (miss.length) g.miss[pg.n] = miss; else delete g.miss[pg.n];
@@ -5746,9 +5764,20 @@ const FIREBASE_CONFIG = {
     let m = compute({ sheet: s });
     guidePages(g).forEach((pg) => {
       if (pg.n > m.upTotal || g.done.indexOf(pg.n) >= 0) return;
-      const ok = applyGuidePage(s, pg);
+      const ok = applyGuidePage(s, pg, true);
       if (ok.length) out.push('UP ' + pg.n + ': ' + ok.join(', '));
     });
+    // +1 de atributo das folhas: entra na ordem das folhas, assim que a ficha tiver direito (a cada 4 UP de XP)
+    g.attrDone = Array.isArray(g.attrDone) ? g.attrDone : [];
+    const atts = [];
+    guidePages(g).forEach((pg) => { if (pg.n <= m.upTotal && g.attrDone.indexOf(pg.n) < 0) pg.acts.forEach((x) => { if (x.type === 'atributo' && x.id) atts.push([pg.n, x]); }); });
+    const gotA = [];
+    for (const [n, x] of atts) {
+      if (!applyGuideAction(s, x)) break;
+      g.attrDone.push(n);
+      gotA.push((ATTRS.find((at) => at.id === x.id) || {}).label + ' +1');
+    }
+    if (gotA.length) out.push('atributo ' + gotA.join(', '));
     m = compute({ sheet: s });
     const ben = guideList(g.beneficios).map((x) => (/pv/i.test(x) ? 'pv' : /pe/i.test(x) ? 'pe' : /pa/i.test(x) ? 'pa' : '')).filter(Boolean);
     let picks = m.picksAllowed - m.picksUsed;
@@ -5782,13 +5811,14 @@ const FIREBASE_CONFIG = {
   /* ---------- Roteiro da build (modo avançado) ----------
      A build tem o nível 0 (a distribuição inicial) e, se quiser, um roteiro: escolha quantos UP e quanto
      dinheiro, e o roteiro vira um livrinho com uma folha por UP. Cada folha mostra o que aquele UP dá
-     (1 UP para gastar, +1 ponto de perícia nos ímpares, 2 benefícios nos pares) e guarda a escolha.
+     (1 UP para gastar, +1 ponto de perícia nos ímpares, 2 benefícios nos pares, +1 de atributo a cada 4) e guarda a escolha.
      O roteiro fica em values.roteiro (JSON) e também é escrito no texto das folhas, que a ficha já sabe aplicar. */
   const RT_KINDS = [['poder', 'Poder'], ['melhoria', 'Melhoria'], ['prof', 'Proficiência'], ['pericias', 'Perícias'], ['guardar', 'Guardar']];
   const RT_BEN = [['pv', '+5 PV'], ['pe', '+5 PE'], ['pa', '+1 PA']];
   const RT_MAX_UP = 30;
   const rtSkills = () => { const out = []; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => out.push([sk[0], sk[1]]))); return out; };
-  const rtPage = () => ({ gasto: null, ben: ['', ''], per: '', nota: '' });
+  const rtPage = () => ({ gasto: null, ben: ['', ''], per: '', attr: '', nota: '' });
+  const rtAttrPage = (n) => n % 4 === 0; // a cada 4 UP: +1 num atributo
   const rtNew = (up, money) => ({ v: 1, up, dinheiro: money, itens: [], pages: Array.from({ length: up }, rtPage) });
   function rtRead(values) { // JSON salvo, ou o texto antigo das folhas convertido
     const v = values || {};
@@ -5810,6 +5840,7 @@ const FIREBASE_CONFIG = {
       if (!p) return;
       const notes = [];
       pg.acts.forEach((a) => {
+        if (a.type === 'atributo') { if (a.id) p.attr = a.id; return; }
         if (p.gasto) { notes.push(a.text); return; }
         if (a.type === 'poder') { const e = findPower(a.name); if (e) p.gasto = { t: 'poder', id: e.id, name: e.name, opt: a.opt || '' }; else notes.push(a.text); }
         else if (a.type === 'melhoria') { const e = guidePowers().find((x) => powerUps(x).some((u) => nameKey(u.name) === nameKey(a.name))); if (e) p.gasto = { t: 'melhoria', id: e.id, name: a.name }; else notes.push(a.text); }
@@ -5817,6 +5848,7 @@ const FIREBASE_CONFIG = {
         else if (a.type === 'prof' && a.id) p.gasto = { t: 'prof', prof: a.id };
         else if (a.type === 'pericias' && a.list.length) { const list = {}; a.list.forEach((x) => { list[x[0]] = (list[x[0]] || 0) + x[1]; }); p.gasto = { t: 'pericias', list }; }
         else if (a.type === 'nota' && /guard/i.test(a.text)) p.gasto = { t: 'guardar' };
+        else if (a.type === 'atributo' && a.id) p.attr = a.id;
         else notes.push(a.text);
       });
       p.nota = notes.join('; ');
@@ -5863,13 +5895,14 @@ const FIREBASE_CONFIG = {
     if (rtItemsTotal(r) > r.dinheiro) out.push('Os itens passam do dinheiro em ' + fmtCronos(rtItemsTotal(r) - r.dinheiro) + ' Cronos.');
     return out;
   }
-  const rtFilled = (p, n) => Boolean(rtText(p.gasto)) && (n % 2 ? Boolean(p.per) : p.ben.every(Boolean));
+  const rtFilled = (p, n) => Boolean(rtText(p.gasto)) && (n % 2 ? Boolean(p.per) : p.ben.every(Boolean)) && (!rtAttrPage(n) || Boolean(p.attr));
+  const attrLabel = (id) => { const x = ATTRS.find((at) => at.id === id); return x ? x.label : id; };
   // grava o roteiro nos campos que a ficha e a distribuição inicial já leem
   function rtWrite(values, r) {
     if (!r) { values.roteiro = ''; values.folhas = ''; values.beneficios = ''; values.periciasUp = ''; values.itens = ''; values.dinheiro = ''; values.tipo = 'Entrada'; return; }
     values.roteiro = JSON.stringify(Object.assign({}, r, { setup: undefined }));
     values.folhas = r.pages.map((p, i) => {
-      const parts = [rtText(p.gasto), p.nota.trim()].filter(Boolean);
+      const parts = [rtText(p.gasto), rtAttrPage(i + 1) && p.attr ? 'Atributo: ' + attrLabel(p.attr) + ' +1' : '', p.nota.trim()].filter(Boolean);
       return parts.length ? (i + 1) + ' | ' + parts.join('; ') : '';
     }).filter(Boolean).join('\n');
     values.beneficios = r.pages.filter((p, i) => (i + 1) % 2 === 0).map((p) => p.ben).flat().filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', ');
@@ -5886,7 +5919,8 @@ const FIREBASE_CONFIG = {
     if (r.itens.length) rows.push(['Itens', r.itens.map((x) => x.name).join(', ')]);
     const lines = r.pages.map((p, i) => {
       const n = i + 1;
-      const parts = [rtText(p.gasto), n % 2 ? (p.per ? 'ponto em ' + skillLabel(p.per) : '') : p.ben.filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', '), p.nota].filter(Boolean);
+      const parts = [rtText(p.gasto), n % 2 ? (p.per ? 'ponto em ' + skillLabel(p.per) : '') : p.ben.filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', '),
+        rtAttrPage(n) && p.attr ? attrLabel(p.attr) + ' +1' : '', p.nota].filter(Boolean);
       return parts.length ? 'UP ' + n + ': ' + parts.join(' · ') : '';
     }).filter(Boolean);
     if (lines.length) rows.push(['Folhas', lines.join('\n')]);
@@ -6072,7 +6106,8 @@ const FIREBASE_CONFIG = {
     }
     const res = h('div', 'rt-res',
       h('span', 'rt-chip rt-chip--up', '1 UP' + (led.have > 1 ? ' (+' + (led.have - 1) + ' guardado' + (led.have > 2 ? 's' : '') + ')' : '')),
-      n % 2 ? h('span', 'rt-chip', '+1 ponto de perícia') : h('span', 'rt-chip', '2 benefícios'));
+      n % 2 ? h('span', 'rt-chip', '+1 ponto de perícia') : h('span', 'rt-chip', '2 benefícios'),
+      rtAttrPage(n) ? h('span', 'rt-chip rt-chip--attr', '+1 atributo') : null);
     const extra = n % 2
       ? h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Ponto de perícia'), rtSelect(rtSkills(), p.per, (v) => { p.per = v; redo(); }, 'Perícia que ganha +1...', 'rt-ponto'))
       : h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Benefícios'), h('div', 'rt-bens', ...[0, 1].map((i) => h('div', 'rt-ben', h('span', 'rt-ben__label', (i + 1) + 'º benefício'), ...RT_BEN.map((b) => {
@@ -6083,6 +6118,18 @@ const FIREBASE_CONFIG = {
         x.addEventListener('click', () => { p.ben[i] = p.ben[i] === b[0] ? '' : b[0]; redo(); });
         return x;
       })))));
+    // a cada 4 UP: +1 num atributo à escolha
+    const attr = rtAttrPage(n) ? h('div', 'rt-sec rt-sec--attr', h('h4', 'rt-sec__title', 'Atributo (+1 a cada 4 UP)'),
+      h('div', 'rt-kinds', ...ATTRS.map((at) => {
+        const on = p.attr === at.id;
+        const x = h('button', 'rt-kind' + (on ? ' is-on' : ''), at.label + ' +1');
+        x.type = 'button';
+        x.title = at.hint;
+        x.dataset.fid = 'rt-attr-' + at.id;
+        x.setAttribute('aria-pressed', String(on));
+        x.addEventListener('click', () => { p.attr = on ? '' : at.id; redo(); });
+        return x;
+      }))) : null;
     const nota = h('input', 'input');
     nota.type = 'text';
     nota.maxLength = 120;
@@ -6090,13 +6137,46 @@ const FIREBASE_CONFIG = {
     nota.value = p.nota;
     nota.dataset.fid = 'rt-nota';
     nota.addEventListener('input', () => { p.nota = nota.value; });
+    // duas colunas no PC: à esquerda o que gastar, à direita o que a folha dá de graça
     return h('article', 'guide__page rt-page' + (rtFilled(p, n) ? ' is-done' : '') + (led.short ? ' is-bad' : ''),
-      h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', String(n))),
-      res,
-      h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Gastar o UP'), kinds, detail,
-        led.short ? h('p', 'field__error', 'Custa ' + led.cost + ' UP e só há ' + led.have + ' aqui. Use "Guardar" em folhas antes.') : null),
-      extra,
+      h('div', 'rt-page__head', h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', String(n))), res),
+      h('div', 'rt-cols',
+        h('div', 'rt-col', h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Gastar o UP'), kinds, detail,
+          led.short ? h('p', 'field__error', 'Custa ' + led.cost + ' UP e só há ' + led.have + ' aqui. Use "Guardar" em folhas antes.') : null)),
+        h('div', 'rt-col', extra, attr)),
       h('div', 'rt-sec', nota));
+  }
+  // resumo do livro inteiro: o que a build ganha somando todas as folhas
+  function rtSummary(r) {
+    const led = rtLedger(r);
+    const ben = { pv: 0, pe: 0, pa: 0 }, attrs = {}, skills = {};
+    const picks = [];
+    r.pages.forEach((p, i) => {
+      const n = i + 1;
+      const t = rtText(p.gasto);
+      if (t && p.gasto.t !== 'guardar') picks.push([n, t]);
+      if (n % 2 === 0) p.ben.forEach((k) => { if (k) ben[k] += 1; });
+      else if (p.per) skills[p.per] = (skills[p.per] || 0) + 1;
+      if (p.gasto && p.gasto.t === 'pericias') Object.keys(p.gasto.list || {}).forEach((k) => { skills[k] = (skills[k] || 0) + num(p.gasto.list[k]); });
+      if (rtAttrPage(n) && p.attr) attrs[p.attr] = (attrs[p.attr] || 0) + 1;
+    });
+    const attrSlots = Math.floor(r.up / 4), attrUsed = Object.keys(attrs).reduce((t, k) => t + attrs[k], 0);
+    const row = (label, value) => h('div', 'rt-sum__row', h('dt', '', label), h('dd', '', value));
+    const benTxt = [ben.pv ? '+' + ben.pv * 5 + ' PV' : '', ben.pe ? '+' + ben.pe * 5 + ' PE' : '', ben.pa ? '+' + ben.pa + ' PA' : ''].filter(Boolean).join(' · ');
+    const left = led.length ? led[led.length - 1].left : 0;
+    return h('aside', 'rt-sum',
+      h('h4', 'rt-sum__title', 'Resumo do roteiro'),
+      h('dl', 'rt-sum__list',
+        row('Atributos', attrSlots ? (ATTRS.filter((at) => attrs[at.id]).map((at) => at.label + ' +' + attrs[at.id]).join(' · ') || '—') + ' (' + attrUsed + ' de ' + attrSlots + ')' : 'a 1ª vem na folha 4'),
+        row('Benefícios', benTxt || '—'),
+        row('Perícias', Object.keys(skills).map((k) => skillLabel(k) + ' +' + skills[k]).join(' · ') || '—'),
+        row('UP guardados no fim', String(left))),
+      picks.length ? h('ol', 'rt-sum__picks', ...picks.map((x) => {
+        const b = h('button', 'rt-sum__pick', h('span', 'rt-sum__n', String(x[0])), h('span', '', x[1]));
+        b.type = 'button';
+        b.addEventListener('click', () => { rt.page = x[0]; renderRoteiro(); });
+        return h('li', '', b);
+      })) : h('p', 'rt-empty rt-sum__empty', 'Nenhum poder ou perícia escolhido ainda.'));
   }
   function renderRoteiro() {
     const r = rt.r, d = rt.d;
@@ -6145,19 +6225,36 @@ const FIREBASE_CONFIG = {
     const marks = h('div', 'guide__marks rt-marks', ...[0].concat(r.pages.map((p, i) => i + 1)).map((n) => {
       const ok = n === 0 ? r.itens.length > 0 : rtFilled(r.pages[n - 1], n);
       const bad = n === 0 ? rtItemsTotal(r) > r.dinheiro : led[n - 1].short;
-      const b = h('button', 'guide__mark' + (ok ? ' is-done' : '') + (bad ? ' is-bad' : '') + (n === rt.page ? ' is-on' : ''), n === 0 ? 'Itens' : String(n));
+      const b = h('button', 'guide__mark' + (ok ? ' is-done' : '') + (bad ? ' is-bad' : '') + (n === rt.page ? ' is-on' : '') + (n && rtAttrPage(n) ? ' is-attr' : ''), n === 0 ? 'Itens' : String(n));
       b.type = 'button';
-      b.setAttribute('aria-label', n === 0 ? 'Folha dos itens' : 'Folha ' + n);
+      b.setAttribute('aria-label', n === 0 ? 'Folha dos itens' : 'Folha ' + n + (rtAttrPage(n) ? ' (+1 atributo)' : ''));
+      if (n && rtAttrPage(n)) b.title = '+1 atributo nesta folha';
       b.addEventListener('click', () => { rt.page = n; renderRoteiro(); });
       return b;
     }));
     const probs = rtProblems(r);
+    const filled = r.pages.filter((p, i) => rtFilled(p, i + 1)).length;
+    // embaixo da folha: anterior e próxima (no celular as setas laterais somem)
+    const step = (dd, label) => {
+      const b = h('button', 'btn btn--ghost btn--sm', label);
+      b.type = 'button';
+      b.disabled = dd < 0 ? rt.page <= 0 : rt.page >= r.up;
+      b.addEventListener('click', () => { rt.page += dd; renderRoteiro(); });
+      return b;
+    };
     body.append(
       h('div', 'rt__bar', h('span', 'rt-chip', plural(r.up, 'UP', 'UP')), h('span', 'rt-chip', fmtCronos(r.dinheiro) + ' Cronos'),
-        h('span', 'rt-chip' + (probs.length ? ' rt-chip--bad' : ' rt-chip--ok'), probs.length ? plural(probs.length, 'aviso', 'avisos') : 'Tudo certo'), settings, clear),
+        h('span', 'rt-chip' + (filled === r.up ? ' rt-chip--ok' : ''), filled + ' de ' + r.up + ' prontas'),
+        h('span', 'rt-chip' + (probs.length ? ' rt-chip--bad' : ' rt-chip--ok'), probs.length ? plural(probs.length, 'aviso', 'avisos') : 'Tudo certo'),
+        h('span', 'rt__bar-acts', settings, clear)),
       marks,
-      h('div', 'guide__book rt-book', turn(-1, '‹'), h('div', 'guide__spread rt-spread', rt.page === 0 ? rtItemsPage() : rtUpPage(rt.page)), turn(1, '›')),
-      h('p', 'field__hint', 'Quem segue esta build recebe cada folha quando ganha o UP dela, até parar a atualização automática na ficha.'));
+      h('div', 'rt-main',
+        h('div', 'rt-main__book',
+          h('div', 'guide__book rt-book', turn(-1, '‹'), h('div', 'guide__spread rt-spread', rt.page === 0 ? rtItemsPage() : rtUpPage(rt.page)), turn(1, '›')),
+          h('div', 'rt-steps', step(-1, '‹ Anterior'), h('span', 'rt-steps__at', rt.page === 0 ? 'Itens' : 'Folha ' + rt.page + ' de ' + r.up), step(1, 'Próxima ›'))),
+        rtSummary(r)),
+      ...(probs.length ? [h('ul', 'rt-probs', ...probs.map((x) => h('li', '', x)))] : []),
+      h('p', 'field__hint', 'Quem segue esta build recebe cada folha quando ganha o UP dela, até parar a atualização automática na ficha. O +1 de atributo entra quando a ficha tiver direito a ele (a cada 4 UP ganhos por XP).'));
     const keep = rt.dlg.querySelector('.rt__sheet');
     const top = keep ? keep.scrollTop : 0;
     rt.dlg.replaceChildren(h('div', 'picker rt__sheet', head, body));
