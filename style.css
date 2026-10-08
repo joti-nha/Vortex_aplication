@@ -3717,3 +3717,10 @@ html, body { max-width: 100%; overflow-x: clip; }
 .nyan-music.is-off { background: #6b5a75; color: #2a2030; animation: none; text-decoration: line-through; }
 @media (min-width: 900px) { .nyan-music { bottom: 16px; right: 16px; } }
 @media (prefers-reduced-motion: reduce) { .nyan-fly, .nyan-music { animation: none !important; } }
+
+/* Vórtex ∞: botão da trilha gerada */
+.vx-music { position: fixed; right: 12px; bottom: 84px; z-index: 60; width: 44px; height: 44px; border: 2px solid #4ff7ff; border-radius: 50%; background: radial-gradient(circle, #000 35%, #24123d 70%, #784fff); color: #ff4fd8; font: 900 1.4rem/1 system-ui, sans-serif; box-shadow: 0 0 12px #ff4fd880, inset 0 0 8px #4ff7ff66; cursor: pointer; animation: vx-music-pulse 2.4s ease-in-out infinite; }
+.vx-music.is-off { border-color: #555; color: #777; box-shadow: none; animation: none; text-decoration: line-through; }
+@keyframes vx-music-pulse { 50% { box-shadow: 0 0 22px #ff4fd8, inset 0 0 12px #4ff7ff; } }
+@media (min-width: 900px) { .vx-music { bottom: 16px; right: 16px; } }
+@media (prefers-reduced-motion: reduce) { .vx-music { animation: none !important; } }

@@ -3953,6 +3953,7 @@ const FIREBASE_CONFIG = {
     saveThemes();
     vortexChaos(id === 'vortice');
     nyanExtras(id === 'nyan');
+    vxMusic(id === 'vortice');
   }
   /* Nyan Cat: de tempos em tempos o gato atravessa o fundo vindo de uma direção sorteada, com o rastro de
      arco-íris em degraus atrás dele. O gato é o GIF oficial (do nyan.cat); se não carregar, entra um gato em
@@ -4327,6 +4328,180 @@ const FIREBASE_CONFIG = {
     vxTimer = setTimeout(tick, 900);
     vxMaybeScare(0.2);
   }
+  /* Trilha do Vórtex ∞, gerada aqui mesmo (Web Audio, sem arquivo nenhum). Segue o relógio do instável
+     (VX_LIMIT = 8 min): começa num zumbido de fita VHS, entram drones graves, chiado, notas que desafinam e
+     batidas cada vez mais rápidas até a explosão. No estável fica para sempre na primeira fase. */
+  var vxMusOn = false, vxMusMuted = false, vxMus = null, vxMusWait = false;
+  function vxMusic(on) {
+    if (on !== undefined) {
+      if (on && !vxMusOn) vxMusMuted = false;
+      vxMusOn = on;
+      let btn = document.querySelector('.vx-music');
+      if (!on && btn) btn.remove();
+      if (on && !btn) {
+        btn = h('button', 'vx-music', '∿');
+        btn.type = 'button';
+        btn.addEventListener('click', () => { vxMusMuted = !vxMusMuted; vxMusic(); });
+        document.body.append(btn);
+      }
+    }
+    if (!sfx) { setTimeout(() => vxMusic(), 0); return; } // ao abrir o site o motor de som ainda não existe
+    const btn = document.querySelector('.vx-music');
+    const soundOn = sfx.on;
+    const want = vxMusOn && !vxMusMuted && soundOn;
+    if (btn) {
+      btn.classList.toggle('is-off', !want);
+      btn.title = want ? 'Pausar a trilha do vórtex' : (soundOn ? 'Tocar a trilha do vórtex' : 'Som do site desligado');
+      btn.setAttribute('aria-label', btn.title);
+      btn.setAttribute('aria-pressed', String(want));
+    }
+    if (!want) { vxMusStop(); return; }
+    // sem nenhum toque ainda o navegador não deixa tocar som: espera o primeiro
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+      if (vxMusWait) return;
+      vxMusWait = true;
+      const once = () => { ['pointerdown', 'keydown'].forEach((e) => document.removeEventListener(e, once, true)); vxMusWait = false; vxMusic(); };
+      ['pointerdown', 'keydown'].forEach((e) => document.addEventListener(e, once, true));
+    } else vxMusStart();
+  }
+  function vxMusStop(cut) {
+    if (!vxMus) return;
+    const m = vxMus;
+    vxMus = null;
+    clearInterval(m.timer);
+    const t = m.ac.currentTime;
+    m.out.gain.cancelScheduledValues(t);
+    m.out.gain.setValueAtTime(m.out.gain.value, t);
+    m.out.gain.linearRampToValueAtTime(0, t + (cut ? 0.04 : 0.6));
+    setTimeout(() => { m.nodes.forEach((n) => { try { n.stop(); } catch (e) { /* já parou */ } }); m.out.disconnect(); }, cut ? 120 : 800);
+  }
+  function vxMusStart() {
+    if (vxMus) return;
+    const ac = sfxCtx();
+    if (!ac) return;
+    const nodes = [];
+    const gain = (v, dest) => { const g = ac.createGain(); g.gain.value = v; if (dest) g.connect(dest); return g; };
+    const osc = (type, f, dest) => { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; if (dest) o.connect(dest); o.start(); nodes.push(o); return o; };
+    const filt = (type, f, q, dest) => { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; if (dest) b.connect(dest); return b; };
+    const out = gain(0);
+    const shaper = ac.createWaveShaper();
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.ratio.value = 5;
+    out.connect(shaper); shaper.connect(comp); comp.connect(ac.destination);
+    // eco de fita, com o tempo do eco oscilando (wow)
+    const echo = ac.createDelay(2); echo.delayTime.value = 0.42;
+    const fb = gain(0.38, echo); echo.connect(fb);
+    const echoF = filt('lowpass', 1800, 0.5, out); echo.connect(echoF);
+    // 1) zumbido VHS: 60 Hz e harmônicos, com wow e flutter
+    const humG = gain(0, out);
+    const humF = filt('lowpass', 380, 1, humG);
+    const h1 = osc('sawtooth', 60, humF), h2 = osc('sine', 120, gain(0.5, humF)), h3 = osc('sine', 180, gain(0.25, humF));
+    const wow = osc('sine', 0.55), wowG = gain(8); wow.connect(wowG);
+    [h1, h2, h3].forEach((o) => wowG.connect(o.detune));
+    // 2) chiado de fita (ruído em loop)
+    const nb = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+    const nd = nb.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const hiss = ac.createBufferSource(); hiss.buffer = nb; hiss.loop = true;
+    const hissG = gain(0, out);
+    hiss.connect(filt('bandpass', 3200, 0.6, hissG)); hiss.start(); nodes.push(hiss);
+    // 3) drones graves que vão desafinando (batimentos) e abrindo o filtro
+    const dG = gain(0, out);
+    const dF = filt('lowpass', 160, 5, dG);
+    const d1 = osc('sawtooth', 55, dF), d2 = osc('sawtooth', 55 * 1.4983, gain(0.6, dF)), d3 = osc('triangle', 27.5, gain(0.9, dF)), d4G = gain(0, dF), d4 = osc('sawtooth', 58.27, d4G);
+    const sweep = osc('sine', 0.07), sweepG = gain(50); sweep.connect(sweepG); sweepG.connect(dF.frequency);
+    // 4) a subida final (só nos últimos segundos)
+    const riseG = gain(0, out);
+    const rise = osc('sawtooth', 80, filt('lowpass', 2400, 2, riseG));
+    const m = { ac, out, nodes, timer: null, nextNote: ac.currentTime + 2, nextBeat: 0, nextCrack: 0, lastCurve: -1 };
+    const nodeEnv = (o, g, t, dur) => { o.start(t); o.stop(t + dur + 0.05); o.onended = () => { try { g.disconnect(); } catch (e) { /* ok */ } }; };
+    const note = (t, L) => { // caixinha de música que desafina
+      const SC = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22];
+      const f = 220 * Math.pow(2, (SC[Math.floor(Math.random() * SC.length)] + 12 * Math.floor(Math.random() * 2)) / 12);
+      const dur = 0.9 + Math.random() * 1.6;
+      const bend = (Math.random() < 0.8 ? -1 : 1) * Math.random() * (0.2 + L * 5); // semitons
+      const g = gain(0); g.connect(out); g.connect(echo);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.07 + L * 0.03, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+      ['triangle', 'sine'].forEach((type, i) => {
+        const o = ac.createOscillator(); o.type = type;
+        o.frequency.setValueAtTime(f * (i + 1), t);
+        o.frequency.exponentialRampToValueAtTime(f * (i + 1) * Math.pow(2, bend / 12), t + dur);
+        o.detune.value = (Math.random() * 2 - 1) * L * 70;
+        o.connect(i ? gain(0.35, g) : g);
+        nodeEnv(o, g, t, dur);
+      });
+    };
+    const kick = (t, v) => {
+      const g = gain(0, out), o = ac.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.18);
+      g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      o.connect(g); nodeEnv(o, g, t, 0.35);
+    };
+    const burst = (t, dur, v, f, q) => { // estalo, tique ou rasgo de estática
+      const s = ac.createBufferSource(); s.buffer = nb;
+      const g = gain(0, out);
+      s.connect(filt('bandpass', f, q, g));
+      g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.02);
+      s.onended = () => { try { g.disconnect(); } catch (e) { /* ok */ } };
+    };
+    const curve = (k) => { // distorção que cresce perto do fim
+      const c = new Float32Array(512);
+      for (let i = 0; i < 512; i++) { const x = i / 255.5 - 1; c[i] = k ? (1 + k) * x / (1 + k * Math.abs(x)) : x; }
+      return c;
+    };
+    const step = () => {
+      const now = ac.currentTime;
+      const L = vxLevel();
+      const sm = (a, b) => { const x = Math.min(1, Math.max(0, (L - a) / (b - a))); return x * x * (3 - 2 * x); };
+      const set = (p, v, k) => p.setTargetAtTime(v, now, k || 0.8);
+      set(out.gain, document.hidden || vxFrozen ? 0 : 0.6 - 0.3 * sm(0.6, 1), document.hidden || vxFrozen ? 0.05 : 0.4); // a tela travada fica em silêncio
+      set(humG.gain, 0.06 * (1 - 0.5 * L));
+      set(wowG.gain, 8 + 70 * L);
+      set(wow.frequency, 0.55 + L * 5);
+      set(hissG.gain, 0.012 + 0.08 * Math.pow(L, 1.5));
+      set(dG.gain, 0.03 + 0.16 * sm(0.04, 0.25) + 0.06 * L);
+      set(dF.frequency, 150 + 1100 * L * L);
+      set(d1.detune, 30 * L); set(d2.detune, -55 * L); set(d3.detune, Math.sin(now / 3) * 40 * L);
+      set(d4G.gain, 0.55 * sm(0.45, 0.9)); set(d4.frequency, 55 * Math.pow(2, (1 + L) / 12)); // o semitom de cima, para doer
+      set(sweepG.gain, 50 + 400 * L);
+      const r = sm(0.86, 1);
+      set(riseG.gain, 0.12 * r, 0.3);
+      set(rise.frequency, 80 * Math.pow(15, r), 0.3);
+      set(rise.detune, (Math.random() * 2 - 1) * 40 * r, 0.05);
+      const k = Math.round(sm(0.6, 1) * 10);
+      if (k !== m.lastCurve) { shaper.curve = curve(k * 0.6); m.lastCurve = k; }
+      if (document.hidden || vxFrozen) { m.nextNote = m.nextBeat = m.nextCrack = 0; return; }
+      const ahead = now + 0.25;
+      // notas: espaçadas no começo, cada vez mais juntas
+      if (m.nextNote < now) m.nextNote = now + 0.05;
+      while (m.nextNote < ahead) { note(m.nextNote, L); m.nextNote += Math.max(0.18, (4.5 - 4 * L) * (0.5 + Math.random())); }
+      // batidas: entram com um terço do caminho, de coração lento até 190 por minuto
+      if (L >= 0.3) {
+        if (m.nextBeat < now) m.nextBeat = now + 0.05;
+        const x = (L - 0.3) / 0.7, bpm = 44 + 146 * Math.pow(x, 1.3), beat = 60 / bpm;
+        while (m.nextBeat < ahead) {
+          const t = m.nextBeat;
+          kick(t, 0.35 + 0.35 * x);
+          if (L < 0.7) kick(t + beat * 0.28, 0.22 + 0.2 * x); // tum-tum de coração
+          if (L >= 0.6) burst(t + beat / 2, 0.04, 0.12 + 0.2 * x, 7000, 1.5);
+          if (L >= 0.85) { burst(t + beat / 4, 0.03, 0.12, 9000, 2); burst(t + beat * 3 / 4, 0.03, 0.12, 9000, 2); }
+          m.nextBeat += beat;
+        }
+      } else m.nextBeat = 0;
+      // estalos de fita e, mais adiante, rasgos de estática
+      if (m.nextCrack < now) m.nextCrack = now + 0.05;
+      while (m.nextCrack < ahead) {
+        const t = m.nextCrack;
+        burst(t, 0.012, 0.08 + 0.2 * L, 1500 + Math.random() * 4000, 4);
+        if (L > 0.5 && Math.random() < L * 0.18) burst(t, 0.08 + Math.random() * 0.3, 0.12 + 0.25 * L, 600 + Math.random() * 3000, 0.4);
+        m.nextCrack += (0.15 + Math.random() * 1.6) * (1.3 - L);
+      }
+    };
+    m.timer = setInterval(step, 100);
+    vxMus = m;
+    step();
+  }
   /* O susto do vórtex: quando o buraco aparece, há uma chance de a tela travar por alguns segundos
      e então um rosto feito do próprio vórtex pular na tela com um som alto. Só uma vez por pessoa (neste aparelho). */
   var VXS_KEY = 'vortex.vxscare.v1';
@@ -4389,6 +4564,7 @@ const FIREBASE_CONFIG = {
     if (document.querySelector('.vx-boom')) return;
     clearTimeout(vxTimer); clearInterval(vxClock);
     saveVx();
+    vxMusStop(true); // a trilha corta seco na explosão
     playThemeSound('boom');
     const flying = vxVisible('.block, .row, .prog__card, .theme-card, .btn, h1, h2, .topbar, .rail').slice(0, 80);
     flying.forEach((el) => {
@@ -4601,6 +4777,7 @@ const FIREBASE_CONFIG = {
     try { localStorage.setItem(SFX_KEY, sfx.on ? 'on' : 'off'); } catch (e) { /* vale até fechar */ }
     renderSoundBtn();
     nyanMusic();
+    vxMusic();
     play('ok');
   });
   renderSoundBtn();
