@@ -4603,7 +4603,7 @@ const FIREBASE_CONFIG = {
   /* ---------- Sons e animações de toque ----------
      Sons curtos feitos na hora (Web Audio, sem arquivos). Cada tema tem a própria "banda":
      escala, camadas de onda, filtro, ruído, eco e um jeito de variar, então o mesmo toque
-     nunca soa duas vezes igual e cada tema soa diferente do outro.
+     cada função tem o seu som (só o tom varia um pouco) e cada tema soa diferente do outro.
      Vortex = gotas de chuva e madeira (pentatônica menor), Ether = vidro e energia (lídio, eco longo),
      Claptrap = bipes e tagarelice de robô, God = órgão e coro em quintas (maior, eco de catedral),
      Nyan = chiptune 8 bits com arpejo, Vórtex ∞ = serra, ruído e notas que caem fora da escala.
@@ -4613,33 +4613,44 @@ const FIREBASE_CONFIG = {
   // layers: [onda, multiplicador de frequência, volume]; drop: a nota cai (gota) no ataque
   var SFX_THEME = {
     '': { base: 440, scale: [0, 3, 5, 7, 10], layers: [['sine', 1, 1], ['triangle', 2, 0.18]], attack: 0.004, decay: 0.11, gain: 0.15,
-      drop: 1.5, filter: ['lowpass', 3200, 0.7], knock: 0.22, echo: [0.11, 0.18], jitter: 12 },
+      drop: 1.5, filter: ['lowpass', 3200, 0.7], knock: 0.22, echo: [0.11, 0.18], jitter: 35 },
     ether: { base: 660, scale: [0, 2, 4, 6, 7, 9, 11], layers: [['triangle', 1, 0.8], ['sine', 2.01, 0.35], ['sine', 3.003, 0.12]], attack: 0.01, decay: 0.2, gain: 0.11,
-      vibrato: [6.5, 0.012], filter: ['highpass', 300, 0.5], hiss: 0.05, echo: [0.19, 0.38], jitter: 6, sparkle: true },
+      vibrato: [6.5, 0.012], filter: ['highpass', 300, 0.5], hiss: 0.05, echo: [0.19, 0.38], jitter: 25, sparkle: true },
     claptrap: { base: 620, scale: [0, 2, 4, 5, 7, 9, 11], layers: [['square', 1, 1]], attack: 0.002, decay: 0.06, gain: 0.06,
-      bits: 1.5, filter: ['bandpass', 1800, 1.2], chatter: 0.45, jitter: 40 },
+      bits: 1.5, filter: ['bandpass', 1800, 1.2], chatter: true, jitter: 60 },
     god: { base: 392, scale: [0, 2, 4, 5, 7, 9, 11], layers: [['sine', 1, 0.7], ['sine', 1.5, 0.35], ['sine', 2, 0.3], ['triangle', 4, 0.06]], attack: 0.03, decay: 0.3, gain: 0.1,
-      filter: ['lowpass', 2600, 0.4], echo: [0.23, 0.45], jitter: 3, chorus: 4 },
+      filter: ['lowpass', 2600, 0.4], echo: [0.23, 0.45], jitter: 20, chorus: 4 },
     nyan: { base: 784, scale: [0, 2, 4, 7, 9], layers: [['square', 1, 1], ['square', 0.5, 0.25]], attack: 0.002, decay: 0.07, gain: 0.05,
-      arp: [0, 4, 7], vibrato: [9, 0.008], filter: ['lowpass', 5200, 0.5], jitter: 0 },
+      arp: [0, 4, 7], vibrato: [9, 0.008], filter: ['lowpass', 5200, 0.5], jitter: 25 },
     vortice: { base: 230, scale: [0, 1, 3, 6, 7, 8, 11], layers: [['sawtooth', 1, 0.7], ['square', 1.007, 0.25], ['sine', 0.5, 0.5]], attack: 0.006, decay: 0.15, gain: 0.07,
-      filter: ['lowpass', 1400, 6, true], hiss: 0.12, echo: [0.13, 0.5], jitter: 80, glitch: 0.35, warp: true }
+      filter: ['lowpass', 1400, 6, true], hiss: 0.12, echo: [0.13, 0.5], jitter: 90, glitch: true, warp: true }
   };
-  // cada som tem variações; uma é sorteada a cada toque. Nota: [grau da escala, início, duração, deslize]
+  // um som fixo para cada função; a cada toque só o tom varia um pouco (jitter do tema).
+  // Nota: [grau da escala, início, duração, deslize]
   var SFX = {
-    tap: [[[0, 0, 1]], [[2, 0, 1]], [[4, 0, 0.9]], [[1, 0, 1]]],
-    tab: [[[2, 0, 0.8], [4, 0.045, 0.8]], [[4, 0, 0.8], [5, 0.04, 0.8]], [[0, 0, 0.8], [2, 0.05, 0.9]]],
-    link: [[[5, 0, 0.7], [7, 0.035, 0.7]], [[3, 0, 0.7], [6, 0.035, 0.8]]],
-    toggle: [[[3, 0, 0.6], [5, 0.03, 0.5]], [[5, 0, 0.6], [3, 0.03, 0.5]]],
-    fold: [[[1, 0, 1.1, 1.12]], [[3, 0, 1.1, 0.9]]],
-    open: [[[-2, 0, 1.2], [2, 0.06, 1.4]], [[-1, 0, 1.2], [3, 0.07, 1.5]], [[0, 0, 1], [2, 0.05, 1], [4, 0.1, 1.5]]],
-    close: [[[2, 0, 0.9], [-2, 0.05, 1.1]], [[4, 0, 0.8], [0, 0.05, 1.1]], [[3, 0, 0.8], [1, 0.04, 0.8], [-1, 0.08, 1]]],
-    drag: [[[-3, 0, 1.6, 1.6]], [[-2, 0, 1.5, 1.4]]],
-    drop: [[[5, 0, 1.4, 0.45]], [[4, 0, 1.2, 0.5], [0, 0.06, 1]]],
-    ok: [[[0, 0, 1], [2, 0.07, 1], [4, 0.14, 1.6]], [[0, 0, 1], [4, 0.07, 1], [7, 0.14, 1.8]], [[2, 0, 0.9], [4, 0.06, 0.9], [5, 0.12, 0.9], [7, 0.18, 1.7]]],
-    bad: [[[-1, 0, 1.4, 0.7]], [[1, 0, 0.8], [-2, 0.09, 1.4, 0.8]]],
-    dice: [[[6, 0, 0.5], [4, 0.05, 0.5], [7, 0.1, 0.5], [3, 0.16, 0.7]], [[5, 0, 0.4], [8, 0.04, 0.4], [4, 0.08, 0.4], [6, 0.12, 0.4], [2, 0.18, 0.8]]],
-    hit: [[[-5, 0, 1.8, 0.5]], [[-4, 0, 1.6, 0.45], [-7, 0.05, 1.8, 0.6]]]
+    tap: [[2, 0, 1]], // botão comum
+    go: [[0, 0, 0.8], [7, 0.05, 1.3]], // ação principal: começar, entrar, abrir, jogar
+    add: [[3, 0, 0.7], [7, 0.05, 1.1]], // criar, adicionar, pôr, comprar
+    save: [[4, 0, 0.7], [5, 0.05, 0.7], [7, 0.1, 1.4]], // salvar, aplicar, pronto
+    del: [[0, 0, 0.7], [-3, 0.05, 1.3, 0.75]], // excluir, apagar, remover, tirar
+    cancel: [[1, 0, 0.9, 0.85]], // cancelar, fechar, voltar, ×
+    roll: [[6, 0, 0.4], [4, 0.04, 0.4], [7, 0.08, 0.6]], // rolar, sortear
+    star: [[7, 0, 0.6], [9, 0.04, 0.6], [11, 0.08, 1.2]], // favoritar
+    nav: [[0, 0, 0.7], [4, 0.04, 0.9]], // menu do site
+    link: [[5, 0, 0.7], [7, 0.035, 0.7]],
+    tab: [[2, 0, 0.8], [4, 0.045, 0.8]],
+    toggle: [[3, 0, 0.6], [5, 0.03, 0.5]], // liga: sobe
+    toggleOff: [[5, 0, 0.6], [3, 0.03, 0.5]], // desliga: desce
+    expand: [[1, 0, 1.1, 1.12]], // abre a seção ou a lista
+    collapse: [[3, 0, 1.1, 0.9]], // fecha a seção
+    open: [[-1, 0, 1.2], [3, 0.07, 1.5]],
+    close: [[4, 0, 0.8], [0, 0.05, 1.1]],
+    drag: [[-3, 0, 1.6, 1.6]],
+    drop: [[5, 0, 1.4, 0.45]],
+    ok: [[0, 0, 1], [2, 0.07, 1], [4, 0.14, 1.6]],
+    bad: [[1, 0, 0.8], [-2, 0.09, 1.4, 0.8]],
+    dice: [[6, 0, 0.5], [4, 0.05, 0.5], [7, 0.1, 0.5], [3, 0.16, 0.7]],
+    hit: [[-4, 0, 1.6, 0.45], [-7, 0.05, 1.8, 0.6]]
   };
   function sfxCtx() {
     if (!sfx.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; sfx.ctx = new AC(); }
@@ -4677,30 +4688,28 @@ const FIREBASE_CONFIG = {
     bus.gain.value = 1;
     const flt = ac.createBiquadFilter();
     flt.type = th.filter[0];
-    flt.frequency.value = th.filter[1] * sfxRnd(0.85, 1.15);
+    flt.frequency.value = th.filter[1];
     flt.Q.value = th.filter[2];
     if (th.filter[3]) { // filtro que varre (Vórtex ∞): abre e fecha num instante
-      flt.frequency.setValueAtTime(sfxRnd(300, 900), t0);
-      flt.frequency.exponentialRampToValueAtTime(sfxRnd(1800, 5200), t0 + 0.08);
-      flt.frequency.exponentialRampToValueAtTime(sfxRnd(250, 700), t0 + 0.3);
+      flt.frequency.setValueAtTime(600, t0);
+      flt.frequency.exponentialRampToValueAtTime(3500, t0 + 0.08);
+      flt.frequency.exponentialRampToValueAtTime(450, t0 + 0.3);
     }
     bus.connect(flt).connect(ac.destination);
     if (th.echo) {
       const dl = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
-      dl.delayTime.value = th.echo[0] * sfxRnd(0.9, 1.1);
+      dl.delayTime.value = th.echo[0];
       fb.gain.value = th.echo[1];
       wet.gain.value = 0.45;
       flt.connect(dl); dl.connect(fb).connect(dl); dl.connect(wet).connect(ac.destination);
       setTimeout(() => { try { flt.disconnect(dl); } catch (e) { /* já foi */ } }, 2500);
     }
-    const shift = th.warp && Math.random() < 0.3 ? sfxPick([-12, -7, 6, 12]) : 0; // o vórtex às vezes puxa a nota pra outro lugar
-    const notes = sfxPick(SFX[name]);
-    const extra = th.chatter && name === 'tap' && Math.random() < th.chatter
-      ? [[Math.floor(sfxRnd(0, 7)), 0.05, 0.6], [Math.floor(sfxRnd(0, 7)), 0.1, 0.5]] : [];
-    notes.concat(extra).forEach((n) => {
-      const len = th.decay * n[2] * sfxRnd(0.9, 1.12);
-      const start = t0 + n[1] * sfxRnd(0.92, 1.08);
-      const cents = sfxRnd(-th.jitter, th.jitter) + shift * 100;
+    // a única coisa sorteada: o tom do som inteiro (o vórtex às vezes ainda puxa para outra oitava ou um trítono)
+    const cents = sfxRnd(-th.jitter, th.jitter) + (th.warp && Math.random() < 0.3 ? sfxPick([-12, -7, 6, 12]) * 100 : 0);
+    const extra = th.chatter && name === 'tap' ? [[5, 0.05, 0.6], [1, 0.1, 0.5]] : []; // tagarelice do robô
+    SFX[name].concat(extra).forEach((n) => {
+      const len = th.decay * n[2];
+      const start = t0 + n[1];
       const f = degFreq(th, n[0]) * Math.pow(2, cents / 1200);
       const env = ac.createGain();
       env.gain.setValueAtTime(0.0001, start);
@@ -4722,10 +4731,10 @@ const FIREBASE_CONFIG = {
           if (n[3]) o.frequency.exponentialRampToValueAtTime(fl * n[3], start + len);
           if (th.bits) o.frequency.setValueAtTime(fl * th.bits, start + len * 0.5); // bipe em dois tons
           if (th.arp) th.arp.forEach((st, i) => o.frequency.setValueAtTime(fl * Math.pow(2, st / 12), start + i * 0.022)); // arpejo 8 bits
-          if (th.glitch && Math.random() < th.glitch) o.frequency.setValueAtTime(fl * sfxPick([0.5, 0.71, 1.41, 2, 3]), start + len * sfxRnd(0.2, 0.7));
+          if (th.glitch) o.frequency.setValueAtTime(fl * 0.71, start + len * 0.45); // a nota quebra no meio
           if (th.vibrato) {
             const lfo = ac.createOscillator(), lfoG = ac.createGain();
-            lfo.frequency.value = th.vibrato[0] * sfxRnd(0.9, 1.1);
+            lfo.frequency.value = th.vibrato[0];
             lfoG.gain.value = fl * th.vibrato[1];
             lfo.connect(lfoG).connect(o.frequency);
             lfo.start(start); lfo.stop(stop);
@@ -4735,10 +4744,10 @@ const FIREBASE_CONFIG = {
           o.start(start); o.stop(stop);
         });
       });
-      if (th.sparkle && Math.random() < 0.5) { // faísca de vidro bem aguda
+      if (th.sparkle) { // faísca de vidro bem aguda
         const o = ac.createOscillator(), g = ac.createGain();
         o.type = 'sine';
-        o.frequency.setValueAtTime(f * sfxPick([4, 5, 6]), start + 0.02);
+        o.frequency.setValueAtTime(f * 5, start + 0.02);
         g.gain.setValueAtTime(0.0001, start + 0.02);
         g.gain.exponentialRampToValueAtTime(th.gain * 0.25, start + 0.03);
         g.gain.exponentialRampToValueAtTime(0.0001, start + 0.02 + len * 1.4);
@@ -4751,14 +4760,13 @@ const FIREBASE_CONFIG = {
       const src = ac.createBufferSource(), nf = ac.createBiquadFilter(), ng = ac.createGain();
       src.buffer = sfxNoise(ac);
       nf.type = th.knock ? 'bandpass' : 'highpass';
-      nf.frequency.value = th.knock ? sfxRnd(700, 1400) : sfxRnd(3000, 7000);
+      nf.frequency.value = (th.knock ? 1000 : 5000) * Math.pow(2, cents / 1200);
       nf.Q.value = th.knock ? 4 : 0.7;
       const amt = th.knock || th.hiss, nl = th.knock ? 0.03 : th.decay * 1.2;
       ng.gain.setValueAtTime(amt * th.gain * 4, t0);
       ng.gain.exponentialRampToValueAtTime(0.0001, t0 + nl);
       src.connect(nf).connect(ng).connect(bus);
-      const off = Math.random() * 0.4;
-      src.start(t0, off, nl + 0.02);
+      src.start(t0, 0, nl + 0.02);
     }
   }
   function renderSoundBtn() {
@@ -4783,14 +4791,33 @@ const FIREBASE_CONFIG = {
   renderSoundBtn();
 
   // toques: som conforme o que foi tocado, e a onda (ripple) nos botões
+  // qual som cada botão faz, pela função dele (classe, papel ou a primeira palavra do texto)
+  function sfxKind(el) {
+    if (el.getAttribute('role') === 'tab' || el.classList.contains('cmd__tab')) return 'tab';
+    if (el.matches('input[type="checkbox"], input[type="radio"], label.check, [role="switch"]')) {
+      const box = el.matches('input') ? el : el.querySelector('input');
+      const on = box ? box.checked : el.getAttribute('aria-checked') === 'true' || el.getAttribute('aria-pressed') === 'true';
+      return on && (!box || box.type !== 'radio') ? 'toggleOff' : 'toggle';
+    }
+    if (el.matches('summary')) return el.parentElement && el.parentElement.open ? 'collapse' : 'expand';
+    if (el.matches('select')) return 'expand';
+    const txt = (el.getAttribute('aria-label') || el.textContent || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const cls = el.className && typeof el.className === 'string' ? el.className : '';
+    if (/(^|\s)star\b/.test(cls) || /^[☆★]|favoritar/.test(txt)) return 'star';
+    if (/btn--danger/.test(cls) || /^(excluir|apagar|remover|tirar|desvincular|limpar|zerar|descartar|esquecer)/.test(txt)) return 'del';
+    if (/__x\b|__close|__back|icon-btn/.test(cls) || /^(cancelar|fechar|voltar|sair|nao$|◀|×|✕)/.test(txt)) return 'cancel';
+    if (/^(rolar|sortear|🎲)|rolagem/.test(txt)) return 'roll';
+    if (/^(salvar|guardar|pronto|aplicar|confirmar|concluir|ok\b)/.test(txt)) return 'save';
+    if (/^(\+|criar|adicionar|novo|nova|por\b|dar\b|comprar|trazer|incluir|abastecer)/.test(txt)) return 'add';
+    if (el.matches('a[href]')) return el.closest('.app-nav, nav') ? 'nav' : 'link';
+    if (/btn--primary/.test(cls) || /^(comecar|jogar|entrar|abrir|disparar|iniciar)/.test(txt)) return 'go';
+    return 'tap';
+  }
   const TAP_SEL = 'button, a[href], [role="tab"], summary, select, input[type="checkbox"], input[type="radio"], label.check';
   document.addEventListener('pointerdown', (ev) => {
     const el = ev.target.closest && ev.target.closest(TAP_SEL);
     if (!el || el.disabled || el.id === 'sound-btn') return;
-    play(el.getAttribute('role') === 'tab' || el.classList.contains('cmd__tab') ? 'tab'
-      : el.matches('input[type="checkbox"], input[type="radio"], label.check, [role="switch"]') ? 'toggle'
-        : el.matches('summary, select') ? 'fold'
-          : el.matches('a[href]') ? 'link' : 'tap');
+    play(sfxKind(el));
     if (el.matches('button, a.btn') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const r = el.getBoundingClientRect();
       const dot = document.createElement('span');
