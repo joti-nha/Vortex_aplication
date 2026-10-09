@@ -4089,21 +4089,31 @@ const FIREBASE_CONFIG = {
     surfing: { pattern: 'wave', trail: ['#1a6ac8', '#2aa8ff', '#7ad8ff', '#ffffff'] }, vapor: { pattern: 'wave', trail: ['#ff71ce', '#b967ff', '#01cdfe', '#05ffa1', '#fffb96'] },
     'wiki:neapolitan': {}, 'wiki:oreo': { pattern: 'checker', trail: ['#1a1a1a', '#f4f4f4'] }, 'wiki:cookie': { glyph: '●', trail: ['#c88a4a', '#4a2a1a'] }, 'wiki:terra': { pattern: 'wave', trail: ['#2a6ac8', '#3aa04a', '#3aa0e8'] }
   };
+  /* Rastro: as faixas saem em degraus como no Nyan Cat original (segmentos sobem e descem alternados); o 16-bit tem
+     degraus mais finos e cada faixa com luz e sombra; os símbolos pulam; os desenhos (fumaça, xadrez, gotas...) correm. */
   function nyanTrail(t) {
     const cols = t.trail || RAINBOW;
-    const el = h('span', 'nyan-flock__trail' + (t.glyph ? ' nyan-flock__trail--glyph' : t.pattern ? ' nyan-flock__trail--' + t.pattern : ''));
+    const pat = t.glyph ? 'glyph' : t.pattern || 'steps';
+    const stepped = ['steps', 'pixel', '16bit', 'wave', 'glitch'].includes(pat);
+    const el = h('span', 'nyan-flock__trail nyan-flock__trail--' + pat + (stepped && pat !== 'steps' ? ' nyan-flock__trail--steps' : ''));
     const bands = (list) => 'linear-gradient(' + list.map((c, k) => c + ' ' + (k * 100 / list.length).toFixed(2) + '% ' + ((k + 1) * 100 / list.length).toFixed(2) + '%').join(', ') + ')';
+    // 16-bit: cada faixa com a metade de cima mais clara e uma linha escura embaixo
+    const bands16 = (list) => 'linear-gradient(' + list.map((c, k) => {
+      const a = k * 100 / list.length, b = (k + 1) * 100 / list.length, m = a + (b - a) * 0.4, e = b - (b - a) * 0.15;
+      return 'color-mix(in srgb, ' + c + ' 65%, #fff) ' + a.toFixed(2) + '% ' + m.toFixed(2) + '%, ' + c + ' ' + m.toFixed(2) + '% ' + e.toFixed(2) + '%, color-mix(in srgb, ' + c + ' 70%, #000) ' + e.toFixed(2) + '% ' + b.toFixed(2) + '%';
+    }).join(', ') + ')';
     const c0 = cols[0], c1 = cols[1 % cols.length];
     if (t.glyph) { // uma fila de símbolos, cada um de uma cor do rastro
       for (let k = 0; k < 6; k++) { const g = h('i', '', t.glyph); g.style.color = cols[k % cols.length]; el.append(g); }
-    } else if (t.pattern === 'smoke') el.style.background = 'radial-gradient(circle at 20% 60%, ' + c1 + ' 0 18%, transparent 20%), radial-gradient(circle at 50% 40%, ' + c0 + ' 0 22%, transparent 24%), radial-gradient(circle at 80% 55%, ' + c1 + ' 0 26%, transparent 28%)';
-    else if (t.pattern === 'pixel' || t.pattern === 'glitch') el.style.background = bands(cols.length > 2 ? cols : RAINBOW) + ' 0 0 / 100% 100%';
-    else if (t.pattern === 'checker') el.style.background = 'repeating-conic-gradient(' + c0 + ' 0 25%, ' + c1 + ' 0 50%) 0 0 / calc(var(--s) * 0.31) calc(var(--s) * 0.31)';
-    else if (t.pattern === 'wave') el.style.background = bands(cols.length > 2 ? cols : RAINBOW);
-    else if (t.pattern === 'drip') el.style.background = 'linear-gradient(' + c0 + ' 0 55%, transparent 55%), repeating-linear-gradient(90deg, ' + c1 + ' 0 12%, transparent 12% 25%)';
-    else if (t.pattern === 'wrap') el.style.background = 'repeating-linear-gradient(-35deg, ' + c0 + ' 0 8%, ' + c1 + ' 8% 12%, ' + c0 + ' 12% 22%)';
-    else if (t.pattern === 'scribble') el.style.background = 'repeating-linear-gradient(-20deg, transparent 0 6%, ' + c0 + ' 6% 9%, transparent 9% 14%), ' + c1;
-    else el.style.background = bands(cols);
+    } else if (stepped) {
+      const n = pat === '16bit' ? 12 : 6, bg = pat === '16bit' ? bands16(cols) : bands(cols);
+      for (let k = 0; k < n; k++) { const seg = h('i'); seg.style.background = bg; seg.style.setProperty('--k', k); el.append(seg); }
+      if (t.hue) el.style.animation = 'nyan-hue 2.4s linear infinite'; // Technyancolor: as cores giram
+    } else if (pat === 'smoke') el.style.background = 'radial-gradient(circle at 20% 60%, ' + c1 + ' 0 18%, transparent 20%), radial-gradient(circle at 50% 40%, ' + c0 + ' 0 22%, transparent 24%), radial-gradient(circle at 80% 55%, ' + c1 + ' 0 26%, transparent 28%)';
+    else if (pat === 'checker') el.style.background = 'repeating-conic-gradient(' + c0 + ' 0 25%, ' + c1 + ' 0 50%) 0 0 / calc(var(--s) * 0.31) calc(var(--s) * 0.31)';
+    else if (pat === 'drip') el.style.background = 'linear-gradient(' + c0 + ' 0 55%, transparent 55%), repeating-linear-gradient(90deg, ' + c1 + ' 0 12%, transparent 12% 25%)';
+    else if (pat === 'wrap') el.style.background = 'repeating-linear-gradient(-35deg, ' + c0 + ' 0 8%, ' + c1 + ' 8% 12%, ' + c0 + ' 12% 22%)';
+    else if (pat === 'scribble') el.style.background = 'repeating-linear-gradient(-20deg, transparent 0 6%, ' + c0 + ' 6% 9%, transparent 9% 14%), ' + c1;
     return el;
   }
   let nyanFlockTimer = null;
