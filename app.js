@@ -3955,7 +3955,18 @@ const FIREBASE_CONFIG = {
     catch (e) { return { unlocked: [], active: '' }; }
   })();
   const saveThemes = () => { try { localStorage.setItem(THEME_KEY, JSON.stringify(themeState)); } catch (e) { /* sem armazenamento: vale até fechar */ } };
+  let themeBooted = false;
   function applyTheme(id) {
+    // troca de tema com as duas telas se fundindo (View Transitions); na abertura do site e onde não há suporte, troca direto
+    const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (themeBooted && !still && document.startViewTransition && (document.documentElement.dataset.theme || '') !== (id || '')) {
+      themeState.active = id; // quem chama logo depois (a lista de temas) já vê o tema novo
+      document.startViewTransition(() => applyThemeNow(id));
+      return;
+    }
+    applyThemeNow(id);
+  }
+  function applyThemeNow(id) {
     themeState.active = id;
     if (id) document.documentElement.dataset.theme = id; else delete document.documentElement.dataset.theme;
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -4159,6 +4170,7 @@ const FIREBASE_CONFIG = {
       // o Synthwave é desenhado no CSS; os outros são pixel art em img/nyan/cenas/
       if (nyanSceneId !== 'vapor') { el.classList.add('nyan-scene--img'); el.style.setProperty('--cena', 'url(img/nyan/cenas/' + nyanSceneId + '.png)'); }
       box.prepend(el);
+      void el.offsetWidth; // o cenário novo nasce apagado e só então acende, para o fade de entrada acontecer
     }
     box.querySelectorAll('.nyan-scene').forEach((el) => el.classList.toggle('is-on', el.classList.contains('nyan-scene--' + nyanSceneId)));
     document.documentElement.classList.toggle('nyan-scene-on', !!nyanSceneId); // o painel de boas-vindas fica translúcido para o cenário aparecer
@@ -4834,6 +4846,7 @@ const FIREBASE_CONFIG = {
     return true;
   }
   applyTheme(themeState.unlocked.indexOf(themeState.active) >= 0 ? themeState.active : '');
+  themeBooted = true;
 
   /* ---------- Sons e animações de toque ----------
      Sons curtos feitos na hora (Web Audio, sem arquivos). Cada tema tem a própria "banda":
