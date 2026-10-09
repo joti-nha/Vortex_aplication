@@ -7333,9 +7333,9 @@ const FIREBASE_CONFIG = {
       }
       if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
       if (p.id === 'of-pod-luta') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s) + ' (Corpo ' + attrOf(s, 'corpo') + ' + perícia Luta ' + skillOf(s, 'luta') + ')')));
-      if (p.id === 'of-pod-tecnomancia') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Nível ' + tecnoLevel(p) + ': até ' + plural(tecnoLevel(p), 'efeito', 'efeitos') + ' ao mesmo tempo')));
+      if (p.id === 'of-pod-tecnomancia') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Nível ' + tecnoLevel(p) + ': um efeito ativo por modo de ação · até ' + plural(tecnoLevel(p), 'implemento especial', 'implementos especiais') + ' por operação')));
       if (powerStyles(p).length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', styleLabel(p)), ...powerStyles(p).map((e, k) => styleRow(s, p, e, i + '-' + k))));
-      if (p.id === 'of-pod-tecnomancia' && styleOf(p) && styleOf(p).name === 'Engenheiro' && tecnoLevel(p)) main.append(tecnoListRow(p, i));
+      if (p.id === 'of-pod-tecnomancia' && styleOf(p) && styleOf(p).name === 'Engenheiro' && tecnoLevel(p)) main.append(tecnoListRow(s, p, i));
       const man = powerManobras(p);
       if (man.length) main.append(h('details', 'pw-sub pw-man', h('summary', 'pw-sub__title', 'Efeitos marciais (custo em ataques)'), manobraTable(man)));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
@@ -7381,8 +7381,13 @@ const FIREBASE_CONFIG = {
   const styleBody = (e) => [
     ...(e.passivas || []).map((x) => h('span', 'pw-opt__text', h('strong', '', x[0] + ': '), x[1])),
     e.tecnicas && e.tecnicas.length ? h('details', 'pw-man', h('summary', 'pw-sub__title', 'Técnicas (custo em ataques)'), manobraTable(e.tecnicas.map((r) => ({ name: r[0], text: r[1], cost: r[2] })))) : null];
-  function tecnoListRow(p, fid) {
+  /* Engenheiro: em cada nível, uma lista e o atributo chave dela (Precisão ou Essência). O atributo chave vale
+     para a lista toda (repetir a lista mantém o mesmo); conhece atributo chave + Operações componentes por escolha. */
+  const TECNO_CHAVES = [['precisao', 'Precisão'], ['essencia', 'Essência']];
+  function tecnoListRow(s, p, fid) {
     const picks = tecnoPicks(p);
+    const chaves = p.chaves && typeof p.chaves === 'object' ? p.chaves : {};
+    const ops = skillOf(s, 'operacoes');
     const seen = {};
     return h('span', 'pw-sub', h('span', 'pw-sub__title', 'Listas de componentes (uma por nível)'), ...picks.map((cur, k) => {
       const sel = h('select', 'input');
@@ -7395,8 +7400,22 @@ const FIREBASE_CONFIG = {
       const again = cur && seen[cur];
       if (cur) seen[cur] = true;
       const info = cur ? (tecnoLists().find((x) => x[0] === cur) || [])[1] : '';
-      return h('span', 'pw-opt' + (cur ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1)), sel),
-        cur ? h('span', 'pw-opt__text', again ? 'Repetida: características únicas de Essência ou Precisão desta lista (em breve).' : info) : null);
+      const key = TECNO_CHAVES.find((c) => c[0] === chaves[cur]) || null;
+      let keySel = null;
+      if (cur && !again) {
+        keySel = h('select', 'input');
+        keySel.dataset.fid = 'pw-chave-' + fid + '-' + k;
+        keySel.setAttribute('aria-label', 'Atributo chave da lista ' + cur);
+        keySel.append(h('option', '', 'Atributo chave…'), ...TECNO_CHAVES.map((c) => { const o = h('option', '', c[1]); o.value = c[0]; return o; }));
+        keySel.options[0].value = '';
+        keySel.value = key ? key[0] : '';
+        keySel.addEventListener('change', () => { p.chaves = Object.assign({}, chaves, { [cur]: keySel.value }); if (!keySel.value) delete p.chaves[cur]; changed(); });
+      }
+      const known = key ? attrOf(s, key[0]) + ops : 0;
+      const detail = !cur ? null : !key ? 'Escolha o atributo chave (Precisão ou Essência) desta lista.'
+        : (again ? 'Repetida: mais ' : 'Conhece ') + plural(Math.max(0, known), 'componente', 'componentes') + ' (' + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + '). Até ' + plural(Math.max(0, attrOf(s, key[0])), 'implemento', 'implementos') + ' por operação.';
+      return h('span', 'pw-opt' + (cur ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1)), sel, keySel),
+        cur ? h('span', 'pw-opt__text', info) : null, detail ? h('span', 'pw-opt__text', detail) : null);
     }));
   }
 
