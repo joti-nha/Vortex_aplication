@@ -305,17 +305,6 @@ def scene_pirate():  # navio pirata no mar à noite
     return im
 
 
-def scene_captain():  # Capitão Pirata: lua cheia enorme, nuvens e mar (exemplo do João)
-    im, d = img()
-    sky(d, ['#002a58', '#06305e', '#0c3a6a', '#123f72', '#1a4a80'], 0, 150, step=10, jag=3, seed=7)
-    moon(d, 230, 56, 40, '#e8eef0', ('#9fd8f4', '#6ac0ea', '#bfe4f6'), '#000000', 7)
-    stars(d, 30, 90, 7)
-    for x0, w in ((-20, 120), (220, 120)):
-        cloud(d, x0, 120, w, 30)
-    sea(d, 150)
-    return im
-
-
 def scene_tacnayn():  # inferno: brasas, rochas, lava e caveiras
     im, d = img()
     sky(d, ['#0a0000', '#1a0202', '#2a0303', '#4a0805', '#6a1006'], 0, 132, seed=8)

@@ -4003,14 +4003,14 @@ const FIREBASE_CONFIG = {
     'wtf', 'nyandoge', 'grumpy', 'wiki:terra', 'wiki:neapolitan', 'wiki:cookie', 'wiki:oreo', '16bit', 'angel', 'biker',
     'bubblegum', 'cherry', 'cowboy', 'disorder', 'demonic', 'levo', 'fancy', 'fat', 'floppy', 'golden',
     'kiminyan', 'liberty', 'magical', 'mintchoc', 'aoki', 'nyanboy', 'nyantendo', 'pumpkinspice', 'smurf',
-    'strawberry', 'vintage', 'surfing', 'vapor', 'captain'
+    'strawberry', 'vintage', 'surfing', 'vapor'
   ];
   /* Artes originais dos Nyan Cats (img/nyan/<variante>.webp), reduzidas a 1 pixel de arte e recortadas:
      [altura em pixels de arte, pixels de arte por pixel do Nyan original (quando a arte é mais fina),
      altura do meio do corpo, para o rastro sair dali e não do balão ou do chapéu]. Toda variante da revoada precisa estar aqui. */
   const NYAN_ART = {
     original: [21], tacnayn: [21], mexinyan: [27, 1, 19], pumpkin: [21], nyaninja: [23, 1, 10], technyancolor: [21], xmas: [26, 1, 15],
-    pirate: [21], captain: [28, 1, 18], mummy: [21], bday: [37, 1, 26], balloon: [51, 1, 38], dub: [22], grumpy: [21], wtf: [171, 7.5], paddy: [33, 1, 23],
+    pirate: [21], mummy: [21], bday: [37, 1, 26], balloon: [51, 1, 38], dub: [22], grumpy: [21], wtf: [171, 7.5], paddy: [33, 1, 23],
     'wiki:neapolitan': [21], 'wiki:oreo': [24, 1, 13], 'wiki:cookie': [21], 'wiki:terra': [26, 1, 13],
     '16bit': [21], angel: [24, 1, 13], biker: [36, 1, 11], bubblegum: [21], cherry: [21], cowboy: [26, 1, 15], disorder: [16],
     demonic: [28, 1, 11], levo: [42, 2], fancy: [34, 1, 24], fat: [36, 1.2], floppy: [24, 1, 13], golden: [21], kiminyan: [21],
@@ -4028,7 +4028,7 @@ const FIREBASE_CONFIG = {
   const NYAN_TRAILS = {
     original: {}, tacnayn: { trail: ['#1a1a1a', '#3a3a3a', '#5a5a5a', '#7a7a7a', '#9a9a9a', '#bababa'] }, mexinyan: { trail: ['#009933', '#ffffff', '#b60000'] },
     pumpkin: {}, nyaninja: {}, zombie: {},
-    technyancolor: { hue: true }, xmas: { trail: ['#33cc00', '#ffffff', '#ff0000', '#ffffff', '#33cc00', '#dedede'] }, pirate: { none: true }, captain: { glyph: '☠', flag: '#111111', trail: ['#ffffff'] },
+    technyancolor: { hue: true }, xmas: { trail: ['#33cc00', '#ffffff', '#ff0000', '#ffffff', '#33cc00', '#dedede'] }, pirate: { none: true },
     mummy: {}, star: { glyph: '★', trail: ['#ffe23a', '#ffd700'] }, vday: { trail: ['#a60000', '#ff0000', '#ff4f4f', '#ff9191', '#ffc1c1', '#ffffff'] },
     easter: { trail: ['#ff84bd', '#ffad31', '#ffd684', '#5abd7b', '#7bceff', '#9c42a5'] }, paddy: {}, newyear: {},
     bday: {}, dub: { pattern: 'eq' }, melon: { trail: ['#efc5ff', '#de94ff', '#ce5aff', '#bd19ff', '#f719ff', '#94007b'] },
@@ -4061,7 +4061,6 @@ const FIREBASE_CONFIG = {
     const c0 = cols[0], c1 = cols[1 % cols.length];
     if (t.glyph) { // uma fila de símbolos, cada um de uma cor do rastro
       for (let k = 0; k < 6; k++) { const g = h('i', '', t.glyph); g.style.color = cols[k % cols.length]; el.append(g); }
-      if (t.flag) el.style.background = t.flag; // Pirata: a bandeira preta com caveiras no lugar do arco-íris
     } else if (stepped) {
       const n = pat === '16bit' || pat === 'eq' ? 12 : 6, bg = pat === '16bit' ? bands16(cols) : bands(cols); // eq: o visualizador do Dubstep
       for (let k = 0; k < n; k++) { const seg = h('i'); seg.style.background = bg; seg.style.setProperty('--k', k); el.append(seg); }
@@ -4141,7 +4140,7 @@ const FIREBASE_CONFIG = {
   /* Fundos dos Nyan Cats mais famosos: enquanto um deles passa, o fundo da página vira o cenário dele (o Vaporwave traz o
      Sol Synthwave, o Natal traz neve, a Abóbora a noite de Halloween...). Cada cenário é pixel art (img/nyan/cenas/) com um detalhe animado no CSS
      e ficam na revoada, atrás dos gatos. Um cenário por vez: quem chega com outro aceso (ou logo depois de um) passa sem trocar o fundo, menos o Vaporwave. */
-  const NYAN_SCENES = new Set(['vapor', 'nyandoge', 'cowboy', 'tacnayn', 'xmas', 'pumpkin', 'pirate', 'paddy', 'vday', 'mexinyan', 'zombie', 'surfing', 'newyear', 'easter', 'star', 'captain', 'cherry', 'liberty', 'angel', 'demonic', 'biker']);
+  const NYAN_SCENES = new Set(['vapor', 'nyandoge', 'cowboy', 'tacnayn', 'xmas', 'pumpkin', 'pirate', 'paddy', 'vday', 'mexinyan', 'zombie', 'surfing', 'newyear', 'easter', 'star', 'cherry', 'liberty', 'angel', 'demonic', 'biker']);
   let nyanSceneId = null, nyanSceneCalm = 0;
   function nyanScene(cat, id, on) {
     const box = cat.parentNode;
