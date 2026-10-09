@@ -5713,7 +5713,7 @@ const FIREBASE_CONFIG = {
   const upCount = (p, name) => Math.max(0, Math.round(num((p.ups || {})[name])));
  /* Estilos de um poder, um por ficha: os estilos de luta (Berserker, Armetista, Renegado) e as variantes da
      Tecnomancia. A lista vem do poder oficial ("Nome | resumo | custo"); passivas e técnicas, do capítulo de regras.
-     O custo soma ao poder (em Luta, isso dá ataques). */
+     O custo soma ao custo do poder. */
   const powerStyles = (p) => {
     const off = p && p.id ? BUILTINS.find((b) => b.id === p.id) : null;
     const more = (((window.VORTEX_REGRAS || {}).estilos || {})[p && p.id]) || [];
@@ -7332,7 +7332,7 @@ const FIREBASE_CONFIG = {
         main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Opções (marque as compradas) ', more), ...opts.map((o, k) => powerOptRow(s, p, o, i + '-' + k))));
       }
       if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
-      if (p.id === 'of-pod-luta') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s) + ' (Poder ' + lutaPower(s) + ' + perícia Luta ' + skillOf(s, 'luta') + ')')));
+      if (p.id === 'of-pod-luta') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s) + ' (Corpo ' + attrOf(s, 'corpo') + ' + perícia Luta ' + skillOf(s, 'luta') + ')')));
       if (p.id === 'of-pod-tecnomancia') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Nível ' + tecnoLevel(p) + ': até ' + plural(tecnoLevel(p), 'efeito', 'efeitos') + ' ao mesmo tempo')));
       if (powerStyles(p).length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', styleLabel(p)), ...powerStyles(p).map((e, k) => styleRow(s, p, e, i + '-' + k))));
       if (p.id === 'of-pod-tecnomancia' && styleOf(p) && styleOf(p).name === 'Engenheiro' && tecnoLevel(p)) main.append(tecnoListRow(p, i));
@@ -8749,8 +8749,8 @@ const FIREBASE_CONFIG = {
   /* Poder Luta: ataques por rodada = UP investidos em Luta + 1, gastos como a cadência de uma arma de fogo,
      desarmado (conta como arma contundente, com proficiência) ou com arma corpo a corpo. */
   // ataques de Luta por rodada: Poder (UP investidos em Luta, com o estilo) + a perícia Luta
-  const lutaPower = (s) => ((s && s.powers) || []).filter((p) => p.id === 'of-pod-luta').reduce((t, p) => t + Math.max(1, powerUpCost(p)), 0);
-  const lutaAttacks = (s) => { const pw = lutaPower(s); return pw ? pw + skillOf(s, 'luta') : 0; };
+  const hasLuta = (s) => ((s && s.powers) || []).some((p) => p.id === 'of-pod-luta');
+  const lutaAttacks = (s) => (hasLuta(s) ? Math.max(1, attrOf(s, 'corpo') + skillOf(s, 'luta')) : 0);
   const maxShots = (i, s) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || 1, 1, 20)
     : (!i || i.kind === 'arma-melee') && lutaAttacks(s) ? clamp(lutaAttacks(s), 1, 20) : 1);
   const atkProf = (s, i) => (i ? isProficient(s, i) : lutaAttacks(s) > 0); // desarmado com Luta é proficiente
