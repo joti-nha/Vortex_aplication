@@ -3830,6 +3830,13 @@ html, body { max-width: 100%; overflow-x: clip; }
 .nyan-flock__img { position: relative; height: var(--s); width: auto; image-rendering: pixelated; }
 .nyan-flock__img--px { width: calc(var(--s) * 1.62); }
 .nyan-flock__img--art { height: var(--ih); }
+.nyan-synth { position: absolute; inset: 0; opacity: 0; transition: opacity 1.4s ease; background: radial-gradient(ellipse 60% 40% at 50% 62%, rgba(255, 60, 160, 0.55), transparent 70%), linear-gradient(#12002b 0%, #3b0a5e 38%, #a3207e 58%, #ff5fa2 62%, #12002b 62.2%); }
+.nyan-flock.is-synth .nyan-synth { opacity: 1; }
+:root[data-theme="nyan"] .hero--landing { transition: background-color 1.4s ease, backdrop-filter 1.4s ease; }
+:root.nyan-synth-on[data-theme="nyan"] .hero--landing { background: rgba(30, 8, 60, 0.3); }
+.nyan-synth::before { content: ''; position: absolute; left: 50%; bottom: 38%; width: min(52vw, 46vh); aspect-ratio: 1; transform: translate(-50%, 0); border-radius: 50%; background: linear-gradient(#fff36a 0%, #ffb02a 38%, #ff4f8b 72%, #c02aff 100%); -webkit-mask: linear-gradient(#000 0 52%, transparent 52% 55%, #000 55% 63%, transparent 63% 67%, #000 67% 74%, transparent 74% 79%, #000 79% 85%, transparent 85% 91%, #000 91%); mask: linear-gradient(#000 0 52%, transparent 52% 55%, #000 55% 63%, transparent 63% 67%, #000 67% 74%, transparent 74% 79%, #000 79% 85%, transparent 85% 91%, #000 91%); }
+.nyan-synth::after { content: ''; position: absolute; left: -60%; right: -60%; top: 62%; bottom: -10%; background: linear-gradient(#ff3fd0 0 2px, transparent 2px) 0 0 / 100% 44px, linear-gradient(90deg, #ff3fd0 0 2px, transparent 2px) 50% 0 / 64px 100%, linear-gradient(#2a0647, #0b0018); transform: perspective(260px) rotateX(58deg); transform-origin: 50% 0; animation: nyan-synth-grid 1.2s linear infinite; }
+@keyframes nyan-synth-grid { to { background-position: 0 44px, 50% 0, 0 0; } }
 .nyan-flock__cat .nyan-flock__trail { translate: 0 calc(var(--mid, 0) * var(--ih, 0px)); }
 .nyan-fly { position: fixed; left: 0; top: 0; z-index: 40; opacity: 0.95; display: flex; align-items: center; pointer-events: none; will-change: transform; }
 .nyan-fly__rainbow { display: flex; align-items: center; margin-right: -36px; -webkit-mask: linear-gradient(90deg, transparent, #000 45%); mask: linear-gradient(90deg, transparent, #000 45%); }

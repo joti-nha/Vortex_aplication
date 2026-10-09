@@ -4077,7 +4077,8 @@ const FIREBASE_CONFIG = {
     ['aoki', { frost: '#ff7ad8', dot: '#ffffff', fur: '#3a3a3a' }], ['nyanboy', { crust: '#c0c0c0', frost: '#3a9a3a', dot: '#1a5a1a' }],
     ['nyantendo', { crust: '#c0c0c0', frost: '#3a9a3a', dot: '#1a5a1a' }], ['pumpkinspice', { crust: '#d98a3a', frost: '#c86a2a', dot: '#ffd0a0' }],
     ['smurf', { frost: '#ffffff', dot: '#2a8aff' }], ['strawberry', { frost: '#ffffff', dot: '#ff2a6a' }],
-    ['vintage', { fur: '#8a7a6a', crust: '#a08a6a', frost: '#b8a080', dot: '#6a5a4a', cheek: '#a08a6a' }]
+    ['vintage', { fur: '#8a7a6a', crust: '#a08a6a', frost: '#b8a080', dot: '#6a5a4a', cheek: '#a08a6a' }],
+    ['surfing', { frost: '#d070d0', dot: '#ff99cc' }], ['vapor', { fur: '#7a6ad8', crust: '#ffb3d9', frost: '#7af0c8', dot: '#ff71ce' }]
   ];
   /* Artes originais dos Nyan Cats (img/nyan/<variante>.webp), reduzidas a 1 pixel de arte e recortadas:
      [altura em pixels de arte, pixels de arte por pixel do Nyan original (quando a arte é mais fina),
@@ -4089,7 +4090,9 @@ const FIREBASE_CONFIG = {
     '16bit': [21], angel: [24, 1, 13], biker: [36, 1, 11], bubblegum: [21], cherry: [21], cowboy: [26, 1, 15], disorder: [16],
     demonic: [28, 1, 11], levo: [42, 2], fancy: [34, 1, 24], fat: [36, 1.2], floppy: [24, 1, 13], golden: [21], kiminyan: [21],
     lavaberry: [21], liberty: [27, 1, 13], magical: [34, 1, 17], mintchoc: [21], aoki: [29, 1, 11], nyanboy: [21],
-    nyantendo: [39, 1, 28], pumpkinspice: [21], smurf: [21], strawberry: [73, 3.6], vintage: [21]
+    nyantendo: [39, 1, 28], pumpkinspice: [21], smurf: [21], strawberry: [73, 3.6], vintage: [21],
+    fiesta: [22], melon: [32, 1, 18], newyear: [200, 8.5], easter: [26, 1, 14], nyandoge: [23, 1, 10], star: [24], surfing: [28, 1, 10],
+    vapor: [21], vday: [21], zombie: [21]
   };
   /* Rastro de cada variante, pelo que ela é: cores (faixas), um símbolo repetido (notas do jazz, corações,
      estrelas, flocos, moedas...) ou um desenho (fumaça, falha de sinal, xadrez, ondas, gotas). */
@@ -4132,7 +4135,8 @@ const FIREBASE_CONFIG = {
     mintchoc: { glyph: '•', trail: ['#3a2a1a', '#7af0b0'] }, aoki: { glyph: '♫', trail: ['#ff7ad8', '#7ad8ff'] },
     nyanboy: { pattern: 'pixel', trail: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'] }, nyantendo: { pattern: 'pixel', trail: ['#c0c0c0', '#e32a2a', '#3a9a3a', '#2a2a2a'] },
     pumpkinspice: { glyph: '🍂', trail: ['#d98a3a', '#c86a2a'] }, smurf: { glyph: '🍄', trail: ['#2a8aff', '#ffffff'] },
-    strawberry: { glyph: '🍓', trail: ['#ff2a6a', '#ffffff'] }, vintage: { pattern: 'smoke', trail: ['#a08a6a', '#6a5a4a'] }
+    strawberry: { glyph: '🍓', trail: ['#ff2a6a', '#ffffff'] }, vintage: { pattern: 'smoke', trail: ['#a08a6a', '#6a5a4a'] },
+    surfing: { pattern: 'wave', trail: ['#1a6ac8', '#2aa8ff', '#7ad8ff', '#ffffff'] }, vapor: { pattern: 'wave', trail: ['#ff71ce', '#b967ff', '#01cdfe', '#05ffa1', '#fffb96'] }
   };
   function nyanTrail(t) {
     const cols = t.trail || RAINBOW;
@@ -4162,7 +4166,7 @@ const FIREBASE_CONFIG = {
     clearInterval(nyanFlockTimer);
     nyanFlockTimer = null;
     const old = document.querySelector('.nyan-flock');
-    if (!on) { if (old) old.remove(); try { localStorage.removeItem(NYAN_FLOCK_KEY); } catch (e) { /* nada */ } return; }
+    if (!on) { document.documentElement.classList.remove('nyan-synth-on'); if (old) old.remove(); try { localStorage.removeItem(NYAN_FLOCK_KEY); } catch (e) { /* nada */ } return; }
     if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const box = old || h('div', 'nyan-flock');
     box.setAttribute('aria-hidden', 'true');
@@ -4214,6 +4218,16 @@ const FIREBASE_CONFIG = {
   }
   /* Cada passagem sorteia altura, tamanho e velocidade; a cada volta o gato reaparece em outro lugar do céu.
      Ao recarregar, quem já estava no céu continua de um ponto sorteado do caminho, em vez de todos entrarem juntos. */
+  /* Sol Synthwave: céu roxo, sol em faixas pousado no horizonte e chão em grade correndo. Fica na revoada, atrás dos gatos,
+     e só acende durante a passagem do Vaporwave Nyan Cat. */
+  function nyanSynth(cat, on) {
+    const box = cat.parentNode;
+    if (!box) return;
+    let sky = box.querySelector('.nyan-synth');
+    if (!sky && on) { sky = h('div', 'nyan-synth'); box.prepend(sky); }
+    box.classList.toggle('is-synth', on);
+    document.documentElement.classList.toggle('nyan-synth-on', on); // o painel de boas-vindas fica translúcido para o sol aparecer
+  }
   function nyanFlockCat(v, i, fresh) {
     const [id, pal] = v;
     const cat = h('div', 'nyan-flock__cat');
@@ -4247,7 +4261,9 @@ const FIREBASE_CONFIG = {
       cat.style.opacity = (0.45 + Math.random() * 0.3).toFixed(2);
       const anim = cat.animate([{ transform: 'translateX(calc(-100% - 20px))' }, { transform: 'translateX(calc(100vw + 20px))' }], { duration: dur, easing: 'linear', fill: 'backwards' });
       if (start) anim.currentTime = start * dur;
-      anim.onfinish = () => { nyanSky.delete(me); setTimeout(() => pass(0), 500 + Math.random() * 5000); }; // some e volta noutro lugar
+      // enquanto o Vaporwave passa, o fundo vira o Sol Synthwave
+      if (id === 'vapor') nyanSynth(cat, true);
+      anim.onfinish = () => { nyanSky.delete(me); if (id === 'vapor') nyanSynth(cat, false); setTimeout(() => pass(0), 500 + Math.random() * 5000); }; // some e volta noutro lugar
     };
     requestAnimationFrame(() => pass(fresh ? 0 : Math.random()));
     return cat;
