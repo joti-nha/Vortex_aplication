@@ -3955,7 +3955,18 @@ const FIREBASE_CONFIG = {
     catch (e) { return { unlocked: [], active: '' }; }
   })();
   const saveThemes = () => { try { localStorage.setItem(THEME_KEY, JSON.stringify(themeState)); } catch (e) { /* sem armazenamento: vale até fechar */ } };
+  let themeBooted = false;
   function applyTheme(id) {
+    // troca de tema com as duas telas se fundindo (View Transitions); na abertura do site e onde não há suporte, troca direto
+    const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (themeBooted && !still && document.startViewTransition && (document.documentElement.dataset.theme || '') !== (id || '')) {
+      themeState.active = id; // quem chama logo depois (a lista de temas) já vê o tema novo
+      document.startViewTransition(() => applyThemeNow(id));
+      return;
+    }
+    applyThemeNow(id);
+  }
+  function applyThemeNow(id) {
     themeState.active = id;
     if (id) document.documentElement.dataset.theme = id; else delete document.documentElement.dataset.theme;
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -4003,14 +4014,14 @@ const FIREBASE_CONFIG = {
     'wtf', 'nyandoge', 'grumpy', 'wiki:terra', 'wiki:neapolitan', 'wiki:cookie', 'wiki:oreo', '16bit', 'angel', 'biker',
     'bubblegum', 'cherry', 'cowboy', 'disorder', 'demonic', 'levo', 'fancy', 'fat', 'floppy', 'golden',
     'kiminyan', 'liberty', 'magical', 'mintchoc', 'aoki', 'nyanboy', 'nyantendo', 'pumpkinspice', 'smurf',
-    'strawberry', 'vintage', 'surfing', 'vapor'
+    'strawberry', 'vintage', 'surfing', 'vapor', 'pikanyan'
   ];
   /* Artes originais dos Nyan Cats (img/nyan/<variante>.webp), reduzidas a 1 pixel de arte e recortadas:
      [altura em pixels de arte, pixels de arte por pixel do Nyan original (quando a arte é mais fina),
      altura do meio do corpo, para o rastro sair dali e não do balão ou do chapéu]. Toda variante da revoada precisa estar aqui. */
   const NYAN_ART = {
     original: [21], tacnayn: [21], mexinyan: [27, 1, 19], pumpkin: [21], nyaninja: [23, 1, 10], technyancolor: [21], xmas: [26, 1, 15],
-    pirate: [21], mummy: [21], bday: [37, 1, 26], balloon: [51, 1, 38], dub: [22], grumpy: [21], wtf: [171, 7.5], paddy: [33, 1, 23],
+    pirate: [21], pikanyan: [23, 1, 11], mummy: [21], bday: [37, 1, 26], balloon: [51, 1, 38], dub: [22], grumpy: [21], wtf: [171, 7.5], paddy: [33, 1, 23],
     'wiki:neapolitan': [21], 'wiki:oreo': [24, 1, 13], 'wiki:cookie': [21], 'wiki:terra': [26, 1, 13],
     '16bit': [21], angel: [24, 1, 13], biker: [36, 1, 11], bubblegum: [21], cherry: [21], cowboy: [26, 1, 15], disorder: [16],
     demonic: [28, 1, 11], levo: [42, 2], fancy: [34, 1, 24], fat: [36, 1.2], floppy: [24, 1, 13], golden: [21], kiminyan: [21],
@@ -4028,7 +4039,7 @@ const FIREBASE_CONFIG = {
   const NYAN_TRAILS = {
     original: {}, tacnayn: { trail: ['#1a1a1a', '#3a3a3a', '#5a5a5a', '#7a7a7a', '#9a9a9a', '#bababa'] }, mexinyan: { trail: ['#009933', '#ffffff', '#b60000'] },
     pumpkin: {}, nyaninja: {}, zombie: {},
-    technyancolor: { hue: true }, xmas: { trail: ['#33cc00', '#ffffff', '#ff0000', '#ffffff', '#33cc00', '#dedede'] }, pirate: { none: true },
+    technyancolor: { hue: true }, xmas: { trail: ['#33cc00', '#ffffff', '#ff0000', '#ffffff', '#33cc00', '#dedede'] }, pirate: { none: true }, pikanyan: { under: 0.7, trail: ['#f7e652', '#d6d6d6', '#f7e652', '#d6d6d6', '#f7e652', '#d6d6d6'] },
     mummy: {}, star: { glyph: '★', trail: ['#ffe23a', '#ffd700'] }, vday: { trail: ['#a60000', '#ff0000', '#ff4f4f', '#ff9191', '#ffc1c1', '#ffffff'] },
     easter: { trail: ['#ff84bd', '#ffad31', '#ffd684', '#5abd7b', '#7bceff', '#9c42a5'] }, paddy: {}, newyear: {},
     bday: {}, dub: { pattern: 'eq' }, melon: { trail: ['#efc5ff', '#de94ff', '#ce5aff', '#bd19ff', '#f719ff', '#94007b'] },
@@ -4145,8 +4156,8 @@ const FIREBASE_CONFIG = {
   function nyanScene(cat, id, on) {
     const box = cat.parentNode;
     if (on) {
-      // um cenário por vez, com uns 40 s de fundo normal entre um e outro; o Vaporwave sempre acende o dele
-      if (id !== 'vapor' && (nyanSceneId || performance.now() < nyanSceneCalm)) return;
+      // um cenário por vez, com uns 40 s de fundo normal entre um e outro (o Vaporwave entra no mesmo rodízio)
+      if (nyanSceneId || performance.now() < nyanSceneCalm) return;
       nyanSceneId = id;
     } else {
       if (nyanSceneId !== id) return;
@@ -4159,6 +4170,7 @@ const FIREBASE_CONFIG = {
       // o Synthwave é desenhado no CSS; os outros são pixel art em img/nyan/cenas/
       if (nyanSceneId !== 'vapor') { el.classList.add('nyan-scene--img'); el.style.setProperty('--cena', 'url(img/nyan/cenas/' + nyanSceneId + '.png)'); }
       box.prepend(el);
+      void el.offsetWidth; // o cenário novo nasce apagado e só então acende, para o fade de entrada acontecer
     }
     box.querySelectorAll('.nyan-scene').forEach((el) => el.classList.toggle('is-on', el.classList.contains('nyan-scene--' + nyanSceneId)));
     document.documentElement.classList.toggle('nyan-scene-on', !!nyanSceneId); // o painel de boas-vindas fica translúcido para o cenário aparecer
@@ -4169,7 +4181,7 @@ const FIREBASE_CONFIG = {
     const tr = NYAN_TRAILS[id] || {};
     if (!tr.none) {
       const trail = nyanTrail(tr); // o Balloon Kitty vai pendurado no balão, sem rastro
-      if (tr.under) { // Taco Dog: o GIF já traz os pedacinhos de taco, e o rastro passa por baixo deles até o corpo
+      if (tr.under) { // Taco Dog e Pikanyan: o GIF já traz o começo do rastro, e o rastro passa por baixo dele até o corpo
         trail.style.width = 'calc(var(--s) * 3.4 + var(--ih) * ' + tr.under + ')';
         trail.style.marginRight = 'calc(var(--ih) * -' + tr.under + ')';
       }
@@ -4834,6 +4846,7 @@ const FIREBASE_CONFIG = {
     return true;
   }
   applyTheme(themeState.unlocked.indexOf(themeState.active) >= 0 ? themeState.active : '');
+  themeBooted = true;
 
   /* ---------- Sons e animações de toque ----------
      Sons curtos feitos na hora (Web Audio, sem arquivos). Cada tema tem a própria "banda":

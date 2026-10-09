@@ -3844,11 +3844,13 @@ html, body { max-width: 100%; overflow-x: clip; }
 .nyan-flock__img { position: relative; height: var(--s); width: auto; image-rendering: pixelated; }
 .nyan-flock__img--art { height: var(--ih); }
 /* Cenários dos Nyan Cats famosos (nyanScene): só um aceso por vez, atrás dos gatos */
-.nyan-scene { position: absolute; inset: 0; overflow: hidden; opacity: 0; transition: opacity 1.4s ease; }
-.nyan-scene.is-on { opacity: 1; }
+.nyan-scene { position: absolute; inset: 0; overflow: hidden; opacity: 0; transform: scale(1.04); transition: opacity 2.2s ease-in-out, transform 3s ease-out; }
+.nyan-scene.is-on { opacity: 1; transform: none; }
+/* o painel de boas-vindas clareia e escurece junto com o cenário */
+/* troca de tema do site: a tela antiga se desfaz na nova */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.9s; animation-timing-function: ease-in-out; }
 .nyan-scene::before, .nyan-scene::after { content: ''; position: absolute; }
-:root[data-theme="nyan"] .hero--landing { transition: background-color 1.4s ease; }
-:root.nyan-scene-on[data-theme="nyan"] .hero--landing { background: rgba(20, 8, 50, 0.5); }
+:root.nyan-scene-on[data-theme="nyan"] .hero--landing { --hero-a: rgba(20, 8, 50, 0.5); --hero-b: rgba(20, 8, 50, 0.5); }
 /* Vaporwave: Sol Synthwave, sol em faixas pousado no horizonte e chão em grade correndo */
 .nyan-scene--vapor { background: radial-gradient(ellipse 60% 40% at 50% 62%, rgba(255, 60, 160, 0.55), transparent 70%), linear-gradient(#12002b 0%, #3b0a5e 38%, #a3207e 58%, #ff5fa2 62%, #12002b 62.2%); }
 .nyan-scene--vapor::before { left: 50%; bottom: 38%; width: min(52vw, 46vh); aspect-ratio: 1; transform: translate(-50%, 0); border-radius: 50%; background: linear-gradient(#fff36a 0%, #ffb02a 38%, #ff4f8b 72%, #c02aff 100%); -webkit-mask: linear-gradient(#000 0 52%, transparent 52% 55%, #000 55% 63%, transparent 63% 67%, #000 67% 74%, transparent 74% 79%, #000 79% 85%, transparent 85% 91%, #000 91%); mask: linear-gradient(#000 0 52%, transparent 52% 55%, #000 55% 63%, transparent 63% 67%, #000 67% 74%, transparent 74% 79%, #000 79% 85%, transparent 85% 91%, #000 91%); }
@@ -3872,7 +3874,10 @@ html, body { max-width: 100%; overflow-x: clip; }
 @keyframes nyan-fall { to { background-position: 0 120px, 60px 240px; } }
 @keyframes nyan-drift { to { transform: translateX(20%); } }
 @keyframes nyan-hue { to { filter: hue-rotate(360deg); } }
-:root[data-theme="nyan"] .hero--landing { transition: background-color 1.4s ease, backdrop-filter 1.4s ease; }
+/* as cores do painel de boas-vindas são registradas como cor para poderem se fundir: na troca de tema e quando um cenário acende ou apaga */
+@property --hero-a { syntax: '<color>'; inherits: true; initial-value: #17303f; }
+@property --hero-b { syntax: '<color>'; inherits: true; initial-value: #0f1f2b; }
+.hero--landing { transition: --hero-a 2.2s ease-in-out, --hero-b 2.2s ease-in-out, backdrop-filter 2.2s ease-in-out; }
 .nyan-flock__cat .nyan-flock__trail { translate: 0 calc(var(--mid, 0) * var(--ih, 0px)); }
 .nyan-fly { position: fixed; left: 0; top: 0; z-index: 40; opacity: 0.95; display: flex; align-items: center; pointer-events: none; will-change: transform; }
 .nyan-fly__rainbow { display: flex; align-items: center; margin-right: -36px; -webkit-mask: linear-gradient(90deg, transparent, #000 45%); mask: linear-gradient(90deg, transparent, #000 45%); }
