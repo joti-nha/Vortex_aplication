@@ -21,16 +21,15 @@
    Só as capacidades genéricas; os estilos de luta (abaixo) trazem as técnicas e passivas próprias.
    A ficha (poder Luta, em items.js) e o capítulo Habilidades usam esta mesma tabela. */
 const LUTA_MANOBRAS = [
-  ['Passo marcial', '1', 'Você se move 3 m entre um golpe e outro, sem gastar a ação de movimento.'],
-  ['Investida', '2', 'Antes do golpe, avança até o seu deslocamento em linha reta.'],
-  ['Empurrão', '1', 'Se o golpe acertar, o alvo é empurrado 3 m (Corpo + Luta contra Atletismo dele).'],
-  ['Alvo extra', '1 por alvo', 'O mesmo golpe acerta mais um alvo adjacente a você; um só teste vale para todos.'],
-  ['Golpe em área', '3', 'Golpe giratório ou no chão: todos adjacentes a você (raio 1,5 m) sofrem o ataque, com metade do dano.'],
+  ['Passo marcial', '1 por 3 m', 'Você se move 3 m por ataque gasto entre um golpe e outro, sem gastar a ação de movimento.'],
+  ['Empurrão', '1 por 3 m', 'Se o golpe acertar, o alvo é empurrado 3 m por ataque gasto (Corpo + Luta contra Atletismo dele).'],
+  ['Alvo extra', '1 por alvo', 'O mesmo golpe acerta mais um alvo adjacente a você por ataque gasto; um só teste vale para todos.'],
+  ['Golpe em área', '2 (+1 por 1,5 m)', 'Golpe giratório ou no chão: todos adjacentes a você (raio 1,5 m) sofrem o ataque, com metade do dano. Cada ataque a mais aumenta o raio em 1,5 m.'],
   ['Junção à manobra', '3', 'O golpe e uma manobra (derrubar, desarmar, agarrar ou quebrar a guarda; Luta contra Resistência ou Reflexos) saem juntos, sem gastar outra ação.'],
-  ['Efeito do dano', '2', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa até o fim do próximo turno do alvo, perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta.'],
+  ['Efeito do dano', '2 (+1 por +1 CD)', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa até o fim do próximo turno do alvo, perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta; cada ataque a mais soma +1 na CD.'],
   ['Trocar o dano', '1', 'Neste golpe, a arma causa outro tipo de dano (cortante, contundente ou perfurante): de lado, com o cabo, com a ponta.'],
-  ['Guarda', '1 cada', 'Até o seu próximo turno, +1 na defesa contra ataques corpo a corpo por ataque gasto (máximo +3).'],
-  ['Arremesso', '1', 'Arremessa a arma corpo a corpo ou um objeto à mão: ataque com Luta até 9 m.']
+  ['Guarda', '1 por +1', 'Até o seu próximo turno, +1 na defesa contra ataques corpo a corpo por ataque gasto (máximo +3).'],
+  ['Arremesso', '1 por 9 m', 'Arremessa a arma corpo a corpo ou um objeto à mão: ataque com Luta até 9 m por ataque gasto.']
 ];
 /* Estilos de luta: o "upgrade" do poder Luta. Um por ficha; o custo em UP soma ao seu poder em Luta.
    Cada um traz passivas únicas e técnicas próprias, que gastam ataques da rodada como os efeitos básicos. */
@@ -44,7 +43,7 @@ const LUTA_ESTILOS = [
     tecnicas: [
       ['Golpe brutal', '2', 'O golpe causa +1d6 de dano.'],
       ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
-      ['Investida esmagadora', '3', 'Como a Investida, e se o golpe acertar o alvo cai (Corpo + Luta contra Atletismo dele).'],
+      ['Golpe esmagador', '2', 'Se o golpe acertar, o alvo cai (Corpo + Luta contra Atletismo dele).'],
       ['Grito de guerra', '1', 'Intimidação contra Vontade de quem ouvir, em 6 m; quem perder tem –1 no ataque contra você até o fim da rodada.'],
       ['Ignorar a dor', '1 (guardado)', 'Guarde um ataque: como reação a um golpe que acertou, o dano dele cai pela metade.']
     ] },
@@ -58,7 +57,7 @@ const LUTA_ESTILOS = [
       ['Aparar', '1 (guardado)', 'Guarde um ataque: como reação a um golpe corpo a corpo, faça um teste de Luta contra o ataque; se vencer, o golpe não acerta.'],
       ['Desarme no golpe', '1', 'Se o golpe acertar, o alvo solta a arma (Luta contra Reflexos dele).'],
       ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
-      ['Guarda de lâmina', '1 cada', 'Como a Guarda, mas +2 por ataque gasto (máximo +4).'],
+      ['Guarda de lâmina', '1 por +2', 'Como a Guarda, mas +2 por ataque gasto (máximo +4).'],
       ['Arremesso duplo', '1', 'Arremessa duas armas à mão no mesmo ataque, em alvos até 9 m; cada uma faz o seu teste.']
     ] },
   { name: 'Renegado', cost: 2, resumo: 'Briga suja: golpes baixos, truques e saídas rápidas, com o que estiver à mão.',
@@ -72,12 +71,52 @@ const LUTA_ESTILOS = [
       ['Contra-ataque', '1 (guardado)', 'Guarde um ataque: quando um inimigo errar um ataque corpo a corpo em você, golpeie-o como reação.'],
       ['Areia nos olhos', '2', 'Enganação contra Reflexos do alvo; se vencer, ele fica Cego até o fim do próximo turno dele.'],
       ['Rasteira', '1', 'Se o golpe acertar, o alvo cai (Luta contra Atletismo dele).'],
-      ['Saída suja', '1', 'Você se afasta 3 m sem provocar reação de quem está adjacente.']
+      ['Saída suja', '1 por 3 m', 'Você se afasta 3 m por ataque gasto sem provocar reação de quem está adjacente.']
     ] }
+];
+/* Tecnomancia: o poder principal dos tecnomantes. Cada nível compra um modo de ação; o efeito gerado
+   copia um componente (poder, equipamento, mod, propriedade, prótese). Um tipo de tecnomante por jogador:
+   só o Engenheiro tem regras; Patrocinado e Insano são citados e chegam depois. */
+const TECNO_ACOES = [
+  ['Instantâneo', 'Ação', 'Gera um efeito explosivo na hora. A duração em campo ou no alvo é a do efeito copiado.'],
+  ['Passivo', 'Nenhuma', 'Fica ativo sem gastar ação, pela duração do efeito copiado. A sustentação é paga no mínimo uma vez por cena, então o efeito passivo dura até uma cena.'],
+  ['Concentrado', 'Ação, toda rodada', 'Gera o efeito uma vez por rodada pagando metade do custo, ou sustenta um efeito passivo pela metade do custo. Dura até você encerrar, cair inconsciente ou sofrer um efeito que tome a sua ação completa (movimento + padrão).'],
+  ['Ativo', 'Ação (ao ativar)', 'Você fabrica o efeito antes: paga o PE na fabricação e trabalha 1 hora por PE. Depois, ativa quando quiser, seguindo as regras do Instantâneo.'],
+  ['Reativo', 'Reação', 'Como o Instantâneo, mas em reação a uma ação. Permite usar qualquer efeito que tenha a reação como ação.']
+];
+// Listas de componentes do Engenheiro: uma por nível (pode repetir uma lista)
+const TECNO_LISTAS = [
+  ['Poderes', 'Poderes do banco: os das Habilidades e os criados na Oficina.'],
+  ['Equipamento', 'Habilidades de armas, armaduras e itens.'],
+  ['Mods', 'Efeitos de mods de armas e armaduras.'],
+  ['Propriedades', 'Propriedades de armas e armaduras.'],
+  ['Próteses e módulos', 'Efeitos de próteses e módulos.']
+];
+// PE por raridade do efeito copiado (equipamento, mod, propriedade, prótese)
+const TECNO_RARIDADE = [['Comum', '1 PE'], ['Incomum', '2 PE'], ['Rara', '3 PE'], ['Épica', '4 PE'], ['Lendária', '5 PE']];
+// Ampliações de um efeito de equipamento
+const TECNO_AMPLIA = [
+  ['Dano', '+1 PE', '+1d6 no dano.'],
+  ['Área', '+2 PE', 'O efeito vira uma área de 3 m de raio (+1 PE a cada 3 m a mais).'],
+  ['Cadência', '+1 PE', '+1 na cadência do ataque.'],
+  ['Alcance', '+1 PE', 'Dobra o alcance.'],
+  ['Alvo extra', '+1 PE', 'Mais um alvo, cada um com o seu teste.']
+];
+const TECNO_TIPOS = [
+  { name: 'Engenheiro', cost: 0, resumo: 'Monta a tecnomancia a partir de listas de componentes.',
+    passivas: [
+      ['Listas', 'A cada nível em Tecnomancia, escolha uma lista de componentes (Poderes, Equipamento, Mods, Propriedades, Próteses e módulos). Você pode copiar qualquer componente das listas que tem.'],
+      ['Especialização', 'Em vez de uma lista nova, escolha de novo uma que já tem: ganha acesso às características únicas de Essência ou Precisão dessa lista (detalhes em breve).']
+    ] },
+  { name: 'Patrocinado', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' },
+  { name: 'Insano', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' }
 ];
 window.VORTEX_REGRAS = {
   lutaManobras: LUTA_MANOBRAS,
   lutaEstilos: LUTA_ESTILOS,
+  tecnoAcoes: TECNO_ACOES,
+  tecnoListas: TECNO_LISTAS,
+  estilos: { 'of-pod-luta': LUTA_ESTILOS, 'of-pod-tecnomancia': TECNO_TIPOS },
   groups: ['Fundamentos', 'Combate', 'Equipamento', 'Personagem'],
   chapters: [
 
@@ -1002,19 +1041,41 @@ window.VORTEX_REGRAS = {
         ]],
         ['card', 'Luta', [
           ['kv', '', [['Custo', '1 Up point (+ o custo do estilo de luta, se comprar um)']]],
-          ['p', 'O principal poder marcial: faz quem luta corpo a corpo competir em dano com as armas de fogo.'],
+          ['p', 'Você domina o combate corpo a corpo e golpeia várias vezes por rodada, rivalizando em dano com quem usa armas de fogo.'],
           ['p', 'Seus ataques desarmados contam como uma arma contundente para todos os efeitos, sem precisar de luvas ou armas desse gênero, e você é proficiente com eles.'],
-          ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu Poder (os Up points investidos em Luta, com o estilo) + a sua perícia Luta. Eles funcionam como a cadência de uma arma de fogo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
-          ['example', 'Luta com 1 Up point e perícia Luta 2 → 3 ataques por rodada. Desarmado, dois golpes no mesmo alvo: –2 no ataque, dano ×2.'],
-          ['p', 'Em vez de golpear, você pode gastar esses ataques nos efeitos marciais básicos abaixo. Os ataques são contados por rodada e não acumulam.'],
+          ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu atributo Corpo + a sua perícia Luta. Eles funcionam como a cadência de uma arma de fogo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
+          ['example', 'Corpo 2 e perícia Luta 1 → 3 ataques por rodada. Desarmado, dois golpes no mesmo alvo: –2 no ataque, dano ×2.'],
+          ['p', 'Em vez de golpear, você pode gastar esses ataques nos efeitos marciais básicos abaixo. A tabela é proporcional: cada ataque gasto vale 3 m de movimento, e os efeitos que acumulam crescem um passo por ataque. Os ataques são contados por rodada e não acumulam.'],
           ['table', ['Efeito', 'Custo', 'O que faz'], LUTA_MANOBRAS],
-          ['p', '**Estilos de luta.** Os efeitos básicos servem a qualquer lutador; um estilo é o upgrade do poder, com passivas únicas e técnicas próprias que melhoram o básico. Só dá para ter **um estilo por ficha**, e o custo dele soma ao seu Poder em Luta (e aos ataques).'],
+          ['p', '**Estilos de luta.** Os efeitos básicos servem a qualquer lutador; um estilo é o upgrade do poder, com passivas únicas e técnicas próprias que melhoram o básico. Só dá para ter **um estilo por ficha**, e o custo dele soma ao custo do poder.'],
           ...LUTA_ESTILOS.flatMap((e) => [
             ['p', '**' + e.name + ' (' + e.cost + ' Up points).** ' + e.resumo],
             ['dl', e.passivas],
             ['table', ['Técnica', 'Custo', 'O que faz'], e.tecnicas]
           ]),
           ['note', 'Técnico', 'Luta não combina direto com tecnomagia: ela se refere à ação de atacar, e não dá para atacar e conjurar ao mesmo tempo. Para complementar os ataques com tecnomancia, é preciso um poder cuja descrição diga que “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia”.']
+        ]],
+        ['card', 'Tecnomancia', [
+          ['kv', '', [['Custo', '1 Up point por nível'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'igual ao nível']]],
+          ['p', 'O poder principal dos tecnomantes: você gasta Essência para reproduzir o efeito de um componente, como um poder, um equipamento, um mod ou uma prótese. Cada jogador tem um único tipo de tecnomancia.'],
+          ['p', '**Nível.** Cada nível, incluindo o primeiro, custa 1 Up point e compra um modo de ação. Você mantém ao mesmo tempo um número de efeitos igual ao seu nível.'],
+          ['table', ['Modo', 'Ação', 'Como funciona'], TECNO_ACOES],
+          ['p', '**Efeito copiado.** Todo efeito que você gera copia um componente: usa a duração, a ação e as exigências do original, pagas em PE.'],
+          ['p', '**Custo de um componente.**'],
+          ['ul', [
+            '**Poder:** paga em PE o dobro do custo de uso normal + o custo em Up points do poder.',
+            '**Equipamento, mod, propriedade ou prótese:** paga o PE pela raridade do efeito (tabela) + o custo por uso do original, se houver.',
+            '**Exigências:** siga as do original. Se for um “ataque”, faça o teste de ataque com Operações; se pedir uma ação, gaste essa ação.',
+            '**Um por ação de uso:** em cada ação de uso, só um efeito ativo por vez.'
+          ]],
+          ['example', 'Poder de 1 Up point com uso de 3 PE: 3 × 2 + 1 = 7 PE. Uma propriedade rara de arma, sem custo de uso: 3 PE.'],
+          ['table', ['Raridade do efeito', 'Custo'], TECNO_RARIDADE],
+          ['p', '**Ampliações.** Um efeito de equipamento pode ser ampliado, somando ao custo:'],
+          ['table', ['Ampliação', 'Custo', 'O que faz'], TECNO_AMPLIA],
+          ['p', '**Tipo de tecnomante (um por jogador).** Define de onde vêm os seus componentes.'],
+          ['p', '**Engenheiro.** A cada nível, escolha uma lista de componentes. Você pode copiar qualquer componente das listas que tem. Em vez de uma lista nova, você pode escolher de novo uma que já tem, ganhando acesso às características únicas de Essência ou Precisão dessa lista (detalhes em breve).'],
+          ['dl', TECNO_LISTAS],
+          ['p', '**Patrocinado e Insano.** Cada um obtém componentes de um jeito diferente. Em breve.']
         ]],
         ['card', 'Akimbo', [
           ['p', 'Você pode empunhar pistolas ou submetralhadoras uma em cada mão (ou uma de cada, seja irado!). O tempo de recarga aumenta em uma categoria (ação livre para bônus, bônus para movimento, movimento para ação padrão, ação padrão para ação completa.)'],
