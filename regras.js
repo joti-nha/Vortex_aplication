@@ -74,12 +74,12 @@ const LUTA_ESTILOS = [
       ['Saída suja', '1 por 3 m', 'Você se afasta 3 m por ataque gasto sem provocar reação de quem está adjacente.']
     ] }
 ];
-/* Tecnomancia: o poder principal dos tecnomantes. Cada nível compra um modo de ação; o efeito gerado
-   copia um componente (poder, equipamento, mod, propriedade, prótese). Um tipo de tecnomante por jogador:
-   só o Engenheiro tem regras; Patrocinado e Insano são citados e chegam depois. */
+/* Tecnomancia: o poder principal dos tecnomantes. Cada nível compra um modo de ação e uma lista de componentes.
+   Toda operação é uma base (ataque, ação efetiva ou item) + implementos (padrão ou especiais, vindos das listas).
+   Um tipo de tecnomante por jogador: só o Engenheiro tem regras; Patrocinado e Insano são citados e chegam depois. */
 const TECNO_ACOES = [
-  ['Instantâneo', 'Ação', 'Gera um efeito explosivo na hora. A duração em campo ou no alvo é a do efeito copiado.'],
-  ['Passivo', 'Nenhuma', 'Fica ativo sem gastar ação, pela duração do efeito copiado. A sustentação é paga no mínimo uma vez por cena, então o efeito passivo dura até uma cena.'],
+  ['Instantâneo', 'Ação', 'Gera um efeito explosivo na hora. A duração em campo ou no alvo é a do efeito.'],
+  ['Passivo', 'Nenhuma', 'Fica ativo sem gastar ação. Paga a sustentação no mínimo uma vez por cena, então dura até uma cena. Só serve para efeitos que aprimoram ou energizam o alvo: nunca ataque, condição negativa ou habilidade que precise ser ativada ou gaste ação.'],
   ['Concentrado', 'Ação, toda rodada', 'Gera o efeito uma vez por rodada pagando metade do custo, ou sustenta um efeito passivo pela metade do custo. Dura até você encerrar, cair inconsciente ou sofrer um efeito que tome a sua ação completa (movimento + padrão).'],
   ['Ativo', 'Ação (ao ativar)', 'Você fabrica o efeito antes: paga o PE na fabricação e trabalha 1 hora por PE. Depois, ativa quando quiser, seguindo as regras do Instantâneo.'],
   ['Reativo', 'Reação', 'Como o Instantâneo, mas em reação a uma ação. Permite usar qualquer efeito que tenha a reação como ação.']
@@ -87,26 +87,36 @@ const TECNO_ACOES = [
 // Listas de componentes do Engenheiro: uma por nível (pode repetir uma lista)
 const TECNO_LISTAS = [
   ['Poderes', 'Poderes do banco: os das Habilidades e os criados na Oficina.'],
-  ['Equipamento', 'Habilidades de armas, armaduras e itens.'],
-  ['Mods', 'Efeitos de mods de armas e armaduras.'],
-  ['Propriedades', 'Propriedades de armas e armaduras.'],
-  ['Próteses e módulos', 'Efeitos de próteses e módulos.']
+  ['Equipamento', 'Armas, armaduras, granadas e outros itens.'],
+  ['Propriedades', 'As propriedades de armas e armaduras do sistema.'],
+  ['Mods', 'Mods de armas e armaduras.'],
+  ['Próteses e módulos', 'Próteses e módulos.']
 ];
-// PE por raridade do efeito copiado (equipamento, mod, propriedade, prótese)
+// Bases de uma operação
+const TECNO_BASES = [
+  ['Ataque', 'Grátis', 'Ataque de toque, sem multiplicador de dano. Teste: 2d6 + atributo chave + Operações contra a Defesa do alvo. Dano = ataque – Defesa, do tipo mágico.'],
+  ['Ação efetiva', 'Grátis', 'Causa um efeito em algo ou alguém. Recarregar Escudo segue a regra de Cura: teste de atributo chave + Operações contra a CD; o alvo recupera a diferença.'],
+  ['Item', 'Raridade + custo do item', 'Usa um item conhecido como base: paga o PE da raridade + qualquer custo original do item.']
+];
+// PE por raridade de um componente (base Item ou implemento especial)
 const TECNO_RARIDADE = [['Comum', '1 PE'], ['Incomum', '2 PE'], ['Rara', '3 PE'], ['Épica', '4 PE'], ['Lendária', '5 PE']];
-// Ampliações de um efeito de equipamento
-const TECNO_AMPLIA = [
-  ['Dano', '+1 PE', '+1d6 no dano.'],
-  ['Área', '+2 PE', 'O efeito vira uma área de 3 m de raio (+1 PE a cada 3 m a mais).'],
-  ['Cadência', '+1 PE', '+1 na cadência do ataque.'],
-  ['Alcance', '+1 PE', 'Dobra o alcance.'],
-  ['Alvo extra', '+1 PE', 'Mais um alvo, cada um com o seu teste.']
+// Implementos padrão: todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.
+const TECNO_IMPLEMENTOS = [
+  ['Alcance', '+1 PE', 'Sobe uma categoria de alcance: toque, Curto (até 10 m), Médio, Longo...'],
+  ['Área', '+2 PE', 'O efeito vira uma área de 3 m de raio, dentro do alcance. Cada repetição soma +3 m de raio.'],
+  ['Intensificar', '+1 PE', 'Multiplica o dano como a cadência: cada Intensificar conta como um disparo a mais na tabela das Regras de Cadência (multiplicador e penalidade).'],
+  ['Modificador', '+1 PE', '+1 no teste da operação (ataque, cura ou efeito).'],
+  ['CD', '+1 PE', '+1 na CD que o alvo precisa vencer para resistir ao efeito.'],
+  ['Alvo extra', '+1 PE', 'Mais um alvo, cada um com o seu teste.'],
+  ['Tipo de dano', '+1 PE', 'Troca o dano mágico por um tipo que você tenha de uma fonte conhecida.']
 ];
 const TECNO_TIPOS = [
-  { name: 'Engenheiro', cost: 0, resumo: 'Monta a tecnomancia a partir de listas de componentes.',
+  { name: 'Engenheiro', cost: 0, resumo: 'Monta a tecnomancia a partir de listas de componentes, uma por nível.',
     passivas: [
-      ['Listas', 'A cada nível em Tecnomancia, escolha uma lista de componentes (Poderes, Equipamento, Mods, Propriedades, Próteses e módulos). Você pode copiar qualquer componente das listas que tem.'],
-      ['Especialização', 'Em vez de uma lista nova, escolha de novo uma que já tem: ganha acesso às características únicas de Essência ou Precisão dessa lista (detalhes em breve).']
+      ['Listas', 'A cada nível em Tecnomancia, escolha uma lista de componentes (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos) e o atributo chave dela: Precisão ou Essência.'],
+      ['Componentes conhecidos', 'Em cada lista, você conhece um número de componentes igual a atributo chave + Operações. Eles servem de base Item ou de implementos especiais.'],
+      ['Repetir uma lista', 'Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes conhecidos dela.'],
+      ['Limite de implementos', 'Numa operação, o número de implementos é no máximo o atributo chave da lista usada.']
     ] },
   { name: 'Patrocinado', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' },
   { name: 'Insano', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' }
@@ -116,6 +126,7 @@ window.VORTEX_REGRAS = {
   lutaEstilos: LUTA_ESTILOS,
   tecnoAcoes: TECNO_ACOES,
   tecnoListas: TECNO_LISTAS,
+  tecnoImplementos: TECNO_IMPLEMENTOS,
   estilos: { 'of-pod-luta': LUTA_ESTILOS, 'of-pod-tecnomancia': TECNO_TIPOS },
   groups: ['Fundamentos', 'Combate', 'Equipamento', 'Personagem'],
   chapters: [
@@ -384,6 +395,7 @@ window.VORTEX_REGRAS = {
         ['formula', '', 'Fonte do dano = Ataque – Defesa do alvo'],
         ['p', 'Se o resultado for zero ou negativo, o mínimo de dano é sempre 1. (A menos que alguma fonte altere essa condição.)'],
         ['p', 'Quando um ataque supera sua defesa você recebe danos que afetam suas resistências (Vida, Blindagem e Escudo: veja abaixo).'],
+        ['p', '**Dano fixo e dano de efeito.** Fora do cálculo acima, só o dano fixo e o dano de efeito (como o Sangramento ou o dano adicional de alguns itens) podem rolar um dado de dano ou somar dano que passa pela Defesa do alvo.'],
 
         ['h2', 'Tipo de dano'],
         ['p', 'Os tipos de dano variam; eles têm interações únicas e diretas contra ou a favor de alvos específicos que contenham fraquezas ou resistências.'],
@@ -1056,24 +1068,29 @@ window.VORTEX_REGRAS = {
           ['note', 'Técnico', 'Luta não combina direto com tecnomagia: ela se refere à ação de atacar, e não dá para atacar e conjurar ao mesmo tempo. Para complementar os ataques com tecnomancia, é preciso um poder cuja descrição diga que “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia”.']
         ]],
         ['card', 'Tecnomancia', [
-          ['kv', '', [['Custo', '1 Up point por nível'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'igual ao nível']]],
-          ['p', 'O poder principal dos tecnomantes: você gasta Essência para reproduzir o efeito de um componente, como um poder, um equipamento, um mod ou uma prótese. Cada jogador tem um único tipo de tecnomancia.'],
-          ['p', '**Nível.** Cada nível, incluindo o primeiro, custa 1 Up point e compra um modo de ação. Você mantém ao mesmo tempo um número de efeitos igual ao seu nível.'],
+          ['kv', '', [['Custo', '1 Up point por nível (até 5)'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'um por modo de ação']]],
+          ['p', 'O poder principal dos tecnomantes: você gasta Essência para montar **operações**, efeitos feitos de uma base e de implementos. Cada jogador tem um único tipo de tecnomancia.'],
+          ['h3', 'Nível'],
+          ['p', 'Cada nível, incluindo o primeiro, custa 1 Up point e compra **um modo de ação** e **uma lista de componentes**. Um modo não pode ser comprado duas vezes, então o nível máximo é 5. Você mantém **um efeito ativo por modo de ação** que tem.'],
           ['table', ['Modo', 'Ação', 'Como funciona'], TECNO_ACOES],
-          ['p', '**Efeito copiado.** Todo efeito que você gera copia um componente: usa a duração, a ação e as exigências do original, pagas em PE.'],
-          ['p', '**Custo de um componente.**'],
+          ['h3', 'Operação = base + implementos'],
+          ['p', 'Toda operação começa por uma **base**. Depois você soma **implementos**, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o atributo chave da lista usada (Precisão ou Essência).'],
+          ['table', ['Base', 'Custo', 'Como funciona'], TECNO_BASES],
+          ['note', 'Dano', 'Toda forma de causar dano segue a regra de ataque, com o multiplicador da cadência. Dado de dano ou dano que passa pela Defesa só vem de **dano fixo** ou **dano de efeito** de um componente conhecido, como o Sangramento ou o dano adicional de alguns itens.'],
+          ['p', '**Implementos padrão.** Todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.'],
+          ['table', ['Implemento', 'Custo', 'O que faz'], TECNO_IMPLEMENTOS],
+          ['p', '**Implementos especiais.** São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Você usa numa operação no máximo um número de implementos especiais igual ao seu nível em Tecnomancia.'],
           ['ul', [
-            '**Poder:** paga em PE o dobro do custo de uso normal + o custo em Up points do poder.',
-            '**Equipamento, mod, propriedade ou prótese:** paga o PE pela raridade do efeito (tabela) + o custo por uso do original, se houver.',
-            '**Exigências:** siga as do original. Se for um “ataque”, faça o teste de ataque com Operações; se pedir uma ação, gaste essa ação.',
-            '**Um por ação de uso:** em cada ação de uso, só um efeito ativo por vez.'
+            '**Poder:** custa em PE o dobro do custo de uso + o custo em Up points do poder.',
+            '**Equipamento, propriedade, mod ou prótese:** custa o PE da raridade (tabela) + qualquer custo original.',
+            '**Exigências:** siga as do original. Se ele pede uma ação, gaste essa ação.'
           ]],
-          ['example', 'Poder de 1 Up point com uso de 3 PE: 3 × 2 + 1 = 7 PE. Uma propriedade rara de arma, sem custo de uso: 3 PE.'],
-          ['table', ['Raridade do efeito', 'Custo'], TECNO_RARIDADE],
-          ['p', '**Ampliações.** Um efeito de equipamento pode ser ampliado, somando ao custo:'],
-          ['table', ['Ampliação', 'Custo', 'O que faz'], TECNO_AMPLIA],
-          ['p', '**Tipo de tecnomante (um por jogador).** Define de onde vêm os seus componentes.'],
-          ['p', '**Engenheiro.** A cada nível, escolha uma lista de componentes. Você pode copiar qualquer componente das listas que tem. Em vez de uma lista nova, você pode escolher de novo uma que já tem, ganhando acesso às características únicas de Essência ou Precisão dessa lista (detalhes em breve).'],
+          ['table', ['Raridade', 'Custo'], TECNO_RARIDADE],
+          ['example', 'Com Precisão 2, um ataque a alcance Médio: base Ataque (grátis) + Alcance duas vezes (toque → Curto → Médio) = 2 PE e 2 implementos, o máximo com Precisão 2. Com Precisão 3, ainda caberia uma Área (+2 PE).'],
+          ['h3', 'Tipo de tecnomante (um por jogador)'],
+          ['p', 'Define de onde vêm os seus componentes.'],
+          ['p', '**Engenheiro.** A cada nível, escolha uma lista de componentes e o atributo chave dela (Precisão ou Essência). Você conhece um número de componentes da lista igual a atributo chave + Operações, e eles servem de base Item ou de implementos especiais. Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes dela.'],
+          ['example', 'O Engenheiro compra Tecnomancia: escolhe a lista Equipamento com Precisão como atributo chave e o modo Instantâneo. Com Precisão 2 e Operações 1, conhece 3 itens (por exemplo, uma armadura, uma arma e uma granada).'],
           ['dl', TECNO_LISTAS],
           ['p', '**Patrocinado e Insano.** Cada um obtém componentes de um jeito diferente. Em breve.']
         ]],
