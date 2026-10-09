@@ -4145,8 +4145,8 @@ const FIREBASE_CONFIG = {
   function nyanScene(cat, id, on) {
     const box = cat.parentNode;
     if (on) {
-      // um cenário por vez, com uns 40 s de fundo normal entre um e outro; o Vaporwave sempre acende o dele
-      if (id !== 'vapor' && (nyanSceneId || performance.now() < nyanSceneCalm)) return;
+      // um cenário por vez, com uns 40 s de fundo normal entre um e outro (o Vaporwave entra no mesmo rodízio)
+      if (nyanSceneId || performance.now() < nyanSceneCalm) return;
       nyanSceneId = id;
     } else {
       if (nyanSceneId !== id) return;
