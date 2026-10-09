@@ -3520,36 +3520,42 @@ html, body { max-width: 100%; overflow-x: clip; }
   --rail-a: #1c1f55; --rail-b: #0b0d2c; --hero-a: #3a3486; --hero-b: #171a4e;
   --sombra: 0 18px 40px -22px rgba(255, 214, 110, 0.45);
 }
-/* o céu: noite real no alto, aurora dourada no horizonte, e uma glória de sol atrás do topo */
+/* um buraco branco: o contrário do buraco negro, um núcleo que só expele luz e matéria.
+   Núcleo branco puro, horizonte de ouro, disco de matéria saindo em espiral e anéis de luz se afastando. */
+/* o núcleo fica atrás do painel de boas-vindas, onde a espiral está; no celular, no meio */
+:root[data-theme="god"] { --wh-x: 50vw; --wh-y: 30vh; }
+@media (min-width: 900px) { :root[data-theme="god"] { --wh-x: 70vw; --wh-y: 32vh; } }
 :root[data-theme="god"] body {
   background:
-    radial-gradient(60vmax 38vmax at 50% -6%, rgba(255, 248, 214, 0.55), rgba(255, 221, 140, 0.22) 38%, transparent 70%),
-    radial-gradient(120vmax 50vmax at 50% 118%, rgba(255, 196, 120, 0.55), rgba(232, 140, 150, 0.25) 40%, transparent 72%),
-    linear-gradient(180deg, #0b0d2e 0%, #161a52 38%, #2c2a6e 64%, #5b3d7a 84%, #a8657a 100%);
+    radial-gradient(circle at var(--wh-x) var(--wh-y), #fff 0, #fff 3.2vmax, rgba(255, 252, 236, 0.96) 4.4vmax, rgba(255, 233, 168, 0.7) 7vmax, rgba(255, 206, 120, 0.32) 13vmax, rgba(180, 150, 255, 0.16) 26vmax, transparent 48vmax),
+    radial-gradient(90vmax 60vmax at var(--wh-x) var(--wh-y), rgba(92, 84, 190, 0.5), transparent 70%),
+    linear-gradient(180deg, #07081f 0%, #0d1035 45%, #151845 100%);
   background-attachment: fixed;
 }
-/* raios da glória girando devagar, saindo do alto do céu */
+/* disco de matéria expelida: braços em espiral girando para fora a partir do horizonte */
 :root[data-theme="god"] body::before {
-  content: ""; position: fixed; left: 50%; top: -70vmax; z-index: -1; width: 170vmax; height: 170vmax; margin-left: -85vmax; pointer-events: none; opacity: 0.3;
-  background: repeating-conic-gradient(from 0deg, rgba(255, 246, 210, 0.95) 0deg 2.5deg, transparent 2.5deg 9deg, rgba(255, 222, 150, 0.5) 9deg 10deg, transparent 10deg 15deg);
-  -webkit-mask: radial-gradient(circle, #000 0 14%, rgba(0, 0, 0, 0.5) 30%, transparent 52%); mask: radial-gradient(circle, #000 0 14%, rgba(0, 0, 0, 0.5) 30%, transparent 52%);
-  animation: vx-spin 180s linear infinite;
-}
-/* estrelas no alto e nuvens douradas no horizonte */
-:root[data-theme="god"] body::after {
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  content: ""; position: fixed; left: var(--wh-x); top: var(--wh-y); z-index: -1; width: 150vmax; height: 150vmax; margin: -75vmax 0 0 -75vmax; pointer-events: none; opacity: 0.55;
   background:
-    radial-gradient(42vmax 9vmax at 12% 100%, rgba(255, 236, 214, 0.42), transparent 70%),
-    radial-gradient(36vmax 8vmax at 46% 103%, rgba(255, 244, 226, 0.4), transparent 70%),
-    radial-gradient(44vmax 10vmax at 86% 101%, rgba(255, 228, 200, 0.42), transparent 70%),
-    radial-gradient(30vmax 6vmax at 30% 94%, rgba(255, 250, 238, 0.22), transparent 70%),
-    radial-gradient(28vmax 6vmax at 70% 95%, rgba(255, 250, 238, 0.2), transparent 70%),
-    radial-gradient(1.6px 1.6px at 12% 14%, #fff, transparent), radial-gradient(1.2px 1.2px at 28% 32%, #fff6d8, transparent),
-    radial-gradient(1.4px 1.4px at 77% 11%, #fff, transparent), radial-gradient(1px 1px at 90% 36%, #fff6d8, transparent),
-    radial-gradient(1.2px 1.2px at 62% 24%, #fff, transparent), radial-gradient(1px 1px at 6% 46%, #fff6d8, transparent);
-  animation: god-twinkle 6s ease-in-out infinite;
+    repeating-conic-gradient(from 0deg, rgba(255, 250, 225, 0.9) 0deg 1.5deg, transparent 1.5deg 7deg, rgba(255, 214, 130, 0.55) 7deg 8deg, transparent 8deg 12deg),
+    conic-gradient(from 90deg, rgba(255, 236, 170, 0.35), rgba(170, 150, 255, 0.25), rgba(255, 236, 170, 0.35), rgba(120, 190, 255, 0.22), rgba(255, 236, 170, 0.35));
+  -webkit-mask: radial-gradient(circle, transparent 0 2.4%, #000 3.4%, rgba(0, 0, 0, 0.55) 14%, transparent 42%); mask: radial-gradient(circle, transparent 0 2.4%, #000 3.4%, rgba(0, 0, 0, 0.55) 14%, transparent 42%);
+  animation: vx-spin 120s linear infinite reverse;
 }
-@keyframes god-twinkle { 50% { opacity: 0.82; } }
+/* ondas de luz saindo do núcleo e estrelas ao fundo */
+:root[data-theme="god"] body::after {
+  content: ""; position: fixed; left: var(--wh-x); top: var(--wh-y); z-index: -1; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax; pointer-events: none;
+  background:
+    repeating-radial-gradient(circle, transparent var(--god-wave), rgba(255, 244, 200, 0.18) calc(var(--god-wave) + 0.4vmax), transparent calc(var(--god-wave) + 1.2vmax), transparent calc(var(--god-wave) + 6.4vmax)),
+    radial-gradient(1.6px 1.6px at 20% 30%, #fff, transparent), radial-gradient(1.2px 1.2px at 32% 42%, #fff6d8, transparent),
+    radial-gradient(1.4px 1.4px at 71% 33%, #fff, transparent), radial-gradient(1px 1px at 80% 47%, #fff6d8, transparent),
+    radial-gradient(1.2px 1.2px at 62% 61%, #fff, transparent), radial-gradient(1px 1px at 26% 64%, #fff6d8, transparent),
+    radial-gradient(1.3px 1.3px at 44% 70%, #fff, transparent), radial-gradient(1px 1px at 57% 28%, #fff6d8, transparent);
+  -webkit-mask: radial-gradient(circle, transparent 0 1.6%, #000 4%, rgba(0, 0, 0, 0.6) 30%, rgba(0, 0, 0, 0.35) 50%); mask: radial-gradient(circle, transparent 0 1.6%, #000 4%, rgba(0, 0, 0, 0.6) 30%, rgba(0, 0, 0, 0.35) 50%);
+  animation: god-burst 7s linear infinite;
+}
+/* as ondas andam um anel inteiro por ciclo, então o laço não salta (sem @property, ficam paradas) */
+@property --god-wave { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes god-burst { from { --god-wave: 0vmax; } to { --god-wave: 6.4vmax; } }
 /* superfícies: vidro com filete de ouro e brilho por dentro */
 :root[data-theme="god"] .block, :root[data-theme="god"] .dash-panel, :root[data-theme="god"] .prog__card {
   border-color: rgba(233, 201, 106, 0.45);
@@ -3557,7 +3563,7 @@ html, body { max-width: 100%; overflow-x: clip; }
   box-shadow: inset 0 1px 0 rgba(255, 244, 210, 0.22), 0 0 0 1px rgba(255, 214, 110, 0.08), var(--sombra);
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
-:root[data-theme="god"] .hero--landing { border-color: rgba(233, 201, 106, 0.6); box-shadow: inset 0 1px 0 rgba(255, 244, 210, 0.3), 0 24px 60px -30px rgba(255, 214, 110, 0.7); }
+:root[data-theme="god"] .hero--landing { background: linear-gradient(135deg, rgba(58, 52, 134, 0.62), rgba(23, 26, 78, 0.3) 70%); backdrop-filter: blur(1.5px); border-color: rgba(233, 201, 106, 0.6); box-shadow: inset 0 1px 0 rgba(255, 244, 210, 0.3), 0 24px 60px -30px rgba(255, 214, 110, 0.7); }
 /* títulos em ouro polido, com um halo de luz */
 :root[data-theme="god"] h1, :root[data-theme="god"] .block__title, :root[data-theme="god"] .dash-panel__title {
   background: linear-gradient(180deg, #fffdf2 0%, #ffe9a6 45%, #f2c24f 70%, #fff1bf 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -3698,7 +3704,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 .unlock--vortice .unlock__name { text-shadow: 4px 0 #4ff7ff, -4px 0 #ff4fd8; animation: vx-glitch 0.9s steps(2) infinite; }
 @keyframes vx-pull { from { transform: scale(0.2); } 70% { transform: scale(1.3); } to { transform: scale(0.9); } }
 
-.theme-card--god .theme-card__swatch i:nth-child(1) { background: linear-gradient(180deg, #0d1035, #5b3d7a); }
+.theme-card--god .theme-card__swatch i:nth-child(1) { background: radial-gradient(circle, #fff 0 18%, #ffe9a8 32%, #5c54be 62%, #0d1035 100%); }
 .theme-card--god .theme-card__swatch i:nth-child(2) { background: #ffd76a; }
 .theme-card--god .theme-card__swatch i:nth-child(3) { background: #fff8e6; }
 .theme-card--nyan .theme-card__swatch i:nth-child(1) { background: #0b1145; }
