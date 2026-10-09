@@ -75,9 +75,49 @@ const LUTA_ESTILOS = [
       ['Saída suja', '1', 'Você se afasta 3 m sem provocar reação de quem está adjacente.']
     ] }
 ];
+/* Tecnomancia: o poder principal dos tecnomantes. Cada nível compra um modo de ação; o efeito gerado
+   copia um componente (poder, equipamento, mod, propriedade, prótese). Um tipo de tecnomante por jogador:
+   só o Engenheiro tem regras; Patrocinado e Insano são citados e chegam depois. */
+const TECNO_ACOES = [
+  ['Instantâneo', 'Ação', 'Gera um efeito explosivo na hora. A duração em campo ou no alvo é a do efeito copiado.'],
+  ['Passivo', 'Nenhuma', 'Fica ativo sem gastar ação, pela duração do efeito copiado. A sustentação é paga no mínimo uma vez por cena, então o efeito passivo dura até uma cena.'],
+  ['Concentrado', 'Ação, toda rodada', 'Gera o efeito uma vez por rodada pagando metade do custo, ou sustenta um efeito passivo pela metade do custo. Dura até você encerrar, cair inconsciente ou sofrer um efeito que tome a sua ação completa (movimento + padrão).'],
+  ['Ativo', 'Ação (ao ativar)', 'Você fabrica o efeito antes: paga o PE na fabricação e trabalha 1 hora por PE. Depois, ativa quando quiser, seguindo as regras do Instantâneo.'],
+  ['Reativo', 'Reação', 'Como o Instantâneo, mas em reação a uma ação. Permite usar qualquer efeito que tenha a reação como ação.']
+];
+// Listas de componentes do Engenheiro: uma por nível (pode repetir uma lista)
+const TECNO_LISTAS = [
+  ['Poderes', 'Poderes do banco: os das Habilidades e os criados na Oficina.'],
+  ['Equipamento', 'Habilidades de armas, armaduras e itens.'],
+  ['Mods', 'Efeitos de mods de armas e armaduras.'],
+  ['Propriedades', 'Propriedades de armas e armaduras.'],
+  ['Próteses e módulos', 'Efeitos de próteses e módulos.']
+];
+// PE por raridade do efeito copiado (equipamento, mod, propriedade, prótese)
+const TECNO_RARIDADE = [['Comum', '1 PE'], ['Incomum', '2 PE'], ['Rara', '3 PE'], ['Épica', '4 PE'], ['Lendária', '5 PE']];
+// Ampliações de um efeito de equipamento
+const TECNO_AMPLIA = [
+  ['Dano', '+1 PE', '+1d6 no dano.'],
+  ['Área', '+2 PE', 'O efeito vira uma área de 3 m de raio (+1 PE a cada 3 m a mais).'],
+  ['Cadência', '+1 PE', '+1 na cadência do ataque.'],
+  ['Alcance', '+1 PE', 'Dobra o alcance.'],
+  ['Alvo extra', '+1 PE', 'Mais um alvo, cada um com o seu teste.']
+];
+const TECNO_TIPOS = [
+  { name: 'Engenheiro', cost: 0, resumo: 'Monta a tecnomancia a partir de listas de componentes.',
+    passivas: [
+      ['Listas', 'A cada nível em Tecnomancia, escolha uma lista de componentes (Poderes, Equipamento, Mods, Propriedades, Próteses e módulos). Você pode copiar qualquer componente das listas que tem.'],
+      ['Especialização', 'Em vez de uma lista nova, escolha de novo uma que já tem: ganha acesso às características únicas de Essência ou Precisão dessa lista (detalhes em breve).']
+    ] },
+  { name: 'Patrocinado', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' },
+  { name: 'Insano', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' }
+];
 window.VORTEX_REGRAS = {
   lutaManobras: LUTA_MANOBRAS,
   lutaEstilos: LUTA_ESTILOS,
+  tecnoAcoes: TECNO_ACOES,
+  tecnoListas: TECNO_LISTAS,
+  estilos: { 'of-pod-luta': LUTA_ESTILOS, 'of-pod-tecnomancia': TECNO_TIPOS },
   groups: ['Fundamentos', 'Combate', 'Equipamento', 'Personagem'],
   chapters: [
 
@@ -1015,6 +1055,28 @@ window.VORTEX_REGRAS = {
             ['table', ['Técnica', 'Custo', 'O que faz'], e.tecnicas]
           ]),
           ['note', 'Técnico', 'Luta não combina direto com tecnomagia: ela se refere à ação de atacar, e não dá para atacar e conjurar ao mesmo tempo. Para complementar os ataques com tecnomancia, é preciso um poder cuja descrição diga que “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia”.']
+        ]],
+        ['card', 'Tecnomancia', [
+          ['kv', '', [['Custo', '1 Up point por nível'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'igual ao nível']]],
+          ['p', 'O poder principal dos tecnomantes: você gasta Essência para reproduzir o efeito de um componente, como um poder, um equipamento, um mod ou uma prótese. Cada jogador tem um único tipo de tecnomancia.'],
+          ['p', '**Nível.** Cada nível, incluindo o primeiro, custa 1 Up point e compra um modo de ação. Você mantém ao mesmo tempo um número de efeitos igual ao seu nível.'],
+          ['table', ['Modo', 'Ação', 'Como funciona'], TECNO_ACOES],
+          ['p', '**Efeito copiado.** Todo efeito que você gera copia um componente: usa a duração, a ação e as exigências do original, pagas em PE.'],
+          ['p', '**Custo de um componente.**'],
+          ['ul', [
+            '**Poder:** paga em PE o dobro do custo de uso normal + o custo em Up points do poder.',
+            '**Equipamento, mod, propriedade ou prótese:** paga o PE pela raridade do efeito (tabela) + o custo por uso do original, se houver.',
+            '**Exigências:** siga as do original. Se for um “ataque”, faça o teste de ataque com Operações; se pedir uma ação, gaste essa ação.',
+            '**Um por ação de uso:** em cada ação de uso, só um efeito ativo por vez.'
+          ]],
+          ['example', 'Poder de 1 Up point com uso de 3 PE: 3 × 2 + 1 = 7 PE. Uma propriedade rara de arma, sem custo de uso: 3 PE.'],
+          ['table', ['Raridade do efeito', 'Custo'], TECNO_RARIDADE],
+          ['p', '**Ampliações.** Um efeito de equipamento pode ser ampliado, somando ao custo:'],
+          ['table', ['Ampliação', 'Custo', 'O que faz'], TECNO_AMPLIA],
+          ['p', '**Tipo de tecnomante (um por jogador).** Define de onde vêm os seus componentes.'],
+          ['p', '**Engenheiro.** A cada nível, escolha uma lista de componentes. Você pode copiar qualquer componente das listas que tem. Em vez de uma lista nova, você pode escolher de novo uma que já tem, ganhando acesso às características únicas de Essência ou Precisão dessa lista (detalhes em breve).'],
+          ['dl', TECNO_LISTAS],
+          ['p', '**Patrocinado e Insano.** Cada um obtém componentes de um jeito diferente. Em breve.']
         ]],
         ['card', 'Akimbo', [
           ['p', 'Você pode empunhar pistolas ou submetralhadoras uma em cada mão (ou uma de cada, seja irado!). O tempo de recarga aumenta em uma categoria (ação livre para bônus, bônus para movimento, movimento para ação padrão, ação padrão para ação completa.)'],
