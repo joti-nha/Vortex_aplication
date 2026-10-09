@@ -970,7 +970,7 @@ window.VORTEX_REGRAS = {
           ['p', 'Em vez de golpear, você pode gastar esses ataques em efeitos marciais. Os ataques são contados por rodada e não acumulam.'],
           ['table', ['Efeito', 'Custo', 'O que faz'], LUTA_MANOBRAS],
           ['p', '**Ataque extra (1 Up point cada):** +1 ataque por rodada.'],
-          ['note', 'Técnico', 'Luta se refere à ação de atacar e não combina direto com tecnomagia; para usar tecnomancia (ou algo parecido) nos golpes, é preciso outro poder que complemente a ação.']
+          ['note', 'Técnico', 'Luta se refere à ação de atacar, e não dá para atacar e conjurar tecnomagia ao mesmo tempo. Por isso, Luta não combina com tecnomancia (ou poderes parecidos): para juntar os dois na mesma ação, é preciso comprar outro poder que complemente o ataque com tecnomancia.']
         ]],
         ['card', 'Akimbo', [
           ['p', 'Você pode empunhar pistolas ou submetralhadoras uma em cada mão (ou uma de cada, seja irado!). O tempo de recarga aumenta em uma categoria (ação livre para bônus, bônus para movimento, movimento para ação padrão, ação padrão para ação completa.)'],
