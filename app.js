@@ -4038,7 +4038,7 @@ const FIREBASE_CONFIG = {
     fat: { trail: ['#fd9796', '#fdfd97', '#00cccb'] }, floppy: {}, golden: { glyph: '✦', trail: ['#ffd700', '#ffee2a', '#fff6a0'] },
     kiminyan: { glyph: '✧', trail: ['#3a2a6a', '#7a6ad8', '#ffffff'] }, lavaberry: { pattern: 'drip', trail: ['#ff5a1a', '#c82a2a'] }, liberty: { glyph: '★', trail: ['#bff0f0', '#ffd700'] },
     magical: { glyph: '✧', trail: ['#ffd700', '#b07aff', '#6aa04a'] }, mintchoc: { glyph: '•', trail: ['#3a2a1a', '#7af0b0'] }, aoki: { glyph: '♫', trail: ['#ff7ad8', '#7ad8ff'] },
-    nyanboy: { pattern: 'pixel', trail: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'] }, nyantendo: { pattern: 'pixel', trail: ['#c0c0c0', '#e32a2a', '#3a9a3a', '#2a2a2a'] }, pumpkinspice: { glyph: '🍂', trail: ['#d98a3a', '#c86a2a'] },
+    nyanboy: { trail: ['#193131', '#214a31', '#527b6b', '#4a523a', '#527b3a', '#adc542'] }, nyantendo: { pattern: 'pixel', trail: ['#c0c0c0', '#e32a2a', '#3a9a3a', '#2a2a2a'] }, pumpkinspice: { glyph: '🍂', trail: ['#d98a3a', '#c86a2a'] },
     smurf: {}, strawberry: { glyph: '🍓', trail: ['#ff2a6a', '#ffffff'] }, vintage: { pattern: 'smoke', trail: ['#a08a6a', '#6a5a4a'] },
     surfing: { pattern: 'wave', trail: ['#1a6ac8', '#2aa8ff', '#7ad8ff', '#ffffff'] }, vapor: { pattern: 'wave', trail: ['#ff71ce', '#b967ff', '#01cdfe', '#05ffa1', '#fffb96'] }, 'wiki:neapolitan': { trail: ['#ffb3c8', '#ffb3c8', '#fff4e0', '#fff4e0', '#7a4a2a', '#7a4a2a'] },
     'wiki:oreo': { pattern: 'checker', trail: ['#1a1a1a', '#f4f4f4'] }, 'wiki:cookie': { glyph: '●', trail: ['#c88a4a', '#4a2a1a'] }, 'wiki:terra': { pattern: 'wave', trail: ['#2a6ac8', '#3aa04a', '#3aa0e8'] }
