@@ -3972,7 +3972,13 @@ const FIREBASE_CONFIG = {
   var NYAN_GIF = 'https://www.nyan.cat/cats/original.gif';
   var NYAN_MP3 = 'audio/nyan-cat.mp3';
   var nyanOn = false, nyanMuted = false, nyanAudio = null, nyanTimer = null, nyanGifOk = null;
-  const NYAN_PIXEL = (() => { // gato em pixel (34×21) para quando o GIF não carrega
+  /* gato em pixel (34×21) para quando o GIF não carrega; a paleta muda o pelo, a massa, a cobertura e o confeito */
+  const nyanPixel = (pal) => {
+    const c = Object.assign({ fur: '#9b9b9b', crust: '#f6d39a', frost: '#ff99cc', dot: '#ff3d8b', cheek: '#ff99cc' }, pal || {});
+    return NYAN_PIXEL.replace(/#9b9b9b/g, c.fur).replace(/#f6d39a/g, c.crust).replace(/#ff3d8b/g, c.dot).replace(/#ff99cc/g, '%F%')
+      .replace('%F%', c.frost).replace(/%F%/g, c.cheek);
+  };
+  const NYAN_PIXEL = (() => {
     const R = (x, y, w, hh, c) => '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + hh + '" fill="' + c + '"/>';
     return '<svg class="nyan-fly__cat nyan-fly__cat--px" viewBox="0 0 34 21" shape-rendering="crispEdges" aria-hidden="true">' +
       R(0, 9, 5, 3, '#9b9b9b') + // rabo
@@ -3989,6 +3995,7 @@ const FIREBASE_CONFIG = {
     clearTimeout(nyanTimer);
     nyanTimer = null;
     document.querySelectorAll('.nyan-fly').forEach((el) => el.remove());
+    nyanFlock(on);
     const btn = document.querySelector('.nyan-music');
     if (!on) { if (btn) btn.remove(); nyanMusic(); return; }
     if (!btn) {
@@ -3999,6 +4006,95 @@ const FIREBASE_CONFIG = {
     }
     if (!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) nyanTimer = setTimeout(nyanFly, 1500 + Math.random() * 5000);
     nyanMusic();
+  }
+  /* Revoada: as variantes do Nyan Cat (as do nyan.cat) vão aparecendo ao fundo, voando juntas da esquerda
+     para a direita. Começa com o original e, em cerca de 10 minutos com o tema ligado, todas estão no céu.
+     O relógio fica guardado (vortex.nyanFlock.v1) e zera ao trocar de tema. Cada uma tenta o GIF da variante;
+     se não carregar, entra o gato em pixel com as cores dela. */
+  const NYAN_FLOCK_KEY = 'vortex.nyanFlock.v1';
+  const NYAN_FLOCK_MS = 10 * 60 * 1000;
+  const RAINBOW = ['#ff2a2a', '#ff9a2a', '#ffee2a', '#33ff4a', '#2aa8ff', '#7a2aff'];
+  const NYAN_VARIANTS = [
+    ['original', {}], ['gb', { fur: '#4c6b22', crust: '#8bac0f', frost: '#9bbc0f', dot: '#306230', cheek: '#8bac0f', trail: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f', '#8bac0f', '#306230'] }],
+    ['tacnayn', { fur: '#3a3a3a', crust: '#5a3b22', frost: '#3b0a2a', dot: '#ff2a2a', cheek: '#ff2a2a', trail: ['#2a2a2a', '#3d1f1f', '#1f1f3d', '#2a2a2a', '#3d1f1f', '#1f1f3d'] }],
+    ['mexinyan', { frost: '#33aa55', dot: '#ff2a2a', trail: ['#2a9d4a', '#2a9d4a', '#ffffff', '#ffffff', '#e32a2a', '#e32a2a'] }],
+    ['pumpkin', { fur: '#3a3a3a', crust: '#ff8a1a', frost: '#ff6a00', dot: '#2a1500', trail: ['#ff7a00', '#ff9a2a', '#2a1500', '#ff7a00', '#ff9a2a', '#2a1500'] }],
+    ['jazz', { fur: '#d9b25c', frost: '#7a2aff', dot: '#ffd700' }], ['nyaninja', { fur: '#222', crust: '#333', frost: '#444', dot: '#ff2a2a', cheek: '#222' }],
+    ['zombie', { fur: '#7fae6a', crust: '#8b7a5a', frost: '#5d7a4a', dot: '#a02a2a', trail: ['#556b2f', '#6b8e23', '#808000', '#556b2f', '#6b8e23', '#808000'] }],
+    ['technyancolor', { frost: '#00ffff', dot: '#ff00ff', trail: ['#ff00ff', '#00ffff', '#ffff00', '#00ff00', '#ff0000', '#0000ff'] }],
+    ['xmas', { frost: '#ffffff', dot: '#e32a2a', trail: ['#e32a2a', '#ffffff', '#2a9d4a', '#e32a2a', '#ffffff', '#2a9d4a'] }],
+    ['pirate', { fur: '#8a7a6a', frost: '#3a2a1a', dot: '#ffd700' }], ['rasta', { frost: '#2a9d4a', dot: '#ffee2a', trail: ['#e32a2a', '#e32a2a', '#ffee2a', '#ffee2a', '#2a9d4a', '#2a9d4a'] }],
+    ['america', { frost: '#ffffff', dot: '#2a3aa0', trail: ['#e32a2a', '#ffffff', '#e32a2a', '#ffffff', '#2a3aa0', '#2a3aa0'] }],
+    ['retro', { fur: '#888', crust: '#ccc', frost: '#aaa', dot: '#555', cheek: '#aaa', trail: ['#333', '#555', '#777', '#999', '#bbb', '#ddd'] }],
+    ['mummy', { fur: '#e8e0c8', crust: '#d9cfae', frost: '#f4efe0', dot: '#b8ad8a', cheek: '#f4efe0', trail: ['#f4efe0', '#d9cfae', '#f4efe0', '#d9cfae', '#f4efe0', '#d9cfae'] }],
+    ['star', { fur: '#ffd700', crust: '#ffee88', frost: '#ffffff', dot: '#ffd700' }],
+    ['vday', { frost: '#ff2a6a', dot: '#ffffff', trail: ['#ff2a6a', '#ff6a9a', '#ffaacc', '#ff2a6a', '#ff6a9a', '#ffaacc'] }],
+    ['easter', { frost: '#c8a2ff', dot: '#ffee2a', trail: ['#ffb3d9', '#ffd9b3', '#ffffb3', '#b3ffb3', '#b3d9ff', '#d9b3ff'] }],
+    ['paddy', { frost: '#2a9d4a', dot: '#ffd700', trail: ['#1a7a3a', '#2a9d4a', '#5ac85a', '#1a7a3a', '#2a9d4a', '#5ac85a'] }],
+    ['newyear', { frost: '#ffd700', dot: '#ffffff' }], ['bday', { frost: '#ffffff', dot: '#2aa8ff' }],
+    ['slomo', { fur: '#b0b0d0' }], ['dub', { frost: '#33ff4a', dot: '#000', trail: ['#33ff4a', '#000000', '#33ff4a', '#000000', '#33ff4a', '#000000'] }],
+    ['smooth', { fur: '#c0a080', frost: '#ffccaa' }], ['coin', { fur: '#d4a017', crust: '#ffd700', frost: '#ffe866', dot: '#b8860b', cheek: '#ffd700', trail: ['#ffd700', '#ffe866', '#d4a017', '#ffd700', '#ffe866', '#d4a017'] }],
+    ['melon', { crust: '#2a9d4a', frost: '#ff4a5a', dot: '#111' }], ['balloon', { frost: '#ff4a8a', dot: '#ffffff' }],
+    ['daft', { fur: '#c0c0c0', crust: '#222', frost: '#ffd700', dot: '#111' }], ['sad', { fur: '#6a7a9a', frost: '#8a9acc', dot: '#3a4a7a', trail: ['#3a4a7a', '#4a5a8a', '#5a6a9a', '#6a7aaa', '#7a8aba', '#8a9aca'] }],
+    ['skrillex', { fur: '#222', frost: '#ff2a2a', dot: '#000' }], ['toaster', { fur: '#c0c0c0', crust: '#a0a0a0', frost: '#d9a066', dot: '#7a4a1a' }],
+    ['elevator', { frost: '#ffeedd', dot: '#cc9966' }], ['fiesta', { frost: '#ff2a8a', dot: '#ffee2a', trail: ['#ff2a8a', '#ffee2a', '#2aa8ff', '#33ff4a', '#ff9a2a', '#7a2aff'] }],
+    ['wtf', { fur: '#ff2a2a', crust: '#2aa8ff', frost: '#33ff4a', dot: '#ffee2a' }], ['manyan', { fur: '#e8c8a8', frost: '#ff99cc' }],
+    ['nyandoge', { fur: '#e0b060', frost: '#ffcc66', dot: '#a06020' }], ['pikanyan', { fur: '#ffd700', crust: '#ffee2a', frost: '#ffee2a', dot: '#e32a2a', cheek: '#e32a2a' }],
+    ['grumpy', { fur: '#8a7a6a', frost: '#c8b8a8', dot: '#6a5a4a' }], ['watermelon', { crust: '#2a9d4a', frost: '#ff4a5a', dot: '#111' }],
+    ['j5dance', { frost: '#66ccff', dot: '#ff66cc' }]
+  ];
+  let nyanFlockTimer = null;
+  function nyanFlockSince() {
+    let t = 0;
+    try { t = Number(localStorage.getItem(NYAN_FLOCK_KEY)) || 0; } catch (e) { /* sem armazenamento */ }
+    if (!t || t > Date.now()) { t = Date.now(); try { localStorage.setItem(NYAN_FLOCK_KEY, String(t)); } catch (e) { /* vale até fechar */ } }
+    return t;
+  }
+  function nyanFlock(on) {
+    clearInterval(nyanFlockTimer);
+    nyanFlockTimer = null;
+    const old = document.querySelector('.nyan-flock');
+    if (!on) { if (old) old.remove(); try { localStorage.removeItem(NYAN_FLOCK_KEY); } catch (e) { /* nada */ } return; }
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const box = old || h('div', 'nyan-flock');
+    box.setAttribute('aria-hidden', 'true');
+    if (!old) document.body.prepend(box);
+    const since = nyanFlockSince();
+    let first = true;
+    const grow = () => {
+      if (!box.isConnected) { clearInterval(nyanFlockTimer); return; }
+      const f = Math.min(1, (Date.now() - since) / NYAN_FLOCK_MS);
+      const want = 1 + Math.floor(f * (NYAN_VARIANTS.length - 1));
+      for (let i = box.children.length; i < want; i++) box.append(nyanFlockCat(NYAN_VARIANTS[i], i, !first));
+      first = false;
+      if (want >= NYAN_VARIANTS.length) { clearInterval(nyanFlockTimer); nyanFlockTimer = null; }
+    };
+    grow();
+    if (box.children.length < NYAN_VARIANTS.length) nyanFlockTimer = setInterval(grow, 5000);
+  }
+  function nyanFlockCat(v, i, fresh) {
+    const [id, pal] = v;
+    const size = 26 + ((i * 37) % 22); // 26 a 47 px de altura
+    const dur = 16 + ((i * 53) % 17); // 16 a 32 s para cruzar
+    const lane = 6 + ((i * 41) % 84); // faixa de altura (vh), espalhada sem sorteio
+    const cat = h('div', 'nyan-flock__cat');
+    cat.style.setProperty('--s', size + 'px');
+    cat.style.top = lane + 'vh';
+    // a recém-chegada entra pela esquerda; as que já estavam (ao recarregar) aparecem espalhadas pelo céu
+    cat.style.animationDuration = dur + 's';
+    cat.style.animationDelay = fresh ? '0s' : -(((i * 29) % 100) / 100 * dur).toFixed(1) + 's';
+    const trail = h('span', 'nyan-flock__trail');
+    trail.style.background = 'linear-gradient(' + (pal.trail || RAINBOW).map((c, k) => c + ' ' + (k * 100 / 6).toFixed(2) + '% ' + ((k + 1) * 100 / 6).toFixed(2) + '%').join(', ') + ')';
+    cat.append(trail);
+    const usePixel = () => { const tmp = document.createElement('span'); tmp.innerHTML = nyanPixel(pal); const svg = tmp.firstChild; svg.setAttribute('class', 'nyan-flock__img nyan-flock__img--px'); return svg; };
+    const img = h('img', 'nyan-flock__img');
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.loading = 'lazy';
+    img.onerror = () => img.replaceWith(usePixel());
+    img.src = 'https://www.nyan.cat/cats/' + id + '.gif';
+    cat.append(img);
+    return cat;
   }
   function nyanFly() {
     if (!nyanOn) return;
