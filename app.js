@@ -2964,7 +2964,7 @@ const FIREBASE_CONFIG = {
     const pic = e.image || e.thumb || itemArt(e);
     if (pic) { const img = h('img', 'entry__img'); img.src = pic; img.alt = ''; body.append(img); }
     const seen = new Set(['nome', 'lore', 'compraRacial']); // compraRacial: campo antigo, hoje é exclusivo do Etheriano
-    if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso'].forEach((k) => seen.add(k)); }
+    if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso', 'manobras'].forEach((k) => seen.add(k)); }
     const facts = entryFacts(e, seen, cat && cat.inventory ? ' (quando equipado)' : '');
     if (facts) body.append(facts);
     else if (e.kind !== 'poder') body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
@@ -3058,12 +3058,20 @@ const FIREBASE_CONFIG = {
     if (powerOpts(e).length) return 'lista';
     return powerUps(e).length ? 'melhorias' : 'simples';
   }
+  // efeitos marciais (poder Luta): "Efeito | custo | descrição"; cópias antigas na ficha usam os do poder oficial
+  function powerManobras(p) {
+    const off = p && p.id ? BUILTINS.find((x) => x.id === p.id) : null;
+    return powerLines((p.values && p.values.manobras) || (off && off.values && off.values.manobras));
+  }
+  const manobraTable = (rows) => h('div', 'pwview__tablewrap', h('table', 'pwview__table', h('thead', '', h('tr', '', h('th', '', 'Efeito'), h('th', '', 'Custo'), h('th', '', 'O que faz'))),
+    h('tbody', '', ...rows.map((r) => h('tr', '', h('th', '', r.name), h('td', 'pwview__cost', r.text), h('td', '', r.cost))))));
   function powerView(e) {
     const v = e.values || {};
     const kind = powerKind(e);
     const cost = num(v.custo);
     const opts = powerOpts(e);
     const ups = powerUps(e);
+    const man = powerManobras(e);
     const bank = (n) => BUILTINS.some((x) => x.kind === 'poder' && x.id !== e.id && nameKey(x.name) === nameKey(n));
     const label = { lista: 'Poder-lista', escolha: 'Poder com escolha', melhorias: 'Poder com melhorias', simples: 'Poder' }[kind];
     const what = { pericia: 'a perícia', arma: 'o tipo de arma', armadura: 'o tipo de armadura' }[CHOICE_POWERS[e.id]];
@@ -3077,6 +3085,8 @@ const FIREBASE_CONFIG = {
       v.efeito ? h('p', 'pwview__efeito', v.efeito) : null,
       opts.length ? h('h3', 'entry__sub', 'Opções') : null,
       opts.length ? h('ul', 'pwview__list', ...opts.map((o) => card(o, o.cost ? 'Uso: ' + o.cost : ''))) : null,
+      man.length ? h('h3', 'entry__sub', 'Efeitos marciais (custo em ataques da rodada)') : null,
+      man.length ? manobraTable(man) : null,
       ups.length ? h('h3', 'entry__sub', 'Melhorias') : null,
       ups.length ? h('ul', 'pwview__list', ...ups.map((u) => card(u, '+' + (u.cost === '' ? 1 : num(u.cost)) + ' UP'))) : null,
       h('p', 'pwview__how', h('strong', '', 'Como obter: '), how));
@@ -7075,6 +7085,9 @@ const FIREBASE_CONFIG = {
         main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Opções (marque as compradas) ', more), ...opts.map((o, k) => powerOptRow(s, p, o, i + '-' + k))));
       }
       if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
+      if (p.id === 'of-pod-luta') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s))));
+      const man = powerManobras(p);
+      if (man.length) main.append(h('details', 'pw-sub pw-man', h('summary', 'pw-sub__title', 'Efeitos marciais (custo em ataques)'), manobraTable(man)));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
       del.type = 'button';
       del.setAttribute('aria-label', 'Remover poder ' + p.name);
@@ -8434,7 +8447,7 @@ const FIREBASE_CONFIG = {
     const prof = i ? isProficient(s, i) : false;
     if (!i || i.kind !== 'arma-fogo') {
       out.push({ id: 'corpo', label: 'Corpo a corpo (Corpo + Luta)', attr: 'corpo', skill: 'luta' });
-      if (i && i.typeId === 'espada') out.push({ id: 'precisao', label: 'Espada com Precisão (Precisão + Luta)', attr: 'precisao', skill: 'luta' });
+      if (i && i.typeId === 'espada' && prof) out.push({ id: 'precisao', label: 'Espada com Precisão (Precisão + Luta)', attr: 'precisao', skill: 'luta' });
     } else {
       out.push({ id: 'precisao', label: 'À distância (Precisão + Mira)', attr: 'precisao', skill: 'mira' });
       if (i.typeId === 'submetralhadora') out.push({ id: 'essencia', label: 'Submetralhadora com Essência (Essência + Mira)', attr: 'essencia', skill: 'mira', mod: prof ? 0 : -1 });
@@ -8442,14 +8455,20 @@ const FIREBASE_CONFIG = {
     out.push({ id: 'tec', label: 'Tecnológico (Essência + Operações)', attr: 'essencia', skill: 'operacoes' });
     return out;
   }
-  const maxShots = (i) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || 1, 1, 20) : 1);
+  /* Poder Luta: ataques por rodada = UP investidos em Luta + 1, gastos como a cadência de uma arma de fogo,
+     desarmado (conta como arma contundente, com proficiência) ou com arma corpo a corpo. */
+  const lutaAttacks = (s) => { const ps = ((s && s.powers) || []).filter((p) => p.id === 'of-pod-luta'); return ps.length ? ps.reduce((t, p) => t + Math.max(1, powerUpCost(p)), 0) + 1 : 0; };
+  const maxShots = (i, s) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || 1, 1, 20)
+    : (!i || i.kind === 'arma-melee') && lutaAttacks(s) ? clamp(lutaAttacks(s), 1, 20) : 1);
+  const atkProf = (s, i) => (i ? isProficient(s, i) : lutaAttacks(s) > 0); // desarmado com Luta é proficiente
+  const shotWord = (i, n) => (i && i.kind === 'arma-fogo' ? (n === 1 ? 'disparo' : 'disparos') : (n === 1 ? 'golpe' : 'golpes'));
   // cadência: com proficiência, –N para N disparos; sem, –(1 + 2 + ... + N). Um disparo não tem penalidade.
   const shotPenalty = (n, prof) => (n <= 1 ? 0 : prof ? n : (n * (n + 1)) / 2);
 
   /* Cadência por alvo: os disparos da ação se dividem entre os alvos marcados.
      A penalidade vem do total de disparos; o dano de cada alvo é multiplicado pelos disparos nele.
      st.per = { idDoAlvo: disparos }. Devolve os campos, o total e se faltou cadência. */
-  function perTargetShots(st, cad, targets, prof, redraw, idp) {
+  function perTargetShots(st, cad, targets, prof, redraw, idp, wi) {
     st.per = st.per || {};
     Object.keys(st.per).forEach((k) => { if (!targets.some((x) => x.id === k)) delete st.per[k]; });
     targets.forEach((x) => { st.per[x.id] = clamp(Math.round(st.per[x.id] || 1), 1, cad); });
@@ -8464,7 +8483,7 @@ const FIREBASE_CONFIG = {
       const sel = h('select', 'input');
       sel.id = idp + 'per-' + x.id.replace(/[^a-z0-9]/gi, '');
       const room = Math.max(1, cad - (total - st.per[x.id]));
-      for (let k = 1; k <= room; k++) { const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos') + ' · dano ×' + k); o.value = String(k); sel.append(o); }
+      for (let k = 1; k <= room; k++) { const o = h('option', '', k + ' ' + shotWord(wi, k) + ' · dano ×' + k); o.value = String(k); sel.append(o); }
       sel.value = String(st.per[x.id]);
       sel.addEventListener('change', () => { st.per[x.id] = Math.round(num(sel.value)) || 1; redraw(); });
       const lab = h('label', 'per__name', x.name);
@@ -8473,7 +8492,7 @@ const FIREBASE_CONFIG = {
     });
     const pen = shotPenalty(Math.min(total, cad), prof);
     const box = h('fieldset', 'per field--wide',
-      h('legend', 'field__label', 'Cadência por alvo: ' + Math.min(total, cad) + ' de ' + cad + ' disparos' + (pen ? ' · –' + pen + ' no ataque' + (prof ? ' (perita)' : '') : '')),
+      h('legend', 'field__label', (wi && wi.kind === 'arma-fogo' ? 'Cadência' : 'Golpes') + ' por alvo: ' + Math.min(total, cad) + ' de ' + cad + ' ' + shotWord(wi, cad) + (pen ? ' · –' + pen + ' no ataque' + (prof ? ' (perita)' : '') : '')),
       ...rows,
       over ? h('p', 'field__error', 'A cadência ' + cad + ' só alcança ' + plural(cad, 'alvo', 'alvos') + '. Desmarque alvos no Combate.') : null);
     return { box, total: Math.min(total, cad), over };
@@ -8481,7 +8500,8 @@ const FIREBASE_CONFIG = {
 
   /* Regra de cadência na arena: antes de escolher os alvos, mostra a penalidade de cada número de disparos,
      com ou sem proficiência na arma, e deixa atacar com um disparo só. */
-  function cadenceBox(st, cad, prof, redraw, idp) {
+  function cadenceBox(st, cad, prof, redraw, idp, wi) {
+    const w1 = shotWord(wi, 1), wn = shotWord(wi, 2);
     const use = h('input');
     use.type = 'checkbox';
     use.id = idp + 'cad-use';
@@ -8490,24 +8510,24 @@ const FIREBASE_CONFIG = {
     const steps = [];
     for (let k = 1; k <= cad; k++) steps.push(h('span', 'cad__step' + (k === 1 ? ' cad__step--free' : ''), h('b', '', k + '×'), ' ' + (k === 1 ? 'sem penalidade' : '–' + shotPenalty(k, prof))));
     return h('div', 'cad field--wide' + (st.cad === false ? ' cad--off' : ''),
-      h('label', 'check cad__use', use, h('span', '', 'Usar cadência (até ' + cad + ' disparos)')),
+      h('label', 'check cad__use', use, h('span', '', (wi && wi.kind === 'arma-fogo' ? 'Usar cadência' : 'Ataques múltiplos de Luta') + ' (até ' + cad + ' ' + wn + ')')),
       h('p', 'cad__rule', prof
-        ? 'Proficiente: cadência perita. Cada disparo a mais dá penalidade igual ao total de disparos.'
-        : 'Sem proficiência: a penalidade soma cada disparo (1 + 2 + 3...). Com proficiência seria só o total.'),
-      st.cad === false ? h('p', 'cad__rule', 'Ataque com um disparo, sem penalidade.') : h('div', 'cad__steps', ...steps),
-      st.cad === false ? null : h('p', 'cad__rule', 'O dano de cada alvo é multiplicado pelos disparos nele.'));
+        ? 'Proficiente: cadência perita. Cada ' + w1 + ' a mais dá penalidade igual ao total de ' + wn + '.'
+        : 'Sem proficiência: a penalidade soma cada ' + w1 + ' (1 + 2 + 3...). Com proficiência seria só o total.'),
+      st.cad === false ? h('p', 'cad__rule', 'Ataque com um ' + w1 + ', sem penalidade.') : h('div', 'cad__steps', ...steps),
+      st.cad === false ? null : h('p', 'cad__rule', 'O dano de cada alvo é multiplicado pelos ' + wn + ' nele.'));
   }
 
   function attackTest(s, m, i, modeId, shots) {
     const modes = attackModes(s, i);
     const mode = modes.find((x) => x.id === modeId) || modes[0];
-    const prof = i ? isProficient(s, i) : false;
-    const n = clamp(Math.round(shots) || 1, 1, maxShots(i));
+    const prof = atkProf(s, i);
+    const n = clamp(Math.round(shots) || 1, 1, maxShots(i, s));
     const mods = [];
     if (mode.mod) mods.push(['Essência sem proficiência', mode.mod]);
     if (PENALTY_SKILLS.indexOf(mode.skill) >= 0 && m.pen) mods.push(['armadura', -m.pen]);
     const pen = shotPenalty(n, prof);
-    if (pen) mods.push(['cadência ' + n + ' disparos' + (prof ? ' (perita)' : ''), -pen]);
+    if (pen) mods.push(['cadência ' + n + ' ' + shotWord(i, n) + (prof ? ' (perita)' : ''), -pen]);
     const name = i ? i.name : 'Desarmado';
     return {
       label: ('Ataque: ' + name + (n > 1 ? ' · dano ×' + n : '')).slice(0, 60),
@@ -8575,7 +8595,7 @@ const FIREBASE_CONFIG = {
       const weapon = weapons.find((w) => w.uid === st.uid) || null;
       const modes = attackModes(s, weapon);
       if (!modes.some((x) => x.id === st.mode)) st.mode = modes[0].id;
-      st.shots = clamp(st.shots || 1, 1, maxShots(weapon));
+      st.shots = clamp(st.shots || 1, 1, maxShots(weapon, s));
 
       const field = (id, label, control) => { control.id = idp + id; const l = h('label', 'field__label', label); l.htmlFor = control.id; return h('div', 'field', l, control); };
       const wSel = h('select', 'input');
@@ -8588,27 +8608,28 @@ const FIREBASE_CONFIG = {
       mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
       const fields = [field('weapon', 'Arma', wSel), field('mode', 'Forma de ataque', mSel)];
       const targets = c.targets || [];
-      const prof = weapon ? isProficient(s, weapon) : false;
-      const cadMax = st.cad === false ? 1 : maxShots(weapon); // "Usar cadência" desmarcado: um disparo só
+      const prof = atkProf(s, weapon);
+      const cadAll = maxShots(weapon, s);
+      const cadMax = st.cad === false ? 1 : cadAll; // "Usar cadência" desmarcado: um disparo só
       let per = null;
       if (cadMax > 1 && targets.length) {
-        per = perTargetShots(st, cadMax, targets, prof, draw, idp);
+        per = perTargetShots(st, cadMax, targets, prof, draw, idp, weapon);
         st.shots = per.total;
         fields.push(per.box);
-      } else if (maxShots(weapon) > 1 && c.aim) {
-        fields.push(cadenceBox(st, maxShots(weapon), prof, draw, idp));
-      } else if (maxShots(weapon) > 1 && !c.aim) {
+      } else if (cadAll > 1 && c.aim) {
+        fields.push(cadenceBox(st, cadAll, prof, draw, idp, weapon));
+      } else if (cadAll > 1 && !c.aim) {
         st.per = null;
         const nSel = h('select', 'input');
-        for (let k = 1; k <= maxShots(weapon); k++) {
-          const p = shotPenalty(k, isProficient(s, weapon));
-          const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos · –' + p + ' · dano ×' + k));
+        for (let k = 1; k <= cadAll; k++) {
+          const p = shotPenalty(k, prof);
+          const o = h('option', '', k + ' ' + shotWord(weapon, k) + (k === 1 ? '' : ' · –' + p + ' · dano ×' + k));
           o.value = String(k);
           nSel.append(o);
         }
         nSel.value = String(st.shots);
         nSel.addEventListener('change', () => { st.shots = Math.round(num(nSel.value)) || 1; draw(); });
-        fields.push(field('shots', 'Disparos (cadência ' + maxShots(weapon) + ')', nSel));
+        fields.push(field('shots', (weapon && weapon.kind === 'arma-fogo' ? 'Disparos (cadência ' : 'Golpes (Luta: ') + cadAll + ')', nSel));
       }
       const modIn = h('input', 'input');
       modIn.type = 'number';
@@ -8628,7 +8649,7 @@ const FIREBASE_CONFIG = {
       fields.push(field('mod', 'Outro modificador (cobertura...)', modIn));
 
       const t = attackTest(s, m, weapon, st.mode, st.shots);
-      if (per) t.label = ('Ataque: ' + (weapon ? weapon.name : 'Desarmado') + ' · ' + st.shots + (st.shots === 1 ? ' disparo' : ' disparos')).slice(0, 60);
+      if (per) t.label = ('Ataque: ' + (weapon ? weapon.name : 'Desarmado') + ' · ' + st.shots + ' ' + shotWord(weapon, st.shots)).slice(0, 60);
       const dist = DISTANCES.find((d) => d.id === st.dist);
       if (dist && dist.mod) t.mods.push([dist.short, dist.mod]);
       if (st.mod) t.mods.push(['modificador', st.mod]);
@@ -8636,7 +8657,7 @@ const FIREBASE_CONFIG = {
       if (c.peek) c.peek(t);
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
       const stowed = c.handsOnly ? all.filter((w) => !handOf(w)).length : 0;
-      const info = [weapon && isGun(weapon) ? ammoLine(weapon, s) : '', c.aim && cadMax > 1 ? 'cadência ' + cadMax + ': cada toque num alvo é um disparo' : '', weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
+      const info = [weapon && isGun(weapon) ? ammoLine(weapon, s) : '', c.aim && cadMax > 1 ? (weapon && weapon.kind === 'arma-fogo' ? 'cadência ' : 'Luta: ') + cadMax + ': cada toque num alvo é um ' + shotWord(weapon, 1) : '', weapon ? (prof ? 'Proficiente' : 'Sem proficiência' + (weapon.kind === 'arma-melee' ? ': sem as propriedades da arma' : '')) : lutaAttacks(s) ? 'Desarmado (Luta): contundente, proficiente' : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
       const go = h('button', 'btn btn--primary btn--sm', (c.btnLabel || 'Atacar') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
       // munição: sem disparos no pente (ou arma superaquecida) não dá para atacar; recarregar custa a ação da regra
@@ -8652,7 +8673,7 @@ const FIREBASE_CONFIG = {
         rl.dataset.fid = idp + 'reload';
         rl.addEventListener('click', () => c.onReload(weapon, rl));
       }
-      box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, rl, info ? h('span', 'attack__info', info) : null), block ? h('p', 'attack__warn', block) : null);
+      box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, rl, info ? h('span', 'attack__info', info) : null), ...(block ? [h('p', 'attack__warn', block)] : []));
     };
     draw();
     return box;
@@ -10672,7 +10693,7 @@ const FIREBASE_CONFIG = {
     ]
   };
   const ACTION_TEXT = {
-    atacar: 'Escolha a arma (só o que está nas mãos, ou desarmado) e depois toque nos alvos. Com cadência, cada toque é um disparo.',
+    atacar: 'Escolha a arma (só o que está nas mãos, ou desarmado) e depois toque nos alvos. Com cadência (ou os ataques múltiplos de Luta), cada toque é um disparo ou golpe.',
     manobra: 'Teste de Manobra (Corpo + Luta) contra Resistência ou Reflexos do alvo, o melhor dele. Se você vencer, o efeito entra sozinho.',
     usar: 'Consumíveis e utilitários: o saque já está incluído na ação.',
     esconder: 'Precisa de algo que engane os sentidos. Teste de Manha; o resultado vira a dificuldade para te achar.',
@@ -10733,14 +10754,14 @@ const FIREBASE_CONFIG = {
     cancel.type = 'button';
     cancel.addEventListener('click', () => { endAim(); renderBattle(); });
     const kids = [h('strong', 'aimbar__title', a.label), h('span', 'aimbar__txt', a.max > 1
-      ? 'Toque nos alvos destacados: cada toque é um disparo (' + total + ' de ' + a.max + ').' + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '') + (a.penalty && a.penalty(total) ? ' ' + a.penalty(total) + '.' : '')
+      ? 'Toque nos alvos destacados: cada toque é um ' + (a.word || 'disparo') + ' (' + total + ' de ' + a.max + ').' + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '') + (a.penalty && a.penalty(total) ? ' ' + a.penalty(total) + '.' : '')
       : 'Toque num dos alvos destacados.')];
     if (a.max > 1) {
       const clear = h('button', 'btn btn--ghost btn--sm', 'Limpar');
       clear.type = 'button';
       clear.disabled = !total;
       clear.addEventListener('click', () => { a.shots = {}; renderBattle(); });
-      const ok = h('button', 'btn btn--primary btn--sm', 'Disparar ' + plural(total, 'vez', 'vezes'));
+      const ok = h('button', 'btn btn--primary btn--sm', (a.word === 'golpe' ? 'Golpear ' : 'Disparar ') + plural(total, 'vez', 'vezes'));
       ok.type = 'button';
       ok.disabled = !total;
       ok.addEventListener('click', async () => {
@@ -11024,15 +11045,15 @@ const FIREBASE_CONFIG = {
     const base = Object.assign({}, c, { handsOnly: true, meleeOnly: adv, onReload });
     return h('div', 'cmd__stack', note, adv ? null : powerToggles(mb, 'Ataque', battle.atkPow, () => renderBattle()), attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
       const weapon = weaponsOf(c.sheet).find((w) => w.uid === st.uid) || null;
-      const cad = st.cad === false ? 1 : maxShots(weapon);
-      const prof = weapon ? isProficient(c.sheet, weapon) : false;
+      const cad = st.cad === false ? 1 : maxShots(weapon, c.sheet);
+      const prof = atkProf(c.sheet, weapon);
       const peek = () => {
         let t = null;
         const targets = combatants().filter((x) => combat.targets.has(x.id)).map((x) => ({ id: x.id, name: x.name }));
         attackBuilder(Object.assign({}, base, { targets, peek: (x) => { t = x; } }), st, () => {}, 'pk-');
         return t;
       };
-      startAim({ label: 'Ataque: ' + (weapon ? weapon.name : 'desarmado'), valid: valid.map((x) => x.id), max: cad,
+      startAim({ label: 'Ataque: ' + (weapon ? weapon.name : 'desarmado'), valid: valid.map((x) => x.id), max: cad, word: shotWord(weapon, 1),
         penalty: (n) => (n > 1 ? '–' + shotPenalty(n, prof) + ' no ataque (' + (prof ? 'cadência perita' : 'sem proficiência') + ')' : ''),
         pick: (x) => go({ member: mb, c }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ member: mb, c }, st, shots, peek) });
     }, 'cmd-'));
@@ -11671,9 +11692,11 @@ const FIREBASE_CONFIG = {
     } else {
       const weapon = weaponsOf(who.c.sheet).find((w) => w.uid === st.uid) || null;
       types = weapon ? splitTypes(weapon.values.dano) : ['Contundente'];
-      if (weapon && weapon.typeId === 'marreta') effective = 'blindagem';
-      if (weapon && weapon.typeId === 'machado') effective = 'escudo';
-      if (!weapon || weapon.kind !== 'arma-fogo') shots = 1;
+      // sem proficiência, a arma corpo a corpo perde as propriedades do tipo
+      const prop = weapon && (weapon.kind !== 'arma-melee' || isProficient(who.c.sheet, weapon));
+      if (prop && weapon.typeId === 'marreta') effective = 'blindagem';
+      if (prop && weapon.typeId === 'machado') effective = 'escudo';
+      if (maxShots(weapon, who.c.sheet) <= 1) shots = 1;
       if (isGun(weapon)) {
         const total = st.per && shots > 1 ? list.reduce((tt, x) => tt + (st.per[x.id] || 1), 0) : shots;
         const block = fireBlock(weapon, total, sceneRound());
