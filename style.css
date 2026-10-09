@@ -3491,31 +3491,76 @@ html, body { max-width: 100%; overflow-x: clip; }
 
 /* ---------- Temas secretos: God, Nyan Cat e Vórtex ∞ ---------- */
 :root[data-theme="god"] {
-  --abismo: #14100a; --abismo-rgb: 20, 16, 10;
-  --casco: #211a0f; --casco-rgb: 33, 26, 15;
-  --casco-2: #2d2414; --casco2-rgb: 45, 36, 20;
-  --linha: #4a3c1f; --linha-forte: #c9a85a;
-  --nevoa: #fff8e6; --nevoa-2: #dccca3;
-  --ambar: #ffd76a; --ambar-rgb: 255, 215, 106; --ambar-claro: #ffe9a8; --ambar-tinta: #2a1d00;
-  --mare: #fff2c4; --mare-rgb: 255, 242, 196;
-  --brilho-ambar: 0 8px 30px -8px rgba(255, 215, 106, 0.9);
-  --linha-rgb: 74, 60, 31; --hover-rgb: 80, 62, 28; --rail-rgb: 24, 19, 11;
-  --rail-a: #2a2112; --rail-b: #120e08; --hero-a: #4a3a16; --hero-b: #1a140a;
+  /* God: o céu ao amanhecer. Azul real lá em cima, ouro e marfim na luz, nuvens no horizonte */
+  --abismo: #0d1035; --abismo-rgb: 13, 16, 53;
+  --casco: #1a1d4d; --casco-rgb: 26, 29, 77;
+  --casco-2: #252a66; --casco2-rgb: 37, 42, 102;
+  --linha: #3d4290; --linha-forte: #e9c96a;
+  --nevoa: #fffbef; --nevoa-2: #d8d3f2;
+  --ambar: #ffd66e; --ambar-rgb: 255, 214, 110; --ambar-claro: #fff1bf; --ambar-tinta: #2b1a00;
+  --mare: #fff3d1; --mare-rgb: 255, 243, 209;
+  --brilho-ambar: 0 10px 34px -8px rgba(255, 214, 110, 0.85);
+  --linha-rgb: 61, 66, 144; --hover-rgb: 58, 62, 140; --rail-rgb: 14, 16, 52;
+  --rail-a: #1c1f55; --rail-b: #0b0d2c; --hero-a: #3a3486; --hero-b: #171a4e;
+  --sombra: 0 18px 40px -22px rgba(255, 214, 110, 0.45);
 }
+/* o céu: noite real no alto, aurora dourada no horizonte, e uma glória de sol atrás do topo */
 :root[data-theme="god"] body {
-  background: radial-gradient(1200px 700px at 50% -20%, rgba(255, 236, 170, 0.28), transparent 60%), radial-gradient(800px 500px at 50% 120%, rgba(255, 215, 106, 0.1), transparent 70%), var(--abismo);
+  background:
+    radial-gradient(60vmax 38vmax at 50% -6%, rgba(255, 248, 214, 0.55), rgba(255, 221, 140, 0.22) 38%, transparent 70%),
+    radial-gradient(120vmax 50vmax at 50% 118%, rgba(255, 196, 120, 0.55), rgba(232, 140, 150, 0.25) 40%, transparent 72%),
+    linear-gradient(180deg, #0b0d2e 0%, #161a52 38%, #2c2a6e 64%, #5b3d7a 84%, #a8657a 100%);
   background-attachment: fixed;
 }
-/* raios de luz descendo do alto, girando devagar */
+/* raios da glória girando devagar, saindo do alto do céu */
 :root[data-theme="god"] body::before {
-  content: ""; position: fixed; left: 50%; top: -60vmax; z-index: -1; width: 160vmax; height: 160vmax; margin-left: -80vmax; pointer-events: none; opacity: 0.13;
-  background: repeating-conic-gradient(from 0deg, rgba(255, 240, 190, 0.9) 0deg 4deg, transparent 4deg 15deg);
-  -webkit-mask: radial-gradient(circle, #000 0 20%, transparent 55%); mask: radial-gradient(circle, #000 0 20%, transparent 55%);
-  animation: vx-spin 140s linear infinite;
+  content: ""; position: fixed; left: 50%; top: -70vmax; z-index: -1; width: 170vmax; height: 170vmax; margin-left: -85vmax; pointer-events: none; opacity: 0.3;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 246, 210, 0.95) 0deg 2.5deg, transparent 2.5deg 9deg, rgba(255, 222, 150, 0.5) 9deg 10deg, transparent 10deg 15deg);
+  -webkit-mask: radial-gradient(circle, #000 0 14%, rgba(0, 0, 0, 0.5) 30%, transparent 52%); mask: radial-gradient(circle, #000 0 14%, rgba(0, 0, 0, 0.5) 30%, transparent 52%);
+  animation: vx-spin 180s linear infinite;
 }
-:root[data-theme="god"] .brand__mark { filter: drop-shadow(0 0 8px rgba(255, 225, 140, 0.95)); }
-:root[data-theme="god"] .btn--primary { box-shadow: 0 0 0 1px rgba(255, 240, 190, 0.5), var(--brilho-ambar); }
-:root[data-theme="god"] .block__title, :root[data-theme="god"] h1 { text-shadow: 0 0 18px rgba(255, 215, 106, 0.45); }
+/* estrelas no alto e nuvens douradas no horizonte */
+:root[data-theme="god"] body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(42vmax 9vmax at 12% 100%, rgba(255, 236, 214, 0.42), transparent 70%),
+    radial-gradient(36vmax 8vmax at 46% 103%, rgba(255, 244, 226, 0.4), transparent 70%),
+    radial-gradient(44vmax 10vmax at 86% 101%, rgba(255, 228, 200, 0.42), transparent 70%),
+    radial-gradient(30vmax 6vmax at 30% 94%, rgba(255, 250, 238, 0.22), transparent 70%),
+    radial-gradient(28vmax 6vmax at 70% 95%, rgba(255, 250, 238, 0.2), transparent 70%),
+    radial-gradient(1.6px 1.6px at 12% 14%, #fff, transparent), radial-gradient(1.2px 1.2px at 28% 32%, #fff6d8, transparent),
+    radial-gradient(1.4px 1.4px at 77% 11%, #fff, transparent), radial-gradient(1px 1px at 90% 36%, #fff6d8, transparent),
+    radial-gradient(1.2px 1.2px at 62% 24%, #fff, transparent), radial-gradient(1px 1px at 6% 46%, #fff6d8, transparent);
+  animation: god-twinkle 6s ease-in-out infinite;
+}
+@keyframes god-twinkle { 50% { opacity: 0.82; } }
+/* superfícies: vidro com filete de ouro e brilho por dentro */
+:root[data-theme="god"] .block, :root[data-theme="god"] .dash-panel, :root[data-theme="god"] .prog__card {
+  border-color: rgba(233, 201, 106, 0.45);
+  background: linear-gradient(180deg, rgba(48, 52, 120, 0.72), rgba(24, 27, 76, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 244, 210, 0.22), 0 0 0 1px rgba(255, 214, 110, 0.08), var(--sombra);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+:root[data-theme="god"] .hero--landing { border-color: rgba(233, 201, 106, 0.6); box-shadow: inset 0 1px 0 rgba(255, 244, 210, 0.3), 0 24px 60px -30px rgba(255, 214, 110, 0.7); }
+/* títulos em ouro polido, com um halo de luz */
+:root[data-theme="god"] h1, :root[data-theme="god"] .block__title, :root[data-theme="god"] .dash-panel__title {
+  background: linear-gradient(180deg, #fffdf2 0%, #ffe9a6 45%, #f2c24f 70%, #fff1bf 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 14px rgba(255, 214, 110, 0.45));
+}
+:root[data-theme="god"] .hero h1::before {
+  content: ""; position: absolute; width: 2em; height: 0.36em; top: 0.12em; left: 0.3em; border: 2px solid rgba(255, 240, 190, 0.9); border-radius: 50%;
+  box-shadow: 0 0 18px rgba(255, 228, 150, 0.9), inset 0 0 10px rgba(255, 228, 150, 0.6); animation: god-float 3.2s ease-in-out infinite; pointer-events: none;
+}
+:root[data-theme="god"] .hero h1 { position: relative; padding-top: 0.35em; }
+@keyframes god-float { 50% { transform: translateY(-4px); } }
+/* botão principal de ouro maciço */
+:root[data-theme="god"] .btn--primary {
+  background: linear-gradient(180deg, #fff6d0 0%, #ffd66e 42%, #e3a93b 100%); color: #2b1a00; border-color: #fff1bf;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 0 0 1px rgba(255, 240, 190, 0.5), var(--brilho-ambar);
+}
+:root[data-theme="god"] .btn--ghost { border-color: rgba(233, 201, 106, 0.55); background: rgba(255, 244, 210, 0.05); }
+:root[data-theme="god"] .brand__mark { filter: drop-shadow(0 0 10px rgba(255, 236, 170, 1)); }
+:root[data-theme="god"] .rail { box-shadow: inset -1px 0 0 rgba(233, 201, 106, 0.35); }
 
 :root[data-theme="nyan"] {
   --abismo: #0b1145; --abismo-rgb: 11, 17, 69;
@@ -3637,7 +3682,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 .unlock--vortice .unlock__name { text-shadow: 4px 0 #4ff7ff, -4px 0 #ff4fd8; animation: vx-glitch 0.9s steps(2) infinite; }
 @keyframes vx-pull { from { transform: scale(0.2); } 70% { transform: scale(1.3); } to { transform: scale(0.9); } }
 
-.theme-card--god .theme-card__swatch i:nth-child(1) { background: #14100a; }
+.theme-card--god .theme-card__swatch i:nth-child(1) { background: linear-gradient(180deg, #0d1035, #5b3d7a); }
 .theme-card--god .theme-card__swatch i:nth-child(2) { background: #ffd76a; }
 .theme-card--god .theme-card__swatch i:nth-child(3) { background: #fff8e6; }
 .theme-card--nyan .theme-card__swatch i:nth-child(1) { background: #0b1145; }
@@ -3648,7 +3693,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 .theme-card--vortice .theme-card__swatch i:nth-child(2) { flex: 0 0 40%; background: radial-gradient(circle, #000 0 55%, #fff 58%, transparent 66%); }
 .theme-card--vortice.is-locked .theme-card__swatch { animation: none; background: var(--linha); }
 @media (prefers-reduced-motion: reduce) {
-  :root[data-theme="vortice"], :root[data-theme="god"] body::before, :root[data-theme="nyan"] body::before, :root[data-theme="nyan"] body::after, :root[data-theme="vortice"] body::before, .vxhack__hole span, .vxhack__title, .secret--vortice .secret__icon, .theme-card--vortice .theme-card__swatch { animation: none !important; }
+  :root[data-theme="vortice"], :root[data-theme="god"] body::before, :root[data-theme="god"] body::after, :root[data-theme="god"] .hero h1::before, :root[data-theme="nyan"] body::before, :root[data-theme="nyan"] body::after, :root[data-theme="vortice"] body::before, .vxhack__hole span, .vxhack__title, .secret--vortice .secret__icon, .theme-card--vortice .theme-card__swatch { animation: none !important; }
   .vxhack__line, .vxhack__switch { animation-duration: 0.01ms !important; animation-delay: 0s !important; }
 }
 
