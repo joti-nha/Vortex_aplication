@@ -3814,11 +3814,10 @@ html, body { max-width: 100%; overflow-x: clip; }
 :root[data-theme="nyan"] body::after { display: none; }
 /* a revoada das variantes, lá no fundo: todas da esquerda para a direita, cada uma na sua faixa */
 .nyan-flock { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.nyan-flock__cat { position: absolute; left: 0; display: flex; align-items: center; opacity: 0.55; animation: nyan-flock 24s linear infinite backwards; will-change: transform; }
+.nyan-flock__cat { position: absolute; left: 0; display: flex; align-items: center; opacity: 0.55; transform: translateX(calc(-100% - 20px)); will-change: transform; }
 .nyan-flock__trail { width: calc(var(--s) * 3.4); height: calc(var(--s) * 0.62); margin-right: calc(var(--s) * -0.55); -webkit-mask: linear-gradient(90deg, transparent, #000 50%); mask: linear-gradient(90deg, transparent, #000 50%); }
 .nyan-flock__img { position: relative; height: var(--s); width: auto; image-rendering: pixelated; }
 .nyan-flock__img--px { width: calc(var(--s) * 1.62); }
-@keyframes nyan-flock { from { transform: translateX(calc(-100% - 20px)); } to { transform: translateX(calc(100vw + 20px)); } }
 .nyan-fly { position: fixed; left: 0; top: 0; z-index: 40; opacity: 0.95; display: flex; align-items: center; pointer-events: none; will-change: transform; }
 .nyan-fly__rainbow { display: flex; align-items: center; margin-right: -36px; -webkit-mask: linear-gradient(90deg, transparent, #000 45%); mask: linear-gradient(90deg, transparent, #000 45%); }
 .nyan-fly__rainbow i { width: 22px; height: 42px; background: linear-gradient(#ff2a2a 0 16.66%, #ff9a2a 0 33.33%, #ffee2a 0 50%, #33ff4a 0 66.66%, #2aa8ff 0 83.33%, #7a2aff 0); animation: nyan-step 0.36s steps(1) infinite; }

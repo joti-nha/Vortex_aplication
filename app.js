@@ -4041,7 +4041,29 @@ const FIREBASE_CONFIG = {
     ['wtf', { fur: '#ff2a2a', crust: '#2aa8ff', frost: '#33ff4a', dot: '#ffee2a' }], ['manyan', { fur: '#e8c8a8', frost: '#ff99cc' }],
     ['nyandoge', { fur: '#e0b060', frost: '#ffcc66', dot: '#a06020' }], ['pikanyan', { fur: '#ffd700', crust: '#ffee2a', frost: '#ffee2a', dot: '#e32a2a', cheek: '#e32a2a' }],
     ['grumpy', { fur: '#8a7a6a', frost: '#c8b8a8', dot: '#6a5a4a' }], ['watermelon', { crust: '#2a9d4a', frost: '#ff4a5a', dot: '#111' }],
-    ['j5dance', { frost: '#66ccff', dot: '#ff66cc' }]
+    ['j5dance', { frost: '#66ccff', dot: '#ff66cc' }],
+    // da wiki dos Nyan Cats (nyancat.fandom.com, Category:Cats): recolorações sem GIF no nyan.cat, desenhadas em pixel
+    ['wiki:mrs', { frost: '#ff66b3', dot: '#ffffff', cheek: '#ff3d8b' }],
+    ['wiki:missingnyan', { fur: '#5a7ac8', crust: '#e8e8e8', frost: '#c86ac8', dot: '#2a2a2a', trail: ['#c86ac8', '#5a7ac8', '#e8e8e8', '#2a2a2a', '#c86ac8', '#5a7ac8'] }],
+    ['wiki:terra', { fur: '#8a6a4a', crust: '#6a4a2a', frost: '#3aa04a', dot: '#2a6ac8', trail: ['#2a6ac8', '#3aa0e8', '#3aa04a', '#8a6a4a', '#3aa04a', '#2a6ac8'] }],
+    ['wiki:neapolitan', { crust: '#7a4a2a', frost: '#ffb3c8', dot: '#fff4e0', trail: ['#ffb3c8', '#ffb3c8', '#fff4e0', '#fff4e0', '#7a4a2a', '#7a4a2a'] }],
+    ['wiki:bendy', { fur: '#111', crust: '#e8dcc0', frost: '#111', dot: '#e8dcc0', cheek: '#111', trail: ['#111', '#e8dcc0', '#111', '#e8dcc0', '#111', '#e8dcc0'] }],
+    ['wiki:blueberry-waffle', { crust: '#d9a050', frost: '#5a6ad8', dot: '#2a2a8a', trail: ['#2a2a8a', '#3a4ab8', '#5a6ad8', '#d9a050', '#c88a3a', '#a06a2a'] }],
+    ['wiki:brasil', { frost: '#2a9d4a', dot: '#ffdf00', trail: ['#2a9d4a', '#2a9d4a', '#ffdf00', '#ffdf00', '#2a3aa0', '#2a3aa0'] }],
+    ['wiki:apaixonado', { frost: '#ff6a9a', dot: '#e32a4a', cheek: '#ff2a6a', trail: ['#ff2a6a', '#ff6a9a', '#ffaacc', '#ff2a6a', '#ff6a9a', '#ffaacc'] }],
+    ['wiki:g-major', { fur: '#9b9b9b', crust: '#6a8aff', frost: '#ff6aff', dot: '#6affff', trail: ['#7a2aff', '#2aa8ff', '#33ff4a', '#ffee2a', '#ff9a2a', '#ff2a2a'] }],
+    ['wiki:xp', { fur: '#9b9b9b', crust: '#2a5ac8', frost: '#3aa04a', dot: '#ffffff', trail: ['#f25022', '#f25022', '#7fba00', '#7fba00', '#00a4ef', '#ffb900'] }],
+    ['wiki:cleo', { fur: '#e0a050', frost: '#ffcc66', dot: '#a06020' }], ['wiki:cobbler', { crust: '#c88a4a', frost: '#a04a8a', dot: '#ffe8c8' }],
+    ['wiki:cookie', { crust: '#c88a4a', frost: '#e0b070', dot: '#4a2a1a' }], ['wiki:avery', { fur: '#b0a090', crust: '#c88a4a', frost: '#e0b070', dot: '#4a2a1a' }],
+    ['wiki:doodle', { fur: '#ffffff', crust: '#ffffff', frost: '#ffffff', dot: '#111', cheek: '#ff99cc', trail: ['#111', '#ffffff', '#111', '#ffffff', '#111', '#ffffff'] }],
+    ['wiki:kitkat', { crust: '#7a3a1a', frost: '#c82a2a', dot: '#ffffff', trail: ['#c82a2a', '#ffffff', '#7a3a1a', '#c82a2a', '#ffffff', '#7a3a1a'] }],
+    ['wiki:kitten', { frost: '#ffccdd', small: true }], ['wiki:lime', { frost: '#9ae02a', dot: '#3a7a1a', trail: ['#3a7a1a', '#5aa02a', '#9ae02a', '#c8f06a', '#9ae02a', '#5aa02a'] }],
+    ['wiki:minty', { frost: '#9af0c8', dot: '#2a8a5a', trail: ['#2a8a5a', '#5ac89a', '#9af0c8', '#e0fff0', '#9af0c8', '#5ac89a'] }],
+    ['wiki:oreo', { crust: '#1a1a1a', frost: '#f4f4f4', dot: '#1a1a1a', trail: ['#1a1a1a', '#f4f4f4', '#1a1a1a', '#f4f4f4', '#1a1a1a', '#f4f4f4'] }],
+    ['wiki:nyoreo', { fur: '#222', crust: '#1a1a1a', frost: '#f4f4f4', dot: '#1a1a1a' }],
+    ['wiki:pepper', { fur: '#5a5a5a', frost: '#e32a2a', dot: '#2a9d4a' }], ['wiki:rainbow', { fur: '#ff9a2a', crust: '#ffee2a', frost: '#2aa8ff', dot: '#ff2a2a' }],
+    ['wiki:snowball', { fur: '#f4f8ff', crust: '#d8e8ff', frost: '#ffffff', dot: '#9ac8ff', cheek: '#ffccdd', trail: ['#ffffff', '#e8f4ff', '#c8e0ff', '#ffffff', '#e8f4ff', '#c8e0ff'] }],
+    ['wiki:nyanbi', { fur: '#7fae6a', crust: '#6a5a3a', frost: '#9a3a5a', dot: '#3a2a1a' }], ['wiki:nyn', { fur: '#9b9b9b', frost: '#ff99cc', dot: '#2aa8ff', trail: ['#2aa8ff', '#7a2aff', '#ff2a2a', '#ff9a2a', '#ffee2a', '#33ff4a'] }]
   ];
   let nyanFlockTimer = null;
   function nyanFlockSince() {
@@ -4060,40 +4082,54 @@ const FIREBASE_CONFIG = {
     box.setAttribute('aria-hidden', 'true');
     if (!old) document.body.prepend(box);
     const since = nyanFlockSince();
+    // ordem de chegada sorteada, mas fixa pelo relógio guardado: ao recarregar, as mesmas variantes já estão no céu
+    let seed = since % 2147483647 || 1;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const order = NYAN_VARIANTS.slice(1);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    order.unshift(NYAN_VARIANTS[0]); // o original chega primeiro
     let first = true;
     const grow = () => {
       if (!box.isConnected) { clearInterval(nyanFlockTimer); return; }
       const f = Math.min(1, (Date.now() - since) / NYAN_FLOCK_MS);
       const want = 1 + Math.floor(f * (NYAN_VARIANTS.length - 1));
-      for (let i = box.children.length; i < want; i++) box.append(nyanFlockCat(NYAN_VARIANTS[i], i, !first));
+      for (let i = box.children.length; i < want; i++) box.append(nyanFlockCat(order[i], i, !first));
       first = false;
       if (want >= NYAN_VARIANTS.length) { clearInterval(nyanFlockTimer); nyanFlockTimer = null; }
     };
     grow();
     if (box.children.length < NYAN_VARIANTS.length) nyanFlockTimer = setInterval(grow, 5000);
   }
+  /* Cada passagem sorteia altura, tamanho e velocidade; a cada volta o gato reaparece em outro lugar do céu.
+     Ao recarregar, quem já estava no céu continua de um ponto sorteado do caminho, em vez de todos entrarem juntos. */
   function nyanFlockCat(v, i, fresh) {
     const [id, pal] = v;
-    const size = 26 + ((i * 37) % 22); // 26 a 47 px de altura
-    const dur = 16 + ((i * 53) % 17); // 16 a 32 s para cruzar
-    const lane = 6 + ((i * 41) % 84); // faixa de altura (vh), espalhada sem sorteio
     const cat = h('div', 'nyan-flock__cat');
-    cat.style.setProperty('--s', size + 'px');
-    cat.style.top = lane + 'vh';
-    // a recém-chegada entra pela esquerda; as que já estavam (ao recarregar) aparecem espalhadas pelo céu
-    cat.style.animationDuration = dur + 's';
-    cat.style.animationDelay = fresh ? '0s' : -(((i * 29) % 100) / 100 * dur).toFixed(1) + 's';
     const trail = h('span', 'nyan-flock__trail');
     trail.style.background = 'linear-gradient(' + (pal.trail || RAINBOW).map((c, k) => c + ' ' + (k * 100 / 6).toFixed(2) + '% ' + ((k + 1) * 100 / 6).toFixed(2) + '%').join(', ') + ')';
     cat.append(trail);
     const usePixel = () => { const tmp = document.createElement('span'); tmp.innerHTML = nyanPixel(pal); const svg = tmp.firstChild; svg.setAttribute('class', 'nyan-flock__img nyan-flock__img--px'); return svg; };
-    const img = h('img', 'nyan-flock__img');
-    img.alt = '';
-    img.referrerPolicy = 'no-referrer';
-    img.loading = 'lazy';
-    img.onerror = () => img.replaceWith(usePixel());
-    img.src = 'https://www.nyan.cat/cats/' + id + '.gif';
-    cat.append(img);
+    if (id.indexOf('wiki:') === 0) cat.append(usePixel());
+    else {
+      const img = h('img', 'nyan-flock__img');
+      img.alt = '';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = () => img.replaceWith(usePixel());
+      img.src = 'https://www.nyan.cat/cats/' + id + '.gif';
+      cat.append(img);
+    }
+    const pass = (start) => {
+      if (!cat.isConnected) return;
+      const size = Math.round((pal.small ? 16 : 24) + Math.random() * (pal.small ? 10 : 26)); // 24 a 50 px (filhote, 16 a 26)
+      cat.style.setProperty('--s', size + 'px');
+      cat.style.top = (2 + Math.random() * 90).toFixed(1) + 'vh';
+      cat.style.opacity = (0.4 + Math.random() * 0.35).toFixed(2);
+      const dur = (14 + Math.random() * 20) * 1000; // 14 a 34 s para cruzar
+      const anim = cat.animate([{ transform: 'translateX(calc(-100% - 20px))' }, { transform: 'translateX(calc(100vw + 20px))' }], { duration: dur, easing: 'linear', fill: 'backwards' });
+      if (start) anim.currentTime = start * dur;
+      anim.onfinish = () => setTimeout(() => pass(0), Math.random() * 4000); // some e volta noutro lugar
+    };
+    requestAnimationFrame(() => pass(fresh ? 0 : Math.random()));
     return cat;
   }
   function nyanFly() {
