@@ -3836,12 +3836,11 @@ html, body { max-width: 100%; overflow-x: clip; }
 @keyframes nyan-glitch { 0% { transform: translate(0, 0); filter: hue-rotate(0deg); } 33% { transform: translate(-3px, 2px); filter: hue-rotate(90deg); } 66% { transform: translate(2px, -2px); filter: hue-rotate(200deg); } }
 .nyan-flock__trail--smoke { animation: nyan-smoke 1.4s ease-in-out infinite alternate; }
 @keyframes nyan-smoke { to { background-position: calc(var(--s) * -0.4) calc(var(--s) * -0.05); transform: scaleY(1.15); } }
-.nyan-flock__trail--checker, .nyan-flock__trail--drip { animation: nyan-tscroll 0.9s linear infinite; }
+.nyan-flock__trail--checker { animation: nyan-tscroll 0.9s linear infinite; }
 @keyframes nyan-tscroll { to { background-position: calc(var(--s) * 0.62) 0; } }
 .nyan-flock__trail--wrap, .nyan-flock__trail--scribble { animation: nyan-tslide 2s linear infinite; }
 @keyframes nyan-tslide { to { background-position: calc(var(--s) * 3.4) 0; } }
 .nyan-flock__trail--smoke { height: calc(var(--s) * 0.8); filter: blur(1.5px); opacity: 0.85; }
-.nyan-flock__trail--drip { height: calc(var(--s) * 0.8); }
 .nyan-flock__img { position: relative; height: var(--s); width: auto; image-rendering: pixelated; }
 .nyan-flock__img--art { height: var(--ih); }
 /* Cenários dos Nyan Cats famosos (nyanScene): só um aceso por vez, atrás dos gatos */
