@@ -3829,6 +3829,9 @@ html, body { max-width: 100%; overflow-x: clip; }
 .nyan-flock__trail--pixel { gap: calc(var(--s) * 0.08); }
 .nyan-flock__trail--wave i { animation: nyan-twave 1s ease-in-out infinite; animation-delay: calc(var(--k) * -0.14s); }
 @keyframes nyan-twave { 50% { transform: translateY(calc(var(--s) * 0.12)); } }
+.nyan-flock__trail--eq { align-items: flex-end; gap: 1px; }
+.nyan-flock__trail--eq i:nth-child(n) { height: 100%; transform-origin: 50% 100%; animation: nyan-eq 0.5s ease-in-out infinite alternate; animation-delay: calc(var(--k) * -0.13s); }
+@keyframes nyan-eq { from { transform: scaleY(0.25); } to { transform: scaleY(1); } }
 .nyan-flock__trail--glitch { animation: nyan-glitch 0.5s steps(3) infinite; }
 @keyframes nyan-glitch { 0% { transform: translate(0, 0); filter: hue-rotate(0deg); } 33% { transform: translate(-3px, 2px); filter: hue-rotate(90deg); } 66% { transform: translate(2px, -2px); filter: hue-rotate(200deg); } }
 .nyan-flock__trail--smoke { animation: nyan-smoke 1.4s ease-in-out infinite alternate; }
