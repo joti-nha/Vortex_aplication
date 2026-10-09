@@ -29,7 +29,7 @@ const LUTA_MANOBRAS = [
   ['Efeito do dano', '2', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa (o alvo perde a ação de movimento; se já estava atordoado, perde o turno), perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta.'],
   ['Trocar o dano', '1', 'Neste golpe, a arma causa outro tipo de dano (cortante, contundente ou perfurante): de lado, com o cabo, com a ponta.'],
   ['Guarda', '1 por +1', 'Até o seu próximo turno, +1 na defesa contra ataques corpo a corpo por ataque gasto, até um máximo igual à sua Precisão.'],
-  ['Arremesso', '1 por 9 m', 'Arremessa a arma corpo a corpo ou um objeto à mão: ataque com Luta até 9 m por ataque gasto.']
+  ['Arremesso', '1 por +9 m', 'Todo mundo pode arremessar coisas; este efeito só aumenta a distância: seu arremesso alcança +9 m por ataque gasto.']
 ];
 /* Estilos de luta: o "upgrade" do poder Luta. Um por ficha; o custo em UP soma ao seu poder em Luta.
    Cada um traz passivas únicas e técnicas próprias, que gastam ataques da rodada como os efeitos básicos. */
