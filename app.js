@@ -4003,14 +4003,14 @@ const FIREBASE_CONFIG = {
     'wtf', 'nyandoge', 'grumpy', 'wiki:terra', 'wiki:neapolitan', 'wiki:cookie', 'wiki:oreo', '16bit', 'angel', 'biker',
     'bubblegum', 'cherry', 'cowboy', 'disorder', 'demonic', 'levo', 'fancy', 'fat', 'floppy', 'golden',
     'kiminyan', 'lavaberry', 'liberty', 'magical', 'mintchoc', 'aoki', 'nyanboy', 'nyantendo', 'pumpkinspice', 'smurf',
-    'strawberry', 'vintage', 'surfing', 'vapor'
+    'strawberry', 'vintage', 'surfing', 'vapor', 'captain'
   ];
   /* Artes originais dos Nyan Cats (img/nyan/<variante>.webp), reduzidas a 1 pixel de arte e recortadas:
      [altura em pixels de arte, pixels de arte por pixel do Nyan original (quando a arte é mais fina),
      altura do meio do corpo, para o rastro sair dali e não do balão ou do chapéu]. Toda variante da revoada precisa estar aqui. */
   const NYAN_ART = {
     original: [21], tacnayn: [21], mexinyan: [27, 1, 19], pumpkin: [21], nyaninja: [23, 1, 10], technyancolor: [21], xmas: [26, 1, 15],
-    pirate: [21], mummy: [21], bday: [37, 1, 26], balloon: [51, 1, 38], dub: [22], grumpy: [21], wtf: [171, 7.5], paddy: [33, 1, 23],
+    pirate: [21], captain: [28, 1, 18], mummy: [21], bday: [37, 1, 26], balloon: [51, 1, 38], dub: [22], grumpy: [21], wtf: [171, 7.5], paddy: [33, 1, 23],
     'wiki:neapolitan': [21], 'wiki:oreo': [24, 1, 13], 'wiki:cookie': [21], 'wiki:terra': [26, 1, 13],
     '16bit': [21], angel: [24, 1, 13], biker: [36, 1, 11], bubblegum: [21], cherry: [21], cowboy: [26, 1, 15], disorder: [16],
     demonic: [28, 1, 11], levo: [42, 2], fancy: [34, 1, 24], fat: [36, 1.2], floppy: [24, 1, 13], golden: [21], kiminyan: [21],
@@ -4028,17 +4028,17 @@ const FIREBASE_CONFIG = {
   const NYAN_TRAILS = {
     original: {}, tacnayn: { trail: ['#1a1a1a', '#3a3a3a', '#5a5a5a', '#7a7a7a', '#9a9a9a', '#bababa'] }, mexinyan: { trail: ['#1a7a3a', '#1a7a3a', '#d8d8d8', '#d8d8d8', '#b8202a', '#b8202a'] },
     pumpkin: {}, nyaninja: {}, zombie: {},
-    technyancolor: { hue: true }, xmas: { trail: ['#33cc00', '#ffffff', '#ff0000', '#ffffff', '#33cc00', '#dedede'] }, pirate: { glyph: '☠', flag: '#111111', trail: ['#ffffff'] },
-    mummy: {}, star: { glyph: '★', trail: ['#ffe23a', '#ffd700'] }, vday: { trail: ['#e8104a', '#ff3a6a', '#ff7a9a', '#ffaac0', '#ffd4e0', '#ffffff'] },
+    technyancolor: { hue: true }, xmas: { trail: ['#33cc00', '#ffffff', '#ff0000', '#ffffff', '#33cc00', '#dedede'] }, pirate: { glyph: '☠', trail: ['#8a0a14', '#c01828'] }, captain: { glyph: '☠', flag: '#111111', trail: ['#ffffff'] },
+    mummy: {}, star: { glyph: '★', trail: ['#ffe23a', '#ffd700'] }, vday: { trail: ['#a60000', '#ff0000', '#ff4f4f', '#ff9191', '#ffc1c1', '#ffffff'] },
     easter: { trail: ['#ff84bd', '#ffad31', '#ffd684', '#5abd7b', '#7bceff', '#9c42a5'] }, paddy: {}, newyear: {},
     bday: {}, dub: { pattern: 'eq' }, melon: { trail: ['#efc5ff', '#de94ff', '#ce5aff', '#bd19ff', '#f719ff', '#94007b'] },
-    balloon: { none: true }, fiesta: { trail: ['#7ad8ff', '#4ab0ff', '#2a7aff', '#2a4ad8', '#3a2ab0', '#5a1a9a'] }, wtf: { pattern: 'glitch' },
+    balloon: { none: true }, fiesta: { bits: true, trail: ['#cedef7', '#9cc5f7', '#6ba5ef', '#2984e6', '#1942ff', '#000099'] }, wtf: { pattern: 'glitch' },
     nyandoge: { trail: ['#cadff9', '#9fc6f4', '#69a6ef', '#2c81e9', '#1544ff', '#000099'] }, grumpy: {}, '16bit': { pattern: '16bit' },
-    angel: { glyph: '✦', trail: ['#ffffff', '#ffe866', '#c8d8ff'] }, biker: { pattern: 'smoke', trail: ['#777777', '#aaaaaa'] }, bubblegum: { glyph: '●', trail: ['#3a6aff', '#ff7ad8', '#7ad8ff'] },
-    cherry: { glyph: '✿', trail: ['#ffb3d9', '#ff7ac8', '#ffffff'] }, cowboy: { trail: ['#3aa2a4', '#308a97', '#2f5d88', '#244a6d', '#1d3f5e', '#173550'] }, disorder: { pattern: 'glitch', trail: ['#2a2a2a', '#9b9b9b', '#5a5a5a', '#ffffff'] },
-    demonic: { pattern: 'drip', trail: ['#7a1a1a', '#e32a2a'] }, levo: { glyph: '✚', trail: ['#2affd0', '#ff2a6a', '#d07ad0'] }, fancy: { glyph: '♦', trail: ['#ffffff', '#c0c0c0', '#8a1a2a'] },
+    angel: { trail: ['#ffffff', '#bfdfff', '#9dceff', '#6cb6ff', '#409fff', '#1a8cff'] }, biker: { pattern: 'smoke', trail: ['#777777', '#aaaaaa'] }, bubblegum: { glyph: '●', trail: ['#3a6aff', '#ff7ad8', '#7ad8ff'] },
+    cherry: { trail: ['#fc56bd', '#fb9278', '#ffe5ae', '#8bfbae', '#7d97ff', '#a052ea'] }, cowboy: { trail: ['#3aa2a4', '#308a97', '#2f5d88', '#244a6d', '#1d3f5e', '#173550'] }, disorder: { pattern: 'glitch', trail: ['#2a2a2a', '#9b9b9b', '#5a5a5a', '#ffffff'] },
+    demonic: { trail: ['#ffa8a8', '#ff6c6c', '#ff0000', '#bb0000', '#8c0000', '#661a00'] }, levo: { glyph: '✚', trail: ['#2affd0', '#ff2a6a', '#d07ad0'] }, fancy: { trail: ['#e5ffff', '#aaffff', '#00e5ff', '#00d0ff', '#00bdff', '#008cd8'] },
     fat: { trail: ['#fd9796', '#fdfd97', '#00cccb'] }, floppy: {}, golden: { trail: ['#fff36a', '#ffe23a', '#ffd700', '#ffcc00', '#ff9a1a', '#ff8a00'] },
-    kiminyan: { glyph: '✧', trail: ['#3a2a6a', '#7a6ad8', '#ffffff'] }, lavaberry: { pattern: 'drip', trail: ['#ff5a1a', '#c82a2a'] }, liberty: { glyph: '★', trail: ['#bff0f0', '#ffd700'] },
+    kiminyan: { glyph: '✧', trail: ['#3a2a6a', '#7a6ad8', '#ffffff'] }, lavaberry: { pattern: 'drip', trail: ['#ff5a1a', '#c82a2a'] }, liberty: { trail: ['#a3dad8', '#84c5c5', '#73bdbd', '#63b5b5', '#52adad', '#49949c'] },
     magical: { glyph: '✧', trail: ['#ffd700', '#b07aff', '#6aa04a'] }, mintchoc: { glyph: '•', trail: ['#3a2a1a', '#7af0b0'] }, aoki: { glyph: '♫', trail: ['#ff7ad8', '#7ad8ff'] },
     nyanboy: { trail: ['#193131', '#214a31', '#527b6b', '#4a523a', '#527b3a', '#adc542'] }, nyantendo: { pattern: 'pixel', trail: ['#c0c0c0', '#e32a2a', '#3a9a3a', '#2a2a2a'] }, pumpkinspice: { trail: ['#ffe23a', '#ffc02a', '#ff9a2a', '#ff7a2a', '#ff4a2a', '#e8202a'] },
     smurf: {}, strawberry: { glyph: '🍓', trail: ['#ff2a6a', '#ffffff'] }, vintage: { pattern: 'smoke', trail: ['#a08a6a', '#6a5a4a'] },
@@ -4047,6 +4047,7 @@ const FIREBASE_CONFIG = {
   };
   /* Rastro: as faixas saem em degraus como no Nyan Cat original (segmentos sobem e descem alternados); o 16-bit tem
      degraus mais finos e cada faixa com luz e sombra; os símbolos pulam; os desenhos (fumaça, xadrez, gotas...) correm. */
+  const NYAN_BITS = 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 18" shape-rendering="crispEdges"><rect x="1" y="2" width="2" height="2" fill="#e8281e"/><rect x="7" y="5" width="2" height="2" fill="#3ab82a"/><rect x="3" y="10" width="2" height="2" fill="#ffb21e"/><rect x="8" y="13" width="2" height="2" fill="#7a4a1e"/></svg>') + '") 0 0 / 100% 100%';
   function nyanTrail(t) {
     const cols = t.trail || RAINBOW;
     const pat = t.glyph ? 'glyph' : t.pattern || 'steps';
@@ -4063,7 +4064,9 @@ const FIREBASE_CONFIG = {
       for (let k = 0; k < 6; k++) { const g = h('i', '', t.glyph); g.style.color = cols[k % cols.length]; el.append(g); }
       if (t.flag) el.style.background = t.flag; // Pirata: a bandeira preta com caveiras no lugar do arco-íris
     } else if (stepped) {
-      const n = pat === '16bit' || pat === 'eq' ? 12 : 6, bg = pat === '16bit' ? bands16(cols) : bands(cols); // eq: o visualizador do Dubstep
+      let bg = pat === '16bit' ? bands16(cols) : bands(cols);
+      const n = pat === '16bit' || pat === 'eq' ? 12 : 6; // eq: o visualizador do Dubstep
+      if (t.bits) bg = NYAN_BITS + ', ' + bg; // Fiesta: pedacinhos de tomate, alface, queijo e carne caindo do taco
       for (let k = 0; k < n; k++) { const seg = h('i'); seg.style.background = bg; seg.style.setProperty('--k', k); el.append(seg); }
       if (t.hue) el.style.animation = 'nyan-hue 2.4s linear infinite'; // Technyancolor: as cores giram
     } else if (pat === 'smoke') el.style.background = 'radial-gradient(circle at 20% 60%, ' + c1 + ' 0 18%, transparent 20%), radial-gradient(circle at 50% 40%, ' + c0 + ' 0 22%, transparent 24%), radial-gradient(circle at 80% 55%, ' + c1 + ' 0 26%, transparent 28%)';
@@ -4142,7 +4145,7 @@ const FIREBASE_CONFIG = {
   /* Fundos dos Nyan Cats mais famosos: enquanto um deles passa, o fundo da página vira o cenário dele (o Vaporwave traz o
      Sol Synthwave, o Natal traz neve, a Abóbora a noite de Halloween...). Cada cenário é pixel art (img/nyan/cenas/) com um detalhe animado no CSS
      e ficam na revoada, atrás dos gatos. Um cenário por vez: quem chega com outro aceso (ou logo depois de um) passa sem trocar o fundo, menos o Vaporwave. */
-  const NYAN_SCENES = new Set(['vapor', 'nyandoge', 'cowboy', 'tacnayn', 'xmas', 'pumpkin', 'pirate', 'paddy', 'vday', 'mexinyan', 'zombie', 'surfing', 'newyear', 'easter', 'star']);
+  const NYAN_SCENES = new Set(['vapor', 'nyandoge', 'cowboy', 'tacnayn', 'xmas', 'pumpkin', 'pirate', 'paddy', 'vday', 'mexinyan', 'zombie', 'surfing', 'newyear', 'easter', 'star', 'captain', 'cherry', 'liberty', 'angel', 'demonic']);
   let nyanSceneId = null, nyanSceneCalm = 0;
   function nyanScene(cat, id, on) {
     const box = cat.parentNode;
