@@ -26,7 +26,7 @@ const LUTA_MANOBRAS = [
   ['Alvo extra', '1 por alvo', 'O mesmo golpe acerta mais um alvo adjacente a você por ataque gasto; um só teste vale para todos.'],
   ['Golpe em área', '2 (+1 por 1,5 m)', 'Golpe giratório ou no chão: todos adjacentes a você (raio 1,5 m) sofrem o ataque, com metade do dano. Cada ataque a mais aumenta o raio em 1,5 m.'],
   ['Junção à manobra', '3', 'O golpe e uma manobra (derrubar, desarmar, agarrar ou quebrar a guarda; Luta contra Resistência ou Reflexos) saem juntos, sem gastar outra ação.'],
-  ['Efeito do dano', '2 (+1 por +1 CD)', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa até o fim do próximo turno do alvo, perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta; cada ataque a mais soma +1 na CD.'],
+  ['Efeito do dano', '2 (+1 por +1 CD)', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa (o alvo perde a ação de movimento; se já estava atordoado, perde o turno), perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta; cada ataque a mais soma +1 na CD.'],
   ['Trocar o dano', '1', 'Neste golpe, a arma causa outro tipo de dano (cortante, contundente ou perfurante): de lado, com o cabo, com a ponta.'],
   ['Guarda', '1 por +1', 'Até o seu próximo turno, +1 na defesa contra ataques corpo a corpo por ataque gasto (máximo +3).'],
   ['Arremesso', '1 por 9 m', 'Arremessa a arma corpo a corpo ou um objeto à mão: ataque com Luta até 9 m por ataque gasto.']
@@ -594,7 +594,7 @@ window.VORTEX_REGRAS = {
         ['h3', 'Instantâneas'],
         ['dl', [
           ['Zonzo', 'O afetado se move aleatoriamente para a direção decidida pelo mestre (se tentar se mover) e tem perdas na defesa.'],
-          ['Atordoado', 'O afetado perde suas ações pelo turno e sua defesa se torna a defesa mínima. (Ser imune a efeitos mentais ignora essa condição.)'],
+          ['Atordoado', 'Cada atordoamento consome a ação de movimento do próximo turno do afetado. Se essa ação de movimento já foi consumida por outro atordoamento, aí sim ele perde o próximo turno inteiro e, até lá, sua defesa se torna a defesa mínima. (Ser imune a efeitos mentais ignora essa condição.)'],
           ['Ofuscado', 'Você tem perdas em testes de percepção que precisem da visão, e de 1 a 2 em um d4 erra automaticamente ataques à distância; para ataque corpo a corpo se erra de 1 em um d4.']
         ]],
         ['h3', 'Passageiras'],

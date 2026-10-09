@@ -10615,11 +10615,10 @@ const FIREBASE_CONFIG = {
     const put = async (name) => {
       const n = cleanName(name).slice(0, 30);
       if (!n) { custom.focus(); return; }
-      const list = (sceneTags()[x.id] || []).filter((t) => nameKey(t.n) !== nameKey(n));
-      list.push({ n, r: Math.round(num(rounds.value)) });
+      const got = withTag(sceneTags()[x.id] || [], n, Math.round(num(rounds.value)));
       closeDialog(tagDlg);
-      await saveTags(x.id, list.slice(-8));
-      toast(x.name + ': ' + n + '.');
+      await saveTags(x.id, got.list.slice(-8));
+      toast(x.name + ': ' + got.n + '.');
     };
     const have = (sceneTags()[x.id] || []).map((t) => nameKey(t.n));
     const grid = h('div', 'tagdlg__grid', ...CONDITIONS.map((c) => {
@@ -10900,10 +10899,19 @@ const FIREBASE_CONFIG = {
     tags.forEach((t) => { const k = Object.keys(DEF_TAGS).find((n) => nameKey(n) === nameKey(t.n)); if (k) { d += DEF_TAGS[k]; why.push(k + ' ' + signed(DEF_TAGS[k])); } });
     return { def: Math.max(0, base + d), note: why.join(', ') };
   }
+  /* Atordoamento em dois passos: o primeiro tira a ação de movimento do próximo turno ("Sem movimento");
+     um segundo, com o movimento já consumido, vira "Atordoado": perde o próximo turno e fica com a defesa mínima.
+     Os dois duram até o próximo turno do alvo (2 rodadas na contagem da cena; a mesa tira antes se quiser). */
+  const STUN_STEP = 'Sem movimento';
+  function withTag(list, n, r) {
+    if (nameKey(n) !== nameKey('Atordoado')) return { list: list.filter((t) => nameKey(t.n) !== nameKey(n)).concat([{ n, r: r || 0 }]), n };
+    const again = list.some((t) => nameKey(t.n) === nameKey(STUN_STEP) || nameKey(t.n) === nameKey('Atordoado'));
+    const rest = list.filter((t) => nameKey(t.n) !== nameKey(STUN_STEP) && nameKey(t.n) !== nameKey('Atordoado'));
+    return again ? { list: rest.concat([{ n: 'Atordoado', r: 2 }]), n: 'Atordoado: perde o próximo turno' }
+      : { list: rest.concat([{ n: STUN_STEP, r: 2 }]), n: 'atordoado, perde a ação de movimento (' + STUN_STEP + ')' };
+  }
   async function addTag(id, n, r) {
-    const list = tagsOf(id).filter((t) => nameKey(t.n) !== nameKey(n));
-    list.push({ n, r: r || 0 });
-    await saveTags(id, list.slice(-8));
+    await saveTags(id, withTag(tagsOf(id), n, r).list.slice(-8));
   }
   async function dropTag(id, n) { if (hasTag(id, n)) await saveTags(id, tagsOf(id).filter((t) => nameKey(t.n) !== nameKey(n))); }
   // registro de uma ação que não rola dado
