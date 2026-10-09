@@ -2964,7 +2964,7 @@ const FIREBASE_CONFIG = {
     const pic = e.image || e.thumb || itemArt(e);
     if (pic) { const img = h('img', 'entry__img'); img.src = pic; img.alt = ''; body.append(img); }
     const seen = new Set(['nome', 'lore', 'compraRacial']); // compraRacial: campo antigo, hoje é exclusivo do Etheriano
-    if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso', 'manobras'].forEach((k) => seen.add(k)); }
+    if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso', 'manobras', 'estilos'].forEach((k) => seen.add(k)); }
     const facts = entryFacts(e, seen, cat && cat.inventory ? ' (quando equipado)' : '');
     if (facts) body.append(facts);
     else if (e.kind !== 'poder') body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
@@ -3077,7 +3077,7 @@ const FIREBASE_CONFIG = {
     const what = { pericia: 'a perícia', arma: 'o tipo de arma', armadura: 'o tipo de armadura' }[CHOICE_POWERS[e.id]];
     const how = kind === 'lista' ? 'Na ficha, em Poderes, "Adicionar poder" abre as opções: pegue quantas quiser, cada uma custa ' + cost + ' UP.'
       : kind === 'escolha' ? 'Na ficha, ao adicionar, você escolhe ' + what + '. Cada compra custa ' + cost + ' UP, vale para uma escolha e dá +1 em uma perícia à sua escolha; dá para comprar de novo.'
-      : 'Na ficha, em Poderes, "Adicionar poder"' + (cost ? ' por ' + cost + ' UP' : '') + '.' + (kind === 'melhorias' ? ' Depois, as melhorias são compradas na lista de poderes.' : '');
+      : 'Na ficha, em Poderes, "Adicionar poder"' + (cost ? ' por ' + cost + ' UP' : '') + '.' + (kind === 'melhorias' ? ' Depois, as melhorias são compradas na lista de poderes.' : '') + (e.id === 'of-pod-luta' ? ' O estilo de luta é escolhido depois, na lista de poderes.' : '');
     const card = (t, tag, i) => h('li', 'pwview__card', h('span', 'pwview__head', h('strong', '', t.name), tag ? h('span', 'tag', tag) : null, bank(t.name) ? h('span', 'tag pwview__bank', 'Poder do banco') : null),
       t.text ? h('span', 'pwview__text', t.text) : null);
     return h('div', 'pwview pwview--' + kind,
@@ -3087,6 +3087,9 @@ const FIREBASE_CONFIG = {
       opts.length ? h('ul', 'pwview__list', ...opts.map((o) => card(o, o.cost ? 'Uso: ' + o.cost : ''))) : null,
       man.length ? h('h3', 'entry__sub', 'Efeitos marciais (custo em ataques da rodada)') : null,
       man.length ? manobraTable(man) : null,
+      ...(e.id === 'of-pod-luta' ? [h('h3', 'entry__sub', 'Estilos de luta (um por ficha)'),
+        h('ul', 'pwview__list', ...lutaStyles().map((st) => h('li', 'pwview__card', h('span', 'pwview__head', h('strong', '', st.name), h('span', 'tag', '+' + st.cost + ' UP')),
+          st.resumo ? h('span', 'pwview__text', st.resumo) : null, ...lutaStyleBody(st))))] : []),
       ups.length ? h('h3', 'entry__sub', 'Melhorias') : null,
       ups.length ? h('ul', 'pwview__list', ...ups.map((u) => card(u, '+' + (u.cost === '' ? 1 : num(u.cost)) + ' UP'))) : null,
       h('p', 'pwview__how', h('strong', '', 'Como obter: '), how));
@@ -5225,7 +5228,7 @@ const FIREBASE_CONFIG = {
         card.addEventListener('click', () => { const now = Date.now(); n = now - t0 < 900 ? n + 1 : 1; t0 = now; if (n >= 5) vxClue(4); });
       }
       if (open) {
-        const b = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Em uso' : 'Usar');
+        const b = h('button', 'btn btn--sm ' + (on || other ? 'btn--ghost' : 'btn--primary'), on ? 'Em uso' : 'Usar');
         b.type = 'button';
         b.disabled = on;
         b.addEventListener('click', async () => {
@@ -5627,6 +5630,18 @@ const FIREBASE_CONFIG = {
     });
     s.doutor = [];
     s.upProfs = [];
+    // poder Luta: o texto e as tabelas vêm sempre do oficial (cópias antigas traziam a melhoria "Ataque extra", que saiu);
+    // o estilo de luta é um só por ficha
+    const lutaOff = BUILTINS.find((b) => b.id === 'of-pod-luta');
+    let styled = false;
+    s.powers = s.powers.map((p) => {
+      if (!p || p.id !== 'of-pod-luta') return p;
+      const q = Object.assign({}, p, { ups: {} });
+      if (lutaOff) q.values = Object.assign({}, p.values, lutaOff.values);
+      if (q.estilo && (styled || !lutaStyleOf(q))) delete q.estilo;
+      if (q.estilo) styled = true;
+      return q;
+    });
     s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
     // fichas da versão anterior marcavam só "equipado": cada item vai para o primeiro espaço livre que o aceite
     s.inventory.forEach((i) => {
@@ -5696,9 +5711,14 @@ const FIREBASE_CONFIG = {
   const powerPicks = (p) => { const names = powerOpts(p).map((o) => o.name); return (p.picks || []).filter((n) => names.indexOf(n) >= 0); };
   const peCost = (txt) => { const m = /(\d+)\s*pe\b/i.exec(String(txt || '')); return m ? Number(m[1]) : 0; };
   const upCount = (p, name) => Math.max(0, Math.round(num((p.ups || {})[name])));
+ /* Estilos de luta (Berserker, Armetista, Renegado): o upgrade do poder Luta, um por ficha.
+     O custo soma ao poder em Luta; as passivas e técnicas vêm do capítulo de regras. */
+  const lutaStyles = () => powerLines(((BUILTINS.find((b) => b.id === 'of-pod-luta') || {}).values || {}).estilos)
+    .map((l) => Object.assign({ cost: num(l.cost) }, ((window.VORTEX_REGRAS || {}).lutaEstilos || []).find((e) => e.name === l.name) || {}, { name: l.name, resumo: l.text }));
+  const lutaStyleOf = (p) => (p && p.estilo ? lutaStyles().find((e) => e.name === p.estilo) || null : null);
   function powerUpCost(p) {
     const custo = num(p.values && p.values.custo);
-    const base = powerOpts(p).length ? custo * powerPicks(p).length : custo;
+    const base = (powerOpts(p).length ? custo * powerPicks(p).length : custo) + (p.id === 'of-pod-luta' && lutaStyleOf(p) ? lutaStyleOf(p).cost : 0);
     return base + powerUps(p).reduce((t, u) => t + (u.cost === '' ? 1 : num(u.cost)) * upCount(p, u.name), 0);
   }
 
@@ -7301,7 +7321,10 @@ const FIREBASE_CONFIG = {
         main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Opções (marque as compradas) ', more), ...opts.map((o, k) => powerOptRow(s, p, o, i + '-' + k))));
       }
       if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
-      if (p.id === 'of-pod-luta') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s))));
+      if (p.id === 'of-pod-luta') {
+        main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s) + ' (Poder ' + lutaPower(s) + ' + perícia Luta ' + skillOf(s, 'luta') + ')')));
+        main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Estilo de luta (um por ficha)'), ...lutaStyles().map((e, k) => lutaStyleRow(s, p, e, i + '-' + k))));
+      }
       const man = powerManobras(p);
       if (man.length) main.append(h('details', 'pw-sub pw-man', h('summary', 'pw-sub__title', 'Efeitos marciais (custo em ataques)'), manobraTable(man)));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
@@ -7342,6 +7365,26 @@ const FIREBASE_CONFIG = {
       row.append(use);
     }
     return row;
+  }
+
+  const lutaStyleBody = (e) => [
+    ...(e.passivas || []).map((x) => h('span', 'pw-opt__text', h('strong', '', x[0] + ': '), x[1])),
+    e.tecnicas && e.tecnicas.length ? h('details', 'pw-man', h('summary', 'pw-sub__title', 'Técnicas (custo em ataques)'), manobraTable(e.tecnicas.map((r) => ({ name: r[0], text: r[1], cost: r[2] })))) : null];
+  function lutaStyleRow(s, p, e, fid) {
+    const on = p.estilo === e.name;
+    const other = !on && s.powers.find((x) => x.id === 'of-pod-luta' && x.estilo);
+    const b = h('button', 'btn btn--sm ' + (on || other ? 'btn--ghost' : 'btn--primary'), on ? 'Tirar' : other ? 'Trocar para este' : 'Escolher');
+    b.type = 'button';
+    b.dataset.fid = 'pw-estilo-' + fid;
+    b.setAttribute('aria-label', (on ? 'Tirar' : 'Escolher') + ' o estilo ' + e.name);
+    b.addEventListener('click', () => {
+      s.powers.forEach((x) => { if (x.id === 'of-pod-luta') delete x.estilo; });
+      if (!on) p.estilo = e.name;
+      changed();
+    });
+    return h('span', 'pw-opt' + (on ? ' pw-opt--on' : ''),
+      h('span', 'pw-opt__head', h('strong', '', e.name), h('span', 'tag', e.cost + ' UP'), b),
+      e.resumo ? h('span', 'pw-opt__text', e.resumo) : null, ...(on ? lutaStyleBody(e) : []));
   }
 
   function powerUpRow(p, u, fid) {
@@ -8200,7 +8243,7 @@ const FIREBASE_CONFIG = {
     const panel = h('div', 'armory__panel');
     const row = (e, on, opt) => {
       const label = on ? 'Tirar' : opt.act || 'Montar';
-      const btn = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), label);
+      const btn = h('button', 'btn btn--sm ' + (on || other ? 'btn--ghost' : 'btn--primary'), label);
       btn.type = 'button';
       btn.dataset.fid = 'arm-part-' + nameKey(e.name).replace(/\s+/g, '-') + (opt.n ? '-' + opt.n : '');
       btn.disabled = Boolean(opt.why) || arm.busy;
@@ -8674,7 +8717,9 @@ const FIREBASE_CONFIG = {
   }
   /* Poder Luta: ataques por rodada = UP investidos em Luta + 1, gastos como a cadência de uma arma de fogo,
      desarmado (conta como arma contundente, com proficiência) ou com arma corpo a corpo. */
-  const lutaAttacks = (s) => { const ps = ((s && s.powers) || []).filter((p) => p.id === 'of-pod-luta'); return ps.length ? ps.reduce((t, p) => t + Math.max(1, powerUpCost(p)), 0) + 1 : 0; };
+  // ataques de Luta por rodada: Poder (UP investidos em Luta, com o estilo) + a perícia Luta
+  const lutaPower = (s) => ((s && s.powers) || []).filter((p) => p.id === 'of-pod-luta').reduce((t, p) => t + Math.max(1, powerUpCost(p)), 0);
+  const lutaAttacks = (s) => { const pw = lutaPower(s); return pw ? pw + skillOf(s, 'luta') : 0; };
   const maxShots = (i, s) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || 1, 1, 20)
     : (!i || i.kind === 'arma-melee') && lutaAttacks(s) ? clamp(lutaAttacks(s), 1, 20) : 1);
   const atkProf = (s, i) => (i ? isProficient(s, i) : lutaAttacks(s) > 0); // desarmado com Luta é proficiente

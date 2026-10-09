@@ -17,28 +17,67 @@
      ['fields', ['campo', ...]]  campos em branco (modelo de ficha)
      ['card', 'Título', [blocos]] cartão com título (aparece no índice)
    ===================================================================== */
-/* Efeitos marciais do poder Luta: [efeito, custo em ataques da rodada, o que faz].
+/* Efeitos marciais básicos do poder Luta: [efeito, custo em ataques da rodada, o que faz].
+   Só as capacidades genéricas; os estilos de luta (abaixo) trazem as técnicas e passivas próprias.
    A ficha (poder Luta, em items.js) e o capítulo Habilidades usam esta mesma tabela. */
 const LUTA_MANOBRAS = [
-  ['Passo marcial', '1', 'Move 3 m entre um golpe e outro, sem gastar a ação de movimento.'],
-  ['Investida', '2', 'Antes do golpe, avança até o seu deslocamento em linha reta; o golpe recebe +2 no dano.'],
-  ['Golpe varrido', '1 por alvo', 'O mesmo golpe acerta mais um alvo adjacente a você; um só teste vale para todos.'],
-  ['Golpe em área', '3', 'Golpe giratório ou no chão: todos adjacentes a você (raio 1,5 m) sofrem o ataque, com metade do dano.'],
-  ['Finta', '1', 'Enganação contra Sentidos do alvo; se vencer, seus próximos golpes nele, nesta rodada, têm +2 no ataque.'],
-  ['Manobra', '1', 'Derrubar, empurrar, desarmar, agarrar ou quebrar a guarda (Luta contra Resistência ou Reflexos) sem gastar outra ação.'],
+  ['Passo marcial', '1', 'Você se move 3 m entre um golpe e outro, sem gastar a ação de movimento.'],
+  ['Investida', '2', 'Antes do golpe, avança até o seu deslocamento em linha reta.'],
   ['Empurrão', '1', 'Se o golpe acertar, o alvo é empurrado 3 m (Corpo + Luta contra Atletismo dele).'],
-  ['Sangrar (cortante)', '2', 'Se o golpe cortante acertar, o alvo sangra: perde 1d6 PV no começo de cada turno até ser tratado (CD 6 + Corpo + Luta contra Fortitude para evitar).'],
-  ['Atordoar (contundente)', '2', 'Se o golpe contundente acertar, o alvo fica Atordoado até o fim do próximo turno dele (CD 6 + Corpo + Luta contra Fortitude para evitar).'],
-  ['Ferir (perfurante)', '2', 'Se o golpe perfurante acertar, o alvo fica Ferido: –1 no ataque e na defesa por ferida (máximo –3) até receber cura (CD 6 + Precisão + Luta contra Fortitude para evitar).'],
-  ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
+  ['Alvo extra', '1 por alvo', 'O mesmo golpe acerta mais um alvo adjacente a você; um só teste vale para todos.'],
+  ['Golpe em área', '3', 'Golpe giratório ou no chão: todos adjacentes a você (raio 1,5 m) sofrem o ataque, com metade do dano.'],
+  ['Junção à manobra', '3', 'O golpe e uma manobra (derrubar, desarmar, agarrar ou quebrar a guarda; Luta contra Resistência ou Reflexos) saem juntos, sem gastar outra ação.'],
+  ['Efeito do dano', '2', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa até o fim do próximo turno do alvo, perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta.'],
+  ['Trocar o dano', '1', 'Neste golpe, a arma causa outro tipo de dano (cortante, contundente ou perfurante): de lado, com o cabo, com a ponta.'],
   ['Guarda', '1 cada', 'Até o seu próximo turno, +1 na defesa contra ataques corpo a corpo por ataque gasto (máximo +3).'],
-  ['Aparar', '1 (guardado)', 'Guarde um ataque: como reação a um golpe corpo a corpo, faça um teste de Luta contra o ataque; se vencer, o golpe não acerta.'],
-  ['Contra-ataque', '1 (guardado)', 'Guarde um ataque: quando um inimigo errar um ataque corpo a corpo em você, golpeie-o como reação.'],
-  ['Arremesso', '1', 'Arremessa a arma corpo a corpo ou um objeto à mão: ataque com Luta até 9 m.'],
-  ['Grito de guerra', '1', 'Intimidação contra Vontade de quem ouvir, em 6 m; quem perder tem –1 no ataque contra você até o fim da rodada.']
+  ['Arremesso', '1', 'Arremessa a arma corpo a corpo ou um objeto à mão: ataque com Luta até 9 m.']
+];
+/* Estilos de luta: o "upgrade" do poder Luta. Um por ficha; o custo em UP soma ao seu poder em Luta.
+   Cada um traz passivas únicas e técnicas próprias, que gastam ataques da rodada como os efeitos básicos. */
+const LUTA_ESTILOS = [
+  { name: 'Berserker', cost: 2, resumo: 'Fúria e força bruta: troca defesa por dano e fica mais perigoso quanto mais apanha.',
+    passivas: [
+      ['Fúria', 'Uma vez por cena, como ação livre, você entra em fúria até o fim da cena ou até cair: +2 no dano corpo a corpo e –2 na defesa.'],
+      ['Sangue quente', 'Com menos da metade dos PV, você tem +1 ataque por rodada.'],
+      ['Couro grosso', 'Em fúria, cada golpe corpo a corpo que você recebe causa 1 de dano a menos.']
+    ],
+    tecnicas: [
+      ['Golpe brutal', '2', 'O golpe causa +1d6 de dano.'],
+      ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
+      ['Investida esmagadora', '3', 'Como a Investida, e se o golpe acertar o alvo cai (Corpo + Luta contra Atletismo dele).'],
+      ['Grito de guerra', '1', 'Intimidação contra Vontade de quem ouvir, em 6 m; quem perder tem –1 no ataque contra você até o fim da rodada.'],
+      ['Ignorar a dor', '1 (guardado)', 'Guarde um ataque: como reação a um golpe que acertou, o dano dele cai pela metade.']
+    ] },
+  { name: 'Armetista', cost: 2, resumo: 'Mestre de armas: domina qualquer arma corpo a corpo e transforma a técnica em defesa.',
+    passivas: [
+      ['Arsenal', 'Você é proficiente com todas as armas corpo a corpo.'],
+      ['Troca rápida', 'Uma vez por rodada, sacar ou trocar uma arma corpo a corpo é ação livre.'],
+      ['Domínio da arma', 'Trocar o dano custa 0 ataques, e você pode usar Precisão + Luta no ataque com qualquer arma corpo a corpo.']
+    ],
+    tecnicas: [
+      ['Aparar', '1 (guardado)', 'Guarde um ataque: como reação a um golpe corpo a corpo, faça um teste de Luta contra o ataque; se vencer, o golpe não acerta.'],
+      ['Desarme no golpe', '1', 'Se o golpe acertar, o alvo solta a arma (Luta contra Reflexos dele).'],
+      ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
+      ['Guarda de lâmina', '1 cada', 'Como a Guarda, mas +2 por ataque gasto (máximo +4).'],
+      ['Arremesso duplo', '1', 'Arremessa duas armas à mão no mesmo ataque, em alvos até 9 m; cada uma faz o seu teste.']
+    ] },
+  { name: 'Renegado', cost: 2, resumo: 'Briga suja: golpes baixos, truques e saídas rápidas, com o que estiver à mão.',
+    passivas: [
+      ['Golpe baixo', '+2 no dano contra alvos Caídos, Agarrados, Atordoados ou flanqueados.'],
+      ['Arma improvisada', 'Qualquer objeto à mão conta como uma arma da qual você é proficiente (1d6, contundente ou cortante).'],
+      ['Escorregadio', 'Se você se moveu nesta rodada, tem +1 na defesa contra ataques corpo a corpo.']
+    ],
+    tecnicas: [
+      ['Finta', '1', 'Enganação contra Sentidos do alvo; se vencer, seus próximos golpes nele, nesta rodada, têm +2 no ataque.'],
+      ['Contra-ataque', '1 (guardado)', 'Guarde um ataque: quando um inimigo errar um ataque corpo a corpo em você, golpeie-o como reação.'],
+      ['Areia nos olhos', '2', 'Enganação contra Reflexos do alvo; se vencer, ele fica Cego até o fim do próximo turno dele.'],
+      ['Rasteira', '1', 'Se o golpe acertar, o alvo cai (Luta contra Atletismo dele).'],
+      ['Saída suja', '1', 'Você se afasta 3 m sem provocar reação de quem está adjacente.']
+    ] }
 ];
 window.VORTEX_REGRAS = {
   lutaManobras: LUTA_MANOBRAS,
+  lutaEstilos: LUTA_ESTILOS,
   groups: ['Fundamentos', 'Combate', 'Equipamento', 'Personagem'],
   chapters: [
 
@@ -962,14 +1001,19 @@ window.VORTEX_REGRAS = {
           ['p', '**Mutável (1 UP):** as transformações têm seus custos em UP diminuídos pela metade, e pode se transformar mais vezes ao dia usando 4 PE (ao invés de 1 PA); porém, os valores contabilizados na transformação não mudam e agora contabilizam essa habilidade. Pré-requisito: Transformação (1 ou 2).']
         ]],
         ['card', 'Luta', [
-          ['kv', '', [['Custo', '1 Up point (+1 por Ataque extra)']]],
+          ['kv', '', [['Custo', '1 Up point (+ o custo do estilo de luta, se comprar um)']]],
           ['p', 'O principal poder marcial: faz quem luta corpo a corpo competir em dano com as armas de fogo.'],
           ['p', 'Seus ataques desarmados contam como uma arma contundente para todos os efeitos, sem precisar de luvas ou armas desse gênero, e você é proficiente com eles.'],
-          ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu poder (os Up points investidos em Luta) + 1. Eles funcionam como a cadência de uma arma de fogo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
-          ['example', 'Luta com 1 Up point → 2 ataques por rodada. Desarmado, dois golpes no mesmo alvo: –2 no ataque, dano ×2.'],
-          ['p', 'Em vez de golpear, você pode gastar esses ataques em efeitos marciais. Os ataques são contados por rodada e não acumulam.'],
+          ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu Poder (os Up points investidos em Luta, com o estilo) + a sua perícia Luta. Eles funcionam como a cadência de uma arma de fogo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
+          ['example', 'Luta com 1 Up point e perícia Luta 2 → 3 ataques por rodada. Desarmado, dois golpes no mesmo alvo: –2 no ataque, dano ×2.'],
+          ['p', 'Em vez de golpear, você pode gastar esses ataques nos efeitos marciais básicos abaixo. Os ataques são contados por rodada e não acumulam.'],
           ['table', ['Efeito', 'Custo', 'O que faz'], LUTA_MANOBRAS],
-          ['p', '**Ataque extra (1 Up point cada):** +1 ataque por rodada.'],
+          ['p', '**Estilos de luta.** Os efeitos básicos servem a qualquer lutador; um estilo é o upgrade do poder, com passivas únicas e técnicas próprias que melhoram o básico. Só dá para ter **um estilo por ficha**, e o custo dele soma ao seu Poder em Luta (e aos ataques).'],
+          ...LUTA_ESTILOS.flatMap((e) => [
+            ['p', '**' + e.name + ' (' + e.cost + ' Up points).** ' + e.resumo],
+            ['dl', e.passivas],
+            ['table', ['Técnica', 'Custo', 'O que faz'], e.tecnicas]
+          ]),
           ['note', 'Técnico', 'Luta não combina direto com tecnomagia: ela se refere à ação de atacar, e não dá para atacar e conjurar ao mesmo tempo. Para complementar os ataques com tecnomancia, é preciso um poder cuja descrição diga que “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia”.']
         ]],
         ['card', 'Akimbo', [
