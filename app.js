@@ -4016,7 +4016,7 @@ const FIREBASE_CONFIG = {
     demonic: [28, 1, 11], levo: [42, 2], fancy: [34, 1, 24], fat: [36, 1.2], floppy: [24, 1, 13], golden: [21], kiminyan: [21],
     liberty: [27, 1, 13], magical: [34, 1, 17], mintchoc: [21], aoki: [29, 1, 11], nyanboy: [21],
     nyantendo: [39, 1, 28], pumpkinspice: [21], smurf: [21], strawberry: [73, 3.6], vintage: [21],
-    fiesta: [27], melon: [32, 1, 18], newyear: [200, 8.5], easter: [26, 1, 14], nyandoge: [23, 1, 10], star: [24], surfing: [28, 1, 10],
+    fiesta: [27, 1, 13], melon: [32, 1, 18], newyear: [200, 8.5], easter: [26, 1, 14], nyandoge: [23, 1, 10], star: [24], surfing: [28, 1, 10],
     vapor: [21], vday: [21], zombie: [21]
   };
   /* Rastro de cada variante. As oficiais do nyan.cat têm o rastro oficial: o arco-íris ({}) ou a versão delas
@@ -4032,7 +4032,7 @@ const FIREBASE_CONFIG = {
     mummy: {}, star: { glyph: '★', trail: ['#ffe23a', '#ffd700'] }, vday: { trail: ['#a60000', '#ff0000', '#ff4f4f', '#ff9191', '#ffc1c1', '#ffffff'] },
     easter: { trail: ['#ff84bd', '#ffad31', '#ffd684', '#5abd7b', '#7bceff', '#9c42a5'] }, paddy: {}, newyear: {},
     bday: {}, dub: { pattern: 'eq' }, melon: { trail: ['#efc5ff', '#de94ff', '#ce5aff', '#bd19ff', '#f719ff', '#94007b'] },
-    balloon: { none: true }, fiesta: { none: true }, wtf: { pattern: 'glitch' },
+    balloon: { none: true }, fiesta: { under: 2.3, trail: ['#cedef7', '#9cc5f7', '#6ba5ef', '#2984e6', '#1942ff', '#000099'] }, wtf: { pattern: 'glitch' },
     nyandoge: { trail: ['#cadff9', '#9fc6f4', '#69a6ef', '#2c81e9', '#1544ff', '#000099'] }, grumpy: {}, '16bit': { pattern: '16bit' },
     angel: { trail: ['#ffffff', '#bfdfff', '#9dceff', '#6cb6ff', '#409fff', '#1a8cff'] }, biker: {}, bubblegum: { glyph: '●', trail: ['#3a6aff', '#ff7ad8', '#7ad8ff'] },
     cherry: { trail: ['#fc56bd', '#fb9278', '#ffe5ae', '#8bfbae', '#7d97ff', '#a052ea'] }, cowboy: { trail: ['#3aa2a4', '#308a97', '#2f5d88', '#244a6d', '#1d3f5e', '#173550'] }, disorder: { pattern: 'glitch', trail: ['#2a2a2a', '#9b9b9b', '#5a5a5a', '#ffffff'] },
@@ -4168,7 +4168,14 @@ const FIREBASE_CONFIG = {
     const id = v;
     const cat = h('div', 'nyan-flock__cat');
     const tr = NYAN_TRAILS[id] || {};
-    if (!tr.none) cat.append(nyanTrail(tr)); // o Balloon Kitty vai pendurado no balão, sem rastro
+    if (!tr.none) {
+      const trail = nyanTrail(tr); // o Balloon Kitty vai pendurado no balão, sem rastro
+      if (tr.under) { // Taco Dog: o GIF já traz os pedacinhos de taco, e o rastro passa por baixo deles até o corpo
+        trail.style.width = 'calc(var(--s) * 3.4 + var(--ih) * ' + tr.under + ')';
+        trail.style.marginRight = 'calc(var(--ih) * -' + tr.under + ')';
+      }
+      cat.append(trail);
+    }
     const img = h('img', 'nyan-flock__img');
     img.alt = '';
     img.onerror = () => cat.remove(); // sem a arte, o gato não voa
