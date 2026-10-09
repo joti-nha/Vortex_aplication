@@ -3966,10 +3966,10 @@ const FIREBASE_CONFIG = {
     vxMusic(id === 'vortice');
   }
   /* Nyan Cat: de tempos em tempos o gato atravessa o fundo vindo de uma direção sorteada, com o rastro de
-     arco-íris em degraus atrás dele. O gato é o GIF oficial (do nyan.cat); se não carregar, entra um gato em
+     arco-íris em degraus atrás dele. O gato é um GIF do próprio projeto (img/nyan/original.gif); se não carregar, entra um gato em
      pixel desenhado aqui. A música (audio/nyan-cat.mp3) toca em loop a partir do primeiro toque, respeita o
      botão de som e o botão ♪ do canto pausa só ela. */
-  var NYAN_GIF = 'https://www.nyan.cat/cats/original.gif';
+  var NYAN_GIF = 'img/nyan/original.gif'; // os GIFs ficam no projeto (img/nyan/), sem depender do nyan.cat
   var NYAN_MP3 = 'audio/nyan-cat.mp3';
   var nyanOn = false, nyanMuted = false, nyanAudio = null, nyanTimer = null, nyanGifOk = null;
   /* gato em pixel (34×21) para quando o GIF não carrega; a paleta muda o pelo, a massa, a cobertura e o confeito */
@@ -4007,10 +4007,10 @@ const FIREBASE_CONFIG = {
     if (!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) nyanTimer = setTimeout(nyanFly, 1500 + Math.random() * 5000);
     nyanMusic();
   }
-  /* Revoada: as variantes do Nyan Cat (as do nyan.cat) vão aparecendo ao fundo, voando juntas da esquerda
+  /* Revoada: as variantes do Nyan Cat (as do nyan.cat e as da wiki) vão aparecendo ao fundo, voando juntas da esquerda
      para a direita. Começa com o original e, em cerca de 10 minutos com o tema ligado, todas estão no céu.
-     O relógio fica guardado (vortex.nyanFlock.v1) e zera ao trocar de tema. Cada uma tenta o GIF da variante;
-     se não carregar, entra o gato em pixel com as cores dela. */
+     O relógio fica guardado (vortex.nyanFlock.v1) e zera ao trocar de tema. Cada uma usa o GIF dela em img/nyan/
+     (gerados em pixel, com as cores e o acessório da variante); se não carregar, entra o gato em pixel em SVG. */
   const NYAN_FLOCK_KEY = 'vortex.nyanFlock.v1';
   const NYAN_FLOCK_MS = 10 * 60 * 1000;
   const RAINBOW = ['#ff2a2a', '#ff9a2a', '#ffee2a', '#33ff4a', '#2aa8ff', '#7a2aff'];
@@ -4042,7 +4042,7 @@ const FIREBASE_CONFIG = {
     ['nyandoge', { fur: '#e0b060', frost: '#ffcc66', dot: '#a06020' }], ['pikanyan', { fur: '#ffd700', crust: '#ffee2a', frost: '#ffee2a', dot: '#e32a2a', cheek: '#e32a2a' }],
     ['grumpy', { fur: '#8a7a6a', frost: '#c8b8a8', dot: '#6a5a4a' }], ['watermelon', { crust: '#2a9d4a', frost: '#ff4a5a', dot: '#111' }],
     ['j5dance', { frost: '#66ccff', dot: '#ff66cc' }],
-    // da wiki dos Nyan Cats (nyancat.fandom.com, Category:Cats): recolorações sem GIF no nyan.cat, desenhadas em pixel
+    // da wiki dos Nyan Cats (nyancat.fandom.com, Category:Cats): recolorações
     ['wiki:mrs', { frost: '#ff66b3', dot: '#ffffff', cheek: '#ff3d8b' }],
     ['wiki:missingnyan', { fur: '#5a7ac8', crust: '#e8e8e8', frost: '#c86ac8', dot: '#2a2a2a', trail: ['#c86ac8', '#5a7ac8', '#e8e8e8', '#2a2a2a', '#c86ac8', '#5a7ac8'] }],
     ['wiki:terra', { fur: '#8a6a4a', crust: '#6a4a2a', frost: '#3aa04a', dot: '#2a6ac8', trail: ['#2a6ac8', '#3aa0e8', '#3aa04a', '#8a6a4a', '#3aa04a', '#2a6ac8'] }],
@@ -4089,7 +4089,7 @@ const FIREBASE_CONFIG = {
     'wiki:neapolitan': {}, 'wiki:bendy': { pattern: 'drip', trail: ['#111111', '#2a2a2a'] }, 'wiki:blueberry-waffle': { pattern: 'checker', trail: ['#d9a050', '#2a2a8a'] },
     'wiki:brasil': { glyph: '⚽', trail: ['#2a9d4a', '#ffdf00'] }, 'wiki:apaixonado': { glyph: '♥', trail: ['#ff2a6a', '#ffaacc'] },
     'wiki:g-major': { glyph: '♪', trail: ['#7a2aff', '#2aa8ff', '#33ff4a', '#ff2a2a'] }, 'wiki:xp': { pattern: 'checker', trail: ['#f25022', '#7fba00', '#00a4ef', '#ffb900'] },
-    'wiki:cleo': { glyph: '𓂀', trail: ['#ffd700', '#2a6ac8'] }, 'wiki:cobbler': { pattern: 'checker', trail: ['#c88a4a', '#a04a8a'] },
+    'wiki:cleo': { glyph: '▲', trail: ['#ffd700', '#2a6ac8'] }, 'wiki:cobbler': { pattern: 'checker', trail: ['#c88a4a', '#a04a8a'] },
     'wiki:cookie': { glyph: '●', trail: ['#c88a4a', '#4a2a1a'] }, 'wiki:avery': { glyph: '●', trail: ['#e0b070', '#4a2a1a'] },
     'wiki:doodle': { pattern: 'scribble' }, 'wiki:kitkat': { pattern: 'checker', trail: ['#7a3a1a', '#c82a2a'] }, 'wiki:kitten': { glyph: '✧', trail: ['#ffccdd', '#ffffff'] },
     'wiki:lime': { glyph: '◐', trail: ['#9ae02a', '#3a7a1a'] }, 'wiki:minty': { glyph: '❋', trail: ['#9af0c8', '#2a8a5a'] }, 'wiki:oreo': { pattern: 'checker', trail: ['#1a1a1a', '#f4f4f4'] },
@@ -4148,6 +4148,32 @@ const FIREBASE_CONFIG = {
     grow();
     if (box.children.length < NYAN_VARIANTS.length) nyanFlockTimer = setInterval(grow, 5000);
   }
+  /* Para não se sobreporem: cada gato no céu guarda altura, tamanho, largura e o seu horário de voo. Uma passagem
+     nova sorteia várias alturas e fica com a que menos cruza os outros no caminho (mesma faixa e no mesmo
+     lugar ao mesmo tempo, contando as velocidades diferentes). */
+  const nyanSky = new Set();
+  function nyanFreeLane(me) {
+    const W = window.innerWidth, H = window.innerHeight;
+    const xAt = (c, t) => -c.w + (W + c.w + 20) * (t - c.t0) / c.dur; // ponta direita do gato no instante t
+    const clash = (y) => {
+      let n = 0;
+      nyanSky.forEach((o) => {
+        if (o === me || Math.abs(o.y - y) > (o.size + me.size) / 2 + 6) return;
+        const a = Math.max(me.t0, o.t0), b = Math.min(me.t0 + me.dur, o.t0 + o.dur);
+        if (a >= b) return;
+        const d1 = xAt(me, a) - xAt(o, a), d2 = xAt(me, b) - xAt(o, b), gap = (me.w + o.w) / 2;
+        if ((d1 > 0) !== (d2 > 0) || Math.min(Math.abs(d1), Math.abs(d2)) < gap) n++;
+      });
+      return n;
+    };
+    let best = 0, bestN = Infinity;
+    for (let k = 0; k < 16 && bestN > 0; k++) {
+      const y = H * 0.02 + Math.random() * Math.max(10, H * 0.92 - me.size);
+      const n = clash(y);
+      if (n < bestN) { best = y; bestN = n; }
+    }
+    return best;
+  }
   /* Cada passagem sorteia altura, tamanho e velocidade; a cada volta o gato reaparece em outro lugar do céu.
      Ao recarregar, quem já estava no céu continua de um ponto sorteado do caminho, em vez de todos entrarem juntos. */
   function nyanFlockCat(v, i, fresh) {
@@ -4155,25 +4181,28 @@ const FIREBASE_CONFIG = {
     const cat = h('div', 'nyan-flock__cat');
     cat.append(nyanTrail(Object.assign({}, pal, NYAN_TRAILS[id])));
     const usePixel = () => { const tmp = document.createElement('span'); tmp.innerHTML = nyanPixel(pal); const svg = tmp.firstChild; svg.setAttribute('class', 'nyan-flock__img nyan-flock__img--px'); return svg; };
-    if (id.indexOf('wiki:') === 0) cat.append(usePixel());
-    else {
-      const img = h('img', 'nyan-flock__img');
-      img.alt = '';
-      img.referrerPolicy = 'no-referrer';
-      img.onerror = () => img.replaceWith(usePixel());
-      img.src = 'https://www.nyan.cat/cats/' + id + '.gif';
-      cat.append(img);
-    }
+    const img = h('img', 'nyan-flock__img');
+    img.alt = '';
+    img.onerror = () => img.replaceWith(usePixel());
+    img.src = 'img/nyan/' + id.replace(':', '-') + '.gif';
+    cat.append(img);
+    const me = { y: 0, size: 0, w: 0, t0: 0, dur: 1 };
     const pass = (start) => {
-      if (!cat.isConnected) return;
-      const size = Math.round((pal.small ? 16 : 24) + Math.random() * (pal.small ? 10 : 26)); // 24 a 50 px (filhote, 16 a 26)
-      cat.style.setProperty('--s', size + 'px');
-      cat.style.top = (2 + Math.random() * 90).toFixed(1) + 'vh';
-      cat.style.opacity = (0.4 + Math.random() * 0.35).toFixed(2);
+      if (!cat.isConnected) { nyanSky.delete(me); return; }
+      // céu cheio para o tamanho da tela (no celular cabem menos): espera um pouco e tenta de novo
+      if (nyanSky.size >= Math.max(8, Math.floor(window.innerWidth * window.innerHeight / 26000))) { setTimeout(() => pass(0), 2000 + Math.random() * 4000); return; }
+      const size = Math.round((pal.small ? 20 : 30) + Math.random() * (pal.small ? 10 : 26)); // 30 a 56 px de GIF (filhote, 20 a 30)
       const dur = (14 + Math.random() * 20) * 1000; // 14 a 34 s para cruzar
+      const now = performance.now();
+      Object.assign(me, { size, w: size * 4.5, dur, t0: now - (start || 0) * dur });
+      me.y = nyanFreeLane(me);
+      nyanSky.add(me);
+      cat.style.setProperty('--s', size + 'px');
+      cat.style.top = me.y.toFixed(0) + 'px';
+      cat.style.opacity = (0.45 + Math.random() * 0.3).toFixed(2);
       const anim = cat.animate([{ transform: 'translateX(calc(-100% - 20px))' }, { transform: 'translateX(calc(100vw + 20px))' }], { duration: dur, easing: 'linear', fill: 'backwards' });
       if (start) anim.currentTime = start * dur;
-      anim.onfinish = () => setTimeout(() => pass(0), Math.random() * 4000); // some e volta noutro lugar
+      anim.onfinish = () => { nyanSky.delete(me); setTimeout(() => pass(0), 500 + Math.random() * 5000); }; // some e volta noutro lugar
     };
     requestAnimationFrame(() => pass(fresh ? 0 : Math.random()));
     return cat;
@@ -4218,7 +4247,7 @@ const FIREBASE_CONFIG = {
       if (!nyanOn || !fly.isConnected) { fly.remove(); return; }
       const img = fly.querySelector('img.nyan-fly__cat');
       // o GIF tem um espaço vazio atrás do gato: o arco-íris entra por baixo da traseira
-      if (img) rainbow.style.marginRight = -Math.round(img.getBoundingClientRect().width * 0.5) + 'px';
+      if (img) rainbow.style.marginRight = -Math.round(img.getBoundingClientRect().width * 0.12) + 'px';
       const len = fly.getBoundingClientRect().width + fly.getBoundingClientRect().height; // comprimento + folga da inclinação
       const back = out(-dx, -dy) + 10, fwd = out(dx, dy) + len + 20; // entra com o focinho na borda, sai com o rastro inteiro
       fly.style.visibility = '';
