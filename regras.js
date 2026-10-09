@@ -22,7 +22,6 @@
    A ficha (poder Luta, em items.js) e o capítulo Habilidades usam esta mesma tabela. */
 const LUTA_MANOBRAS = [
   ['Passo marcial', '1 por 3 m', 'Você se move 3 m por ataque gasto entre um golpe e outro, sem gastar a ação de movimento.'],
-  ['Investida', '1 por 3 m', 'Antes do golpe, avança 3 m em linha reta por ataque gasto; o golpe recebe +1 no dano a cada 3 m percorridos.'],
   ['Empurrão', '1 por 3 m', 'Se o golpe acertar, o alvo é empurrado 3 m por ataque gasto (Corpo + Luta contra Atletismo dele).'],
   ['Alvo extra', '1 por alvo', 'O mesmo golpe acerta mais um alvo adjacente a você por ataque gasto; um só teste vale para todos.'],
   ['Golpe em área', '2 (+1 por 1,5 m)', 'Golpe giratório ou no chão: todos adjacentes a você (raio 1,5 m) sofrem o ataque, com metade do dano. Cada ataque a mais aumenta o raio em 1,5 m.'],
@@ -44,7 +43,7 @@ const LUTA_ESTILOS = [
     tecnicas: [
       ['Golpe brutal', '2', 'O golpe causa +1d6 de dano.'],
       ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
-      ['Investida esmagadora', '1 por 3 m (+1)', 'Como a Investida, com um ataque a mais: se o golpe acertar, o alvo cai (Corpo + Luta contra Atletismo dele).'],
+      ['Golpe esmagador', '2', 'Se o golpe acertar, o alvo cai (Corpo + Luta contra Atletismo dele).'],
       ['Grito de guerra', '1', 'Intimidação contra Vontade de quem ouvir, em 6 m; quem perder tem –1 no ataque contra você até o fim da rodada.'],
       ['Ignorar a dor', '1 (guardado)', 'Guarde um ataque: como reação a um golpe que acertou, o dano dele cai pela metade.']
     ] },
