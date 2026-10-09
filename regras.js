@@ -26,10 +26,10 @@ const LUTA_MANOBRAS = [
   ['Alvo extra', '1 por alvo', 'O mesmo golpe acerta mais um alvo adjacente a você por ataque gasto; um só teste vale para todos.'],
   ['Golpe em área', '2 (+1 por 1,5 m)', 'Golpe giratório ou no chão: todos adjacentes a você (raio 1,5 m) sofrem o ataque, com metade do dano. Cada ataque a mais aumenta o raio em 1,5 m.'],
   ['Junção à manobra', '3', 'O golpe e uma manobra (derrubar, desarmar, agarrar ou quebrar a guarda; Luta contra Resistência ou Reflexos) saem juntos, sem gastar outra ação.'],
-  ['Efeito do dano', '2 (+1 por +1 CD)', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa até o fim do próximo turno do alvo, perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta; cada ataque a mais soma +1 na CD.'],
+  ['Efeito do dano', '2', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa (o alvo perde a ação de movimento; se já estava atordoado, perde o turno), perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta.'],
   ['Trocar o dano', '1', 'Neste golpe, a arma causa outro tipo de dano (cortante, contundente ou perfurante): de lado, com o cabo, com a ponta.'],
-  ['Guarda', '1 por +1', 'Até o seu próximo turno, +1 na defesa contra ataques corpo a corpo por ataque gasto (máximo +3).'],
-  ['Arremesso', '1 por 9 m', 'Arremessa a arma corpo a corpo ou um objeto à mão: ataque com Luta até 9 m por ataque gasto.']
+  ['Guarda', '1 por +1', 'Até o seu próximo turno, +1 na defesa contra ataques corpo a corpo por ataque gasto, até um máximo igual à sua Precisão.'],
+  ['Arremesso', '1 por +9 m', 'Todo mundo pode arremessar coisas; este efeito só aumenta a distância: seu arremesso alcança +9 m por ataque gasto.']
 ];
 /* Estilos de luta: o "upgrade" do poder Luta. Um por ficha; o custo em UP soma ao seu poder em Luta.
    Cada um traz passivas únicas e técnicas próprias, que gastam ataques da rodada como os efeitos básicos. */
@@ -57,7 +57,7 @@ const LUTA_ESTILOS = [
       ['Aparar', '1 (guardado)', 'Guarde um ataque: como reação a um golpe corpo a corpo, faça um teste de Luta contra o ataque; se vencer, o golpe não acerta.'],
       ['Desarme no golpe', '1', 'Se o golpe acertar, o alvo solta a arma (Luta contra Reflexos dele).'],
       ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
-      ['Guarda de lâmina', '1 por +2', 'Como a Guarda, mas +2 por ataque gasto (máximo +4).'],
+      ['Guarda de lâmina', '1 por +2', 'Como a Guarda, mas +2 por ataque gasto; o máximo continua igual à sua Precisão.'],
       ['Arremesso duplo', '1', 'Arremessa duas armas à mão no mesmo ataque, em alvos até 9 m; cada uma faz o seu teste.']
     ] },
   { name: 'Renegado', cost: 2, resumo: 'Briga suja: golpes baixos, truques e saídas rápidas, com o que estiver à mão.',
@@ -606,7 +606,7 @@ window.VORTEX_REGRAS = {
         ['h3', 'Instantâneas'],
         ['dl', [
           ['Zonzo', 'O afetado se move aleatoriamente para a direção decidida pelo mestre (se tentar se mover) e tem perdas na defesa.'],
-          ['Atordoado', 'O afetado perde suas ações pelo turno e sua defesa se torna a defesa mínima. (Ser imune a efeitos mentais ignora essa condição.)'],
+          ['Atordoado', 'Cada atordoamento consome a ação de movimento do próximo turno do afetado. Se essa ação de movimento já foi consumida por outro atordoamento, aí sim ele perde o próximo turno inteiro e, até lá, sua defesa se torna a defesa mínima. (Ser imune a efeitos mentais ignora essa condição.)'],
           ['Ofuscado', 'Você tem perdas em testes de percepção que precisem da visão, e de 1 a 2 em um d4 erra automaticamente ataques à distância; para ataque corpo a corpo se erra de 1 em um d4.']
         ]],
         ['h3', 'Passageiras'],
@@ -1055,7 +1055,7 @@ window.VORTEX_REGRAS = {
           ['kv', '', [['Custo', '1 Up point (+ o custo do estilo de luta, se comprar um)']]],
           ['p', 'Você domina o combate corpo a corpo e golpeia várias vezes por rodada, rivalizando em dano com quem usa armas de fogo.'],
           ['p', 'Seus ataques desarmados contam como uma arma contundente para todos os efeitos, sem precisar de luvas ou armas desse gênero, e você é proficiente com eles.'],
-          ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu atributo Corpo + a sua perícia Luta. Eles funcionam como a cadência de uma arma de fogo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
+          ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu atributo Corpo + a sua perícia Luta. Eles seguem as mesmas regras de cadência das armas de fogo (veja Regras de Cadência), e cada golpe conta como um disparo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
           ['example', 'Corpo 2 e perícia Luta 1 → 3 ataques por rodada. Desarmado, dois golpes no mesmo alvo: –2 no ataque, dano ×2.'],
           ['p', 'Em vez de golpear, você pode gastar esses ataques nos efeitos marciais básicos abaixo. A tabela é proporcional: cada ataque gasto vale 3 m de movimento, e os efeitos que acumulam crescem um passo por ataque. Os ataques são contados por rodada e não acumulam.'],
           ['table', ['Efeito', 'Custo', 'O que faz'], LUTA_MANOBRAS],
