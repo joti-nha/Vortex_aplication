@@ -126,7 +126,9 @@ window.VORTEX_REGRAS = {
   lutaEstilos: LUTA_ESTILOS,
   tecnoAcoes: TECNO_ACOES,
   tecnoListas: TECNO_LISTAS,
+  tecnoBases: TECNO_BASES,
   tecnoImplementos: TECNO_IMPLEMENTOS,
+  tecnoRaridade: TECNO_RARIDADE,
   estilos: { 'of-pod-luta': LUTA_ESTILOS, 'of-pod-tecnomancia': TECNO_TIPOS },
   groups: ['Fundamentos', 'Combate', 'Equipamento', 'Personagem'],
   chapters: [

@@ -3065,6 +3065,22 @@ const FIREBASE_CONFIG = {
   }
   const manobraTable = (rows) => h('div', 'pwview__tablewrap', h('table', 'pwview__table', h('thead', '', h('tr', '', h('th', '', 'Efeito'), h('th', '', 'Custo'), h('th', '', 'O que faz'))),
     h('tbody', '', ...rows.map((r) => h('tr', '', h('th', '', r.name), h('td', 'pwview__cost', r.text), h('td', '', r.cost))))));
+  // Tecnomancia na Oficina: as mesmas tabelas do capítulo Habilidades (bases, implementos e raridade)
+  const ruleTable = (head, rows) => h('div', 'pwview__tablewrap', h('table', 'pwview__table', h('thead', '', h('tr', '', ...head.map((t) => h('th', '', t)))),
+    h('tbody', '', ...rows.map((r) => h('tr', '', h('th', '', r[0]), ...r.slice(1).map((c, k) => h('td', k === 0 && r.length > 2 ? 'pwview__cost' : '', c)))))));
+  const tecnoView = () => {
+    const R = window.VORTEX_REGRAS || {};
+    return [h('h3', 'entry__sub', 'Operação = base + implementos'),
+      h('p', 'pwview__efeito', 'Toda operação começa por uma base. Depois você soma implementos, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o atributo chave da lista usada (Precisão ou Essência).'),
+      ruleTable(['Base', 'Custo', 'Como funciona'], R.tecnoBases || []),
+      h('p', 'pwview__efeito', 'Dano: toda forma de causar dano segue a regra de ataque, com o multiplicador da cadência. Dado de dano ou dano que passa pela Defesa só vem de dano fixo ou dano de efeito de um componente conhecido, como o Sangramento ou o dano adicional de alguns itens.'),
+      h('h3', 'entry__sub', 'Implementos padrão'),
+      h('p', 'pwview__efeito', 'Todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.'),
+      ruleTable(['Implemento', 'Custo', 'O que faz'], R.tecnoImplementos || []),
+      h('h3', 'entry__sub', 'Implementos especiais'),
+      h('p', 'pwview__efeito', 'São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Numa operação, no máximo um número igual ao seu nível. Um poder custa em PE o dobro do custo de uso + o custo em UP; o resto custa o PE da raridade + qualquer custo original.'),
+      ruleTable(['Raridade', 'Custo'], R.tecnoRaridade || [])];
+  };
   function powerView(e) {
     const v = e.values || {};
     const kind = powerKind(e);
@@ -3085,6 +3101,7 @@ const FIREBASE_CONFIG = {
       v.efeito ? h('p', 'pwview__efeito', v.efeito) : null,
       opts.length ? h('h3', 'entry__sub', 'Opções') : null,
       opts.length ? h('ul', 'pwview__list', ...opts.map((o) => card(o, o.cost ? 'Uso: ' + o.cost : ''))) : null,
+      ...(e.id === 'of-pod-tecnomancia' ? tecnoView() : []),
       man.length ? h('h3', 'entry__sub', 'Efeitos marciais (custo em ataques da rodada)') : null,
       man.length ? manobraTable(man) : null,
       ...(powerStyles(e).length ? [h('h3', 'entry__sub', styleLabel(e)),
