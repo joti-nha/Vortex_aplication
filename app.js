@@ -4029,7 +4029,7 @@ const FIREBASE_CONFIG = {
     technyancolor: { hue: true }, xmas: { trail: ['#33cc00', '#ffffff', '#ff0000', '#ffffff', '#33cc00', '#dedede'] }, pirate: {},
     mummy: {}, star: {}, vday: {},
     easter: { trail: ['#ff84bd', '#ffad31', '#ffd684', '#5abd7b', '#7bceff', '#9c42a5'] }, paddy: {}, newyear: {},
-    bday: {}, dub: {}, melon: {},
+    bday: {}, dub: {}, melon: { trail: ['#efc5ff', '#de94ff', '#ce5aff', '#bd19ff', '#f719ff', '#94007b'] },
     balloon: { none: true }, fiesta: {}, wtf: { pattern: 'glitch' },
     nyandoge: { trail: ['#cadff9', '#9fc6f4', '#69a6ef', '#2c81e9', '#1544ff', '#000099'] }, grumpy: {}, '16bit': { pattern: '16bit' },
     angel: { glyph: '✦', trail: ['#ffffff', '#ffe866', '#c8d8ff'] }, biker: { pattern: 'smoke', trail: ['#777777', '#aaaaaa'] }, bubblegum: { glyph: '●', trail: ['#3a6aff', '#ff7ad8', '#7ad8ff'] },
