@@ -572,6 +572,34 @@ def scene_demonic():  # vermelho do inferno com chamas no chão e brilhos (exemp
     return im
 
 
+def scene_biker():  # cidade à noite com rua asfaltada e faixas brancas (exemplo do João)
+    im, d = img()
+    sky(d, ['#002a58', '#03305f', '#063666', '#0a3c6e'], 0, 130, step=10, jag=3, seed=22)
+    cloud(d, 110, 14, 96, 18, ('#ffffff', '#f0f0f8', '#d8d8ea'))
+    ring(d, 262, 36)
+    stars(d, 14, 70, 22)
+    r = random.Random(22)
+    x = -6
+    while x < W:  # prédios cinza com janelas amarelas e verdes-claros no meio
+        w, h = r.randint(26, 46), r.randint(36, 70)
+        c = r.choice(['#9a9a8c', '#8c8c80', '#a4a496'])
+        d.rectangle([x, 130 - h, x + w, 130], fill=c)
+        for wy in range(130 - h + 5, 126, 8):
+            for wx in range(x + 4, x + w - 4, 8):
+                d.rectangle([wx, wy, wx + 3, wy + 3], fill='#ffe83a' if r.random() < 0.35 else '#5e5e54')
+        x += w + r.choice([0, 0, 6])
+        if r.random() < 0.4:
+            d.rectangle([x - 6, 116, x, 130], fill='#8ab890')
+            x += 2
+    d.rectangle([0, 130, W, 134], fill='#4a4a4a')
+    d.rectangle([0, 134, W, 162], fill='#56636e')
+    for x in range(8, W, 54):
+        d.rectangle([x, 147, x + 26, 148], fill='#ffffff')
+    d.rectangle([0, 162, W, H], fill='#2cae2c')
+    d.rectangle([0, 162, W, 163], fill='#249424')
+    return im
+
+
 SCENES = {k[6:]: v for k, v in list(globals().items()) if k.startswith('scene_')}
 
 if __name__ == '__main__':

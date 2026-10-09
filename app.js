@@ -4034,7 +4034,7 @@ const FIREBASE_CONFIG = {
     bday: {}, dub: { pattern: 'eq' }, melon: { trail: ['#efc5ff', '#de94ff', '#ce5aff', '#bd19ff', '#f719ff', '#94007b'] },
     balloon: { none: true }, fiesta: { bits: true, trail: ['#cedef7', '#9cc5f7', '#6ba5ef', '#2984e6', '#1942ff', '#000099'] }, wtf: { pattern: 'glitch' },
     nyandoge: { trail: ['#cadff9', '#9fc6f4', '#69a6ef', '#2c81e9', '#1544ff', '#000099'] }, grumpy: {}, '16bit': { pattern: '16bit' },
-    angel: { trail: ['#ffffff', '#bfdfff', '#9dceff', '#6cb6ff', '#409fff', '#1a8cff'] }, biker: { pattern: 'smoke', trail: ['#777777', '#aaaaaa'] }, bubblegum: { glyph: '●', trail: ['#3a6aff', '#ff7ad8', '#7ad8ff'] },
+    angel: { trail: ['#ffffff', '#bfdfff', '#9dceff', '#6cb6ff', '#409fff', '#1a8cff'] }, biker: {}, bubblegum: { glyph: '●', trail: ['#3a6aff', '#ff7ad8', '#7ad8ff'] },
     cherry: { trail: ['#fc56bd', '#fb9278', '#ffe5ae', '#8bfbae', '#7d97ff', '#a052ea'] }, cowboy: { trail: ['#3aa2a4', '#308a97', '#2f5d88', '#244a6d', '#1d3f5e', '#173550'] }, disorder: { pattern: 'glitch', trail: ['#2a2a2a', '#9b9b9b', '#5a5a5a', '#ffffff'] },
     demonic: { trail: ['#ffa8a8', '#ff6c6c', '#ff0000', '#bb0000', '#8c0000', '#661a00'] }, levo: { glyph: '✚', trail: ['#2affd0', '#ff2a6a', '#d07ad0'] }, fancy: { trail: ['#e5ffff', '#aaffff', '#00e5ff', '#00d0ff', '#00bdff', '#008cd8'] },
     fat: { trail: ['#fd9796', '#fdfd97', '#00cccb'] }, floppy: {}, golden: { trail: ['#fff36a', '#ffe23a', '#ffd700', '#ffcc00', '#ff9a1a', '#ff8a00'] },
@@ -4145,7 +4145,7 @@ const FIREBASE_CONFIG = {
   /* Fundos dos Nyan Cats mais famosos: enquanto um deles passa, o fundo da página vira o cenário dele (o Vaporwave traz o
      Sol Synthwave, o Natal traz neve, a Abóbora a noite de Halloween...). Cada cenário é pixel art (img/nyan/cenas/) com um detalhe animado no CSS
      e ficam na revoada, atrás dos gatos. Um cenário por vez: quem chega com outro aceso (ou logo depois de um) passa sem trocar o fundo, menos o Vaporwave. */
-  const NYAN_SCENES = new Set(['vapor', 'nyandoge', 'cowboy', 'tacnayn', 'xmas', 'pumpkin', 'pirate', 'paddy', 'vday', 'mexinyan', 'zombie', 'surfing', 'newyear', 'easter', 'star', 'captain', 'cherry', 'liberty', 'angel', 'demonic']);
+  const NYAN_SCENES = new Set(['vapor', 'nyandoge', 'cowboy', 'tacnayn', 'xmas', 'pumpkin', 'pirate', 'paddy', 'vday', 'mexinyan', 'zombie', 'surfing', 'newyear', 'easter', 'star', 'captain', 'cherry', 'liberty', 'angel', 'demonic', 'biker']);
   let nyanSceneId = null, nyanSceneCalm = 0;
   function nyanScene(cat, id, on) {
     const box = cat.parentNode;
