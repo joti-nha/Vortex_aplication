@@ -2964,7 +2964,7 @@ const FIREBASE_CONFIG = {
     const pic = e.image || e.thumb || itemArt(e);
     if (pic) { const img = h('img', 'entry__img'); img.src = pic; img.alt = ''; body.append(img); }
     const seen = new Set(['nome', 'lore', 'compraRacial']); // compraRacial: campo antigo, hoje é exclusivo do Etheriano
-    if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso'].forEach((k) => seen.add(k)); }
+    if (e.kind === 'poder') { body.append(powerView(e)); ['custo', 'efeito', 'opcoes', 'melhorias', 'custoUso', 'manobras'].forEach((k) => seen.add(k)); }
     const facts = entryFacts(e, seen, cat && cat.inventory ? ' (quando equipado)' : '');
     if (facts) body.append(facts);
     else if (e.kind !== 'poder') body.append(h('p', 'empty', 'Sem outros dados além do nome.'));
@@ -3058,12 +3058,20 @@ const FIREBASE_CONFIG = {
     if (powerOpts(e).length) return 'lista';
     return powerUps(e).length ? 'melhorias' : 'simples';
   }
+  // efeitos marciais (poder Luta): "Efeito | custo | descrição"; cópias antigas na ficha usam os do poder oficial
+  function powerManobras(p) {
+    const off = p && p.id ? BUILTINS.find((x) => x.id === p.id) : null;
+    return powerLines((p.values && p.values.manobras) || (off && off.values && off.values.manobras));
+  }
+  const manobraTable = (rows) => h('div', 'pwview__tablewrap', h('table', 'pwview__table', h('thead', '', h('tr', '', h('th', '', 'Efeito'), h('th', '', 'Custo'), h('th', '', 'O que faz'))),
+    h('tbody', '', ...rows.map((r) => h('tr', '', h('th', '', r.name), h('td', 'pwview__cost', r.text), h('td', '', r.cost))))));
   function powerView(e) {
     const v = e.values || {};
     const kind = powerKind(e);
     const cost = num(v.custo);
     const opts = powerOpts(e);
     const ups = powerUps(e);
+    const man = powerManobras(e);
     const bank = (n) => BUILTINS.some((x) => x.kind === 'poder' && x.id !== e.id && nameKey(x.name) === nameKey(n));
     const label = { lista: 'Poder-lista', escolha: 'Poder com escolha', melhorias: 'Poder com melhorias', simples: 'Poder' }[kind];
     const what = { pericia: 'a perícia', arma: 'o tipo de arma', armadura: 'o tipo de armadura' }[CHOICE_POWERS[e.id]];
@@ -3077,6 +3085,8 @@ const FIREBASE_CONFIG = {
       v.efeito ? h('p', 'pwview__efeito', v.efeito) : null,
       opts.length ? h('h3', 'entry__sub', 'Opções') : null,
       opts.length ? h('ul', 'pwview__list', ...opts.map((o) => card(o, o.cost ? 'Uso: ' + o.cost : ''))) : null,
+      man.length ? h('h3', 'entry__sub', 'Efeitos marciais (custo em ataques da rodada)') : null,
+      man.length ? manobraTable(man) : null,
       ups.length ? h('h3', 'entry__sub', 'Melhorias') : null,
       ups.length ? h('ul', 'pwview__list', ...ups.map((u) => card(u, '+' + (u.cost === '' ? 1 : num(u.cost)) + ' UP'))) : null,
       h('p', 'pwview__how', h('strong', '', 'Como obter: '), how));
@@ -3500,7 +3510,7 @@ const FIREBASE_CONFIG = {
     const check = () => {
       const r = parseScript(ta.value);
       state.classList.toggle('script__state--bad', r.bad.length > 0);
-      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.desloc ? signed(r.desloc) + ' m de deslocamento' : '', r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
+      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'OK: ' + ([r.vida ? 'vida base ' + r.vida : '', r.up ? signed(r.up) + ' UP iniciais' : '', r.nucleo ? 'núcleo +' + r.nucleo : '', r.desloc ? signed(r.desloc) + ' m de deslocamento' : '', Object.keys(r.skills).map((k) => '+' + r.skills[k] + ' em ' + skillLabel(k)).join(', '), r.acopla ? 'acopla' : '', r.humanidade ? 'Humanidade' : '', r.eletronico ? 'eletrônico' : '', bonusLine(r.bonus)].filter(Boolean).join(' · ') || 'nada') + '.' : '');
     };
     ta.addEventListener('input', () => { onChange(ta.value); check(); });
     check();
@@ -3962,7 +3972,13 @@ const FIREBASE_CONFIG = {
   var NYAN_GIF = 'https://www.nyan.cat/cats/original.gif';
   var NYAN_MP3 = 'audio/nyan-cat.mp3';
   var nyanOn = false, nyanMuted = false, nyanAudio = null, nyanTimer = null, nyanGifOk = null;
-  const NYAN_PIXEL = (() => { // gato em pixel (34×21) para quando o GIF não carrega
+  /* gato em pixel (34×21) para quando o GIF não carrega; a paleta muda o pelo, a massa, a cobertura e o confeito */
+  const nyanPixel = (pal) => {
+    const c = Object.assign({ fur: '#9b9b9b', crust: '#f6d39a', frost: '#ff99cc', dot: '#ff3d8b', cheek: '#ff99cc' }, pal || {});
+    return NYAN_PIXEL.replace(/#9b9b9b/g, c.fur).replace(/#f6d39a/g, c.crust).replace(/#ff3d8b/g, c.dot).replace(/#ff99cc/g, '%F%')
+      .replace('%F%', c.frost).replace(/%F%/g, c.cheek);
+  };
+  const NYAN_PIXEL = (() => {
     const R = (x, y, w, hh, c) => '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + hh + '" fill="' + c + '"/>';
     return '<svg class="nyan-fly__cat nyan-fly__cat--px" viewBox="0 0 34 21" shape-rendering="crispEdges" aria-hidden="true">' +
       R(0, 9, 5, 3, '#9b9b9b') + // rabo
@@ -3979,6 +3995,7 @@ const FIREBASE_CONFIG = {
     clearTimeout(nyanTimer);
     nyanTimer = null;
     document.querySelectorAll('.nyan-fly').forEach((el) => el.remove());
+    nyanFlock(on);
     const btn = document.querySelector('.nyan-music');
     if (!on) { if (btn) btn.remove(); nyanMusic(); return; }
     if (!btn) {
@@ -3989,6 +4006,95 @@ const FIREBASE_CONFIG = {
     }
     if (!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) nyanTimer = setTimeout(nyanFly, 1500 + Math.random() * 5000);
     nyanMusic();
+  }
+  /* Revoada: as variantes do Nyan Cat (as do nyan.cat) vão aparecendo ao fundo, voando juntas da esquerda
+     para a direita. Começa com o original e, em cerca de 10 minutos com o tema ligado, todas estão no céu.
+     O relógio fica guardado (vortex.nyanFlock.v1) e zera ao trocar de tema. Cada uma tenta o GIF da variante;
+     se não carregar, entra o gato em pixel com as cores dela. */
+  const NYAN_FLOCK_KEY = 'vortex.nyanFlock.v1';
+  const NYAN_FLOCK_MS = 10 * 60 * 1000;
+  const RAINBOW = ['#ff2a2a', '#ff9a2a', '#ffee2a', '#33ff4a', '#2aa8ff', '#7a2aff'];
+  const NYAN_VARIANTS = [
+    ['original', {}], ['gb', { fur: '#4c6b22', crust: '#8bac0f', frost: '#9bbc0f', dot: '#306230', cheek: '#8bac0f', trail: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f', '#8bac0f', '#306230'] }],
+    ['tacnayn', { fur: '#3a3a3a', crust: '#5a3b22', frost: '#3b0a2a', dot: '#ff2a2a', cheek: '#ff2a2a', trail: ['#2a2a2a', '#3d1f1f', '#1f1f3d', '#2a2a2a', '#3d1f1f', '#1f1f3d'] }],
+    ['mexinyan', { frost: '#33aa55', dot: '#ff2a2a', trail: ['#2a9d4a', '#2a9d4a', '#ffffff', '#ffffff', '#e32a2a', '#e32a2a'] }],
+    ['pumpkin', { fur: '#3a3a3a', crust: '#ff8a1a', frost: '#ff6a00', dot: '#2a1500', trail: ['#ff7a00', '#ff9a2a', '#2a1500', '#ff7a00', '#ff9a2a', '#2a1500'] }],
+    ['jazz', { fur: '#d9b25c', frost: '#7a2aff', dot: '#ffd700' }], ['nyaninja', { fur: '#222', crust: '#333', frost: '#444', dot: '#ff2a2a', cheek: '#222' }],
+    ['zombie', { fur: '#7fae6a', crust: '#8b7a5a', frost: '#5d7a4a', dot: '#a02a2a', trail: ['#556b2f', '#6b8e23', '#808000', '#556b2f', '#6b8e23', '#808000'] }],
+    ['technyancolor', { frost: '#00ffff', dot: '#ff00ff', trail: ['#ff00ff', '#00ffff', '#ffff00', '#00ff00', '#ff0000', '#0000ff'] }],
+    ['xmas', { frost: '#ffffff', dot: '#e32a2a', trail: ['#e32a2a', '#ffffff', '#2a9d4a', '#e32a2a', '#ffffff', '#2a9d4a'] }],
+    ['pirate', { fur: '#8a7a6a', frost: '#3a2a1a', dot: '#ffd700' }], ['rasta', { frost: '#2a9d4a', dot: '#ffee2a', trail: ['#e32a2a', '#e32a2a', '#ffee2a', '#ffee2a', '#2a9d4a', '#2a9d4a'] }],
+    ['america', { frost: '#ffffff', dot: '#2a3aa0', trail: ['#e32a2a', '#ffffff', '#e32a2a', '#ffffff', '#2a3aa0', '#2a3aa0'] }],
+    ['retro', { fur: '#888', crust: '#ccc', frost: '#aaa', dot: '#555', cheek: '#aaa', trail: ['#333', '#555', '#777', '#999', '#bbb', '#ddd'] }],
+    ['mummy', { fur: '#e8e0c8', crust: '#d9cfae', frost: '#f4efe0', dot: '#b8ad8a', cheek: '#f4efe0', trail: ['#f4efe0', '#d9cfae', '#f4efe0', '#d9cfae', '#f4efe0', '#d9cfae'] }],
+    ['star', { fur: '#ffd700', crust: '#ffee88', frost: '#ffffff', dot: '#ffd700' }],
+    ['vday', { frost: '#ff2a6a', dot: '#ffffff', trail: ['#ff2a6a', '#ff6a9a', '#ffaacc', '#ff2a6a', '#ff6a9a', '#ffaacc'] }],
+    ['easter', { frost: '#c8a2ff', dot: '#ffee2a', trail: ['#ffb3d9', '#ffd9b3', '#ffffb3', '#b3ffb3', '#b3d9ff', '#d9b3ff'] }],
+    ['paddy', { frost: '#2a9d4a', dot: '#ffd700', trail: ['#1a7a3a', '#2a9d4a', '#5ac85a', '#1a7a3a', '#2a9d4a', '#5ac85a'] }],
+    ['newyear', { frost: '#ffd700', dot: '#ffffff' }], ['bday', { frost: '#ffffff', dot: '#2aa8ff' }],
+    ['slomo', { fur: '#b0b0d0' }], ['dub', { frost: '#33ff4a', dot: '#000', trail: ['#33ff4a', '#000000', '#33ff4a', '#000000', '#33ff4a', '#000000'] }],
+    ['smooth', { fur: '#c0a080', frost: '#ffccaa' }], ['coin', { fur: '#d4a017', crust: '#ffd700', frost: '#ffe866', dot: '#b8860b', cheek: '#ffd700', trail: ['#ffd700', '#ffe866', '#d4a017', '#ffd700', '#ffe866', '#d4a017'] }],
+    ['melon', { crust: '#2a9d4a', frost: '#ff4a5a', dot: '#111' }], ['balloon', { frost: '#ff4a8a', dot: '#ffffff' }],
+    ['daft', { fur: '#c0c0c0', crust: '#222', frost: '#ffd700', dot: '#111' }], ['sad', { fur: '#6a7a9a', frost: '#8a9acc', dot: '#3a4a7a', trail: ['#3a4a7a', '#4a5a8a', '#5a6a9a', '#6a7aaa', '#7a8aba', '#8a9aca'] }],
+    ['skrillex', { fur: '#222', frost: '#ff2a2a', dot: '#000' }], ['toaster', { fur: '#c0c0c0', crust: '#a0a0a0', frost: '#d9a066', dot: '#7a4a1a' }],
+    ['elevator', { frost: '#ffeedd', dot: '#cc9966' }], ['fiesta', { frost: '#ff2a8a', dot: '#ffee2a', trail: ['#ff2a8a', '#ffee2a', '#2aa8ff', '#33ff4a', '#ff9a2a', '#7a2aff'] }],
+    ['wtf', { fur: '#ff2a2a', crust: '#2aa8ff', frost: '#33ff4a', dot: '#ffee2a' }], ['manyan', { fur: '#e8c8a8', frost: '#ff99cc' }],
+    ['nyandoge', { fur: '#e0b060', frost: '#ffcc66', dot: '#a06020' }], ['pikanyan', { fur: '#ffd700', crust: '#ffee2a', frost: '#ffee2a', dot: '#e32a2a', cheek: '#e32a2a' }],
+    ['grumpy', { fur: '#8a7a6a', frost: '#c8b8a8', dot: '#6a5a4a' }], ['watermelon', { crust: '#2a9d4a', frost: '#ff4a5a', dot: '#111' }],
+    ['j5dance', { frost: '#66ccff', dot: '#ff66cc' }]
+  ];
+  let nyanFlockTimer = null;
+  function nyanFlockSince() {
+    let t = 0;
+    try { t = Number(localStorage.getItem(NYAN_FLOCK_KEY)) || 0; } catch (e) { /* sem armazenamento */ }
+    if (!t || t > Date.now()) { t = Date.now(); try { localStorage.setItem(NYAN_FLOCK_KEY, String(t)); } catch (e) { /* vale até fechar */ } }
+    return t;
+  }
+  function nyanFlock(on) {
+    clearInterval(nyanFlockTimer);
+    nyanFlockTimer = null;
+    const old = document.querySelector('.nyan-flock');
+    if (!on) { if (old) old.remove(); try { localStorage.removeItem(NYAN_FLOCK_KEY); } catch (e) { /* nada */ } return; }
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const box = old || h('div', 'nyan-flock');
+    box.setAttribute('aria-hidden', 'true');
+    if (!old) document.body.prepend(box);
+    const since = nyanFlockSince();
+    let first = true;
+    const grow = () => {
+      if (!box.isConnected) { clearInterval(nyanFlockTimer); return; }
+      const f = Math.min(1, (Date.now() - since) / NYAN_FLOCK_MS);
+      const want = 1 + Math.floor(f * (NYAN_VARIANTS.length - 1));
+      for (let i = box.children.length; i < want; i++) box.append(nyanFlockCat(NYAN_VARIANTS[i], i, !first));
+      first = false;
+      if (want >= NYAN_VARIANTS.length) { clearInterval(nyanFlockTimer); nyanFlockTimer = null; }
+    };
+    grow();
+    if (box.children.length < NYAN_VARIANTS.length) nyanFlockTimer = setInterval(grow, 5000);
+  }
+  function nyanFlockCat(v, i, fresh) {
+    const [id, pal] = v;
+    const size = 26 + ((i * 37) % 22); // 26 a 47 px de altura
+    const dur = 16 + ((i * 53) % 17); // 16 a 32 s para cruzar
+    const lane = 6 + ((i * 41) % 84); // faixa de altura (vh), espalhada sem sorteio
+    const cat = h('div', 'nyan-flock__cat');
+    cat.style.setProperty('--s', size + 'px');
+    cat.style.top = lane + 'vh';
+    // a recém-chegada entra pela esquerda; as que já estavam (ao recarregar) aparecem espalhadas pelo céu
+    cat.style.animationDuration = dur + 's';
+    cat.style.animationDelay = fresh ? '0s' : -(((i * 29) % 100) / 100 * dur).toFixed(1) + 's';
+    const trail = h('span', 'nyan-flock__trail');
+    trail.style.background = 'linear-gradient(' + (pal.trail || RAINBOW).map((c, k) => c + ' ' + (k * 100 / 6).toFixed(2) + '% ' + ((k + 1) * 100 / 6).toFixed(2) + '%').join(', ') + ')';
+    cat.append(trail);
+    const usePixel = () => { const tmp = document.createElement('span'); tmp.innerHTML = nyanPixel(pal); const svg = tmp.firstChild; svg.setAttribute('class', 'nyan-flock__img nyan-flock__img--px'); return svg; };
+    const img = h('img', 'nyan-flock__img');
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.loading = 'lazy';
+    img.onerror = () => img.replaceWith(usePixel());
+    img.src = 'https://www.nyan.cat/cats/' + id + '.gif';
+    cat.append(img);
+    return cat;
   }
   function nyanFly() {
     if (!nyanOn) return;
@@ -5367,6 +5473,20 @@ const FIREBASE_CONFIG = {
   // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
   // atributo efetivo: o da ficha + o +1 dos UP (a cada 4) + o ajuste manual
   const attrOf = (s, id) => num(s.attrs[id]) + num((s.upAttr || {})[id]) + num((s.attrMod || {})[id]);
+  /* perícias dadas pela espécime (script "pericia:"): somam por fora dos pontos da ficha, até o limite da perícia;
+     o que passar do limite vira ponto livre para investir em outra perícia */
+  function skillGrant(s) {
+    const give = sheetMech(s).skills || {};
+    const grant = {};
+    let over = 0;
+    Object.keys(give).forEach((k) => {
+      const g = Math.min(give[k], Math.max(0, skillCap(s, k) - num(s.skills[k])));
+      if (g > 0) grant[k] = g;
+      over += give[k] - g;
+    });
+    return { grant, over };
+  }
+  const skillOf = (s, id) => num(s.skills[id]) + (skillGrant(s).grant[id] || 0);
   const attrUpUsed = (s) => ['corpo', 'precisao', 'essencia'].reduce((t, k) => t + Math.max(0, Math.round(num((s.upAttr || {})[k]))), 0);
   function normSheet(raw) {
     const r = raw && typeof raw === 'object' ? raw : {};
@@ -5473,10 +5593,11 @@ const FIREBASE_CONFIG = {
     ['humanidade', 'testes contra efeitos de PE com CD; metade da Blindagem/Escudo regenera como PV'],
     ['eletronico', 'ser eletrônico: efeitos de PE atordoam'],
     ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)'],
-    ['deslocamento: 3', 'metros a mais de deslocamento (o padrão é 9 m)']
+    ['deslocamento: 3', 'metros a mais de deslocamento (o padrão é 9 m)'],
+    ['pericia: Reflexos +1', 'perícia de graça; se passar do limite, vira um ponto livre para outra perícia']
   ];
   function parseScript(txt) {
-    const out = { vida: '', up: 0, nucleo: 0, desloc: 0, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
+    const out = { vida: '', up: 0, nucleo: 0, desloc: 0, skills: {}, acopla: false, humanidade: false, eletronico: false, bonus: {}, bad: [] };
     String(txt || '').split(/[\n;]/).forEach((raw) => {
       const line = raw.replace(/\/\/.*$|#.*$/, '').trim();
       if (!line) return;
@@ -5488,6 +5609,12 @@ const FIREBASE_CONFIG = {
       if (key === 'vida' || key === 'vidabase') {
         const v = (ITEM_DATA.vidaBase || ['PV', 'Blindagem', 'Escudo']).find((x) => nameKey(x) === nameKey(val));
         if (v) out.vida = v; else out.bad.push(raw.trim());
+        return;
+      }
+      if (key === 'pericia' || key === 'pericias') { // "pericia: Reflexos +1, Sentidos"
+        const parts = val.split(',').map((x) => /^(.+?)\s*(?:\+\s*(\d+))?$/.exec(x.trim())).filter(Boolean);
+        if (!parts.length) { out.bad.push(raw.trim()); return; }
+        parts.forEach((p) => { const id = skillIdOf(p[1]); if (!id) { out.bad.push(raw.trim()); return; } out.skills[id] = (out.skills[id] || 0) + Number(p[2] || 1); });
         return;
       }
       const n = Number(val.replace(',', '.'));
@@ -5525,17 +5652,18 @@ const FIREBASE_CONFIG = {
     return out;
   }
   function mergeMech(list) {
-    const m = { vida: 'PV', up: 0, nucleo: 0, desloc: 0, acopla: false, humanidade: false, eletronico: false };
+    const m = { vida: 'PV', up: 0, nucleo: 0, desloc: 0, skills: {}, acopla: false, humanidade: false, eletronico: false };
     list.forEach((x) => {
       if (x.vida) m.vida = x.vida;
       m.up += x.up;
       m.nucleo = Math.max(m.nucleo, x.nucleo);
       m.desloc += x.desloc || 0;
+      Object.keys(x.skills || {}).forEach((k) => { m.skills[k] = (m.skills[k] || 0) + x.skills[k]; });
       ['acopla', 'humanidade', 'eletronico'].forEach((k) => { if (x[k]) m[k] = true; });
     });
     return m;
   }
-  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.desloc ? signed(m.desloc) + ' m de deslocamento' : '', m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
+  const mechLine = (m) => ['Vida base ' + m.vida, m.up + ' UP iniciais', m.nucleo ? 'núcleo +' + m.nucleo : '', m.desloc ? signed(m.desloc) + ' m de deslocamento' : '', Object.keys(m.skills).map((k) => '+' + m.skills[k] + ' em ' + skillLabel(k)).join(', '), m.acopla ? 'acopla armas e armaduras' : '', m.humanidade ? 'Humanidade' : '', m.eletronico ? 'eletrônico' : ''].filter(Boolean).join(' · ');
 
   /* Poderes com escolha: Doutor (uma perícia) e Proficiência em arma ou armadura (um tipo).
      Cada compra é um poder na lista, com a escolha guardada em choice. */
@@ -5639,7 +5767,8 @@ const FIREBASE_CONFIG = {
       // +1 num atributo a cada 4 UP: vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
       attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length, // Doutor e proficiências: +1 de perícia cada
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over, // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
+      skillGrant: skillGrant(s).grant,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
   }
@@ -6778,13 +6907,15 @@ const FIREBASE_CONFIG = {
       const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(attrOf(s, at.id)))));
       SKILLS[at.id].forEach((sk) => {
         const v = num(s.skills[sk[0]]);
+        const gift = (m.skillGrant || {})[sk[0]] || 0; // de graça, da espécime
         const pen = PENALTY_SKILLS.indexOf(sk[0]) >= 0 ? m.pen : 0;
-        const total = h('span', 'skill__total', signed(attrOf(s, at.id) + v - pen));
-        total.title = 'Atributo ' + signed(attrOf(s, at.id)) + ', perícia +' + v + (pen ? ', armadura –' + pen : '');
+        const total = h('span', 'skill__total', signed(attrOf(s, at.id) + v + gift - pen));
+        total.title = 'Atributo ' + signed(attrOf(s, at.id)) + ', perícia +' + (v + gift) + (gift ? ' (+' + gift + ' da espécime)' : '') + (pen ? ', armadura –' + pen : '');
         const row = h('div', 'skill',
-          h('span', 'skill__name', sk[1], pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
+          h('span', 'skill__name', sk[1], gift ? h('span', 'skill__gift', ' +' + gift + ' espécime') : null, pen ? h('span', 'skill__pen', ' –' + pen + ' armadura') : null),
           total,
-          stepper(v, { min: 0, max: Math.max(v, skillCap(s, sk[0])), label: sk[1], fid: 'sk-' + sk[0], text: '+' + v, onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
+          // subir até o limite tira o ponto da espécime desta perícia e devolve como ponto livre
+          stepper(v, { min: 0, max: Math.max(v, skillCap(s, sk[0])), label: sk[1], fid: 'sk-' + sk[0], text: '+' + (v + gift), onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
         if (skillCap(s, sk[0]) > 3) row.querySelector('.skill__name').append(h('span', 'skill__doc', ' Doutor'));
         group.append(row);
         if (sk[0] === 'oficio') {
@@ -7050,6 +7181,9 @@ const FIREBASE_CONFIG = {
         main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Opções (marque as compradas) ', more), ...opts.map((o, k) => powerOptRow(s, p, o, i + '-' + k))));
       }
       if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
+      if (p.id === 'of-pod-luta') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s))));
+      const man = powerManobras(p);
+      if (man.length) main.append(h('details', 'pw-sub pw-man', h('summary', 'pw-sub__title', 'Efeitos marciais (custo em ataques)'), manobraTable(man)));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
       del.type = 'button';
       del.setAttribute('aria-label', 'Remover poder ' + p.name);
@@ -8400,7 +8534,7 @@ const FIREBASE_CONFIG = {
     const attr = SKILL_ATTR[sk];
     const name = sk === 'oficio' && s.oficio ? 'Ofício (' + String(s.oficio).slice(0, 30) + ')' : SKILL_LABEL[sk];
     const pen = PENALTY_SKILLS.indexOf(sk) >= 0 ? m.pen : 0;
-    return { label: name, attrName: ATTR_LABEL[attr], attr: attrOf(s, attr), skillName: name, skill: num(s.skills[sk]), mods: pen ? [['armadura', -pen]] : [] };
+    return { label: name, attrName: ATTR_LABEL[attr], attr: attrOf(s, attr), skillName: name, skill: skillOf(s, sk), mods: pen ? [['armadura', -pen]] : [] };
   }
 
   // formas de atacar com um item (ou desarmado), conforme as regras de Ataque e de cada tipo de arma
@@ -8409,7 +8543,7 @@ const FIREBASE_CONFIG = {
     const prof = i ? isProficient(s, i) : false;
     if (!i || i.kind !== 'arma-fogo') {
       out.push({ id: 'corpo', label: 'Corpo a corpo (Corpo + Luta)', attr: 'corpo', skill: 'luta' });
-      if (i && i.typeId === 'espada') out.push({ id: 'precisao', label: 'Espada com Precisão (Precisão + Luta)', attr: 'precisao', skill: 'luta' });
+      if (i && i.typeId === 'espada' && prof) out.push({ id: 'precisao', label: 'Espada com Precisão (Precisão + Luta)', attr: 'precisao', skill: 'luta' });
     } else {
       out.push({ id: 'precisao', label: 'À distância (Precisão + Mira)', attr: 'precisao', skill: 'mira' });
       if (i.typeId === 'submetralhadora') out.push({ id: 'essencia', label: 'Submetralhadora com Essência (Essência + Mira)', attr: 'essencia', skill: 'mira', mod: prof ? 0 : -1 });
@@ -8417,14 +8551,20 @@ const FIREBASE_CONFIG = {
     out.push({ id: 'tec', label: 'Tecnológico (Essência + Operações)', attr: 'essencia', skill: 'operacoes' });
     return out;
   }
-  const maxShots = (i) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || 1, 1, 20) : 1);
+  /* Poder Luta: ataques por rodada = UP investidos em Luta + 1, gastos como a cadência de uma arma de fogo,
+     desarmado (conta como arma contundente, com proficiência) ou com arma corpo a corpo. */
+  const lutaAttacks = (s) => { const ps = ((s && s.powers) || []).filter((p) => p.id === 'of-pod-luta'); return ps.length ? ps.reduce((t, p) => t + Math.max(1, powerUpCost(p)), 0) + 1 : 0; };
+  const maxShots = (i, s) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || 1, 1, 20)
+    : (!i || i.kind === 'arma-melee') && lutaAttacks(s) ? clamp(lutaAttacks(s), 1, 20) : 1);
+  const atkProf = (s, i) => (i ? isProficient(s, i) : lutaAttacks(s) > 0); // desarmado com Luta é proficiente
+  const shotWord = (i, n) => (i && i.kind === 'arma-fogo' ? (n === 1 ? 'disparo' : 'disparos') : (n === 1 ? 'golpe' : 'golpes'));
   // cadência: com proficiência, –N para N disparos; sem, –(1 + 2 + ... + N). Um disparo não tem penalidade.
   const shotPenalty = (n, prof) => (n <= 1 ? 0 : prof ? n : (n * (n + 1)) / 2);
 
   /* Cadência por alvo: os disparos da ação se dividem entre os alvos marcados.
      A penalidade vem do total de disparos; o dano de cada alvo é multiplicado pelos disparos nele.
      st.per = { idDoAlvo: disparos }. Devolve os campos, o total e se faltou cadência. */
-  function perTargetShots(st, cad, targets, prof, redraw, idp) {
+  function perTargetShots(st, cad, targets, prof, redraw, idp, wi) {
     st.per = st.per || {};
     Object.keys(st.per).forEach((k) => { if (!targets.some((x) => x.id === k)) delete st.per[k]; });
     targets.forEach((x) => { st.per[x.id] = clamp(Math.round(st.per[x.id] || 1), 1, cad); });
@@ -8439,7 +8579,7 @@ const FIREBASE_CONFIG = {
       const sel = h('select', 'input');
       sel.id = idp + 'per-' + x.id.replace(/[^a-z0-9]/gi, '');
       const room = Math.max(1, cad - (total - st.per[x.id]));
-      for (let k = 1; k <= room; k++) { const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos') + ' · dano ×' + k); o.value = String(k); sel.append(o); }
+      for (let k = 1; k <= room; k++) { const o = h('option', '', k + ' ' + shotWord(wi, k) + ' · dano ×' + k); o.value = String(k); sel.append(o); }
       sel.value = String(st.per[x.id]);
       sel.addEventListener('change', () => { st.per[x.id] = Math.round(num(sel.value)) || 1; redraw(); });
       const lab = h('label', 'per__name', x.name);
@@ -8448,7 +8588,7 @@ const FIREBASE_CONFIG = {
     });
     const pen = shotPenalty(Math.min(total, cad), prof);
     const box = h('fieldset', 'per field--wide',
-      h('legend', 'field__label', 'Cadência por alvo: ' + Math.min(total, cad) + ' de ' + cad + ' disparos' + (pen ? ' · –' + pen + ' no ataque' + (prof ? ' (perita)' : '') : '')),
+      h('legend', 'field__label', (wi && wi.kind === 'arma-fogo' ? 'Cadência' : 'Golpes') + ' por alvo: ' + Math.min(total, cad) + ' de ' + cad + ' ' + shotWord(wi, cad) + (pen ? ' · –' + pen + ' no ataque' + (prof ? ' (perita)' : '') : '')),
       ...rows,
       over ? h('p', 'field__error', 'A cadência ' + cad + ' só alcança ' + plural(cad, 'alvo', 'alvos') + '. Desmarque alvos no Combate.') : null);
     return { box, total: Math.min(total, cad), over };
@@ -8456,7 +8596,8 @@ const FIREBASE_CONFIG = {
 
   /* Regra de cadência na arena: antes de escolher os alvos, mostra a penalidade de cada número de disparos,
      com ou sem proficiência na arma, e deixa atacar com um disparo só. */
-  function cadenceBox(st, cad, prof, redraw, idp) {
+  function cadenceBox(st, cad, prof, redraw, idp, wi) {
+    const w1 = shotWord(wi, 1), wn = shotWord(wi, 2);
     const use = h('input');
     use.type = 'checkbox';
     use.id = idp + 'cad-use';
@@ -8465,29 +8606,29 @@ const FIREBASE_CONFIG = {
     const steps = [];
     for (let k = 1; k <= cad; k++) steps.push(h('span', 'cad__step' + (k === 1 ? ' cad__step--free' : ''), h('b', '', k + '×'), ' ' + (k === 1 ? 'sem penalidade' : '–' + shotPenalty(k, prof))));
     return h('div', 'cad field--wide' + (st.cad === false ? ' cad--off' : ''),
-      h('label', 'check cad__use', use, h('span', '', 'Usar cadência (até ' + cad + ' disparos)')),
+      h('label', 'check cad__use', use, h('span', '', (wi && wi.kind === 'arma-fogo' ? 'Usar cadência' : 'Ataques múltiplos de Luta') + ' (até ' + cad + ' ' + wn + ')')),
       h('p', 'cad__rule', prof
-        ? 'Proficiente: cadência perita. Cada disparo a mais dá penalidade igual ao total de disparos.'
-        : 'Sem proficiência: a penalidade soma cada disparo (1 + 2 + 3...). Com proficiência seria só o total.'),
-      st.cad === false ? h('p', 'cad__rule', 'Ataque com um disparo, sem penalidade.') : h('div', 'cad__steps', ...steps),
-      st.cad === false ? null : h('p', 'cad__rule', 'O dano de cada alvo é multiplicado pelos disparos nele.'));
+        ? 'Proficiente: cadência perita. Cada ' + w1 + ' a mais dá penalidade igual ao total de ' + wn + '.'
+        : 'Sem proficiência: a penalidade soma cada ' + w1 + ' (1 + 2 + 3...). Com proficiência seria só o total.'),
+      st.cad === false ? h('p', 'cad__rule', 'Ataque com um ' + w1 + ', sem penalidade.') : h('div', 'cad__steps', ...steps),
+      st.cad === false ? null : h('p', 'cad__rule', 'O dano de cada alvo é multiplicado pelos ' + wn + ' nele.'));
   }
 
   function attackTest(s, m, i, modeId, shots) {
     const modes = attackModes(s, i);
     const mode = modes.find((x) => x.id === modeId) || modes[0];
-    const prof = i ? isProficient(s, i) : false;
-    const n = clamp(Math.round(shots) || 1, 1, maxShots(i));
+    const prof = atkProf(s, i);
+    const n = clamp(Math.round(shots) || 1, 1, maxShots(i, s));
     const mods = [];
     if (mode.mod) mods.push(['Essência sem proficiência', mode.mod]);
     if (PENALTY_SKILLS.indexOf(mode.skill) >= 0 && m.pen) mods.push(['armadura', -m.pen]);
     const pen = shotPenalty(n, prof);
-    if (pen) mods.push(['cadência ' + n + ' disparos' + (prof ? ' (perita)' : ''), -pen]);
+    if (pen) mods.push(['cadência ' + n + ' ' + shotWord(i, n) + (prof ? ' (perita)' : ''), -pen]);
     const name = i ? i.name : 'Desarmado';
     return {
       label: ('Ataque: ' + name + (n > 1 ? ' · dano ×' + n : '')).slice(0, 60),
       attrName: ATTR_LABEL[mode.attr], attr: attrOf(s, mode.attr),
-      skillName: SKILL_LABEL[mode.skill], skill: num(s.skills[mode.skill]), mods
+      skillName: SKILL_LABEL[mode.skill], skill: skillOf(s, mode.skill), mods
     };
   }
   const weaponsOf = (s) => s.inventory.filter((i) => isWeapon(i.kind))
@@ -8550,7 +8691,7 @@ const FIREBASE_CONFIG = {
       const weapon = weapons.find((w) => w.uid === st.uid) || null;
       const modes = attackModes(s, weapon);
       if (!modes.some((x) => x.id === st.mode)) st.mode = modes[0].id;
-      st.shots = clamp(st.shots || 1, 1, maxShots(weapon));
+      st.shots = clamp(st.shots || 1, 1, maxShots(weapon, s));
 
       const field = (id, label, control) => { control.id = idp + id; const l = h('label', 'field__label', label); l.htmlFor = control.id; return h('div', 'field', l, control); };
       const wSel = h('select', 'input');
@@ -8563,27 +8704,28 @@ const FIREBASE_CONFIG = {
       mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
       const fields = [field('weapon', 'Arma', wSel), field('mode', 'Forma de ataque', mSel)];
       const targets = c.targets || [];
-      const prof = weapon ? isProficient(s, weapon) : false;
-      const cadMax = st.cad === false ? 1 : maxShots(weapon); // "Usar cadência" desmarcado: um disparo só
+      const prof = atkProf(s, weapon);
+      const cadAll = maxShots(weapon, s);
+      const cadMax = st.cad === false ? 1 : cadAll; // "Usar cadência" desmarcado: um disparo só
       let per = null;
       if (cadMax > 1 && targets.length) {
-        per = perTargetShots(st, cadMax, targets, prof, draw, idp);
+        per = perTargetShots(st, cadMax, targets, prof, draw, idp, weapon);
         st.shots = per.total;
         fields.push(per.box);
-      } else if (maxShots(weapon) > 1 && c.aim) {
-        fields.push(cadenceBox(st, maxShots(weapon), prof, draw, idp));
-      } else if (maxShots(weapon) > 1 && !c.aim) {
+      } else if (cadAll > 1 && c.aim) {
+        fields.push(cadenceBox(st, cadAll, prof, draw, idp, weapon));
+      } else if (cadAll > 1 && !c.aim) {
         st.per = null;
         const nSel = h('select', 'input');
-        for (let k = 1; k <= maxShots(weapon); k++) {
-          const p = shotPenalty(k, isProficient(s, weapon));
-          const o = h('option', '', k + (k === 1 ? ' disparo' : ' disparos · –' + p + ' · dano ×' + k));
+        for (let k = 1; k <= cadAll; k++) {
+          const p = shotPenalty(k, prof);
+          const o = h('option', '', k + ' ' + shotWord(weapon, k) + (k === 1 ? '' : ' · –' + p + ' · dano ×' + k));
           o.value = String(k);
           nSel.append(o);
         }
         nSel.value = String(st.shots);
         nSel.addEventListener('change', () => { st.shots = Math.round(num(nSel.value)) || 1; draw(); });
-        fields.push(field('shots', 'Disparos (cadência ' + maxShots(weapon) + ')', nSel));
+        fields.push(field('shots', (weapon && weapon.kind === 'arma-fogo' ? 'Disparos (cadência ' : 'Golpes (Luta: ') + cadAll + ')', nSel));
       }
       const modIn = h('input', 'input');
       modIn.type = 'number';
@@ -8603,7 +8745,7 @@ const FIREBASE_CONFIG = {
       fields.push(field('mod', 'Outro modificador (cobertura...)', modIn));
 
       const t = attackTest(s, m, weapon, st.mode, st.shots);
-      if (per) t.label = ('Ataque: ' + (weapon ? weapon.name : 'Desarmado') + ' · ' + st.shots + (st.shots === 1 ? ' disparo' : ' disparos')).slice(0, 60);
+      if (per) t.label = ('Ataque: ' + (weapon ? weapon.name : 'Desarmado') + ' · ' + st.shots + ' ' + shotWord(weapon, st.shots)).slice(0, 60);
       const dist = DISTANCES.find((d) => d.id === st.dist);
       if (dist && dist.mod) t.mods.push([dist.short, dist.mod]);
       if (st.mod) t.mods.push(['modificador', st.mod]);
@@ -8611,7 +8753,7 @@ const FIREBASE_CONFIG = {
       if (c.peek) c.peek(t);
       const fixed = t.attr + t.skill + t.mods.reduce((x, y) => x + y[1], 0);
       const stowed = c.handsOnly ? all.filter((w) => !handOf(w)).length : 0;
-      const info = [weapon && isGun(weapon) ? ammoLine(weapon, s) : '', c.aim && cadMax > 1 ? 'cadência ' + cadMax + ': cada toque num alvo é um disparo' : '', weapon ? (isProficient(s, weapon) ? 'Proficiente' : 'Sem proficiência') : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
+      const info = [weapon && isGun(weapon) ? ammoLine(weapon, s) : '', c.aim && cadMax > 1 ? (weapon && weapon.kind === 'arma-fogo' ? 'cadência ' : 'Luta: ') + cadMax + ': cada toque num alvo é um ' + shotWord(weapon, 1) : '', weapon ? (prof ? 'Proficiente' : 'Sem proficiência' + (weapon.kind === 'arma-melee' ? ': sem as propriedades da arma' : '')) : lutaAttacks(s) ? 'Desarmado (Luta): contundente, proficiente' : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
       const go = h('button', 'btn btn--primary btn--sm', (c.btnLabel || 'Atacar') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
       // munição: sem disparos no pente (ou arma superaquecida) não dá para atacar; recarregar custa a ação da regra
@@ -8627,7 +8769,7 @@ const FIREBASE_CONFIG = {
         rl.dataset.fid = idp + 'reload';
         rl.addEventListener('click', () => c.onReload(weapon, rl));
       }
-      box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, rl, info ? h('span', 'attack__info', info) : null), block ? h('p', 'attack__warn', block) : null);
+      box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, rl, info ? h('span', 'attack__info', info) : null), ...(block ? [h('p', 'attack__warn', block)] : []));
     };
     draw();
     return box;
@@ -9529,7 +9671,7 @@ const FIREBASE_CONFIG = {
     const s = normSheet(c.sheet);
     const m = compute({ sheet: s });
     const skills = [];
-    ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (num(s.skills[sk[0]])) skills.push(sk[1] + (sk[0] === 'oficio' && s.oficio ? ' (' + s.oficio + ')' : '') + ' +' + num(s.skills[sk[0]])); }));
+    ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => { if (skillOf(s, sk[0])) skills.push(sk[1] + (sk[0] === 'oficio' && s.oficio ? ' (' + s.oficio + ')' : '') + ' +' + skillOf(s, sk[0])); }));
     const life = LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + getCur(s, l[0], m.max[l[0]]) + '/' + m.max[l[0]]);
     const inv = s.inventory.map((i) => {
       const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);
@@ -10647,7 +10789,7 @@ const FIREBASE_CONFIG = {
     ]
   };
   const ACTION_TEXT = {
-    atacar: 'Escolha a arma (só o que está nas mãos, ou desarmado) e depois toque nos alvos. Com cadência, cada toque é um disparo.',
+    atacar: 'Escolha a arma (só o que está nas mãos, ou desarmado) e depois toque nos alvos. Com cadência (ou os ataques múltiplos de Luta), cada toque é um disparo ou golpe.',
     manobra: 'Teste de Manobra (Corpo + Luta) contra Resistência ou Reflexos do alvo, o melhor dele. Se você vencer, o efeito entra sozinho.',
     usar: 'Consumíveis e utilitários: o saque já está incluído na ação.',
     esconder: 'Precisa de algo que engane os sentidos. Teste de Manha; o resultado vira a dificuldade para te achar.',
@@ -10708,14 +10850,14 @@ const FIREBASE_CONFIG = {
     cancel.type = 'button';
     cancel.addEventListener('click', () => { endAim(); renderBattle(); });
     const kids = [h('strong', 'aimbar__title', a.label), h('span', 'aimbar__txt', a.max > 1
-      ? 'Toque nos alvos destacados: cada toque é um disparo (' + total + ' de ' + a.max + ').' + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '') + (a.penalty && a.penalty(total) ? ' ' + a.penalty(total) + '.' : '')
+      ? 'Toque nos alvos destacados: cada toque é um ' + (a.word || 'disparo') + ' (' + total + ' de ' + a.max + ').' + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '') + (a.penalty && a.penalty(total) ? ' ' + a.penalty(total) + '.' : '')
       : 'Toque num dos alvos destacados.')];
     if (a.max > 1) {
       const clear = h('button', 'btn btn--ghost btn--sm', 'Limpar');
       clear.type = 'button';
       clear.disabled = !total;
       clear.addEventListener('click', () => { a.shots = {}; renderBattle(); });
-      const ok = h('button', 'btn btn--primary btn--sm', 'Disparar ' + plural(total, 'vez', 'vezes'));
+      const ok = h('button', 'btn btn--primary btn--sm', (a.word === 'golpe' ? 'Golpear ' : 'Disparar ') + plural(total, 'vez', 'vezes'));
       ok.type = 'button';
       ok.disabled = !total;
       ok.addEventListener('click', async () => {
@@ -10999,15 +11141,15 @@ const FIREBASE_CONFIG = {
     const base = Object.assign({}, c, { handsOnly: true, meleeOnly: adv, onReload });
     return h('div', 'cmd__stack', note, adv ? null : powerToggles(mb, 'Ataque', battle.atkPow, () => renderBattle()), attackBuilder(Object.assign({}, base, { aim: true, btnLabel: 'Escolher alvo' }), st, () => {
       const weapon = weaponsOf(c.sheet).find((w) => w.uid === st.uid) || null;
-      const cad = st.cad === false ? 1 : maxShots(weapon);
-      const prof = weapon ? isProficient(c.sheet, weapon) : false;
+      const cad = st.cad === false ? 1 : maxShots(weapon, c.sheet);
+      const prof = atkProf(c.sheet, weapon);
       const peek = () => {
         let t = null;
         const targets = combatants().filter((x) => combat.targets.has(x.id)).map((x) => ({ id: x.id, name: x.name }));
         attackBuilder(Object.assign({}, base, { targets, peek: (x) => { t = x; } }), st, () => {}, 'pk-');
         return t;
       };
-      startAim({ label: 'Ataque: ' + (weapon ? weapon.name : 'desarmado'), valid: valid.map((x) => x.id), max: cad,
+      startAim({ label: 'Ataque: ' + (weapon ? weapon.name : 'desarmado'), valid: valid.map((x) => x.id), max: cad, word: shotWord(weapon, 1),
         penalty: (n) => (n > 1 ? '–' + shotPenalty(n, prof) + ' no ataque (' + (prof ? 'cadência perita' : 'sem proficiência') + ')' : ''),
         pick: (x) => go({ member: mb, c }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ member: mb, c }, st, shots, peek) });
     }, 'cmd-'));
@@ -11646,9 +11788,11 @@ const FIREBASE_CONFIG = {
     } else {
       const weapon = weaponsOf(who.c.sheet).find((w) => w.uid === st.uid) || null;
       types = weapon ? splitTypes(weapon.values.dano) : ['Contundente'];
-      if (weapon && weapon.typeId === 'marreta') effective = 'blindagem';
-      if (weapon && weapon.typeId === 'machado') effective = 'escudo';
-      if (!weapon || weapon.kind !== 'arma-fogo') shots = 1;
+      // sem proficiência, a arma corpo a corpo perde as propriedades do tipo
+      const prop = weapon && (weapon.kind !== 'arma-melee' || isProficient(who.c.sheet, weapon));
+      if (prop && weapon.typeId === 'marreta') effective = 'blindagem';
+      if (prop && weapon.typeId === 'machado') effective = 'escudo';
+      if (maxShots(weapon, who.c.sheet) <= 1) shots = 1;
       if (isGun(weapon)) {
         const total = st.per && shots > 1 ? list.reduce((tt, x) => tt + (st.per[x.id] || 1), 0) : shots;
         const block = fireBlock(weapon, total, sceneRound());
