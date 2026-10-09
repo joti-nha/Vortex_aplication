@@ -8546,13 +8546,11 @@ const FIREBASE_CONFIG = {
   let racialDlg = null;
   let racialPick = '';
   let racialOpen = false; // lista de espécimes expandida
-  // o combo de pegar as 3 Experiências passadas (os 3 UP do Humano) não é permitido
+  // de cada espécime, o Etheriano pega uma ou duas das 3 habilidades raciais, nunca as 3
+  const RACIAL_MAX = 2;
+  const racialTaken = (s, esp) => racialLines(esp.values).filter((t) => s.powers.some((p) => p.id === racialId(esp, t))).length;
   function racialAll(s, esp, id) {
-    const lines = racialLines(esp.values).filter((t) => /^experi[eê]ncia passada/i.test(t.name));
-    if (lines.length < 2) return false;
-    const ids = lines.map((t) => racialId(esp, t));
-    if (ids.indexOf(id) < 0) return false;
-    return ids.filter((x) => x !== id && s.powers.some((p) => p.id === x)).length >= ids.length - 1;
+    return !s.powers.some((p) => p.id === id) && racialTaken(s, esp) >= RACIAL_MAX;
   }
   async function openRacial() {
     const ch = sheetChar;
@@ -8601,13 +8599,14 @@ const FIREBASE_CONFIG = {
       const traits = esp ? racialLines(esp.values).map((t) => {
         const id = racialId(esp, t);
         const have = s.powers.findIndex((p) => p.id === id);
-        const b = h('button', 'btn btn--sm ' + (have >= 0 ? 'btn--ghost' : 'btn--primary'), have >= 0 ? 'Devolver' : 'Pegar · ' + t.cost + ' UP');
+        const full = racialAll(s, esp, id);
+        const b = h('button', 'btn btn--sm ' + (have >= 0 || full ? 'btn--ghost' : 'btn--primary'), have >= 0 ? 'Devolver' : full ? 'Já tem 2 deste espécime' : 'Pegar · ' + t.cost + ' UP');
         b.type = 'button';
         b.dataset.fid = ('racial-' + nameKey(esp.name) + '-' + nameKey(t.name)).replace(/\s+/g, '-');
         b.disabled = have < 0 && t.cost > free && !racialAll(s, esp, id);
         b.addEventListener('click', () => {
           if (have >= 0) s.powers.splice(have, 1);
-          else if (racialAll(s, esp, id)) { toast('Se achando muito esperto, não é? Os 3 UP do Humano não vêm juntos.'); return; }
+          else if (racialAll(s, esp, id)) { toast(/^experi[eê]ncia passada/i.test(t.name) ? 'Se achando muito esperto, não é? Os 3 UP do Humano não vêm juntos.' : 'Do ' + esp.name + ' dá para pegar só uma ou duas das 3 habilidades. Devolva uma para trocar.'); return; }
           else s.powers.push({ id, kind: 'poder', typeId: '', typeTitle: '', name: (esp.name + ' · ' + t.name).slice(0, 60), values: { custo: String(t.cost), efeito: t.text, script: t.script }, bonus: {}, slots: null, thumb: '', racial: esp.name });
           changed();
           draw();
@@ -8615,12 +8614,14 @@ const FIREBASE_CONFIG = {
         return h('li', 'pickchar__card racial__trait' + (have >= 0 ? ' is-here' : ''),
           h('span', 'pickchar__info', h('strong', 'pickchar__name', t.name), h('span', 'pickchar__meta', t.cost + ' UP'), t.text ? h('span', 'racial__text', t.text) : null), b);
       }) : [];
-      content.replaceChildren(
+      const taken = esp ? racialTaken(s, esp) : 0;
+      content.replaceChildren(...[ // replaceChildren escreveria "null" na tela para o botão que não existe
         h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free))),
         races,
         more,
         esp ? h('h3', 'pickchar__sub', esp.name) : h('p', 'empty', q.value ? 'Nenhum espécime com esse nome.' : 'Nenhum espécime com características raciais.'),
-        h('ul', 'pickchar__list', ...traits));
+        esp ? h('p', 'field__hint racial__count', 'Escolhidas: ' + taken + ' de ' + RACIAL_MAX + ' (uma ou duas das ' + racialLines(esp.values).length + ' habilidades)') : null,
+        h('ul', 'pickchar__list', ...traits)].filter(Boolean));
     };
     q.addEventListener('input', draw);
     const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
@@ -8630,7 +8631,7 @@ const FIREBASE_CONFIG = {
     title.id = 'racial-title';
     dlg.replaceChildren(h('div', 'pickchar__body', title,
       h('p', 'racial__only', 'Exclusivo do Etheriano'),
-      h('p', 'field__hint', 'Só o Etheriano gasta UP em características raciais, e pode pegar de qualquer espécime, inclusive dos criados na Oficina. Busque ou toque num espécime para ver as características dele.'),
+      h('p', 'field__hint', 'Só o Etheriano gasta UP em características raciais. De qualquer espécime, inclusive dos criados na Oficina, ele escolhe uma ou duas das 3 habilidades raciais. Busque ou toque num espécime para ver as habilidades dele.'),
       h('div', 'field racial__search', qLab, q),
       content,
       h('div', 'dialog__actions', close)));
