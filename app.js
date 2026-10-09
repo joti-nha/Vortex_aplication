@@ -4166,7 +4166,9 @@ const FIREBASE_CONFIG = {
     clearInterval(nyanFlockTimer);
     nyanFlockTimer = null;
     const old = document.querySelector('.nyan-flock');
-    if (!on) { document.documentElement.classList.remove('nyan-synth-on'); if (old) old.remove(); try { localStorage.removeItem(NYAN_FLOCK_KEY); } catch (e) { /* nada */ } return; }
+    nyanSceneId = null;
+    document.documentElement.classList.remove('nyan-scene-on');
+    if (!on) { if (old) old.remove(); try { localStorage.removeItem(NYAN_FLOCK_KEY); } catch (e) { /* nada */ } return; }
     if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const box = old || h('div', 'nyan-flock');
     box.setAttribute('aria-hidden', 'true');
@@ -4218,15 +4220,26 @@ const FIREBASE_CONFIG = {
   }
   /* Cada passagem sorteia altura, tamanho e velocidade; a cada volta o gato reaparece em outro lugar do céu.
      Ao recarregar, quem já estava no céu continua de um ponto sorteado do caminho, em vez de todos entrarem juntos. */
-  /* Sol Synthwave: céu roxo, sol em faixas pousado no horizonte e chão em grade correndo. Fica na revoada, atrás dos gatos,
-     e só acende durante a passagem do Vaporwave Nyan Cat. */
-  function nyanSynth(cat, on) {
+  /* Fundos dos Nyan Cats mais famosos: enquanto um deles passa, o fundo da página vira o cenário dele (o Vaporwave traz o
+     Sol Synthwave, o Natal traz neve, a Abóbora a noite de Halloween...). Os cenários são só CSS (.nyan-scene--<variante>)
+     e ficam na revoada, atrás dos gatos. Um cenário por vez: quem chega com outro aceso (ou logo depois de um) passa sem trocar o fundo, menos o Vaporwave. */
+  const NYAN_SCENES = new Set(['vapor', 'tacnayn', 'xmas', 'pumpkin', 'pirate', 'technyancolor', 'paddy', 'vday', 'gb', 'mexinyan', 'zombie', 'wtf', 'america', 'surfing']);
+  let nyanSceneId = null, nyanSceneCalm = 0;
+  function nyanScene(cat, id, on) {
     const box = cat.parentNode;
+    if (on) {
+      // um cenário por vez, com uns 40 s de fundo normal entre um e outro; o Vaporwave sempre acende o dele
+      if (id !== 'vapor' && (nyanSceneId || performance.now() < nyanSceneCalm)) return;
+      nyanSceneId = id;
+    } else {
+      if (nyanSceneId !== id) return;
+      nyanSceneId = null;
+      nyanSceneCalm = performance.now() + 40000;
+    }
     if (!box) return;
-    let sky = box.querySelector('.nyan-synth');
-    if (!sky && on) { sky = h('div', 'nyan-synth'); box.prepend(sky); }
-    box.classList.toggle('is-synth', on);
-    document.documentElement.classList.toggle('nyan-synth-on', on); // o painel de boas-vindas fica translúcido para o sol aparecer
+    if (nyanSceneId && !box.querySelector('.nyan-scene--' + nyanSceneId)) box.prepend(h('div', 'nyan-scene nyan-scene--' + nyanSceneId));
+    box.querySelectorAll('.nyan-scene').forEach((el) => el.classList.toggle('is-on', el.classList.contains('nyan-scene--' + nyanSceneId)));
+    document.documentElement.classList.toggle('nyan-scene-on', !!nyanSceneId); // o painel de boas-vindas fica translúcido para o cenário aparecer
   }
   function nyanFlockCat(v, i, fresh) {
     const [id, pal] = v;
@@ -4261,9 +4274,9 @@ const FIREBASE_CONFIG = {
       cat.style.opacity = (0.45 + Math.random() * 0.3).toFixed(2);
       const anim = cat.animate([{ transform: 'translateX(calc(-100% - 20px))' }, { transform: 'translateX(calc(100vw + 20px))' }], { duration: dur, easing: 'linear', fill: 'backwards' });
       if (start) anim.currentTime = start * dur;
-      // enquanto o Vaporwave passa, o fundo vira o Sol Synthwave
-      if (id === 'vapor') nyanSynth(cat, true);
-      anim.onfinish = () => { nyanSky.delete(me); if (id === 'vapor') nyanSynth(cat, false); setTimeout(() => pass(0), 500 + Math.random() * 5000); }; // some e volta noutro lugar
+      // enquanto um dos famosos passa, o fundo vira o cenário dele
+      if (NYAN_SCENES.has(id)) nyanScene(cat, id, true);
+      anim.onfinish = () => { nyanSky.delete(me); if (NYAN_SCENES.has(id)) nyanScene(cat, id, false); setTimeout(() => pass(0), 500 + Math.random() * 5000); }; // some e volta noutro lugar
     };
     requestAnimationFrame(() => pass(fresh ? 0 : Math.random()));
     return cat;
