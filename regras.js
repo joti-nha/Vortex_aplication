@@ -1042,7 +1042,7 @@ window.VORTEX_REGRAS = {
         ]],
         ['card', 'Luta', [
           ['kv', '', [['Custo', '1 Up point (+ o custo do estilo de luta, se comprar um)']]],
-          ['p', 'O principal poder marcial: faz quem luta corpo a corpo competir em dano com as armas de fogo.'],
+          ['p', 'Você domina o combate corpo a corpo e golpeia várias vezes por rodada, rivalizando em dano com quem usa armas de fogo.'],
           ['p', 'Seus ataques desarmados contam como uma arma contundente para todos os efeitos, sem precisar de luvas ou armas desse gênero, e você é proficiente com eles.'],
           ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu atributo Corpo + a sua perícia Luta. Eles funcionam como a cadência de uma arma de fogo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
           ['example', 'Corpo 2 e perícia Luta 1 → 3 ataques por rodada. Desarmado, dois golpes no mesmo alvo: –2 no ataque, dano ×2.'],
