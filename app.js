@@ -4065,6 +4065,54 @@ const FIREBASE_CONFIG = {
     ['wiki:snowball', { fur: '#f4f8ff', crust: '#d8e8ff', frost: '#ffffff', dot: '#9ac8ff', cheek: '#ffccdd', trail: ['#ffffff', '#e8f4ff', '#c8e0ff', '#ffffff', '#e8f4ff', '#c8e0ff'] }],
     ['wiki:nyanbi', { fur: '#7fae6a', crust: '#6a5a3a', frost: '#9a3a5a', dot: '#3a2a1a' }], ['wiki:nyn', { fur: '#9b9b9b', frost: '#ff99cc', dot: '#2aa8ff', trail: ['#2aa8ff', '#7a2aff', '#ff2a2a', '#ff9a2a', '#ffee2a', '#33ff4a'] }]
   ];
+  /* Rastro de cada variante, pelo que ela é: cores (faixas), um símbolo repetido (notas do jazz, corações,
+     estrelas, flocos, moedas...) ou um desenho (fumaça, falha de sinal, xadrez, ondas, gotas). */
+  const NYAN_TRAILS = {
+    original: {}, gb: { pattern: 'pixel' }, tacnayn: { pattern: 'smoke' },
+    mexinyan: { glyph: '✿', trail: ['#2a9d4a', '#ffffff', '#e32a2a'] }, pumpkin: { glyph: '🍬', trail: ['#ff7a00', '#2a1500', '#7a2aff'] },
+    jazz: { glyph: '♪', trail: ['#ffd700', '#7a2aff', '#ff2a6a', '#2aa8ff'] }, nyaninja: { pattern: 'smoke', trail: ['#222222', '#444444'] },
+    zombie: { pattern: 'drip' }, technyancolor: { pattern: 'wave' }, xmas: { glyph: '❄', trail: ['#ffffff', '#e32a2a', '#2a9d4a'] },
+    pirate: { glyph: '☠', trail: ['#f4efe0', '#ffd700'] }, rasta: {}, america: { glyph: '★', trail: ['#ffffff', '#e32a2a', '#2a3aa0'] },
+    retro: { pattern: 'pixel' }, mummy: { pattern: 'wrap' }, star: { glyph: '★', trail: ['#ffd700', '#fff6a0', '#ffffff'] },
+    vday: { glyph: '♥', trail: ['#ff2a6a', '#ff6a9a', '#e32a4a'] }, easter: { glyph: '🥚', trail: ['#ffb3d9', '#b3d9ff', '#ffffb3'] },
+    paddy: { glyph: '☘', trail: ['#2a9d4a', '#5ac85a', '#ffd700'] }, newyear: { glyph: '✦', trail: ['#ffd700', '#ff2a6a', '#2aa8ff', '#ffffff'] },
+    bday: { glyph: '🎈', trail: ['#ff2a2a', '#2aa8ff', '#ffee2a'] }, slomo: { pattern: 'wave', trail: ['#b0b0d0', '#8a8ab0', '#d0d0f0'] },
+    dub: { glyph: '♫', trail: ['#33ff4a', '#ffffff'] }, smooth: { pattern: 'wave', trail: ['#ffccaa', '#c0a080', '#ffeedd'] },
+    coin: { glyph: '●', trail: ['#ffd700', '#d4a017'] }, melon: { glyph: '•', trail: ['#111111', '#2a9d4a'] }, balloon: { glyph: '●', trail: ['#ff4a8a', '#2aa8ff', '#ffee2a', '#33ff4a'] },
+    daft: { pattern: 'pixel', trail: ['#ffd700', '#c0c0c0', '#222222', '#ff2a2a'] }, sad: { pattern: 'drip', trail: ['#3a4a7a', '#6a7aaa', '#9ab8e8'] },
+    skrillex: { glyph: '⚡', trail: ['#ff2a2a', '#ffee2a', '#ffffff'] }, toaster: { pattern: 'smoke', trail: ['#999999', '#cccccc'] },
+    elevator: { glyph: '♩', trail: ['#cc9966', '#ffeedd'] }, fiesta: { glyph: '✷', trail: ['#ff2a8a', '#ffee2a', '#2aa8ff', '#33ff4a'] },
+    wtf: { pattern: 'glitch', trail: ['#ff2a2a', '#2aa8ff', '#33ff4a', '#ffee2a'] }, manyan: {}, nyandoge: { glyph: '🦴', trail: ['#e0b060', '#ffffff'] },
+    pikanyan: { glyph: 'ϟ', trail: ['#ffee2a', '#ffd700'] }, grumpy: { pattern: 'smoke', trail: ['#6a5a4a', '#8a7a6a'] }, watermelon: { glyph: '•', trail: ['#111111', '#ff4a5a'] },
+    j5dance: { glyph: '♬', trail: ['#66ccff', '#ff66cc'] },
+    'wiki:mrs': { glyph: '🎀', trail: ['#ff66b3', '#ffffff'] }, 'wiki:missingnyan': { pattern: 'glitch' }, 'wiki:terra': { pattern: 'wave', trail: ['#2a6ac8', '#3aa04a', '#3aa0e8'] },
+    'wiki:neapolitan': {}, 'wiki:bendy': { pattern: 'drip', trail: ['#111111', '#2a2a2a'] }, 'wiki:blueberry-waffle': { pattern: 'checker', trail: ['#d9a050', '#2a2a8a'] },
+    'wiki:brasil': { glyph: '⚽', trail: ['#2a9d4a', '#ffdf00'] }, 'wiki:apaixonado': { glyph: '♥', trail: ['#ff2a6a', '#ffaacc'] },
+    'wiki:g-major': { glyph: '♪', trail: ['#7a2aff', '#2aa8ff', '#33ff4a', '#ff2a2a'] }, 'wiki:xp': { pattern: 'checker', trail: ['#f25022', '#7fba00', '#00a4ef', '#ffb900'] },
+    'wiki:cleo': { glyph: '𓂀', trail: ['#ffd700', '#2a6ac8'] }, 'wiki:cobbler': { pattern: 'checker', trail: ['#c88a4a', '#a04a8a'] },
+    'wiki:cookie': { glyph: '●', trail: ['#c88a4a', '#4a2a1a'] }, 'wiki:avery': { glyph: '●', trail: ['#e0b070', '#4a2a1a'] },
+    'wiki:doodle': { pattern: 'scribble' }, 'wiki:kitkat': { pattern: 'checker', trail: ['#7a3a1a', '#c82a2a'] }, 'wiki:kitten': { glyph: '✧', trail: ['#ffccdd', '#ffffff'] },
+    'wiki:lime': { glyph: '◐', trail: ['#9ae02a', '#3a7a1a'] }, 'wiki:minty': { glyph: '❋', trail: ['#9af0c8', '#2a8a5a'] }, 'wiki:oreo': { pattern: 'checker', trail: ['#1a1a1a', '#f4f4f4'] },
+    'wiki:nyoreo': { pattern: 'checker', trail: ['#f4f4f4', '#1a1a1a'] }, 'wiki:pepper': { glyph: '🌶', trail: ['#e32a2a', '#2a9d4a'] }, 'wiki:rainbow': { pattern: 'wave' },
+    'wiki:snowball': { glyph: '❄', trail: ['#ffffff', '#c8e0ff'] }, 'wiki:nyanbi': { pattern: 'drip', trail: ['#7fae6a', '#9a3a5a'] }, 'wiki:nyn': {}
+  };
+  function nyanTrail(t) {
+    const cols = t.trail || RAINBOW;
+    const el = h('span', 'nyan-flock__trail' + (t.glyph ? ' nyan-flock__trail--glyph' : t.pattern ? ' nyan-flock__trail--' + t.pattern : ''));
+    const bands = (list) => 'linear-gradient(' + list.map((c, k) => c + ' ' + (k * 100 / list.length).toFixed(2) + '% ' + ((k + 1) * 100 / list.length).toFixed(2) + '%').join(', ') + ')';
+    const c0 = cols[0], c1 = cols[1 % cols.length];
+    if (t.glyph) { // uma fila de símbolos, cada um de uma cor do rastro
+      for (let k = 0; k < 6; k++) { const g = h('i', '', t.glyph); g.style.color = cols[k % cols.length]; el.append(g); }
+    } else if (t.pattern === 'smoke') el.style.background = 'radial-gradient(circle at 20% 60%, ' + c1 + ' 0 18%, transparent 20%), radial-gradient(circle at 50% 40%, ' + c0 + ' 0 22%, transparent 24%), radial-gradient(circle at 80% 55%, ' + c1 + ' 0 26%, transparent 28%)';
+    else if (t.pattern === 'pixel' || t.pattern === 'glitch') el.style.background = bands(cols.length > 2 ? cols : RAINBOW) + ' 0 0 / 100% 100%';
+    else if (t.pattern === 'checker') el.style.background = 'repeating-conic-gradient(' + c0 + ' 0 25%, ' + c1 + ' 0 50%) 0 0 / calc(var(--s) * 0.31) calc(var(--s) * 0.31)';
+    else if (t.pattern === 'wave') el.style.background = bands(cols.length > 2 ? cols : RAINBOW);
+    else if (t.pattern === 'drip') el.style.background = 'linear-gradient(' + c0 + ' 0 55%, transparent 55%), repeating-linear-gradient(90deg, ' + c1 + ' 0 12%, transparent 12% 25%)';
+    else if (t.pattern === 'wrap') el.style.background = 'repeating-linear-gradient(-35deg, ' + c0 + ' 0 8%, ' + c1 + ' 8% 12%, ' + c0 + ' 12% 22%)';
+    else if (t.pattern === 'scribble') el.style.background = 'repeating-linear-gradient(-20deg, transparent 0 6%, ' + c0 + ' 6% 9%, transparent 9% 14%), ' + c1;
+    else el.style.background = bands(cols);
+    return el;
+  }
   let nyanFlockTimer = null;
   function nyanFlockSince() {
     let t = 0;
@@ -4105,9 +4153,7 @@ const FIREBASE_CONFIG = {
   function nyanFlockCat(v, i, fresh) {
     const [id, pal] = v;
     const cat = h('div', 'nyan-flock__cat');
-    const trail = h('span', 'nyan-flock__trail');
-    trail.style.background = 'linear-gradient(' + (pal.trail || RAINBOW).map((c, k) => c + ' ' + (k * 100 / 6).toFixed(2) + '% ' + ((k + 1) * 100 / 6).toFixed(2) + '%').join(', ') + ')';
-    cat.append(trail);
+    cat.append(nyanTrail(Object.assign({}, pal, NYAN_TRAILS[id])));
     const usePixel = () => { const tmp = document.createElement('span'); tmp.innerHTML = nyanPixel(pal); const svg = tmp.firstChild; svg.setAttribute('class', 'nyan-flock__img nyan-flock__img--px'); return svg; };
     if (id.indexOf('wiki:') === 0) cat.append(usePixel());
     else {

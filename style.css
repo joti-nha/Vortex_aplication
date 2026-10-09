@@ -3816,6 +3816,17 @@ html, body { max-width: 100%; overflow-x: clip; }
 .nyan-flock { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .nyan-flock__cat { position: absolute; left: 0; display: flex; align-items: center; opacity: 0.55; transform: translateX(calc(-100% - 20px)); will-change: transform; }
 .nyan-flock__trail { width: calc(var(--s) * 3.4); height: calc(var(--s) * 0.62); margin-right: calc(var(--s) * -0.55); -webkit-mask: linear-gradient(90deg, transparent, #000 50%); mask: linear-gradient(90deg, transparent, #000 50%); }
+.nyan-flock__trail--glyph { display: flex; align-items: center; justify-content: space-around; height: var(--s); background: none; font-size: calc(var(--s) * 0.42); line-height: 1; text-shadow: 0 0 4px rgba(0, 0, 0, 0.5); }
+.nyan-flock__trail--glyph i { font-style: normal; animation: nyan-glyph 0.72s steps(2) infinite; }
+.nyan-flock__trail--glyph i:nth-child(even) { animation-delay: -0.36s; }
+@keyframes nyan-glyph { 50% { transform: translateY(-25%); } }
+.nyan-flock__trail--pixel { -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(var(--s) * 0.28), transparent 0 calc(var(--s) * 0.36)); mask: repeating-linear-gradient(90deg, #000 0 calc(var(--s) * 0.28), transparent 0 calc(var(--s) * 0.36)); }
+.nyan-flock__trail--glitch { animation: nyan-glitch 0.5s steps(3) infinite; }
+@keyframes nyan-glitch { 0% { transform: translate(0, 0); filter: hue-rotate(0deg); } 33% { transform: translate(-3px, 2px); filter: hue-rotate(90deg); } 66% { transform: translate(2px, -2px); filter: hue-rotate(200deg); } }
+.nyan-flock__trail--wave { animation: nyan-wave 0.9s ease-in-out infinite; }
+@keyframes nyan-wave { 50% { transform: skewY(6deg); } }
+.nyan-flock__trail--smoke { height: calc(var(--s) * 0.8); filter: blur(1.5px); opacity: 0.85; }
+.nyan-flock__trail--drip { height: calc(var(--s) * 0.8); }
 .nyan-flock__img { position: relative; height: var(--s); width: auto; image-rendering: pixelated; }
 .nyan-flock__img--px { width: calc(var(--s) * 1.62); }
 .nyan-fly { position: fixed; left: 0; top: 0; z-index: 40; opacity: 0.95; display: flex; align-items: center; pointer-events: none; will-change: transform; }
