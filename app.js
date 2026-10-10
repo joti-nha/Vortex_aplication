@@ -7353,6 +7353,7 @@ const FIREBASE_CONFIG = {
       if (p.id === 'of-pod-tecnomancia') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Nível de Tecnomancia ' + tecnoLevel(p) + ': um efeito ativo por modo de ação · até ' + plural(tecnoLevel(p), 'implemento especial', 'implementos especiais') + ' por operação')));
       if (powerStyles(p).length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', styleLabel(p)), ...powerStyles(p).map((e, k) => styleRow(s, p, e, i + '-' + k))));
       if (p.id === 'of-pod-tecnomancia' && styleOf(p) && styleOf(p).name === 'Engenheiro' && tecnoLevel(p)) main.append(tecnoListRow(s, p, i));
+      if (p.id === 'of-pod-tecnomancia' && styleOf(p) && styleOf(p).name === 'Patrocinado' && tecnoLevel(p)) main.append(tecnoSponsorRow(p, i));
       const man = powerManobras(p);
       if (man.length) main.append(h('details', 'pw-sub pw-man', h('summary', 'pw-sub__title', 'Efeitos marciais (custo em ataques)'), manobraTable(man)));
       const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
@@ -7434,6 +7435,47 @@ const FIREBASE_CONFIG = {
       return h('span', 'pw-opt' + (cur ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1) + ' de Tecnomancia'), sel, keySel),
         cur ? h('span', 'pw-opt__text', info) : null, detail ? h('span', 'pw-opt__text', detail) : null);
     }));
+  }
+
+  /* Patrocinado: uma companhia para o poder todo e um catálogo dela por nível de Tecnomancia. Catálogo = uma
+     categoria que a companhia fabrica (todas as armas de fogo da Wathrever...). Propriedades, acessórios e mods
+     não têm patrocinador: o catálogo deles é um tipo de arma (corpo a corpo ou de fogo). */
+  const TECNO_UNIVERSAIS = [['propriedade', 'Propriedades'], ['acessorio', 'Acessórios'], ['mod-arma', 'Mods']];
+  function tecnoCatalogs(co) {
+    const count = {};
+    BUILTINS.forEach((e) => { if (co && (e.values || {}).fabricante === co) count[e.kind] = (count[e.kind] || 0) + 1; });
+    const own = Object.keys(count).map((k) => ({ id: k, label: kindTitle(k) + ' da ' + co, n: count[k] }));
+    const uni = [];
+    TECNO_UNIVERSAIS.forEach((u) => ['armas corpo a corpo', 'armas de fogo'].forEach((t) => uni.push({ id: u[0] + ':' + t, label: u[1] + ' de ' + t })));
+    return own.concat(uni);
+  }
+  function tecnoSponsorRow(p, fid) {
+    const cos = ITEM_DATA.fabricantes || [];
+    const co = cos.indexOf(p.companhia) >= 0 ? p.companhia : '';
+    const coSel = h('select', 'input');
+    coSel.dataset.fid = 'pw-companhia-' + fid;
+    coSel.setAttribute('aria-label', 'Companhia que patrocina');
+    coSel.append(h('option', '', 'Escolher companhia…'), ...cos.map((c) => h('option', '', c)));
+    coSel.options[0].value = '';
+    coSel.value = co;
+    coSel.addEventListener('change', () => { p.companhia = coSel.value; p.catalogos = []; changed(); });
+    const cats = tecnoCatalogs(co);
+    const n = tecnoLevel(p);
+    const cur = Array.from({ length: n }, (_, k) => { const c = (Array.isArray(p.catalogos) ? p.catalogos : [])[k]; return cats.some((x) => x.id === c) ? c : ''; });
+    const rows = co ? cur.map((c, k) => {
+      const sel = h('select', 'input');
+      sel.dataset.fid = 'pw-catalogo-' + fid + '-' + k;
+      sel.setAttribute('aria-label', 'Catálogo do nível ' + (k + 1) + ' de Tecnomancia');
+      sel.append(h('option', '', 'Escolher catálogo…'), ...cats.map((x) => { const o = h('option', '', x.label + (x.n ? ' (' + x.n + ')' : '')); o.value = x.id; o.disabled = x.id !== c && cur.indexOf(x.id) >= 0; return o; }));
+      sel.options[0].value = '';
+      sel.value = c;
+      sel.addEventListener('change', () => { const l = cur.slice(); l[k] = sel.value; p.catalogos = l; changed(); });
+      const x = cats.find((y) => y.id === c);
+      return h('span', 'pw-opt' + (c ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1) + ' de Tecnomancia'), sel),
+        x ? h('span', 'pw-opt__text', x.n ? 'Conhece os ' + plural(x.n, 'componente', 'componentes') + ' deste catálogo.' : 'Conhece todos os componentes desta categoria para ' + x.label.split(' de ').slice(1).join(' de ') + '.') : null);
+    }) : [h('span', 'pw-opt__text', 'Escolha a companhia para ver os catálogos dela.')];
+    return h('span', 'pw-sub', h('span', 'pw-sub__title', 'Patrocínio: uma companhia e um catálogo por nível de Tecnomancia'),
+      h('span', 'pw-opt' + (co ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Companhia'), coSel)), ...rows);
   }
 
   function styleRow(s, p, e, fid) {
