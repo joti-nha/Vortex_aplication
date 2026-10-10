@@ -3071,15 +3071,15 @@ const FIREBASE_CONFIG = {
   const tecnoView = () => {
     const R = window.VORTEX_REGRAS || {};
     return [h('h3', 'entry__sub', 'Operação = base + implementos'),
-      h('p', 'pwview__efeito', 'Toda operação começa por uma base. Depois você soma implementos, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o atributo chave da lista usada (Precisão ou Essência).'),
+      h('p', 'pwview__efeito', 'Toda operação começa por uma base. Depois você soma implementos, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o seu atributo chave, que vem do seu tipo de tecnomante (o Engenheiro escolhe Precisão ou Essência para cada lista).'),
       ruleTable(['Base', 'Custo', 'Como funciona'], R.tecnoBases || []),
       h('p', 'pwview__efeito', 'Dano: toda forma de causar dano segue a regra de ataque, com o multiplicador da cadência. Dado de dano ou dano que passa pela Defesa só vem de dano fixo ou dano de efeito de um componente conhecido, como o Sangramento ou o dano adicional de alguns itens.'),
       h('h3', 'entry__sub', 'Implementos padrão'),
       h('p', 'pwview__efeito', 'Todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.'),
       ruleTable(['Implemento', 'Custo', 'O que faz'], R.tecnoImplementos || []),
       h('h3', 'entry__sub', 'Implementos especiais'),
-      h('p', 'pwview__efeito', 'São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Numa operação, no máximo um número igual ao seu nível. Um poder custa em PE o dobro do custo de uso + o custo em UP; o resto custa o PE da raridade + qualquer custo original.'),
-      ruleTable(['Raridade', 'Custo'], R.tecnoRaridade || [])];
+      h('p', 'pwview__efeito', 'São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Numa operação, no máximo um número igual ao seu nível. Um poder custa em PE o dobro do custo de uso + o custo em UP; o resto custa o PE da raridade + qualquer custo original. Um implemento lendário custa +5 PE.'),
+      ruleTable(['Raridade do componente', 'Custo em PE'], R.tecnoRaridade || [])];
   };
   function powerView(e) {
     const v = e.values || {};
