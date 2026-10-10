@@ -4555,11 +4555,37 @@ const FIREBASE_CONFIG = {
     document.body.append(w);
     setTimeout(() => w.remove(), 3200);
   }
+  /* Última fase (vx-critical): o vórtex vai engolindo o site. A cada batida, um pedaço sorteado da tela
+     (bloco, linha, botão, título, a barra...) gira em espiral até o centro e some, e uma boca negra no meio
+     cresce até a explosão. Ao trocar de tela o que foi engolido volta, mas o vórtex continua comendo. */
+  const VX_PREY = '.block, .row, .prog__card, .item-card, .theme-card, .btn, .chip, h1, h2, h3, p, .topbar, .rail, .hero, img, svg';
+  function vxSwallow() {
+    const all = vxVisible(VX_PREY).filter((el) => !el.closest('.vx-swallow, dialog, .vx-music, .vx-boom, .toast'));
+    if (!all.length) return;
+    const el = vxPick(all);
+    const r = el.getBoundingClientRect();
+    // o centro do buraco fica no meio da tela, um pouco acima (o mesmo do disco que gira ao fundo)
+    el.style.setProperty('--sx', Math.round(window.innerWidth / 2 - (r.left + r.width / 2)) + 'px');
+    el.style.setProperty('--sy', Math.round(window.innerHeight * 0.45 - (r.top + r.height / 2)) + 'px');
+    el.style.setProperty('--rot', Math.round(vxR(280, 900) * (Math.random() < 0.5 ? -1 : 1)) + 'deg');
+    el.style.setProperty('--sd', vxR(2.4, 5).toFixed(2) + 's');
+    el.classList.add('vx-swallow');
+    el.setAttribute('aria-hidden', 'true');
+  }
+  function vxUnswallow() {
+    $$('.vx-swallow').forEach((el) => {
+      el.classList.remove('vx-swallow');
+      el.removeAttribute('aria-hidden');
+      ['--sx', '--sy', '--rot', '--sd'].forEach((p) => el.style.removeProperty(p));
+    });
+  }
   function vortexChaos(on) {
     clearTimeout(vxTimer); clearInterval(vxClock);
     vxTimer = vxClock = null;
     const root = document.documentElement;
     root.style.removeProperty('--vx');
+    root.style.removeProperty('--vxs');
+    vxUnswallow();
     root.classList.remove('vx-hot', 'vx-critical');
     const veil = document.querySelector('.vx-veil');
     if (veil) veil.remove();
@@ -4572,6 +4598,7 @@ const FIREBASE_CONFIG = {
       root.style.setProperty('--vx', L.toFixed(3));
       root.classList.toggle('vx-hot', L >= 0.5);
       root.classList.toggle('vx-critical', L >= 0.85);
+      root.style.setProperty('--vxs', Math.max(0, (L - 0.85) / 0.15).toFixed(3)); // o quanto o buraco já engoliu
       return L;
     };
     level();
@@ -4589,6 +4616,7 @@ const FIREBASE_CONFIG = {
         if (L > 0.2 && Math.random() < 0.3 + L * 0.6) vxScramble(L);
         if (L > 0.4 && Math.random() < L * 0.8) vxTear(L);
         if (L > 0.6 && Math.random() < L * 0.45) vxWhisper();
+        if (L >= 0.85 && Math.random() < 0.35 + (L - 0.85) * 4) vxSwallow();
       }
       vxTimer = setTimeout(tick, 1700 - 1300 * L + Math.random() * 400);
     };
@@ -4827,13 +4855,427 @@ const FIREBASE_CONFIG = {
       }, 1500);
     }, vxR(2200, 4000));
   }
+  /* A visão do vórtex: na primeira vez que o instável chega ao fim (uma vez por pessoa, neste aparelho), no lugar
+     da explosão a tela trava e vira uma cena em primeira pessoa. Você está olhando para o vórtex, vira para trás e vê o sistema solar dele, 10 planetas de tamanhos
+     e distâncias diferentes, cada um bagunçado de um jeito (repetido para dentro sem fim, fatiado, do avesso,
+     derretendo, feito de planetinhas, com anéis impossíveis). Então quem está olhando levanta a mão para
+     observá-la, de uma espécie sorteada (humana, máquina, alienígena, quitina ou energia), e ela também se
+     desfaz. Tudo vira branco e o site volta ao tema normal. Desenhado num canvas, sem arquivos; dura uns 11 segundos. */
+  var VXCINE_KEY = 'vortex.vxcine.v1';
+  function vxCineFirst() { // true só na primeira vez (e marca como vista)
+    try { if (localStorage.getItem(VXCINE_KEY)) return false; localStorage.setItem(VXCINE_KEY, String(Date.now())); } catch (e) { /* sem memória: toca */ }
+    return true;
+  }
+  // as mãos possíveis: paleta de pixel art (contorno, sombra, base, luz, brilho), quantos dedos e juntas
+  const VX_HANDS = {
+    humana: { pal: ['#2a1610', '#8a4f36', '#c07a58', '#e3a682', '#f6d2b8'], fingers: 4, joints: 3, len: 1, width: 1, nails: true },
+    maquina: { pal: ['#11151c', '#3b4352', '#6c7787', '#a9b3c1', '#4ff7ff'], fingers: 4, joints: 3, len: 1.05, width: 1.05, bolts: true },
+    alienigena: { pal: ['#0e2414', '#2f7a3e', '#4fb35e', '#8fe07a', '#d6ff4f'], fingers: 3, joints: 4, len: 1.5, width: 0.8, pads: true },
+    quitina: { pal: ['#0b0610', '#2a1636', '#4a2a5e', '#7a4f8f', '#ff4fd8'], fingers: 2, joints: 3, len: 1.25, width: 1.3, spikes: true },
+    energia: { pal: ['#0a3a4a', '#1a7a9a', '#3fc4e0', '#9ff4ff', '#ffffff'], fingers: 5, joints: 3, len: 1.1, width: 0.85, glow: true },
+  };
+  function vxCine(done) {
+    const root = document.documentElement;
+    vxFrozen = true;
+    const dlg = h('dialog', 'vx-cine');
+    dlg.setAttribute('aria-label', 'Vórtex: você olha para trás');
+    dlg.addEventListener('cancel', (ev) => ev.preventDefault()); // nem o Esc tira
+    const cv = document.createElement('canvas');
+    cv.setAttribute('aria-hidden', 'true');
+    dlg.append(cv);
+    document.body.append(dlg);
+    root.classList.add('vx-freeze');
+    try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
+    // a cena é desenhada fora da tela (sc) e passa pelos "olhos" de quem vê antes de aparecer (cv): ondas,
+    // cores que se separam, rastro que se repete para dentro, blocos fora do lugar, piscadas e letras de erro
+    const out = cv.getContext('2d');
+    const sc = document.createElement('canvas'), ctx = sc.getContext('2d');
+    const pv = document.createElement('canvas'), pctx = pv.getContext('2d'); // o quadro anterior, para o rastro
+    const px = document.createElement('canvas'), xctx = px.getContext('2d'); // miniatura para os quadros pixelados
+    let W = 0, H = 0, F = 0, PW = 0, PH = 0;
+    const fit = () => {
+      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      PW = cv.width = sc.width = Math.round(W * dpr); PH = cv.height = sc.height = Math.round(H * dpr);
+      pv.width = Math.round(PW / 2); pv.height = Math.round(PH / 2);
+      px.width = Math.max(8, Math.round(W / 14)); px.height = Math.max(8, Math.round(H / 14));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      F = Math.max(W, H) * 0.62; // distância focal: o quanto cabe na tela
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    const TAU = Math.PI * 2;
+    // céu: estrelas espalhadas em volta (ângulo horizontal e altura)
+    const stars = Array.from({ length: 260 }, () => ({ az: Math.random() * TAU, el: vxR(-0.9, 0.9), s: vxR(0.4, 1.8), hue: vxPick([190, 300, 55, 260, 0]) }));
+    // os 10 planetas: atrás de quem olha (az ≈ π), ao longo de uma eclíptica torta, cada um numa distância
+    const MODES = ['eco', 'fatias', 'avesso', 'derrete', 'aneis', 'enxame', 'poligono'];
+    const order = Array.from({ length: 10 }, (_, i) => i).sort(() => Math.random() - 0.5);
+    const planets = order.map((k, i) => {
+      const dist = 1.2 + k * vxR(0.5, 1.1) + vxR(0, 0.6);
+      const off = ((i - 4.5) * 0.14 + vxR(-0.04, 0.04)) * Math.min(1, 0.25 + W / H * 0.75); // na tela em pé, mais juntos para caberem os 10
+      const m1 = vxPick(MODES);
+      let m2 = vxPick(MODES);
+      if (m2 === m1) m2 = null;
+      return { az: Math.PI + off, el: off * -0.35 + vxR(-0.12, 0.12), dist, size: vxR(0.06, 0.32), hue: Math.random() * 360, spin: vxR(-2, 2),
+        wob: vxR(0.6, 2.4), ph: Math.random() * TAU, modes: [m1, m2], sides: 3 + Math.floor(Math.random() * 5) };
+    }).sort((a, b) => b.dist - a.dist); // os de longe primeiro
+    const kinds = Object.keys(VX_HANDS);
+    const kind = vxPick(kinds);
+    const T_TURN0 = 1.4, T_TURN1 = 3.6, T_HAND = 6.2, T_OUT = 10.6, T_END = 11.4;
+    const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+    const proj = (az, el, yaw) => {
+      let d = az - yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      if (Math.abs(d) > 1.25) return null;
+      return { x: W / 2 + Math.tan(d) * F, y: H / 2 - Math.tan(el) * F };
+    };
+    const blob = (x, y, r, wob, t, sides) => { // contorno torto: círculo, polígono ou gosma
+      ctx.beginPath();
+      const n = sides ? sides : 28;
+      for (let i = 0; i <= n; i++) {
+        const a = TAU * i / n + t * 0.3;
+        const rr = r * (1 + (sides ? 0 : 0.12 * wob * Math.sin(a * 3 + t * wob) + 0.06 * Math.sin(a * 7 - t * 2)));
+        i ? ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      }
+      ctx.closePath();
+    };
+    const fillBody = (x, y, r, hue, inv) => {
+      const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.05, x, y, r);
+      if (inv) { g.addColorStop(0, '#000'); g.addColorStop(0.82, '#000'); g.addColorStop(1, 'hsl(' + hue + ',100%,70%)'); }
+      else { g.addColorStop(0, 'hsl(' + hue + ',90%,72%)'); g.addColorStop(0.6, 'hsl(' + ((hue + 60) % 360) + ',70%,40%)'); g.addColorStop(1, 'hsl(' + ((hue + 140) % 360) + ',80%,12%)'); }
+      ctx.fillStyle = g;
+      ctx.fill();
+    };
+    const drawPlanet = (p, x, y, r, t) => {
+      const hue = (p.hue + t * 40 * p.spin) % 360;
+      const has = (m) => p.modes.indexOf(m) >= 0;
+      const sides = has('poligono') ? p.sides + Math.round(Math.sin(t * 1.3 + p.ph) * 1.4) : 0;
+      if (has('fatias')) { // fatiado: faixas do planeta deslizando para os lados
+        const bands = 6, bh = (r * 2.4) / bands;
+        for (let b = 0; b < bands; b++) {
+          ctx.save();
+          ctx.beginPath(); ctx.rect(x - r * 3, y - r * 1.2 + b * bh, r * 6, bh); ctx.clip();
+          const dx = Math.sin(t * 3 + b * 1.7 + p.ph) * r * 0.7;
+          blob(x + dx, y, r, p.wob, t, sides); fillBody(x + dx, y, r, (hue + b * 25) % 360, has('avesso'));
+          ctx.restore();
+        }
+      } else { blob(x, y, r, has('derrete') ? p.wob * 2.4 : p.wob * 0.4, t, sides); fillBody(x, y, r, hue, has('avesso')); }
+      if (has('avesso')) { // do avesso: estrelas dentro do planeta
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 9; i++) { const a = p.ph + i * 2.4 + t * 0.5, rr = r * 0.7 * ((i * 0.37) % 1); ctx.fillRect(x + Math.cos(a) * rr, y + Math.sin(a) * rr, 1.5, 1.5); }
+      }
+      if (has('derrete')) { // pinga para cima e para baixo ao mesmo tempo
+        ctx.fillStyle = 'hsl(' + hue + ',80%,55%)';
+        for (let i = 0; i < 4; i++) { const dx = (i - 1.5) * r * 0.4, len = r * (0.4 + 0.5 * Math.abs(Math.sin(t * 1.5 + i))); ctx.fillRect(x + dx - r * 0.06, y + (i % 2 ? r * 0.7 : -r * 0.7 - len), r * 0.12, len); }
+      }
+      if (has('eco')) { // repetido para dentro, sem fim
+        for (let k = 1; k < 7; k++) {
+          const rk = r * Math.pow(0.62, k), a = t * (k % 2 ? 1 : -1) * 0.8 + k;
+          const xk = x + Math.cos(a) * (r - rk) * 0.5, yk = y + Math.sin(a) * (r - rk) * 0.5;
+          blob(xk, yk, rk, p.wob, t + k, sides); fillBody(xk, yk, rk, (hue + k * 50) % 360, k % 2 === 1);
+        }
+      }
+      if (has('enxame')) { // feito de planetinhas orbitando o próprio buraco
+        for (let k = 0; k < 10; k++) {
+          const a = t * (1 + k * 0.15) + k * 0.63, rr = r * (1.1 + 0.25 * Math.sin(t + k));
+          ctx.beginPath(); ctx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.6, r * 0.14, 0, TAU);
+          ctx.fillStyle = 'hsl(' + ((hue + k * 36) % 360) + ',90%,60%)'; ctx.fill();
+        }
+      }
+      if (has('aneis')) { // anéis que se cruzam em ângulos impossíveis
+        ctx.lineWidth = Math.max(1, r * 0.06);
+        for (let k = 0; k < 3; k++) {
+          ctx.beginPath(); ctx.ellipse(x, y, r * (1.5 + k * 0.3), r * 0.3, t * (0.4 + k * 0.5) + k, 0, TAU);
+          ctx.strokeStyle = 'hsla(' + ((hue + 120 + k * 60) % 360) + ',100%,70%,0.8)'; ctx.stroke();
+        }
+      }
+    };
+    const drawVortex = (x, y, r, t) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(t * 2.2);
+      const cols = ['#ff4fd8', '#4ff7ff', '#fff04f', '#784fff'];
+      for (let i = 12; i >= 0; i--) {
+        ctx.beginPath(); ctx.ellipse(0, 0, r * (0.25 + i * 0.12), r * (0.18 + i * 0.1), i * 0.4, 0, TAU);
+        ctx.strokeStyle = cols[i % 4]; ctx.globalAlpha = 0.7 - i * 0.04; ctx.lineWidth = Math.max(1, r * 0.04); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.24, 0, TAU); ctx.fillStyle = '#000'; ctx.fill();
+      ctx.lineWidth = Math.max(1.5, r * 0.02); ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.restore();
+    };
+    /* a mão em pixel art: desenhada em tons de cinza numa grade pequena (HX x HY), depois cada pixel vira uma
+       das 5 cores da espécie pelo brilho (preto = contorno e vincos, branco = unhas e luzes) e ganha contorno.
+       Punho em (0,0), dedos para cima; 1 unidade = HK pixels da grade. */
+    const HX = 72, HY = 128, HK = 52, HO = 64;
+    const hc = document.createElement('canvas'), hctx = hc.getContext('2d', { willReadFrequently: true });
+    hc.width = HX; hc.height = HY;
+    const rgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+    const gray = (v) => 'rgb(' + v + ',' + v + ',' + v + ')';
+    const bone = (x0, y0, x1, y1, w, v) => { hctx.beginPath(); hctx.moveTo(x0, y0); hctx.lineTo(x1, y1); hctx.lineWidth = w; hctx.strokeStyle = gray(v); hctx.stroke(); };
+    const renderHand = (spec, t, flip, rot, warp) => {
+      const g = hctx;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, HX, HY);
+      g.setTransform(HK, 0, 0, HK, HX / 2, HO);
+      g.rotate(rot);
+      g.scale(flip, 1);
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      const palm = flip > 0; // a palma virada para quem olha (senão, as costas da mão)
+      // antebraço e punho
+      g.beginPath(); g.moveTo(-0.17, 0); g.lineTo(-0.23, 1.3); g.lineTo(0.23, 1.3); g.lineTo(0.18, 0); g.closePath();
+      g.fillStyle = gray(120); g.fill();
+      g.beginPath(); g.moveTo(-0.12, 0.05); g.lineTo(-0.15, 1.3); g.lineTo(0.06, 1.3); g.lineTo(0.06, 0.05); g.closePath();
+      g.fillStyle = gray(160); g.fill();
+      // palma: eminência do polegar à esquerda, nós dos dedos em arco, lado do mindinho mais reto
+      const palmPath = () => {
+        g.beginPath(); g.moveTo(-0.17, 0.03);
+        g.quadraticCurveTo(-0.29, -0.12, -0.26, -0.3); g.lineTo(-0.23, -0.5);
+        g.quadraticCurveTo(0, -0.6, 0.23, -0.49);
+        g.quadraticCurveTo(0.27, -0.24, 0.18, 0.03); g.closePath();
+      };
+      palmPath(); g.fillStyle = gray(130); g.fill();
+      g.save(); g.translate(-0.03, -0.03); g.scale(0.82, 0.86); palmPath(); g.fillStyle = gray(165); g.fill(); g.restore();
+      g.beginPath(); g.ellipse(-0.14, -0.17, 0.07, 0.11, -0.4, 0, Math.PI * 2); g.fillStyle = gray(200); g.fill(); // o volume do polegar
+      if (palm) { // linhas da mão
+        g.lineWidth = 0.022; g.strokeStyle = '#000';
+        g.beginPath(); g.moveTo(-0.2, -0.42); g.quadraticCurveTo(-0.1, -0.2, -0.13, 0); g.stroke();
+        g.beginPath(); g.moveTo(-0.21, -0.36); g.quadraticCurveTo(0, -0.33, 0.12, -0.24); g.stroke();
+        g.beginPath(); g.moveTo(0.22, -0.4); g.quadraticCurveTo(0.05, -0.44, -0.08, -0.47); g.stroke();
+        g.beginPath(); g.moveTo(-0.15, 0.02); g.lineTo(0.15, 0.02); g.stroke(); // vinco do punho
+      } else { // tendões nas costas da mão
+        g.lineWidth = 0.018; g.strokeStyle = gray(105);
+        [-0.12, -0.03, 0.06, 0.14].forEach((x) => { g.beginPath(); g.moveTo(x * 0.4, -0.02); g.lineTo(x, -0.48); g.stroke(); });
+      }
+      if (spec.bolts) [[-0.1, -0.3], [0.1, -0.3], [0, -0.12]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 0.035, 0, Math.PI * 2); g.fillStyle = '#000'; g.fill(); g.beginPath(); g.arc(x, y, 0.015, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); });
+      // dedos: falanges com volume (sombra, base e luz do lado esquerdo), vincos nas juntas
+      const n = Math.max(1, spec.fingers + (spec.glow ? Math.round(Math.sin(t * 2.3) * 2 * warp) : 0));
+      const fw = 0.4 / n * 0.95 * spec.width;
+      const finger = (x, y, a, lens, w, curl, f) => {
+        lens.forEach((L, j) => {
+          const nx = x + Math.cos(a) * L, ny = y + Math.sin(a) * L, ww = w * (1 - j * 0.1);
+          bone(x, y, nx, ny, ww, 125);
+          bone(x - Math.sin(a) * ww * 0.18, y + Math.cos(a) * ww * 0.18 * -1, nx - Math.sin(a) * ww * 0.18, ny - Math.cos(a) * ww * 0.18, ww * 0.5, 175);
+          if (j) { g.lineWidth = 0.016; g.strokeStyle = palm ? '#000' : gray(95); g.beginPath(); g.moveTo(x + Math.sin(a) * ww * 0.35, y - Math.cos(a) * ww * 0.35); g.lineTo(x - Math.sin(a) * ww * 0.35, y + Math.cos(a) * ww * 0.35); g.stroke(); }
+          if (spec.spikes) { g.beginPath(); g.moveTo(nx, ny); g.lineTo(nx + Math.cos(a + 1.3) * 0.07, ny + Math.sin(a + 1.3) * 0.07); g.lineWidth = 0.03; g.strokeStyle = '#fff'; g.stroke(); }
+          x = nx; y = ny; a += curl[j] || 0;
+        });
+        if (spec.nails && !palm) { g.beginPath(); g.ellipse(x - Math.cos(a) * w * 0.35, y - Math.sin(a) * w * 0.35, w * 0.28, w * 0.36, a + Math.PI / 2, 0, Math.PI * 2); g.fillStyle = gray(245); g.fill(); }
+        if (spec.pads) { g.beginPath(); g.arc(x, y, w * 0.55, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); }
+        if (spec.glow && f % 2) { g.beginPath(); g.arc(x, y, w * 0.3, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); }
+      };
+      for (let f = 0; f < n; f++) {
+        const u = n === 1 ? 0.5 : f / (n - 1);
+        const L = (1 - 0.9 * (u - 0.38) * (u - 0.38)) * 0.43 * spec.len * (1 + warp * 0.7 * Math.sin(t * 1.7 + f));
+        const parts = spec.joints === 3 ? [0.45, 0.32, 0.23] : Array.from({ length: spec.joints }, () => 1 / spec.joints);
+        const wave = Math.max(0, Math.sin(t * 1.3 - f * 0.5));
+        const curl = parts.map((_, j) => (0.04 + 0.16 * wave) * (j + 1) * 0.6 * (spec.spikes ? -1 : 1));
+        finger(-0.19 + 0.4 * u, -0.53 + 0.1 * u * u, -Math.PI / 2 + (u - 0.45) * 0.3 + Math.sin(t * 0.9 + f) * 0.03, parts.map((k) => k * L), fw, curl, f);
+      }
+      // o polegar sai da lateral da palma, com duas falanges
+      finger(-0.21, -0.16, -2.25 + Math.sin(t * 1.1) * 0.08, [0.17, 0.13].map((k) => k * spec.len * (1 + warp * 0.5 * Math.sin(t * 2))), fw * 1.2, [0.25, 0.15], 0);
+      // cinza → as 5 cores da espécie, sem meio-termo, e um contorno de 1 pixel
+      const img = g.getImageData(0, 0, HX, HY), d = img.data, P = spec.pal.map(rgb);
+      const on = new Uint8Array(HX * HY);
+      for (let i = 0; i < HX * HY; i++) {
+        if (d[i * 4 + 3] < 110) { d[i * 4 + 3] = 0; continue; }
+        on[i] = 1;
+        const v = d[i * 4], c = P[v < 50 ? 0 : v < 135 ? 1 : v < 185 ? 2 : v < 230 ? 3 : 4];
+        d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = spec.glow ? 200 : 255;
+      }
+      for (let y = 0; y < HY; y++) for (let x = 0; x < HX; x++) {
+        const i = y * HX + x;
+        if (on[i]) continue;
+        if ((x > 0 && on[i - 1]) || (x < HX - 1 && on[i + 1]) || (y > 0 && on[i - HX]) || (y < HY - 1 && on[i + HX])) {
+          d[i * 4] = P[0][0]; d[i * 4 + 1] = P[0][1]; d[i * 4 + 2] = P[0][2]; d[i * 4 + 3] = 255;
+        }
+      }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.putImageData(img, 0, 0);
+      return hc;
+    };
+    // os olhos de quem vê: tudo aqui é em pixels do canvas; I = o quanto a visão já se desfez (sobe com o tempo)
+    let pixUntil = 0, inv = 0;
+    const lidAt = [0.15, 4.3, 6.0, 9.6];
+    const see = (t, speed) => {
+      // enquanto a mão sobe e é observada, a visão se acalma; depois piora de vez
+      const calm = ease((t - T_HAND - 0.3) / 0.6) * (1 - ease((t - T_HAND - 2.3) / 0.6));
+      const I = Math.min(1, 0.25 + t / 9 + speed * 0.35) * (1 - 0.75 * calm);
+      out.setTransform(1, 0, 0, 1, 0, 0);
+      out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1; out.filter = 'none';
+      out.fillStyle = '#000'; out.fillRect(0, 0, PW, PH);
+      // rastro: o quadro anterior, um pouco maior e girado, repetindo a visão para dentro sem fim
+      out.save();
+      out.globalAlpha = 0.3 + 0.4 * I;
+      out.translate(PW / 2, PH / 2); out.rotate(Math.sin(t * 0.8) * 0.03 * I); out.scale(1.025 + 0.04 * I, 1.025 + 0.04 * I);
+      out.drawImage(pv, -PW / 2, -PH / 2, PW, PH);
+      out.restore();
+      // ondas: a visão escorre de lado, faixa por faixa
+      const sh = Math.max(4, Math.round(PH / 120)), amp = PW * (0.006 + 0.035 * I) * (0.6 + 0.4 * Math.sin(t * 0.9));
+      const burstY = Math.random() < 0.15 * I ? vxR(0, PH) : -1, burstH = vxR(20, 120) * I;
+      out.globalAlpha = 0.9;
+      for (let y = 0; y < PH; y += sh) {
+        let dx = Math.sin(y / PH * 9 + t * 3.1) * amp + Math.sin(y / PH * 31 - t * 7) * amp * 0.25;
+        if (burstY >= 0 && Math.abs(y - burstY) < burstH) dx += PW * 0.08 * (Math.random() - 0.5) * 2;
+        out.drawImage(sc, 0, y, PW, sh, dx, y, PW, sh);
+      }
+      // cores separadas e visão dupla: cópias tingidas que se afastam
+      const d = PW * (0.004 + 0.02 * I) * (1 + Math.sin(t * 2.3));
+      out.globalCompositeOperation = 'screen';
+      out.globalAlpha = 0.25 + 0.3 * I;
+      out.filter = 'hue-rotate(' + Math.round(100 + t * 80) + 'deg)';
+      out.drawImage(sc, d, -d * 0.3);
+      out.filter = 'hue-rotate(' + Math.round(-100 - t * 60) + 'deg)';
+      out.drawImage(sc, -d, d * 0.4);
+      out.filter = 'none';
+      out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1;
+      // blocos fora do lugar (cada um copiado de outro canto da cena)
+      for (let i = Math.floor(I * 9 * Math.random()); i > 0; i--) {
+        const bw = vxR(PW * 0.05, PW * 0.35), bh = vxR(PH * 0.01, PH * 0.08);
+        out.drawImage(sc, vxR(0, PW - bw), vxR(0, PH - bh), bw, bh, vxR(0, PW - bw), vxR(0, PH - bh), bw, bh);
+      }
+      // às vezes a visão vira pixels grossos por alguns quadros
+      if (t > pixUntil && Math.random() < 0.012 * I) pixUntil = t + vxR(0.08, 0.3);
+      if (t < pixUntil) {
+        xctx.imageSmoothingEnabled = true; xctx.drawImage(sc, 0, 0, px.width, px.height);
+        out.imageSmoothingEnabled = false; out.globalAlpha = 0.85; out.drawImage(px, 0, 0, PW, PH);
+        out.imageSmoothingEnabled = true; out.globalAlpha = 1;
+      }
+      // rasgos: linhas finas que cortam a tela
+      for (let i = Math.floor(I * 4 * Math.random()); i > 0; i--) {
+        out.fillStyle = vxPick(['#fff', '#4ff7ff', '#ff4fd8', '#fff04f']);
+        out.fillRect(0, vxR(0, PH), PW, vxR(1, 3));
+      }
+      // letras de erro na própria visão
+      if (Math.random() < 0.35 * I) {
+        out.font = Math.round(vxR(10, 26) * PW / W) + 'px monospace';
+        out.fillStyle = vxPick(['#4ff7ff', '#ff4fd8', '#fff']);
+        out.globalAlpha = vxR(0.4, 0.9);
+        out.fillText(vxPick(VX_BITS) + ' ' + vxPick(['ERRO DE VISÃO', 'olho_0x' + Math.floor(Math.random() * 4096).toString(16), 'SINAL ∅', 'quem vê?', 'retina: NaN', 'você', 'NÃO OLHE']), vxR(0, PW * 0.7), vxR(PH * 0.05, PH));
+        out.globalAlpha = 1;
+      }
+      // cores invertidas num estalo
+      if (inv > 0 || Math.random() < 0.008 * I) {
+        inv = inv > 0 ? inv - 1 : 2;
+        out.globalCompositeOperation = 'difference'; out.fillStyle = '#fff'; out.fillRect(0, 0, PW, PH);
+        out.globalCompositeOperation = 'source-over';
+      }
+      // a borda escura de quem olha, pulsando, e as pálpebras que piscam tortas
+      const vr = Math.max(PW, PH) * (0.62 - 0.12 * I + 0.04 * Math.sin(t * 1.7));
+      const vg = out.createRadialGradient(PW / 2, PH / 2, vr * 0.35, PW / 2, PH / 2, vr);
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(0.75, 'rgba(20,0,30,0.55)'); vg.addColorStop(1, 'rgba(0,0,0,0.95)');
+      out.fillStyle = vg; out.fillRect(0, 0, PW, PH);
+      let lid = 0;
+      lidAt.forEach((a) => { const k = 1 - Math.abs(t - a) / 0.22; if (k > lid) lid = k; });
+      if (lid > 0) {
+        out.fillStyle = '#000';
+        [[0, 1], [PH, -1]].forEach(([y0, s], j) => {
+          out.beginPath(); out.moveTo(0, y0);
+          for (let x = 0; x <= PW; x += PW / 16) out.lineTo(x, y0 + s * (lid * PH * 0.55 * (j ? 0.9 : 1.05) + Math.sin(x / PW * 7 + t * 9) * PH * 0.02 * I));
+          out.lineTo(PW, y0); out.closePath(); out.fill();
+        });
+      }
+      pctx.globalAlpha = 1; pctx.drawImage(cv, 0, 0, pv.width, pv.height);
+    };
+    const t0 = performance.now();
+    let last = t0, raf = 0;
+    const frame = (now) => {
+      const t = (now - t0) / 1000;
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      // virar para trás: o ângulo de 0 a π com um tranco; a câmera inclina no meio da virada
+      const turn = ease((t - T_TURN0) / (T_TURN1 - T_TURN0));
+      const speed = Math.sin(turn * Math.PI);
+      const yaw = turn * Math.PI + Math.sin(t * 0.7) * 0.03;
+      ctx.save();
+      ctx.fillStyle = 'rgba(2,0,8,' + (1 - speed * 0.75).toFixed(2) + ')'; // rastro quando gira rápido
+      ctx.fillRect(0, 0, W, H);
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(speed * 0.35 + Math.sin(t * 1.3) * 0.02);
+      ctx.translate(-W / 2, -H / 2 + Math.sin(t * 2.1) * 4); // a respiração de quem olha
+      stars.forEach((s) => {
+        const p = proj(s.az, s.el, yaw);
+        if (!p) return;
+        ctx.fillStyle = 'hsl(' + s.hue + ',90%,' + (70 + Math.sin(t * 5 + s.az * 9) * 25) + '%)';
+        ctx.fillRect(p.x, p.y, s.s + speed * 30, s.s);
+      });
+      const vp = proj(0, 0.02, yaw);
+      if (vp) drawVortex(vp.x, vp.y, F * 0.5, t);
+      const chaos = Math.max(0, t - T_TURN1 + 1);
+      planets.forEach((p) => {
+        const az = p.az + Math.sin(t * 0.6 * p.spin + p.ph) * 0.04 * chaos * 0.4;
+        const pp = proj(az, p.el + Math.cos(t * 0.5 + p.ph) * 0.02 * chaos * 0.4, yaw);
+        if (!pp) return;
+        const r = F * p.size / p.dist * (1 + 0.08 * Math.sin(t * p.wob + p.ph));
+        if (r < 0.8) return;
+        drawPlanet(p, pp.x, pp.y, r, t);
+      });
+      ctx.restore();
+      // a mão sobe de baixo, vira para ser observada e se desfaz
+      if (t > T_HAND) {
+        const ht = t - T_HAND;
+        const rise = ease(ht / 1.6);
+        const S = Math.min(W, H) * (W > H ? 0.62 : 0.78);
+        const hx = W * (W > H ? 0.62 : 0.56), hy = H + S * 0.5 - rise * S * 1.05;
+        // primeiro a mão aparece inteira e nítida (palma, depois vira as costas); só então se desfaz
+        const flip = Math.cos(Math.max(0, ht - 1.5) * 1.5);
+        const warp = Math.min(1, Math.max(0, ht - 2.4) / 1.6);
+        const spec = Math.random() < warp * 0.12 ? VX_HANDS[vxPick(kinds)] : VX_HANDS[kind]; // pisca outras espécies
+        renderHand(spec, t, Math.abs(flip) < 0.12 ? 0.12 * Math.sign(flip || 1) : flip, -0.12 + Math.sin(ht * 0.9) * 0.08, warp);
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        if (spec.glow) { ctx.shadowColor = '#4ff7ff'; ctx.shadowBlur = 16; }
+        // ecos: a mesma mão repetida em cores trocadas, cada vez mais longe
+        for (let e = Math.round(warp * 3); e >= 0; e--) {
+          ctx.save();
+          ctx.globalAlpha = e ? 0.35 / e : 1;
+          ctx.globalCompositeOperation = e ? 'lighter' : 'source-over';
+          ctx.translate(hx + e * S * 0.09 * Math.sin(t * 2 + e), hy - e * S * 0.04);
+          ctx.rotate(e * 0.08);
+          ctx.scale(S / HK, S / HK);
+          if (e) ctx.filter = 'hue-rotate(' + (e * 90 + t * 60) + 'deg)';
+          ctx.drawImage(hc, -HX / 2, -HO);
+          ctx.restore();
+        }
+        ctx.restore();
+        // a mão fatiada: faixas da tela deslizam para os lados
+        if (warp > 0.2) {
+          const bands = 3 + Math.floor(warp * 6);
+          for (let b = 0; b < bands; b++) {
+            if (Math.random() > warp * 0.6) continue;
+            const by = vxR(hy - S * 1.1, H), bh = vxR(4, 18 + warp * 30);
+            try { ctx.drawImage(sc, 0, by * (PH / H), PW, bh * (PH / H), vxR(-40, 40) * warp, by, W, bh); } catch (e) { /* nada */ }
+          }
+        }
+      }
+      see(t, speed);
+      // fim: tudo é puxado para um branco e a tela volta
+      if (t > T_OUT) {
+        out.fillStyle = 'rgba(255,255,255,' + Math.min(1, (t - T_OUT) / (T_END - T_OUT - 0.2)).toFixed(2) + ')';
+        out.fillRect(0, 0, PW, PH);
+      }
+      if (t < T_END && dlg.isConnected) { raf = requestAnimationFrame(frame); return; }
+      finish();
+    };
+    const finish = () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', fit);
+      root.classList.remove('vx-freeze');
+      vxFrozen = false;
+      done(); // o site já volta ao normal por baixo do branco, que some devagar
+      dlg.classList.add('is-out');
+      setTimeout(() => { if (dlg.open) dlg.close(); dlg.remove(); }, 600);
+    };
+    setTimeout(() => playThemeSound('vortice'), T_TURN0 * 1000);
+    setTimeout(() => playThemeSound('boom'), T_OUT * 1000);
+    raf = requestAnimationFrame(frame);
+  }
   function vortexExplode() {
-    if (document.querySelector('.vx-boom')) return;
+    if (document.querySelector('.vx-boom, .vx-cine')) return;
     clearTimeout(vxTimer); clearInterval(vxClock);
     saveVx();
     vxMusStop(true); // a trilha corta seco na explosão
+    if (vxCineFirst()) { vxCine(() => vxAfterBoom(null)); return; } // na primeira vez, a visão no lugar da explosão
     playThemeSound('boom');
-    const flying = vxVisible('.block, .row, .prog__card, .theme-card, .btn, h1, h2, .topbar, .rail').slice(0, 80);
+    const flying = vxVisible('.block, .row, .prog__card, .theme-card, .btn, h1, h2, .topbar, .rail').filter((el) => !el.closest('.vx-swallow')).slice(0, 80);
     flying.forEach((el) => {
       el.style.setProperty('--dx', Math.round(vxR(-120, 120)) + 'vw');
       el.style.setProperty('--dy', Math.round(vxR(-90, 120)) + 'vh');
@@ -4846,14 +5288,17 @@ const FIREBASE_CONFIG = {
     document.body.append(boom);
     setTimeout(() => {
       flying.forEach((el) => { el.classList.remove('vx-fly'); ['--dx', '--dy', '--rot', '--d'].forEach((p) => el.style.removeProperty(p)); });
-      vxState.t = 0; vxState.exploded = true; vxState.stable = false;
-      saveVx();
-      applyTheme('');
-      boom.classList.add('is-out');
-      setTimeout(() => boom.remove(), 900);
-      if (document.getElementById('theme-list')) renderThemes();
-      toast('O site explodiu e voltou ao tema normal. Agora o Vórtex ∞ também tem uma versão estável.');
+      vxAfterBoom(boom);
     }, 2600);
+  }
+  // depois da explosão (ou da visão): zera o relógio e volta ao tema normal
+  function vxAfterBoom(boom) {
+    vxState.t = 0; vxState.exploded = true; vxState.stable = false;
+    saveVx();
+    applyTheme('');
+    if (boom) { boom.classList.add('is-out'); setTimeout(() => boom.remove(), 900); }
+    if (document.getElementById('theme-list')) renderThemes();
+    toast('O site explodiu e voltou ao tema normal. Agora o Vórtex ∞ também tem uma versão estável.');
   }
   // depois da primeira explosão, cada vez que o tema é escolhido: estável ou instável? (false = desistiu)
   async function chooseVortex() {
