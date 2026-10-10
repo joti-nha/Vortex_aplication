@@ -99,7 +99,7 @@ const TECNO_BASES = [
   ['Item', 'Raridade + custo do item', 'Usa um item conhecido como base: paga o PE da raridade + qualquer custo original do item.']
 ];
 // PE por raridade de um componente (base Item ou implemento especial)
-const TECNO_RARIDADE = [['Comum', '1 PE'], ['Incomum', '2 PE'], ['Rara', '3 PE'], ['Épica', '4 PE'], ['Lendária', '5 PE']];
+const TECNO_RARIDADE = [['Comum', '+1 PE'], ['Incomum', '+2 PE'], ['Rara', '+3 PE'], ['Épica', '+4 PE'], ['Lendária', '+5 PE']];
 // Implementos padrão: todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.
 const TECNO_IMPLEMENTOS = [
   ['Alcance', '+1 PE', 'Sobe uma categoria de alcance: toque, Curto (até 10 m), Médio, Longo...'],
@@ -113,7 +113,8 @@ const TECNO_IMPLEMENTOS = [
 const TECNO_TIPOS = [
   { name: 'Engenheiro', cost: 0, resumo: 'Monta a tecnomancia a partir de listas de componentes, uma por nível.',
     passivas: [
-      ['Listas', 'A cada nível em Tecnomancia, escolha uma lista de componentes (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos) e o atributo chave dela: Precisão ou Essência.'],
+      ['Atributo chave (característica do Engenheiro)', 'Para cada lista, o Engenheiro escolhe se ela usa Precisão ou Essência. Esse é o atributo chave: entra nos testes das operações e define quantos implementos cabem nelas.'],
+      ['Listas', 'A cada nível em Tecnomancia, escolha uma lista de componentes (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos) e o atributo chave dela.'],
       ['Componentes conhecidos', 'Em cada lista, você conhece um número de componentes igual a atributo chave + Operações. Eles servem de base Item ou de implementos especiais.'],
       ['Repetir uma lista', 'Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes conhecidos dela.'],
       ['Limite de implementos', 'Numa operação, o número de implementos é no máximo o atributo chave da lista usada.']
@@ -1071,12 +1072,14 @@ window.VORTEX_REGRAS = {
         ]],
         ['card', 'Tecnomancia', [
           ['kv', '', [['Custo', '1 Up point por nível (até 5)'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'um por modo de ação']]],
-          ['p', 'O poder principal dos tecnomantes: você gasta Essência para montar **operações**, efeitos feitos de uma base e de implementos. Cada jogador tem um único tipo de tecnomancia.'],
+          ['p', 'A Tecnomancia é o poder dos tecnomantes: com ela você gasta Essência (PE) para criar efeitos com a sua tecnologia, como um disparo de energia, um escudo recarregado ou o efeito de um equipamento que você conhece.'],
+          ['p', 'Cada efeito criado se chama **operação**. Você começa com algo simples, como um ataque de toque, e vai somando melhorias (os **implementos**): mais alcance, uma área, mais dano. Cada melhoria custa PE.'],
+          ['p', 'Cada nível compra um jeito de usar o poder (o **modo de ação**, como Instantâneo ou Reativo). O seu **tipo de tecnomante** diz de onde vêm os efeitos que você conhece. Cada jogador tem um só tipo.'],
           ['h3', 'Nível'],
           ['p', 'Cada nível, incluindo o primeiro, custa 1 Up point e compra **um modo de ação** e **uma lista de componentes**. Um modo não pode ser comprado duas vezes, então o nível máximo é 5. Você mantém **um efeito ativo por modo de ação** que tem.'],
           ['table', ['Modo', 'Ação', 'Como funciona'], TECNO_ACOES],
           ['h3', 'Operação = base + implementos'],
-          ['p', 'Toda operação começa por uma **base**. Depois você soma **implementos**, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o atributo chave da lista usada (Precisão ou Essência).'],
+          ['p', 'Toda operação começa por uma **base**. Depois você soma **implementos**, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o seu **atributo chave**, que vem do seu tipo de tecnomante (o Engenheiro escolhe Precisão ou Essência para cada lista).'],
           ['table', ['Base', 'Custo', 'Como funciona'], TECNO_BASES],
           ['note', 'Dano', 'Toda forma de causar dano segue a regra de ataque, com o multiplicador da cadência. Dado de dano ou dano que passa pela Defesa só vem de **dano fixo** ou **dano de efeito** de um componente conhecido, como o Sangramento ou o dano adicional de alguns itens.'],
           ['p', '**Implementos padrão.** Todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.'],
@@ -1084,14 +1087,14 @@ window.VORTEX_REGRAS = {
           ['p', '**Implementos especiais.** São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Você usa numa operação no máximo um número de implementos especiais igual ao seu nível em Tecnomancia.'],
           ['ul', [
             '**Poder:** custa em PE o dobro do custo de uso + o custo em Up points do poder.',
-            '**Equipamento, propriedade, mod ou prótese:** custa o PE da raridade (tabela) + qualquer custo original.',
+            '**Equipamento, propriedade, mod ou prótese:** custa o PE da raridade (tabela abaixo) + qualquer custo original. Um implemento lendário custa +5 PE.',
             '**Exigências:** siga as do original. Se ele pede uma ação, gaste essa ação.'
           ]],
-          ['table', ['Raridade', 'Custo'], TECNO_RARIDADE],
+          ['table', ['Raridade do componente', 'Custo em PE'], TECNO_RARIDADE],
           ['example', 'Com Precisão 2, um ataque a alcance Médio: base Ataque (grátis) + Alcance duas vezes (toque → Curto → Médio) = 2 PE e 2 implementos, o máximo com Precisão 2. Com Precisão 3, ainda caberia uma Área (+2 PE).'],
           ['h3', 'Tipo de tecnomante (um por jogador)'],
           ['p', 'Define de onde vêm os seus componentes.'],
-          ['p', '**Engenheiro.** A cada nível, escolha uma lista de componentes e o atributo chave dela (Precisão ou Essência). Você conhece um número de componentes da lista igual a atributo chave + Operações, e eles servem de base Item ou de implementos especiais. Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes dela.'],
+          ['p', '**Engenheiro.** Característica do Engenheiro: ele escolhe o atributo chave de cada lista, **Precisão ou Essência**. A cada nível, escolha uma lista de componentes e o atributo chave dela. Você conhece um número de componentes da lista igual a atributo chave + Operações, e eles servem de base Item ou de implementos especiais. Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes dela.'],
           ['example', 'O Engenheiro compra Tecnomancia: escolhe a lista Equipamento com Precisão como atributo chave e o modo Instantâneo. Com Precisão 2 e Operações 1, conhece 3 itens (por exemplo, uma armadura, uma arma e uma granada).'],
           ['dl', TECNO_LISTAS],
           ['p', '**Patrocinado e Insano.** Cada um obtém componentes de um jeito diferente. Em breve.']
