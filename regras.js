@@ -76,7 +76,7 @@ const LUTA_ESTILOS = [
 ];
 /* Tecnomancia: o poder principal dos tecnomantes. Cada nível compra um modo de ação e uma lista de componentes.
    Toda operação é uma base (ataque, ação efetiva ou item) + implementos (padrão ou especiais, vindos das listas).
-   Um tipo de tecnomante por jogador: só o Engenheiro tem regras; Patrocinado e Insano são citados e chegam depois. */
+   Um tipo de tecnomante por jogador: Engenheiro (listas) e Patrocinado (catálogos de uma companhia); o Insano chega depois. */
 const TECNO_ACOES = [
   ['Instantâneo', 'Ação', 'Gera um efeito explosivo na hora. A duração em campo ou no alvo é a do efeito.'],
   ['Passivo', 'Nenhuma', 'Fica ativo sem gastar ação. Paga a sustentação no mínimo uma vez por cena, então dura até uma cena. Só serve para efeitos que aprimoram ou energizam o alvo: nunca ataque, condição negativa ou habilidade que precise ser ativada ou gaste ação.'],
@@ -95,7 +95,7 @@ const TECNO_LISTAS = [
 // Bases de uma operação
 const TECNO_BASES = [
   ['Ataque', 'Grátis', 'Ataque de toque, sem multiplicador de dano. Teste: 2d6 + atributo chave + Operações contra a Defesa do alvo. Dano = ataque – Defesa, do tipo mágico.'],
-  ['Ação efetiva', 'Grátis', 'Causa um efeito em algo ou alguém. Recarregar Escudo segue a regra de Cura: teste de atributo chave + Operações contra a CD; o alvo recupera a diferença.'],
+  ['Ação efetiva', 'Grátis', 'Causa um efeito em algo ou alguém. Se o alvo resistir, a CD é 6 + atributo chave.'],
   ['Item', 'Raridade + custo do item', 'Usa um item conhecido como base: paga o PE da raridade + qualquer custo original do item.']
 ];
 // PE por raridade de um componente (base Item ou implemento especial)
@@ -106,7 +106,7 @@ const TECNO_IMPLEMENTOS = [
   ['Área', '+2 PE', 'O efeito vira uma área de 3 m de raio, dentro do alcance. Cada repetição soma +3 m de raio.'],
   ['Intensificar', '+1 PE', 'Multiplica o dano como a cadência: cada Intensificar conta como um disparo a mais na tabela das Regras de Cadência (multiplicador e penalidade).'],
   ['Modificador', '+1 PE', '+1 no teste da operação (ataque, cura ou efeito).'],
-  ['CD', '+1 PE', '+1 na CD que o alvo precisa vencer para resistir ao efeito.'],
+  ['CD', '+1 PE', '+1 na CD que o alvo precisa vencer para resistir ao efeito (a CD padrão é 6 + atributo chave).'],
   ['Alvo extra', '+1 PE', 'Mais um alvo, cada um com o seu teste.'],
   ['Tipo de dano', '+1 PE', 'Troca o dano mágico por um tipo que você tenha de uma fonte conhecida.']
 ];
@@ -117,9 +117,15 @@ const TECNO_TIPOS = [
       ['Listas', 'A cada nível de Tecnomancia (cada compra do poder), escolha uma lista de componentes (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos) e o atributo chave dela.'],
       ['Componentes conhecidos', 'Em cada lista, você conhece um número de componentes igual a atributo chave + Operações. Eles servem de base Item ou de implementos especiais.'],
       ['Repetir uma lista', 'Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes conhecidos dela.'],
-      ['Limite de implementos', 'Numa operação, o número de implementos é no máximo o atributo chave da lista usada.']
+      ['Limite de implementos', 'Numa operação, o número de implementos é no máximo o atributo chave da lista usada.'],
+      ['Consertar Escudo (exclusivo do Engenheiro)', 'Uma ação efetiva pode recarregar o Escudo de um alvo, seguindo a regra de Cura: teste de atributo chave + Operações contra a CD; o alvo recupera a diferença.']
     ] },
-  { name: 'Patrocinado', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' },
+  { name: 'Patrocinado', cost: 0, resumo: 'Uma companhia patrocina você: a cada nível de Tecnomancia, recebe um catálogo inteiro dela.',
+    passivas: [
+      ['Companhia', 'Escolha uma companhia que patrocina você (por exemplo, Wathrever, Tnnaks, Live Service ou Pinger). Ela vale para todos os níveis.'],
+      ['Catálogos', 'A cada nível de Tecnomancia, escolha um catálogo da companhia, como todas as armas dela ou todas as armaduras dela, e conheça todos os componentes desse catálogo. Cada nível dá um catálogo diferente.'],
+      ['Categorias universais', 'Propriedades, acessórios e mods não têm patrocinador, porque o valor deles é mecânico. Para eles, o catálogo é um tipo de arma: todos os de armas corpo a corpo ou todos os de armas de fogo.']
+    ] },
   { name: 'Insano', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' }
 ];
 window.VORTEX_REGRAS = {
@@ -1071,16 +1077,17 @@ window.VORTEX_REGRAS = {
           ['note', 'Técnico', 'Luta não combina direto com tecnomagia: ela se refere à ação de atacar, e não dá para atacar e conjurar ao mesmo tempo. Para complementar os ataques com tecnomancia, é preciso um poder cuja descrição diga que “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia”.']
         ]],
         ['card', 'Tecnomancia', [
-          ['kv', '', [['Custo', '1 Up point por nível de Tecnomancia (até 5)'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'um por modo de ação']]],
-          ['p', 'A Tecnomancia é o poder dos tecnomantes: com ela você gasta Essência (PE) para criar efeitos com a sua tecnologia, como um disparo de energia, um escudo recarregado ou o efeito de um equipamento que você conhece.'],
+          ['kv', '', [['Custo', '1 Up point por nível de Tecnomancia (até 5)'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'um por modo de ação'], ['CD contra os seus efeitos', '6 + atributo chave']]],
+          ['p', 'A Tecnomancia é o poder dos tecnomantes: com ela você gasta Essência (PE) para criar efeitos com a sua tecnologia, como um disparo de energia ou o efeito de um equipamento que você conhece.'],
           ['p', 'Cada efeito criado se chama **operação**. Você começa com algo simples, como um ataque de toque, e vai somando melhorias (os **implementos**): mais alcance, uma área, mais dano. Cada melhoria custa PE.'],
           ['p', 'Cada nível compra um jeito de usar o poder (o **modo de ação**, como Instantâneo ou Reativo). O seu **tipo de tecnomante** diz de onde vêm os efeitos que você conhece. Cada jogador tem um só tipo.'],
           ['h3', 'Nível de Tecnomancia'],
-          ['p', 'O **nível de Tecnomancia** é o nível deste poder, e não o nível do personagem: é quantas vezes você comprou a Tecnomancia. Cada nível de Tecnomancia, incluindo o primeiro, custa 1 Up point e compra **um modo de ação** e **uma lista de componentes**. Um modo não pode ser comprado duas vezes, então o nível máximo de Tecnomancia é 5. Você mantém **um efeito ativo por modo de ação** que tem.'],
+          ['p', 'O **nível de Tecnomancia** é o nível deste poder, e não o nível do personagem: é quantas vezes você comprou a Tecnomancia. Cada nível de Tecnomancia, incluindo o primeiro, custa 1 Up point e compra **um modo de ação** e um grupo de componentes (uma **lista** no Engenheiro, um **catálogo** no Patrocinado). Um modo não pode ser comprado duas vezes, então o nível máximo de Tecnomancia é 5. Você mantém **um efeito ativo por modo de ação** que tem.'],
           ['table', ['Modo', 'Ação', 'Como funciona'], TECNO_ACOES],
           ['h3', 'Operação = base + implementos'],
           ['p', 'Toda operação começa por uma **base**. Depois você soma **implementos**, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o seu **atributo chave**, que vem do seu tipo de tecnomante (o Engenheiro escolhe Precisão ou Essência para cada lista).'],
           ['table', ['Base', 'Custo', 'Como funciona'], TECNO_BASES],
+          ['p', '**CD padrão.** Quando alguém faz um teste para resistir a uma operação sua, a CD é **6 + o seu atributo chave**.'],
           ['note', 'Dano', 'Toda forma de causar dano segue a regra de ataque, com o multiplicador da cadência. Dado de dano ou dano que passa pela Defesa só vem de **dano fixo** ou **dano de efeito** de um componente conhecido, como o Sangramento ou o dano adicional de alguns itens.'],
           ['p', '**Implementos padrão.** Todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.'],
           ['table', ['Implemento', 'Custo', 'O que faz'], TECNO_IMPLEMENTOS],
@@ -1096,8 +1103,12 @@ window.VORTEX_REGRAS = {
           ['p', 'Define de onde vêm os seus componentes.'],
           ['p', '**Engenheiro.** Característica do Engenheiro: ele escolhe o atributo chave de cada lista, **Precisão ou Essência**. A cada nível de Tecnomancia, escolha uma lista de componentes e o atributo chave dela. Você conhece um número de componentes da lista igual a atributo chave + Operações, e eles servem de base Item ou de implementos especiais. Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes dela.'],
           ['example', 'O Engenheiro compra Tecnomancia: escolhe a lista Equipamento com Precisão como atributo chave e o modo Instantâneo. Com Precisão 2 e Operações 1, conhece 3 itens (por exemplo, uma armadura, uma arma e uma granada).'],
+          ['p', '**Consertar Escudo (exclusivo do Engenheiro).** Uma ação efetiva do Engenheiro pode recarregar o Escudo de um alvo, seguindo a regra de Cura: teste de atributo chave + Operações contra a CD; o alvo recupera a diferença.'],
           ['dl', TECNO_LISTAS],
-          ['p', '**Patrocinado e Insano.** Cada um obtém componentes de um jeito diferente. Em breve.']
+          ['p', '**Patrocinado.** Uma companhia patrocina você. Escolha a companhia uma vez; a cada nível de Tecnomancia, escolha um catálogo dela (todas as armas dela, todas as armaduras dela...) e conheça todos os componentes desse catálogo. Cada nível dá um catálogo diferente.'],
+          ['p', 'Propriedades, acessórios e mods não têm patrocinador, porque o valor deles é mecânico. Para essas categorias, o catálogo é um tipo de arma: todas as de armas corpo a corpo ou todas as de armas de fogo.'],
+          ['example', 'Um Patrocinado escolhe a Wathrever. No nível 1 de Tecnomancia, pega o catálogo de armas de fogo dela e conhece todas. No nível 2, pega acessórios de armas de fogo.'],
+          ['p', '**Insano.** Obtém componentes de um jeito diferente. Em breve.']
         ]],
         ['card', 'Akimbo', [
           ['p', 'Você pode empunhar pistolas ou submetralhadoras uma em cada mão (ou uma de cada, seja irado!). O tempo de recarga aumenta em uma categoria (ação livre para bônus, bônus para movimento, movimento para ação padrão, ação padrão para ação completa.)'],
