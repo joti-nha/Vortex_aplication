@@ -3078,7 +3078,7 @@ const FIREBASE_CONFIG = {
       h('p', 'pwview__efeito', 'Todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.'),
       ruleTable(['Implemento', 'Custo', 'O que faz'], R.tecnoImplementos || []),
       h('h3', 'entry__sub', 'Implementos especiais'),
-      h('p', 'pwview__efeito', 'São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Numa operação, no máximo um número igual ao seu nível. Um poder custa em PE o dobro do custo de uso + o custo em UP; o resto custa o PE da raridade + qualquer custo original. Um implemento lendário custa +5 PE.'),
+      h('p', 'pwview__efeito', 'São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Numa operação, no máximo um número igual ao seu nível de Tecnomancia (o nível do poder, não o do personagem). Um poder custa em PE o dobro do custo de uso + o custo em UP; o resto custa o PE da raridade + qualquer custo original. Um implemento lendário custa +5 PE.'),
       ruleTable(['Raridade do componente', 'Custo em PE'], R.tecnoRaridade || [])];
   };
   function powerView(e) {
@@ -7350,7 +7350,7 @@ const FIREBASE_CONFIG = {
       }
       if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
       if (p.id === 'of-pod-luta') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s) + ' (Corpo ' + attrOf(s, 'corpo') + ' + perícia Luta ' + skillOf(s, 'luta') + ')')));
-      if (p.id === 'of-pod-tecnomancia') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Nível ' + tecnoLevel(p) + ': um efeito ativo por modo de ação · até ' + plural(tecnoLevel(p), 'implemento especial', 'implementos especiais') + ' por operação')));
+      if (p.id === 'of-pod-tecnomancia') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Nível de Tecnomancia ' + tecnoLevel(p) + ': um efeito ativo por modo de ação · até ' + plural(tecnoLevel(p), 'implemento especial', 'implementos especiais') + ' por operação')));
       if (powerStyles(p).length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', styleLabel(p)), ...powerStyles(p).map((e, k) => styleRow(s, p, e, i + '-' + k))));
       if (p.id === 'of-pod-tecnomancia' && styleOf(p) && styleOf(p).name === 'Engenheiro' && tecnoLevel(p)) main.append(tecnoListRow(s, p, i));
       const man = powerManobras(p);
@@ -7406,7 +7406,7 @@ const FIREBASE_CONFIG = {
     const chaves = p.chaves && typeof p.chaves === 'object' ? p.chaves : {};
     const ops = skillOf(s, 'operacoes');
     const seen = {};
-    return h('span', 'pw-sub', h('span', 'pw-sub__title', 'Listas de componentes (uma por nível)'), ...picks.map((cur, k) => {
+    return h('span', 'pw-sub', h('span', 'pw-sub__title', 'Listas de componentes (uma por nível de Tecnomancia)'), ...picks.map((cur, k) => {
       const sel = h('select', 'input');
       sel.dataset.fid = 'pw-lista-' + fid + '-' + k;
       sel.setAttribute('aria-label', 'Lista do nível ' + (k + 1));
@@ -7431,7 +7431,7 @@ const FIREBASE_CONFIG = {
       const known = key ? attrOf(s, key[0]) + ops : 0;
       const detail = !cur ? null : !key ? 'Escolha o atributo chave (Precisão ou Essência) desta lista.'
         : (again ? 'Repetida: mais ' : 'Conhece ') + plural(Math.max(0, known), 'componente', 'componentes') + ' (' + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + '). Até ' + plural(Math.max(0, attrOf(s, key[0])), 'implemento', 'implementos') + ' por operação.';
-      return h('span', 'pw-opt' + (cur ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1)), sel, keySel),
+      return h('span', 'pw-opt' + (cur ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1) + ' de Tecnomancia'), sel, keySel),
         cur ? h('span', 'pw-opt__text', info) : null, detail ? h('span', 'pw-opt__text', detail) : null);
     }));
   }
