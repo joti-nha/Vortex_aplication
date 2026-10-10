@@ -4866,12 +4866,13 @@ const FIREBASE_CONFIG = {
     try { if (localStorage.getItem(VXCINE_KEY)) return false; localStorage.setItem(VXCINE_KEY, String(Date.now())); } catch (e) { /* sem memória: toca */ }
     return true;
   }
+  // as mãos possíveis: paleta de pixel art (contorno, sombra, base, luz, brilho), quantos dedos e juntas
   const VX_HANDS = {
-    humana: { fingers: 5, joints: 3, len: 1, width: 0.075, color: (t) => 'hsl(' + (22 + Math.sin(t) * 6) + ',48%,62%)', line: 'hsl(18,40%,38%)' },
-    maquina: { fingers: 5, joints: 3, len: 1.05, width: 0.07, color: () => '#8d96a3', line: '#4ff7ff', bolts: true, square: true },
-    alienigena: { fingers: 4, joints: 4, len: 1.55, width: 0.05, color: (t) => 'hsla(' + (140 + Math.sin(t * 2) * 30) + ',65%,45%,0.85)', line: '#d6ff4f', pads: true },
-    quitina: { fingers: 3, joints: 2, len: 1.2, width: 0.09, color: () => 'hsl(285,30%,18%)', line: '#ff4fd8', spikes: true, square: true },
-    energia: { fingers: 6, joints: 3, len: 1.15, width: 0.06, color: () => 'rgba(79,247,255,0.12)', line: '#fff', glow: true },
+    humana: { pal: ['#2a1610', '#8a4f36', '#c07a58', '#e3a682', '#f6d2b8'], fingers: 4, joints: 3, len: 1, width: 1, nails: true },
+    maquina: { pal: ['#11151c', '#3b4352', '#6c7787', '#a9b3c1', '#4ff7ff'], fingers: 4, joints: 3, len: 1.05, width: 1.05, bolts: true },
+    alienigena: { pal: ['#0e2414', '#2f7a3e', '#4fb35e', '#8fe07a', '#d6ff4f'], fingers: 3, joints: 4, len: 1.5, width: 0.8, pads: true },
+    quitina: { pal: ['#0b0610', '#2a1636', '#4a2a5e', '#7a4f8f', '#ff4fd8'], fingers: 2, joints: 3, len: 1.25, width: 1.3, spikes: true },
+    energia: { pal: ['#0a3a4a', '#1a7a9a', '#3fc4e0', '#9ff4ff', '#ffffff'], fingers: 5, joints: 3, len: 1.1, width: 0.85, glow: true },
   };
   function vxCine(done) {
     const root = document.documentElement;
@@ -5001,49 +5002,103 @@ const FIREBASE_CONFIG = {
       ctx.lineWidth = Math.max(1.5, r * 0.02); ctx.strokeStyle = '#fff'; ctx.stroke();
       ctx.restore();
     };
-    // a mão: punho em (0,0), dedos para cima; unidade = tamanho da mão
-    const drawHand = (spec, t, flip, warp) => {
-      const n = spec.fingers + (spec === VX_HANDS.energia ? Math.round(Math.sin(t * 2.3) * 2) : 0);
-      ctx.save();
-      ctx.scale(flip, 1);
-      if (spec.glow) { ctx.shadowColor = '#4ff7ff'; ctx.shadowBlur = 18; }
-      // antebraço até fora da tela
-      ctx.beginPath();
-      ctx.moveTo(-0.2, 0); ctx.lineTo(-0.26, 2.2); ctx.lineTo(0.26, 2.2); ctx.lineTo(0.2, 0); ctx.closePath();
-      ctx.fillStyle = spec.color(t); ctx.fill();
-      ctx.lineWidth = 0.012; ctx.strokeStyle = spec.line; ctx.stroke();
-      // palma
-      ctx.beginPath(); ctx.ellipse(0, -0.3, 0.27, 0.33, 0, 0, TAU);
-      ctx.fillStyle = spec.color(t); ctx.fill(); ctx.stroke();
-      if (spec.bolts) { ctx.fillStyle = '#4ff7ff'; [[-0.12, -0.2], [0.12, -0.2], [0, -0.42]].forEach(([bx, by]) => { ctx.beginPath(); ctx.arc(bx, by, 0.022, 0, TAU); ctx.fill(); }); }
-      // dedos: cada um uma corrente de juntas que dobra
-      const fingers = Math.max(2, n);
-      for (let f = 0; f < fingers; f++) {
-        const thumb = f === 0 && fingers > 2;
-        const u = fingers === 1 ? 0.5 : (thumb ? 0 : (f - 1) / Math.max(1, fingers - 2));
-        let x = thumb ? -0.24 : -0.2 + u * 0.4, y = thumb ? -0.22 : -0.58 + Math.abs(u - 0.5) * 0.12;
-        let a = thumb ? -2.3 : -Math.PI / 2 + (u - 0.5) * 0.55;
-        const segLen = (thumb ? 0.13 : 0.17 - Math.abs(u - 0.5) * 0.06) * spec.len * (1 + warp * 0.6 * Math.sin(t * 1.7 + f));
-        const flex = 0.18 + 0.3 * Math.max(0, Math.sin(t * 1.4 + f * 0.6));
-        for (let j = 0; j < spec.joints; j++) {
-          const nx = x + Math.cos(a) * segLen, ny = y + Math.sin(a) * segLen;
-          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny);
-          ctx.lineCap = spec.square ? 'butt' : 'round';
-          ctx.lineWidth = spec.width * (1 - j * 0.12); ctx.strokeStyle = spec.color(t + f); ctx.stroke();
-          ctx.lineWidth = 0.008; ctx.strokeStyle = spec.line; ctx.stroke();
-          if (spec.bolts) { ctx.beginPath(); ctx.arc(x, y, spec.width * 0.4, 0, TAU); ctx.fillStyle = '#5c6470'; ctx.fill(); ctx.strokeStyle = '#4ff7ff'; ctx.stroke(); }
-          if (spec.spikes) { ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(nx + Math.cos(a + 1.2) * 0.06, ny + Math.sin(a + 1.2) * 0.06); ctx.strokeStyle = spec.line; ctx.lineWidth = 0.012; ctx.stroke(); }
-          x = nx; y = ny; a += thumb ? flex * 0.6 : flex * (spec.spikes ? -1 : 1) * 0.5;
-        }
-        if (spec.pads) { ctx.beginPath(); ctx.arc(x, y, spec.width * 0.7, 0, TAU); ctx.fillStyle = spec.line; ctx.fill(); }
+    /* a mão em pixel art: desenhada em tons de cinza numa grade pequena (HX x HY), depois cada pixel vira uma
+       das 5 cores da espécie pelo brilho (preto = contorno e vincos, branco = unhas e luzes) e ganha contorno.
+       Punho em (0,0), dedos para cima; 1 unidade = HK pixels da grade. */
+    const HX = 72, HY = 128, HK = 52, HO = 64;
+    const hc = document.createElement('canvas'), hctx = hc.getContext('2d', { willReadFrequently: true });
+    hc.width = HX; hc.height = HY;
+    const rgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+    const gray = (v) => 'rgb(' + v + ',' + v + ',' + v + ')';
+    const bone = (x0, y0, x1, y1, w, v) => { hctx.beginPath(); hctx.moveTo(x0, y0); hctx.lineTo(x1, y1); hctx.lineWidth = w; hctx.strokeStyle = gray(v); hctx.stroke(); };
+    const renderHand = (spec, t, flip, rot, warp) => {
+      const g = hctx;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, HX, HY);
+      g.setTransform(HK, 0, 0, HK, HX / 2, HO);
+      g.rotate(rot);
+      g.scale(flip, 1);
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      const palm = flip > 0; // a palma virada para quem olha (senão, as costas da mão)
+      // antebraço e punho
+      g.beginPath(); g.moveTo(-0.17, 0); g.lineTo(-0.23, 1.3); g.lineTo(0.23, 1.3); g.lineTo(0.18, 0); g.closePath();
+      g.fillStyle = gray(120); g.fill();
+      g.beginPath(); g.moveTo(-0.12, 0.05); g.lineTo(-0.15, 1.3); g.lineTo(0.06, 1.3); g.lineTo(0.06, 0.05); g.closePath();
+      g.fillStyle = gray(160); g.fill();
+      // palma: eminência do polegar à esquerda, nós dos dedos em arco, lado do mindinho mais reto
+      const palmPath = () => {
+        g.beginPath(); g.moveTo(-0.17, 0.03);
+        g.quadraticCurveTo(-0.29, -0.12, -0.26, -0.3); g.lineTo(-0.23, -0.5);
+        g.quadraticCurveTo(0, -0.6, 0.23, -0.49);
+        g.quadraticCurveTo(0.27, -0.24, 0.18, 0.03); g.closePath();
+      };
+      palmPath(); g.fillStyle = gray(130); g.fill();
+      g.save(); g.translate(-0.03, -0.03); g.scale(0.82, 0.86); palmPath(); g.fillStyle = gray(165); g.fill(); g.restore();
+      g.beginPath(); g.ellipse(-0.14, -0.17, 0.07, 0.11, -0.4, 0, Math.PI * 2); g.fillStyle = gray(200); g.fill(); // o volume do polegar
+      if (palm) { // linhas da mão
+        g.lineWidth = 0.022; g.strokeStyle = '#000';
+        g.beginPath(); g.moveTo(-0.2, -0.42); g.quadraticCurveTo(-0.1, -0.2, -0.13, 0); g.stroke();
+        g.beginPath(); g.moveTo(-0.21, -0.36); g.quadraticCurveTo(0, -0.33, 0.12, -0.24); g.stroke();
+        g.beginPath(); g.moveTo(0.22, -0.4); g.quadraticCurveTo(0.05, -0.44, -0.08, -0.47); g.stroke();
+        g.beginPath(); g.moveTo(-0.15, 0.02); g.lineTo(0.15, 0.02); g.stroke(); // vinco do punho
+      } else { // tendões nas costas da mão
+        g.lineWidth = 0.018; g.strokeStyle = gray(105);
+        [-0.12, -0.03, 0.06, 0.14].forEach((x) => { g.beginPath(); g.moveTo(x * 0.4, -0.02); g.lineTo(x, -0.48); g.stroke(); });
       }
-      ctx.restore();
+      if (spec.bolts) [[-0.1, -0.3], [0.1, -0.3], [0, -0.12]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 0.035, 0, Math.PI * 2); g.fillStyle = '#000'; g.fill(); g.beginPath(); g.arc(x, y, 0.015, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); });
+      // dedos: falanges com volume (sombra, base e luz do lado esquerdo), vincos nas juntas
+      const n = Math.max(1, spec.fingers + (spec.glow ? Math.round(Math.sin(t * 2.3) * 2 * warp) : 0));
+      const fw = 0.4 / n * 0.95 * spec.width;
+      const finger = (x, y, a, lens, w, curl, f) => {
+        lens.forEach((L, j) => {
+          const nx = x + Math.cos(a) * L, ny = y + Math.sin(a) * L, ww = w * (1 - j * 0.1);
+          bone(x, y, nx, ny, ww, 125);
+          bone(x - Math.sin(a) * ww * 0.18, y + Math.cos(a) * ww * 0.18 * -1, nx - Math.sin(a) * ww * 0.18, ny - Math.cos(a) * ww * 0.18, ww * 0.5, 175);
+          if (j) { g.lineWidth = 0.016; g.strokeStyle = palm ? '#000' : gray(95); g.beginPath(); g.moveTo(x + Math.sin(a) * ww * 0.35, y - Math.cos(a) * ww * 0.35); g.lineTo(x - Math.sin(a) * ww * 0.35, y + Math.cos(a) * ww * 0.35); g.stroke(); }
+          if (spec.spikes) { g.beginPath(); g.moveTo(nx, ny); g.lineTo(nx + Math.cos(a + 1.3) * 0.07, ny + Math.sin(a + 1.3) * 0.07); g.lineWidth = 0.03; g.strokeStyle = '#fff'; g.stroke(); }
+          x = nx; y = ny; a += curl[j] || 0;
+        });
+        if (spec.nails && !palm) { g.beginPath(); g.ellipse(x - Math.cos(a) * w * 0.35, y - Math.sin(a) * w * 0.35, w * 0.28, w * 0.36, a + Math.PI / 2, 0, Math.PI * 2); g.fillStyle = gray(245); g.fill(); }
+        if (spec.pads) { g.beginPath(); g.arc(x, y, w * 0.55, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); }
+        if (spec.glow && f % 2) { g.beginPath(); g.arc(x, y, w * 0.3, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); }
+      };
+      for (let f = 0; f < n; f++) {
+        const u = n === 1 ? 0.5 : f / (n - 1);
+        const L = (1 - 0.9 * (u - 0.38) * (u - 0.38)) * 0.43 * spec.len * (1 + warp * 0.7 * Math.sin(t * 1.7 + f));
+        const parts = spec.joints === 3 ? [0.45, 0.32, 0.23] : Array.from({ length: spec.joints }, () => 1 / spec.joints);
+        const wave = Math.max(0, Math.sin(t * 1.3 - f * 0.5));
+        const curl = parts.map((_, j) => (0.04 + 0.16 * wave) * (j + 1) * 0.6 * (spec.spikes ? -1 : 1));
+        finger(-0.19 + 0.4 * u, -0.53 + 0.1 * u * u, -Math.PI / 2 + (u - 0.45) * 0.3 + Math.sin(t * 0.9 + f) * 0.03, parts.map((k) => k * L), fw, curl, f);
+      }
+      // o polegar sai da lateral da palma, com duas falanges
+      finger(-0.21, -0.16, -2.25 + Math.sin(t * 1.1) * 0.08, [0.17, 0.13].map((k) => k * spec.len * (1 + warp * 0.5 * Math.sin(t * 2))), fw * 1.2, [0.25, 0.15], 0);
+      // cinza → as 5 cores da espécie, sem meio-termo, e um contorno de 1 pixel
+      const img = g.getImageData(0, 0, HX, HY), d = img.data, P = spec.pal.map(rgb);
+      const on = new Uint8Array(HX * HY);
+      for (let i = 0; i < HX * HY; i++) {
+        if (d[i * 4 + 3] < 110) { d[i * 4 + 3] = 0; continue; }
+        on[i] = 1;
+        const v = d[i * 4], c = P[v < 50 ? 0 : v < 135 ? 1 : v < 185 ? 2 : v < 230 ? 3 : 4];
+        d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = spec.glow ? 200 : 255;
+      }
+      for (let y = 0; y < HY; y++) for (let x = 0; x < HX; x++) {
+        const i = y * HX + x;
+        if (on[i]) continue;
+        if ((x > 0 && on[i - 1]) || (x < HX - 1 && on[i + 1]) || (y > 0 && on[i - HX]) || (y < HY - 1 && on[i + HX])) {
+          d[i * 4] = P[0][0]; d[i * 4 + 1] = P[0][1]; d[i * 4 + 2] = P[0][2]; d[i * 4 + 3] = 255;
+        }
+      }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.putImageData(img, 0, 0);
+      return hc;
     };
     // os olhos de quem vê: tudo aqui é em pixels do canvas; I = o quanto a visão já se desfez (sobe com o tempo)
     let pixUntil = 0, inv = 0;
-    const lidAt = [0.15, 4.3, 7.4, 9.6];
+    const lidAt = [0.15, 4.3, 6.0, 9.6];
     const see = (t, speed) => {
-      const I = Math.min(1, 0.25 + t / 9 + speed * 0.35);
+      // enquanto a mão sobe e é observada, a visão se acalma; depois piora de vez
+      const calm = ease((t - T_HAND - 0.3) / 0.6) * (1 - ease((t - T_HAND - 2.3) / 0.6));
+      const I = Math.min(1, 0.25 + t / 9 + speed * 0.35) * (1 - 0.75 * calm);
       out.setTransform(1, 0, 0, 1, 0, 0);
       out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1; out.filter = 'none';
       out.fillStyle = '#000'; out.fillRect(0, 0, PW, PH);
@@ -5160,20 +5215,24 @@ const FIREBASE_CONFIG = {
         const rise = ease(ht / 1.6);
         const S = Math.min(W, H) * (W > H ? 0.62 : 0.78);
         const hx = W * (W > H ? 0.62 : 0.56), hy = H + S * 0.5 - rise * S * 1.05;
-        const flip = Math.cos(Math.max(0, ht - 1.4) * 1.3);
-        const warp = Math.min(1, Math.max(0, ht - 1) / 2.5);
+        // primeiro a mão aparece inteira e nítida (palma, depois vira as costas); só então se desfaz
+        const flip = Math.cos(Math.max(0, ht - 1.5) * 1.5);
+        const warp = Math.min(1, Math.max(0, ht - 2.4) / 1.6);
         const spec = Math.random() < warp * 0.12 ? VX_HANDS[vxPick(kinds)] : VX_HANDS[kind]; // pisca outras espécies
+        renderHand(spec, t, Math.abs(flip) < 0.12 ? 0.12 * Math.sign(flip || 1) : flip, -0.12 + Math.sin(ht * 0.9) * 0.08, warp);
         ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        if (spec.glow) { ctx.shadowColor = '#4ff7ff'; ctx.shadowBlur = 16; }
         // ecos: a mesma mão repetida em cores trocadas, cada vez mais longe
         for (let e = Math.round(warp * 3); e >= 0; e--) {
           ctx.save();
           ctx.globalAlpha = e ? 0.35 / e : 1;
           ctx.globalCompositeOperation = e ? 'lighter' : 'source-over';
           ctx.translate(hx + e * S * 0.09 * Math.sin(t * 2 + e), hy - e * S * 0.04);
-          ctx.rotate(-0.15 + Math.sin(ht * 0.9) * 0.12 + e * 0.08);
-          ctx.scale(S, S);
+          ctx.rotate(e * 0.08);
+          ctx.scale(S / HK, S / HK);
           if (e) ctx.filter = 'hue-rotate(' + (e * 90 + t * 60) + 'deg)';
-          drawHand(spec, t, Math.abs(flip) < 0.15 ? 0.15 * Math.sign(flip || 1) : flip, warp);
+          ctx.drawImage(hc, -HX / 2, -HO);
           ctx.restore();
         }
         ctx.restore();
