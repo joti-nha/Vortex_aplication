@@ -4885,12 +4885,19 @@ const FIREBASE_CONFIG = {
     document.body.append(dlg);
     root.classList.add('vx-freeze');
     try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
-    const ctx = cv.getContext('2d');
-    let W = 0, H = 0, F = 0;
+    // a cena é desenhada fora da tela (sc) e passa pelos "olhos" de quem vê antes de aparecer (cv): ondas,
+    // cores que se separam, rastro que se repete para dentro, blocos fora do lugar, piscadas e letras de erro
+    const out = cv.getContext('2d');
+    const sc = document.createElement('canvas'), ctx = sc.getContext('2d');
+    const pv = document.createElement('canvas'), pctx = pv.getContext('2d'); // o quadro anterior, para o rastro
+    const px = document.createElement('canvas'), xctx = px.getContext('2d'); // miniatura para os quadros pixelados
+    let W = 0, H = 0, F = 0, PW = 0, PH = 0;
     const fit = () => {
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
       W = window.innerWidth; H = window.innerHeight;
-      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      PW = cv.width = sc.width = Math.round(W * dpr); PH = cv.height = sc.height = Math.round(H * dpr);
+      pv.width = Math.round(PW / 2); pv.height = Math.round(PH / 2);
+      px.width = Math.max(8, Math.round(W / 14)); px.height = Math.max(8, Math.round(H / 14));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       F = Math.max(W, H) * 0.62; // distância focal: o quanto cabe na tela
     };
@@ -5032,6 +5039,87 @@ const FIREBASE_CONFIG = {
       }
       ctx.restore();
     };
+    // os olhos de quem vê: tudo aqui é em pixels do canvas; I = o quanto a visão já se desfez (sobe com o tempo)
+    let pixUntil = 0, inv = 0;
+    const lidAt = [0.15, 4.3, 7.4, 9.6];
+    const see = (t, speed) => {
+      const I = Math.min(1, 0.25 + t / 9 + speed * 0.35);
+      out.setTransform(1, 0, 0, 1, 0, 0);
+      out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1; out.filter = 'none';
+      out.fillStyle = '#000'; out.fillRect(0, 0, PW, PH);
+      // rastro: o quadro anterior, um pouco maior e girado, repetindo a visão para dentro sem fim
+      out.save();
+      out.globalAlpha = 0.3 + 0.4 * I;
+      out.translate(PW / 2, PH / 2); out.rotate(Math.sin(t * 0.8) * 0.03 * I); out.scale(1.025 + 0.04 * I, 1.025 + 0.04 * I);
+      out.drawImage(pv, -PW / 2, -PH / 2, PW, PH);
+      out.restore();
+      // ondas: a visão escorre de lado, faixa por faixa
+      const sh = Math.max(4, Math.round(PH / 120)), amp = PW * (0.006 + 0.035 * I) * (0.6 + 0.4 * Math.sin(t * 0.9));
+      const burstY = Math.random() < 0.15 * I ? vxR(0, PH) : -1, burstH = vxR(20, 120) * I;
+      out.globalAlpha = 0.9;
+      for (let y = 0; y < PH; y += sh) {
+        let dx = Math.sin(y / PH * 9 + t * 3.1) * amp + Math.sin(y / PH * 31 - t * 7) * amp * 0.25;
+        if (burstY >= 0 && Math.abs(y - burstY) < burstH) dx += PW * 0.08 * (Math.random() - 0.5) * 2;
+        out.drawImage(sc, 0, y, PW, sh, dx, y, PW, sh);
+      }
+      // cores separadas e visão dupla: cópias tingidas que se afastam
+      const d = PW * (0.004 + 0.02 * I) * (1 + Math.sin(t * 2.3));
+      out.globalCompositeOperation = 'screen';
+      out.globalAlpha = 0.25 + 0.3 * I;
+      out.filter = 'hue-rotate(' + Math.round(100 + t * 80) + 'deg)';
+      out.drawImage(sc, d, -d * 0.3);
+      out.filter = 'hue-rotate(' + Math.round(-100 - t * 60) + 'deg)';
+      out.drawImage(sc, -d, d * 0.4);
+      out.filter = 'none';
+      out.globalCompositeOperation = 'source-over'; out.globalAlpha = 1;
+      // blocos fora do lugar (cada um copiado de outro canto da cena)
+      for (let i = Math.floor(I * 9 * Math.random()); i > 0; i--) {
+        const bw = vxR(PW * 0.05, PW * 0.35), bh = vxR(PH * 0.01, PH * 0.08);
+        out.drawImage(sc, vxR(0, PW - bw), vxR(0, PH - bh), bw, bh, vxR(0, PW - bw), vxR(0, PH - bh), bw, bh);
+      }
+      // às vezes a visão vira pixels grossos por alguns quadros
+      if (t > pixUntil && Math.random() < 0.012 * I) pixUntil = t + vxR(0.08, 0.3);
+      if (t < pixUntil) {
+        xctx.imageSmoothingEnabled = true; xctx.drawImage(sc, 0, 0, px.width, px.height);
+        out.imageSmoothingEnabled = false; out.globalAlpha = 0.85; out.drawImage(px, 0, 0, PW, PH);
+        out.imageSmoothingEnabled = true; out.globalAlpha = 1;
+      }
+      // rasgos: linhas finas que cortam a tela
+      for (let i = Math.floor(I * 4 * Math.random()); i > 0; i--) {
+        out.fillStyle = vxPick(['#fff', '#4ff7ff', '#ff4fd8', '#fff04f']);
+        out.fillRect(0, vxR(0, PH), PW, vxR(1, 3));
+      }
+      // letras de erro na própria visão
+      if (Math.random() < 0.35 * I) {
+        out.font = Math.round(vxR(10, 26) * PW / W) + 'px monospace';
+        out.fillStyle = vxPick(['#4ff7ff', '#ff4fd8', '#fff']);
+        out.globalAlpha = vxR(0.4, 0.9);
+        out.fillText(vxPick(VX_BITS) + ' ' + vxPick(['ERRO DE VISÃO', 'olho_0x' + Math.floor(Math.random() * 4096).toString(16), 'SINAL ∅', 'quem vê?', 'retina: NaN', 'você', 'NÃO OLHE']), vxR(0, PW * 0.7), vxR(PH * 0.05, PH));
+        out.globalAlpha = 1;
+      }
+      // cores invertidas num estalo
+      if (inv > 0 || Math.random() < 0.008 * I) {
+        inv = inv > 0 ? inv - 1 : 2;
+        out.globalCompositeOperation = 'difference'; out.fillStyle = '#fff'; out.fillRect(0, 0, PW, PH);
+        out.globalCompositeOperation = 'source-over';
+      }
+      // a borda escura de quem olha, pulsando, e as pálpebras que piscam tortas
+      const vr = Math.max(PW, PH) * (0.62 - 0.12 * I + 0.04 * Math.sin(t * 1.7));
+      const vg = out.createRadialGradient(PW / 2, PH / 2, vr * 0.35, PW / 2, PH / 2, vr);
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(0.75, 'rgba(20,0,30,0.55)'); vg.addColorStop(1, 'rgba(0,0,0,0.95)');
+      out.fillStyle = vg; out.fillRect(0, 0, PW, PH);
+      let lid = 0;
+      lidAt.forEach((a) => { const k = 1 - Math.abs(t - a) / 0.22; if (k > lid) lid = k; });
+      if (lid > 0) {
+        out.fillStyle = '#000';
+        [[0, 1], [PH, -1]].forEach(([y0, s], j) => {
+          out.beginPath(); out.moveTo(0, y0);
+          for (let x = 0; x <= PW; x += PW / 16) out.lineTo(x, y0 + s * (lid * PH * 0.55 * (j ? 0.9 : 1.05) + Math.sin(x / PW * 7 + t * 9) * PH * 0.02 * I));
+          out.lineTo(PW, y0); out.closePath(); out.fill();
+        });
+      }
+      pctx.globalAlpha = 1; pctx.drawImage(cv, 0, 0, pv.width, pv.height);
+    };
     const t0 = performance.now();
     let last = t0, raf = 0;
     const frame = (now) => {
@@ -5095,14 +5183,15 @@ const FIREBASE_CONFIG = {
           for (let b = 0; b < bands; b++) {
             if (Math.random() > warp * 0.6) continue;
             const by = vxR(hy - S * 1.1, H), bh = vxR(4, 18 + warp * 30);
-            try { ctx.drawImage(cv, 0, by * (cv.height / H), cv.width, bh * (cv.height / H), vxR(-40, 40) * warp, by, W, bh); } catch (e) { /* nada */ }
+            try { ctx.drawImage(sc, 0, by * (PH / H), PW, bh * (PH / H), vxR(-40, 40) * warp, by, W, bh); } catch (e) { /* nada */ }
           }
         }
       }
+      see(t, speed);
       // fim: tudo é puxado para um branco e a tela volta
       if (t > T_OUT) {
-        ctx.fillStyle = 'rgba(255,255,255,' + Math.min(1, (t - T_OUT) / (T_END - T_OUT - 0.2)).toFixed(2) + ')';
-        ctx.fillRect(0, 0, W, H);
+        out.fillStyle = 'rgba(255,255,255,' + Math.min(1, (t - T_OUT) / (T_END - T_OUT - 0.2)).toFixed(2) + ')';
+        out.fillRect(0, 0, PW, PH);
       }
       if (t < T_END && dlg.isConnected) { raf = requestAnimationFrame(frame); return; }
       finish();
