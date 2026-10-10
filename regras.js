@@ -84,7 +84,7 @@ const TECNO_ACOES = [
   ['Ativo', 'Ação (ao ativar)', 'Você fabrica o efeito antes: paga o PE na fabricação e trabalha 1 hora por PE. Depois, ativa quando quiser, seguindo as regras do Instantâneo.'],
   ['Reativo', 'Reação', 'Como o Instantâneo, mas em reação a uma ação. Permite usar qualquer efeito que tenha a reação como ação.']
 ];
-// Listas de componentes do Engenheiro: uma por nível (pode repetir uma lista)
+// Listas de componentes do Engenheiro: uma por nível de Tecnomancia (pode repetir uma lista)
 const TECNO_LISTAS = [
   ['Poderes', 'Poderes do banco: os das Habilidades e os criados na Oficina.'],
   ['Equipamento', 'Armas, armaduras, granadas e outros itens.'],
@@ -111,10 +111,10 @@ const TECNO_IMPLEMENTOS = [
   ['Tipo de dano', '+1 PE', 'Troca o dano mágico por um tipo que você tenha de uma fonte conhecida.']
 ];
 const TECNO_TIPOS = [
-  { name: 'Engenheiro', cost: 0, resumo: 'Monta a tecnomancia a partir de listas de componentes, uma por nível.',
+  { name: 'Engenheiro', cost: 0, resumo: 'Monta a tecnomancia a partir de listas de componentes, uma por nível de Tecnomancia.',
     passivas: [
       ['Atributo chave (característica do Engenheiro)', 'Para cada lista, o Engenheiro escolhe se ela usa Precisão ou Essência. Esse é o atributo chave: entra nos testes das operações e define quantos implementos cabem nelas.'],
-      ['Listas', 'A cada nível em Tecnomancia, escolha uma lista de componentes (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos) e o atributo chave dela.'],
+      ['Listas', 'A cada nível de Tecnomancia (cada compra do poder), escolha uma lista de componentes (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos) e o atributo chave dela.'],
       ['Componentes conhecidos', 'Em cada lista, você conhece um número de componentes igual a atributo chave + Operações. Eles servem de base Item ou de implementos especiais.'],
       ['Repetir uma lista', 'Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes conhecidos dela.'],
       ['Limite de implementos', 'Numa operação, o número de implementos é no máximo o atributo chave da lista usada.']
@@ -1071,12 +1071,12 @@ window.VORTEX_REGRAS = {
           ['note', 'Técnico', 'Luta não combina direto com tecnomagia: ela se refere à ação de atacar, e não dá para atacar e conjurar ao mesmo tempo. Para complementar os ataques com tecnomancia, é preciso um poder cuja descrição diga que “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia”.']
         ]],
         ['card', 'Tecnomancia', [
-          ['kv', '', [['Custo', '1 Up point por nível (até 5)'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'um por modo de ação']]],
+          ['kv', '', [['Custo', '1 Up point por nível de Tecnomancia (até 5)'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'um por modo de ação']]],
           ['p', 'A Tecnomancia é o poder dos tecnomantes: com ela você gasta Essência (PE) para criar efeitos com a sua tecnologia, como um disparo de energia, um escudo recarregado ou o efeito de um equipamento que você conhece.'],
           ['p', 'Cada efeito criado se chama **operação**. Você começa com algo simples, como um ataque de toque, e vai somando melhorias (os **implementos**): mais alcance, uma área, mais dano. Cada melhoria custa PE.'],
           ['p', 'Cada nível compra um jeito de usar o poder (o **modo de ação**, como Instantâneo ou Reativo). O seu **tipo de tecnomante** diz de onde vêm os efeitos que você conhece. Cada jogador tem um só tipo.'],
-          ['h3', 'Nível'],
-          ['p', 'Cada nível, incluindo o primeiro, custa 1 Up point e compra **um modo de ação** e **uma lista de componentes**. Um modo não pode ser comprado duas vezes, então o nível máximo é 5. Você mantém **um efeito ativo por modo de ação** que tem.'],
+          ['h3', 'Nível de Tecnomancia'],
+          ['p', 'O **nível de Tecnomancia** é o nível deste poder, e não o nível do personagem: é quantas vezes você comprou a Tecnomancia. Cada nível de Tecnomancia, incluindo o primeiro, custa 1 Up point e compra **um modo de ação** e **uma lista de componentes**. Um modo não pode ser comprado duas vezes, então o nível máximo de Tecnomancia é 5. Você mantém **um efeito ativo por modo de ação** que tem.'],
           ['table', ['Modo', 'Ação', 'Como funciona'], TECNO_ACOES],
           ['h3', 'Operação = base + implementos'],
           ['p', 'Toda operação começa por uma **base**. Depois você soma **implementos**, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o seu **atributo chave**, que vem do seu tipo de tecnomante (o Engenheiro escolhe Precisão ou Essência para cada lista).'],
@@ -1084,7 +1084,7 @@ window.VORTEX_REGRAS = {
           ['note', 'Dano', 'Toda forma de causar dano segue a regra de ataque, com o multiplicador da cadência. Dado de dano ou dano que passa pela Defesa só vem de **dano fixo** ou **dano de efeito** de um componente conhecido, como o Sangramento ou o dano adicional de alguns itens.'],
           ['p', '**Implementos padrão.** Todo tecnomante conhece. Cada um conta 1 no limite e pode ser repetido.'],
           ['table', ['Implemento', 'Custo', 'O que faz'], TECNO_IMPLEMENTOS],
-          ['p', '**Implementos especiais.** São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Você usa numa operação no máximo um número de implementos especiais igual ao seu nível em Tecnomancia.'],
+          ['p', '**Implementos especiais.** São os componentes que você conhece das suas listas: uma propriedade, um mod, o efeito de uma prótese, um poder. Você usa numa operação no máximo um número de implementos especiais igual ao seu nível de Tecnomancia (o nível do poder, não o do personagem).'],
           ['ul', [
             '**Poder:** custa em PE o dobro do custo de uso + o custo em Up points do poder.',
             '**Equipamento, propriedade, mod ou prótese:** custa o PE da raridade (tabela abaixo) + qualquer custo original. Um implemento lendário custa +5 PE.',
@@ -1094,7 +1094,7 @@ window.VORTEX_REGRAS = {
           ['example', 'Com Precisão 2, um ataque a alcance Médio: base Ataque (grátis) + Alcance duas vezes (toque → Curto → Médio) = 2 PE e 2 implementos, o máximo com Precisão 2. Com Precisão 3, ainda caberia uma Área (+2 PE).'],
           ['h3', 'Tipo de tecnomante (um por jogador)'],
           ['p', 'Define de onde vêm os seus componentes.'],
-          ['p', '**Engenheiro.** Característica do Engenheiro: ele escolhe o atributo chave de cada lista, **Precisão ou Essência**. A cada nível, escolha uma lista de componentes e o atributo chave dela. Você conhece um número de componentes da lista igual a atributo chave + Operações, e eles servem de base Item ou de implementos especiais. Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes dela.'],
+          ['p', '**Engenheiro.** Característica do Engenheiro: ele escolhe o atributo chave de cada lista, **Precisão ou Essência**. A cada nível de Tecnomancia, escolha uma lista de componentes e o atributo chave dela. Você conhece um número de componentes da lista igual a atributo chave + Operações, e eles servem de base Item ou de implementos especiais. Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes dela.'],
           ['example', 'O Engenheiro compra Tecnomancia: escolhe a lista Equipamento com Precisão como atributo chave e o modo Instantâneo. Com Precisão 2 e Operações 1, conhece 3 itens (por exemplo, uma armadura, uma arma e uma granada).'],
           ['dl', TECNO_LISTAS],
           ['p', '**Patrocinado e Insano.** Cada um obtém componentes de um jeito diferente. Em breve.']
