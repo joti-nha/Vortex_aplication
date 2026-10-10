@@ -4555,11 +4555,37 @@ const FIREBASE_CONFIG = {
     document.body.append(w);
     setTimeout(() => w.remove(), 3200);
   }
+  /* Última fase (vx-critical): o vórtex vai engolindo o site. A cada batida, um pedaço sorteado da tela
+     (bloco, linha, botão, título, a barra...) gira em espiral até o centro e some, e uma boca negra no meio
+     cresce até a explosão. Ao trocar de tela o que foi engolido volta, mas o vórtex continua comendo. */
+  const VX_PREY = '.block, .row, .prog__card, .item-card, .theme-card, .btn, .chip, h1, h2, h3, p, .topbar, .rail, .hero, img, svg';
+  function vxSwallow() {
+    const all = vxVisible(VX_PREY).filter((el) => !el.closest('.vx-swallow, dialog, .vx-music, .vx-boom, .toast'));
+    if (!all.length) return;
+    const el = vxPick(all);
+    const r = el.getBoundingClientRect();
+    // o centro do buraco fica no meio da tela, um pouco acima (o mesmo do disco que gira ao fundo)
+    el.style.setProperty('--sx', Math.round(window.innerWidth / 2 - (r.left + r.width / 2)) + 'px');
+    el.style.setProperty('--sy', Math.round(window.innerHeight * 0.45 - (r.top + r.height / 2)) + 'px');
+    el.style.setProperty('--rot', Math.round(vxR(280, 900) * (Math.random() < 0.5 ? -1 : 1)) + 'deg');
+    el.style.setProperty('--sd', vxR(2.4, 5).toFixed(2) + 's');
+    el.classList.add('vx-swallow');
+    el.setAttribute('aria-hidden', 'true');
+  }
+  function vxUnswallow() {
+    $$('.vx-swallow').forEach((el) => {
+      el.classList.remove('vx-swallow');
+      el.removeAttribute('aria-hidden');
+      ['--sx', '--sy', '--rot', '--sd'].forEach((p) => el.style.removeProperty(p));
+    });
+  }
   function vortexChaos(on) {
     clearTimeout(vxTimer); clearInterval(vxClock);
     vxTimer = vxClock = null;
     const root = document.documentElement;
     root.style.removeProperty('--vx');
+    root.style.removeProperty('--vxs');
+    vxUnswallow();
     root.classList.remove('vx-hot', 'vx-critical');
     const veil = document.querySelector('.vx-veil');
     if (veil) veil.remove();
@@ -4572,6 +4598,7 @@ const FIREBASE_CONFIG = {
       root.style.setProperty('--vx', L.toFixed(3));
       root.classList.toggle('vx-hot', L >= 0.5);
       root.classList.toggle('vx-critical', L >= 0.85);
+      root.style.setProperty('--vxs', Math.max(0, (L - 0.85) / 0.15).toFixed(3)); // o quanto o buraco já engoliu
       return L;
     };
     level();
@@ -4589,6 +4616,7 @@ const FIREBASE_CONFIG = {
         if (L > 0.2 && Math.random() < 0.3 + L * 0.6) vxScramble(L);
         if (L > 0.4 && Math.random() < L * 0.8) vxTear(L);
         if (L > 0.6 && Math.random() < L * 0.45) vxWhisper();
+        if (L >= 0.85 && Math.random() < 0.35 + (L - 0.85) * 4) vxSwallow();
       }
       vxTimer = setTimeout(tick, 1700 - 1300 * L + Math.random() * 400);
     };
@@ -4827,13 +4855,279 @@ const FIREBASE_CONFIG = {
       }, 1500);
     }, vxR(2200, 4000));
   }
+  /* A visão do vórtex: na primeira vez que o instável chega ao fim (uma vez por pessoa, neste aparelho), no lugar
+     da explosão a tela trava e vira uma cena em primeira pessoa. Você está olhando para o vórtex, vira para trás e vê o sistema solar dele, 10 planetas de tamanhos
+     e distâncias diferentes, cada um bagunçado de um jeito (repetido para dentro sem fim, fatiado, do avesso,
+     derretendo, feito de planetinhas, com anéis impossíveis). Então quem está olhando levanta a mão para
+     observá-la, de uma espécie sorteada (humana, máquina, alienígena, quitina ou energia), e ela também se
+     desfaz. Tudo vira branco e o site volta ao tema normal. Desenhado num canvas, sem arquivos; dura uns 11 segundos. */
+  var VXCINE_KEY = 'vortex.vxcine.v1';
+  function vxCineFirst() { // true só na primeira vez (e marca como vista)
+    try { if (localStorage.getItem(VXCINE_KEY)) return false; localStorage.setItem(VXCINE_KEY, String(Date.now())); } catch (e) { /* sem memória: toca */ }
+    return true;
+  }
+  const VX_HANDS = {
+    humana: { fingers: 5, joints: 3, len: 1, width: 0.075, color: (t) => 'hsl(' + (22 + Math.sin(t) * 6) + ',48%,62%)', line: 'hsl(18,40%,38%)' },
+    maquina: { fingers: 5, joints: 3, len: 1.05, width: 0.07, color: () => '#8d96a3', line: '#4ff7ff', bolts: true, square: true },
+    alienigena: { fingers: 4, joints: 4, len: 1.55, width: 0.05, color: (t) => 'hsla(' + (140 + Math.sin(t * 2) * 30) + ',65%,45%,0.85)', line: '#d6ff4f', pads: true },
+    quitina: { fingers: 3, joints: 2, len: 1.2, width: 0.09, color: () => 'hsl(285,30%,18%)', line: '#ff4fd8', spikes: true, square: true },
+    energia: { fingers: 6, joints: 3, len: 1.15, width: 0.06, color: () => 'rgba(79,247,255,0.12)', line: '#fff', glow: true },
+  };
+  function vxCine(done) {
+    const root = document.documentElement;
+    vxFrozen = true;
+    const dlg = h('dialog', 'vx-cine');
+    dlg.setAttribute('aria-label', 'Vórtex: você olha para trás');
+    dlg.addEventListener('cancel', (ev) => ev.preventDefault()); // nem o Esc tira
+    const cv = document.createElement('canvas');
+    cv.setAttribute('aria-hidden', 'true');
+    dlg.append(cv);
+    document.body.append(dlg);
+    root.classList.add('vx-freeze');
+    try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
+    const ctx = cv.getContext('2d');
+    let W = 0, H = 0, F = 0;
+    const fit = () => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      F = Math.max(W, H) * 0.62; // distância focal: o quanto cabe na tela
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    const TAU = Math.PI * 2;
+    // céu: estrelas espalhadas em volta (ângulo horizontal e altura)
+    const stars = Array.from({ length: 260 }, () => ({ az: Math.random() * TAU, el: vxR(-0.9, 0.9), s: vxR(0.4, 1.8), hue: vxPick([190, 300, 55, 260, 0]) }));
+    // os 10 planetas: atrás de quem olha (az ≈ π), ao longo de uma eclíptica torta, cada um numa distância
+    const MODES = ['eco', 'fatias', 'avesso', 'derrete', 'aneis', 'enxame', 'poligono'];
+    const order = Array.from({ length: 10 }, (_, i) => i).sort(() => Math.random() - 0.5);
+    const planets = order.map((k, i) => {
+      const dist = 1.2 + k * vxR(0.5, 1.1) + vxR(0, 0.6);
+      const off = ((i - 4.5) * 0.14 + vxR(-0.04, 0.04)) * Math.min(1, 0.25 + W / H * 0.75); // na tela em pé, mais juntos para caberem os 10
+      const m1 = vxPick(MODES);
+      let m2 = vxPick(MODES);
+      if (m2 === m1) m2 = null;
+      return { az: Math.PI + off, el: off * -0.35 + vxR(-0.12, 0.12), dist, size: vxR(0.06, 0.32), hue: Math.random() * 360, spin: vxR(-2, 2),
+        wob: vxR(0.6, 2.4), ph: Math.random() * TAU, modes: [m1, m2], sides: 3 + Math.floor(Math.random() * 5) };
+    }).sort((a, b) => b.dist - a.dist); // os de longe primeiro
+    const kinds = Object.keys(VX_HANDS);
+    const kind = vxPick(kinds);
+    const T_TURN0 = 1.4, T_TURN1 = 3.6, T_HAND = 6.2, T_OUT = 10.6, T_END = 11.4;
+    const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+    const proj = (az, el, yaw) => {
+      let d = az - yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      if (Math.abs(d) > 1.25) return null;
+      return { x: W / 2 + Math.tan(d) * F, y: H / 2 - Math.tan(el) * F };
+    };
+    const blob = (x, y, r, wob, t, sides) => { // contorno torto: círculo, polígono ou gosma
+      ctx.beginPath();
+      const n = sides ? sides : 28;
+      for (let i = 0; i <= n; i++) {
+        const a = TAU * i / n + t * 0.3;
+        const rr = r * (1 + (sides ? 0 : 0.12 * wob * Math.sin(a * 3 + t * wob) + 0.06 * Math.sin(a * 7 - t * 2)));
+        i ? ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      }
+      ctx.closePath();
+    };
+    const fillBody = (x, y, r, hue, inv) => {
+      const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.05, x, y, r);
+      if (inv) { g.addColorStop(0, '#000'); g.addColorStop(0.82, '#000'); g.addColorStop(1, 'hsl(' + hue + ',100%,70%)'); }
+      else { g.addColorStop(0, 'hsl(' + hue + ',90%,72%)'); g.addColorStop(0.6, 'hsl(' + ((hue + 60) % 360) + ',70%,40%)'); g.addColorStop(1, 'hsl(' + ((hue + 140) % 360) + ',80%,12%)'); }
+      ctx.fillStyle = g;
+      ctx.fill();
+    };
+    const drawPlanet = (p, x, y, r, t) => {
+      const hue = (p.hue + t * 40 * p.spin) % 360;
+      const has = (m) => p.modes.indexOf(m) >= 0;
+      const sides = has('poligono') ? p.sides + Math.round(Math.sin(t * 1.3 + p.ph) * 1.4) : 0;
+      if (has('fatias')) { // fatiado: faixas do planeta deslizando para os lados
+        const bands = 6, bh = (r * 2.4) / bands;
+        for (let b = 0; b < bands; b++) {
+          ctx.save();
+          ctx.beginPath(); ctx.rect(x - r * 3, y - r * 1.2 + b * bh, r * 6, bh); ctx.clip();
+          const dx = Math.sin(t * 3 + b * 1.7 + p.ph) * r * 0.7;
+          blob(x + dx, y, r, p.wob, t, sides); fillBody(x + dx, y, r, (hue + b * 25) % 360, has('avesso'));
+          ctx.restore();
+        }
+      } else { blob(x, y, r, has('derrete') ? p.wob * 2.4 : p.wob * 0.4, t, sides); fillBody(x, y, r, hue, has('avesso')); }
+      if (has('avesso')) { // do avesso: estrelas dentro do planeta
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 9; i++) { const a = p.ph + i * 2.4 + t * 0.5, rr = r * 0.7 * ((i * 0.37) % 1); ctx.fillRect(x + Math.cos(a) * rr, y + Math.sin(a) * rr, 1.5, 1.5); }
+      }
+      if (has('derrete')) { // pinga para cima e para baixo ao mesmo tempo
+        ctx.fillStyle = 'hsl(' + hue + ',80%,55%)';
+        for (let i = 0; i < 4; i++) { const dx = (i - 1.5) * r * 0.4, len = r * (0.4 + 0.5 * Math.abs(Math.sin(t * 1.5 + i))); ctx.fillRect(x + dx - r * 0.06, y + (i % 2 ? r * 0.7 : -r * 0.7 - len), r * 0.12, len); }
+      }
+      if (has('eco')) { // repetido para dentro, sem fim
+        for (let k = 1; k < 7; k++) {
+          const rk = r * Math.pow(0.62, k), a = t * (k % 2 ? 1 : -1) * 0.8 + k;
+          const xk = x + Math.cos(a) * (r - rk) * 0.5, yk = y + Math.sin(a) * (r - rk) * 0.5;
+          blob(xk, yk, rk, p.wob, t + k, sides); fillBody(xk, yk, rk, (hue + k * 50) % 360, k % 2 === 1);
+        }
+      }
+      if (has('enxame')) { // feito de planetinhas orbitando o próprio buraco
+        for (let k = 0; k < 10; k++) {
+          const a = t * (1 + k * 0.15) + k * 0.63, rr = r * (1.1 + 0.25 * Math.sin(t + k));
+          ctx.beginPath(); ctx.arc(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.6, r * 0.14, 0, TAU);
+          ctx.fillStyle = 'hsl(' + ((hue + k * 36) % 360) + ',90%,60%)'; ctx.fill();
+        }
+      }
+      if (has('aneis')) { // anéis que se cruzam em ângulos impossíveis
+        ctx.lineWidth = Math.max(1, r * 0.06);
+        for (let k = 0; k < 3; k++) {
+          ctx.beginPath(); ctx.ellipse(x, y, r * (1.5 + k * 0.3), r * 0.3, t * (0.4 + k * 0.5) + k, 0, TAU);
+          ctx.strokeStyle = 'hsla(' + ((hue + 120 + k * 60) % 360) + ',100%,70%,0.8)'; ctx.stroke();
+        }
+      }
+    };
+    const drawVortex = (x, y, r, t) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(t * 2.2);
+      const cols = ['#ff4fd8', '#4ff7ff', '#fff04f', '#784fff'];
+      for (let i = 12; i >= 0; i--) {
+        ctx.beginPath(); ctx.ellipse(0, 0, r * (0.25 + i * 0.12), r * (0.18 + i * 0.1), i * 0.4, 0, TAU);
+        ctx.strokeStyle = cols[i % 4]; ctx.globalAlpha = 0.7 - i * 0.04; ctx.lineWidth = Math.max(1, r * 0.04); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.24, 0, TAU); ctx.fillStyle = '#000'; ctx.fill();
+      ctx.lineWidth = Math.max(1.5, r * 0.02); ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.restore();
+    };
+    // a mão: punho em (0,0), dedos para cima; unidade = tamanho da mão
+    const drawHand = (spec, t, flip, warp) => {
+      const n = spec.fingers + (spec === VX_HANDS.energia ? Math.round(Math.sin(t * 2.3) * 2) : 0);
+      ctx.save();
+      ctx.scale(flip, 1);
+      if (spec.glow) { ctx.shadowColor = '#4ff7ff'; ctx.shadowBlur = 18; }
+      // antebraço até fora da tela
+      ctx.beginPath();
+      ctx.moveTo(-0.2, 0); ctx.lineTo(-0.26, 2.2); ctx.lineTo(0.26, 2.2); ctx.lineTo(0.2, 0); ctx.closePath();
+      ctx.fillStyle = spec.color(t); ctx.fill();
+      ctx.lineWidth = 0.012; ctx.strokeStyle = spec.line; ctx.stroke();
+      // palma
+      ctx.beginPath(); ctx.ellipse(0, -0.3, 0.27, 0.33, 0, 0, TAU);
+      ctx.fillStyle = spec.color(t); ctx.fill(); ctx.stroke();
+      if (spec.bolts) { ctx.fillStyle = '#4ff7ff'; [[-0.12, -0.2], [0.12, -0.2], [0, -0.42]].forEach(([bx, by]) => { ctx.beginPath(); ctx.arc(bx, by, 0.022, 0, TAU); ctx.fill(); }); }
+      // dedos: cada um uma corrente de juntas que dobra
+      const fingers = Math.max(2, n);
+      for (let f = 0; f < fingers; f++) {
+        const thumb = f === 0 && fingers > 2;
+        const u = fingers === 1 ? 0.5 : (thumb ? 0 : (f - 1) / Math.max(1, fingers - 2));
+        let x = thumb ? -0.24 : -0.2 + u * 0.4, y = thumb ? -0.22 : -0.58 + Math.abs(u - 0.5) * 0.12;
+        let a = thumb ? -2.3 : -Math.PI / 2 + (u - 0.5) * 0.55;
+        const segLen = (thumb ? 0.13 : 0.17 - Math.abs(u - 0.5) * 0.06) * spec.len * (1 + warp * 0.6 * Math.sin(t * 1.7 + f));
+        const flex = 0.18 + 0.3 * Math.max(0, Math.sin(t * 1.4 + f * 0.6));
+        for (let j = 0; j < spec.joints; j++) {
+          const nx = x + Math.cos(a) * segLen, ny = y + Math.sin(a) * segLen;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny);
+          ctx.lineCap = spec.square ? 'butt' : 'round';
+          ctx.lineWidth = spec.width * (1 - j * 0.12); ctx.strokeStyle = spec.color(t + f); ctx.stroke();
+          ctx.lineWidth = 0.008; ctx.strokeStyle = spec.line; ctx.stroke();
+          if (spec.bolts) { ctx.beginPath(); ctx.arc(x, y, spec.width * 0.4, 0, TAU); ctx.fillStyle = '#5c6470'; ctx.fill(); ctx.strokeStyle = '#4ff7ff'; ctx.stroke(); }
+          if (spec.spikes) { ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(nx + Math.cos(a + 1.2) * 0.06, ny + Math.sin(a + 1.2) * 0.06); ctx.strokeStyle = spec.line; ctx.lineWidth = 0.012; ctx.stroke(); }
+          x = nx; y = ny; a += thumb ? flex * 0.6 : flex * (spec.spikes ? -1 : 1) * 0.5;
+        }
+        if (spec.pads) { ctx.beginPath(); ctx.arc(x, y, spec.width * 0.7, 0, TAU); ctx.fillStyle = spec.line; ctx.fill(); }
+      }
+      ctx.restore();
+    };
+    const t0 = performance.now();
+    let last = t0, raf = 0;
+    const frame = (now) => {
+      const t = (now - t0) / 1000;
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      // virar para trás: o ângulo de 0 a π com um tranco; a câmera inclina no meio da virada
+      const turn = ease((t - T_TURN0) / (T_TURN1 - T_TURN0));
+      const speed = Math.sin(turn * Math.PI);
+      const yaw = turn * Math.PI + Math.sin(t * 0.7) * 0.03;
+      ctx.save();
+      ctx.fillStyle = 'rgba(2,0,8,' + (1 - speed * 0.75).toFixed(2) + ')'; // rastro quando gira rápido
+      ctx.fillRect(0, 0, W, H);
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(speed * 0.35 + Math.sin(t * 1.3) * 0.02);
+      ctx.translate(-W / 2, -H / 2 + Math.sin(t * 2.1) * 4); // a respiração de quem olha
+      stars.forEach((s) => {
+        const p = proj(s.az, s.el, yaw);
+        if (!p) return;
+        ctx.fillStyle = 'hsl(' + s.hue + ',90%,' + (70 + Math.sin(t * 5 + s.az * 9) * 25) + '%)';
+        ctx.fillRect(p.x, p.y, s.s + speed * 30, s.s);
+      });
+      const vp = proj(0, 0.02, yaw);
+      if (vp) drawVortex(vp.x, vp.y, F * 0.5, t);
+      const chaos = Math.max(0, t - T_TURN1 + 1);
+      planets.forEach((p) => {
+        const az = p.az + Math.sin(t * 0.6 * p.spin + p.ph) * 0.04 * chaos * 0.4;
+        const pp = proj(az, p.el + Math.cos(t * 0.5 + p.ph) * 0.02 * chaos * 0.4, yaw);
+        if (!pp) return;
+        const r = F * p.size / p.dist * (1 + 0.08 * Math.sin(t * p.wob + p.ph));
+        if (r < 0.8) return;
+        drawPlanet(p, pp.x, pp.y, r, t);
+      });
+      ctx.restore();
+      // a mão sobe de baixo, vira para ser observada e se desfaz
+      if (t > T_HAND) {
+        const ht = t - T_HAND;
+        const rise = ease(ht / 1.6);
+        const S = Math.min(W, H) * (W > H ? 0.62 : 0.78);
+        const hx = W * (W > H ? 0.62 : 0.56), hy = H + S * 0.5 - rise * S * 1.05;
+        const flip = Math.cos(Math.max(0, ht - 1.4) * 1.3);
+        const warp = Math.min(1, Math.max(0, ht - 1) / 2.5);
+        const spec = Math.random() < warp * 0.12 ? VX_HANDS[vxPick(kinds)] : VX_HANDS[kind]; // pisca outras espécies
+        ctx.save();
+        // ecos: a mesma mão repetida em cores trocadas, cada vez mais longe
+        for (let e = Math.round(warp * 3); e >= 0; e--) {
+          ctx.save();
+          ctx.globalAlpha = e ? 0.35 / e : 1;
+          ctx.globalCompositeOperation = e ? 'lighter' : 'source-over';
+          ctx.translate(hx + e * S * 0.09 * Math.sin(t * 2 + e), hy - e * S * 0.04);
+          ctx.rotate(-0.15 + Math.sin(ht * 0.9) * 0.12 + e * 0.08);
+          ctx.scale(S, S);
+          if (e) ctx.filter = 'hue-rotate(' + (e * 90 + t * 60) + 'deg)';
+          drawHand(spec, t, Math.abs(flip) < 0.15 ? 0.15 * Math.sign(flip || 1) : flip, warp);
+          ctx.restore();
+        }
+        ctx.restore();
+        // a mão fatiada: faixas da tela deslizam para os lados
+        if (warp > 0.2) {
+          const bands = 3 + Math.floor(warp * 6);
+          for (let b = 0; b < bands; b++) {
+            if (Math.random() > warp * 0.6) continue;
+            const by = vxR(hy - S * 1.1, H), bh = vxR(4, 18 + warp * 30);
+            try { ctx.drawImage(cv, 0, by * (cv.height / H), cv.width, bh * (cv.height / H), vxR(-40, 40) * warp, by, W, bh); } catch (e) { /* nada */ }
+          }
+        }
+      }
+      // fim: tudo é puxado para um branco e a tela volta
+      if (t > T_OUT) {
+        ctx.fillStyle = 'rgba(255,255,255,' + Math.min(1, (t - T_OUT) / (T_END - T_OUT - 0.2)).toFixed(2) + ')';
+        ctx.fillRect(0, 0, W, H);
+      }
+      if (t < T_END && dlg.isConnected) { raf = requestAnimationFrame(frame); return; }
+      finish();
+    };
+    const finish = () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', fit);
+      root.classList.remove('vx-freeze');
+      vxFrozen = false;
+      done(); // o site já volta ao normal por baixo do branco, que some devagar
+      dlg.classList.add('is-out');
+      setTimeout(() => { if (dlg.open) dlg.close(); dlg.remove(); }, 600);
+    };
+    setTimeout(() => playThemeSound('vortice'), T_TURN0 * 1000);
+    setTimeout(() => playThemeSound('boom'), T_OUT * 1000);
+    raf = requestAnimationFrame(frame);
+  }
   function vortexExplode() {
-    if (document.querySelector('.vx-boom')) return;
+    if (document.querySelector('.vx-boom, .vx-cine')) return;
     clearTimeout(vxTimer); clearInterval(vxClock);
     saveVx();
     vxMusStop(true); // a trilha corta seco na explosão
+    if (vxCineFirst()) { vxCine(() => vxAfterBoom(null)); return; } // na primeira vez, a visão no lugar da explosão
     playThemeSound('boom');
-    const flying = vxVisible('.block, .row, .prog__card, .theme-card, .btn, h1, h2, .topbar, .rail').slice(0, 80);
+    const flying = vxVisible('.block, .row, .prog__card, .theme-card, .btn, h1, h2, .topbar, .rail').filter((el) => !el.closest('.vx-swallow')).slice(0, 80);
     flying.forEach((el) => {
       el.style.setProperty('--dx', Math.round(vxR(-120, 120)) + 'vw');
       el.style.setProperty('--dy', Math.round(vxR(-90, 120)) + 'vh');
@@ -4846,14 +5140,17 @@ const FIREBASE_CONFIG = {
     document.body.append(boom);
     setTimeout(() => {
       flying.forEach((el) => { el.classList.remove('vx-fly'); ['--dx', '--dy', '--rot', '--d'].forEach((p) => el.style.removeProperty(p)); });
-      vxState.t = 0; vxState.exploded = true; vxState.stable = false;
-      saveVx();
-      applyTheme('');
-      boom.classList.add('is-out');
-      setTimeout(() => boom.remove(), 900);
-      if (document.getElementById('theme-list')) renderThemes();
-      toast('O site explodiu e voltou ao tema normal. Agora o Vórtex ∞ também tem uma versão estável.');
+      vxAfterBoom(boom);
     }, 2600);
+  }
+  // depois da explosão (ou da visão): zera o relógio e volta ao tema normal
+  function vxAfterBoom(boom) {
+    vxState.t = 0; vxState.exploded = true; vxState.stable = false;
+    saveVx();
+    applyTheme('');
+    if (boom) { boom.classList.add('is-out'); setTimeout(() => boom.remove(), 900); }
+    if (document.getElementById('theme-list')) renderThemes();
+    toast('O site explodiu e voltou ao tema normal. Agora o Vórtex ∞ também tem uma versão estável.');
   }
   // depois da primeira explosão, cada vez que o tema é escolhido: estável ou instável? (false = desistiu)
   async function chooseVortex() {

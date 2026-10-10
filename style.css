@@ -3809,6 +3809,23 @@ html, body { max-width: 100%; overflow-x: clip; }
 @keyframes vx-scare-shake { 50% { translate: 6px -4px; } }
 .vx-scare__swirl { transform-origin: 0 0; animation: vx-spin 0.8s linear infinite !important; animation-play-state: running !important; }
 .vx-scare.is-out { opacity: 0; transition: opacity 0.5s !important; }
+/* última fase: os pedaços do site giram em espiral até o centro do buraco e somem; o disco cresce e uma boca negra se abre */
+.vx-swallow { pointer-events: none; transform-origin: center; animation: vx-swallow var(--sd, 3s) cubic-bezier(0.55, 0, 0.9, 0.5) forwards !important; }
+@keyframes vx-swallow {
+  0% { transform: none; }
+  15% { transform: translate(calc(var(--sy) * 0.08), calc(var(--sx) * -0.08)) rotate(calc(var(--rot) * 0.05)) skewX(6deg); filter: drop-shadow(3px 0 #4ff7ff) drop-shadow(-3px 0 #ff4fd8); }
+  55% { transform: translate(calc(var(--sx) * 0.45 + var(--sy) * 0.3), calc(var(--sy) * 0.45 - var(--sx) * 0.3)) rotate(calc(var(--rot) * 0.4)) scale(0.6) skewX(-14deg); opacity: 0.9; }
+  100% { transform: translate(var(--sx), var(--sy)) rotate(var(--rot)) scale(0.02); opacity: 0; filter: blur(3px) brightness(3); }
+}
+:root.vx-critical[data-theme="vortice"] body::before { scale: calc(1 + var(--vxs, 0) * 0.9); }
+:root.vx-critical[data-theme="vortice"] .vx-veil::after { content: ""; position: fixed; left: 50%; top: 45%; width: calc(var(--vxs, 0) * 150vmax); aspect-ratio: 1; translate: -50% -50%; border-radius: 50%;
+  background: radial-gradient(circle, #000 0 32%, rgba(0, 0, 0, 0.85) 40%, rgba(255, 79, 216, 0.35) 46%, rgba(79, 247, 255, 0.15) 52%, transparent 66%); }
+/* a visão do vórtex (canvas em tela cheia) */
+.vx-cine { position: fixed; inset: 0; width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; background: #020008; outline: none; cursor: none; animation: vx-cine-in 0.5s steps(3) !important; animation-play-state: running !important; }
+.vx-cine::backdrop { background: #000; }
+.vx-cine canvas { display: block; width: 100%; height: 100%; }
+@keyframes vx-cine-in { 0% { background: #fff; } 40% { background: #ff4fd8; } }
+.vx-cine.is-out { opacity: 0; transition: opacity 0.6s !important; }
 
 /* Nyan Cat: o gato atravessa a tela de direções sorteadas (o JS move o .nyan-fly; não pega toques), com o rastro em degraus */
 :root[data-theme="nyan"] body::after { display: none; }
