@@ -3455,7 +3455,10 @@ const FIREBASE_CONFIG = {
     const grid = $('#item-category-grid');
     grid.replaceChildren();
     let lastGroup = null;
-    ITEM_DATA.categories.forEach((c) => {
+    // munição não se cria na Oficina (só a do banco oficial); no lugar dela, no grupo Armas, entram os acessórios
+    const acc = findCategory('acessorio');
+    const cats = ITEM_DATA.categories.filter((c) => c.id !== 'acessorio').map((c) => (c.id === 'municao' ? Object.assign({}, acc, { group: c.group }) : c));
+    cats.forEach((c) => {
       if (c.group !== lastGroup) { grid.append(h('p', 'item-grid__group', c.group)); lastGroup = c.group; }
       grid.append(itemCard(c.title, c.hint, () => openCategory(c.id)));
     });
