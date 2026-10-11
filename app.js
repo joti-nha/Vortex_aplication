@@ -2177,13 +2177,13 @@ const FIREBASE_CONFIG = {
 
   /* =====================================================================
      7. TELAS: navegação por endereço
-        #/home  #/novo  #/personagens  #/campanhas  #/itens
+        #/home  #/novo  #/personagens  #/bestiario  #/campanhas  #/itens
         #/character/ID  #/campaign/ID  #/rules/TÓPICO
      ===================================================================== */
   const views = {};
   let onLeave = null; // cada tela pode registrar uma limpeza (ex.: parar de ouvir os dados)
   let lastCharacterId = null;
-  const NAV_FOR = { home: 'home', personagens: 'personagens', campanhas: 'campanhas', itens: 'itens', rules: 'rules' };
+  const NAV_FOR = { home: 'home', personagens: 'personagens', bestiario: 'personagens', campanhas: 'campanhas', itens: 'itens', rules: 'rules' };
 
   function go(name, param) {
     const next = '#/' + name + (param ? '/' + encodeURIComponent(param) : '');
@@ -3904,6 +3904,7 @@ const FIREBASE_CONFIG = {
     ev.preventDefault();
     const d = itemState.draft;
     const cat = d ? findCategory(d.kind) : null;
+    if (itemState.host) { closeHostedForm(); return; }
     if (cat && cat.types && !d.id) setItemStep('tipo'); else setItemStep('categoria');
   });
   $$('.item-steps__step').forEach((b) => b.addEventListener('click', () => {
@@ -3911,7 +3912,28 @@ const FIREBASE_CONFIG = {
     if (b.dataset.itemStep === 'tipo' && itemState.draft && !itemState.draft.id) { openCategory(itemState.draft.kind); return; }
     setItemStep('categoria');
   }));
-  $('#item-reset').addEventListener('click', () => { itemState.draft = null; setItemStep('categoria'); });
+  $('#item-reset').addEventListener('click', () => { if (itemState.host) { closeHostedForm(); return; } itemState.draft = null; setItemStep('categoria'); });
+
+  /* O formulário da Oficina também abre dentro de outra tela (o Bestiário cria e edita criaturas sem sair dele):
+     o mesmo painel muda de lugar e volta para a Oficina ao fechar. */
+  function openHostedForm(slot, kind, from, after) {
+    const panel = $('#item-panel-form');
+    itemState.host = { slot, after: after || null };
+    slot.append(panel);
+    openForm(kind, from ? from.typeId : '', from);
+    if (kind === 'npc') $('#item-form-title').textContent = from && from.id ? 'Editar: ' + from.name : 'Nova criatura';
+    $('#item-back-tipo').textContent = 'Fechar';
+  }
+  function closeHostedForm(saved) {
+    const host = itemState.host;
+    if (!host) return;
+    itemState.host = null;
+    itemState.draft = null;
+    setItemStep('categoria');
+    $('#item-back-tipo').textContent = 'Voltar';
+    $('#item-panel-tipo').after($('#item-panel-form'));
+    if (host.after && saved) host.after(saved); // fechar sem salvar não precisa refazer a lista
+  }
 
   $('#form-item').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -3944,7 +3966,8 @@ const FIREBASE_CONFIG = {
     try {
       await db.saveLibrary(entry);
       const notItem = NON_ITEM_KINDS.indexOf(cat.id) >= 0;
-      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.') + (notItem ? ' Aparece em Personagens, no catálogo.' : ''));
+      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.') + (cat.id === 'npc' ? ' Aparece no Bestiário.' : notItem ? ' Aparece em Personagens, no catálogo.' : ''));
+      if (itemState.host) { closeHostedForm(entry); return; }
       itemState.draft = null;
       setItemStep('categoria');
       await runLib();
@@ -6026,6 +6049,7 @@ const FIREBASE_CONFIG = {
   }
 
   views.itens = async function showItens() {
+    if (itemState.host) { itemState.host = null; $('#item-back-tipo').textContent = 'Voltar'; $('#item-panel-tipo').after($('#item-panel-form')); } // o rascunho continua aqui
     renderCategoryGrid();
     setItemStep(itemState.draft && itemState.step === 'form' ? 'form' : 'categoria');
     await runLib();
@@ -12877,55 +12901,83 @@ const FIREBASE_CONFIG = {
     if (seq !== gmlibSeq) return;
     let list = r.list;
     suggestAfter($('#gmlib-mag'), r.suggest, $('#beast-q'), runBeast);
-    const cats = Array.from(new Set(list.map((e) => (e.values && e.values.categoria) || 'Comum')));
-    if (gmlibCat && cats.indexOf(gmlibCat) < 0) gmlibCat = '';
-    $('#gmlib-cats').replaceChildren(...(cats.length > 1 ? [''].concat(cats) : []).map((c) => {
-      const b = h('button', 'check--pill mag__chip' + (gmlibCat === c ? ' is-on' : ''), c || 'Todas');
-      b.type = 'button';
-      b.setAttribute('aria-pressed', String(gmlibCat === c));
-      if (c) b.style.setProperty('--cat', NPC_CAT_COLOR[c] || 'var(--ambar)');
-      b.addEventListener('click', () => { gmlibCat = c; runBeast(); });
-      return b;
-    }));
-    if (gmlibCat) list = list.filter((e) => ((e.values && e.values.categoria) || 'Comum') === gmlibCat);
+    gmlibCat = beastCats($('#gmlib-cats'), list, gmlibCat, (c) => { gmlibCat = c; runBeast(); });
+    if (gmlibCat) list = list.filter((e) => npcCat(e) === gmlibCat);
     list = beastFacets.apply(list, kinds);
-    $('#gmlib-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map(magPage));
+    $('#gmlib-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => magPage(e, 'camp')));
     $('#beast-hint').textContent = r.warn || (!list.length ? 'Nenhuma criatura encontrada.' : plural(list.length, 'criatura', 'criaturas') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.');
   }
-  // uma página da revista: capa, categoria, camadas, atributos, ataque, saque e quantas vezes já caiu
-  function magPage(e) {
+  // categoria da criatura (Comum, Maior, Chefão) e os chips coloridos que filtram por ela
+  const npcCat = (e) => (e.values && e.values.categoria) || 'Comum';
+  function beastCats(box, list, cur, pick) {
+    const known = Object.keys(NPC_CAT_COLOR);
+    const rank = (c) => (known.indexOf(c) < 0 ? 99 : known.indexOf(c));
+    const cats = Array.from(new Set(list.map(npcCat))).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, 'pt-BR'));
+    const on = cur && cats.indexOf(cur) >= 0 ? cur : '';
+    box.replaceChildren(...(cats.length > 1 ? [''].concat(cats) : []).map((c) => {
+      const b = h('button', 'check--pill mag__chip' + (on === c ? ' is-on' : ''), c || 'Todas');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(on === c));
+      if (c) b.style.setProperty('--cat', NPC_CAT_COLOR[c] || 'var(--ambar)');
+      b.addEventListener('click', () => pick(c));
+      return b;
+    }));
+    return on;
+  }
+  // uma página da revista: capa, categoria, camadas, atributos, ataque, saque e quantas vezes já caiu.
+  // where: 'camp' (aba do mestre: pôr na arena) ou 'lib' (tela Bestiário: favoritar, editar, usar de base)
+  function magPage(e, where) {
     const v = e.values || {};
-    const cat = v.categoria || 'Comum';
+    const cat = npcCat(e);
+    const camp = where === 'camp';
     const cover = h('div', 'mag__cover');
     const pic = e.image || e.thumb;
     if (pic) { const img = h('img'); img.src = pic; img.alt = ''; img.loading = 'lazy'; cover.append(img); }
     else cover.append(h('span', 'mag__mono', (e.name || '?').trim().charAt(0).toUpperCase()));
-    cover.append(h('span', 'mag__cat', cat), num(v.up) ? h('span', 'mag__up', 'UP ' + num(v.up)) : null);
+    cover.append(h('span', 'mag__cat', cat), ...(num(v.up) ? [h('span', 'mag__up', 'UP ' + num(v.up))] : [])); // append nativo escreveria "null"
     const pill = (k, n) => h('span', 'mag__pill mag__pill--' + k, h('b', '', String(n)), ' ' + ({ pv: 'PV', escudo: 'Escudo', blindagem: 'Blind.', def: 'Defesa' })[k]);
     const layers = ['escudo', 'blindagem', 'pv'].filter((k) => num(v[k])).map((k) => pill(k, num(v[k])));
     layers.push(pill('def', num(v.armadura || ARMOR_BASE) + num(v.corpo) + num(v.resistencia)));
     const stat = (k, label) => h('span', 'mag__stat', h('small', '', label), h('b', '', signed(num(v[k]))));
     const atk = [v.ataque, v.arma, v.dano, num(v.cadencia) > 1 ? num(v.cadencia) + ' disparos' : '', v.efetivo ? 'efetivo contra ' + v.efetivo : ''].filter(Boolean).join(' · ');
     const drops = parseDrops(v.saque).map((d) => (d.qty > 1 ? d.qty + '× ' : '') + d.name).concat(num(v.cronos) ? [fmtCronos(num(v.cronos)) + ' Cronos'] : []);
-    const kills = fallen.filter((f) => (f.npcId && f.npcId === e.id) || nameKey(f.name) === nameKey(e.name)).length;
-    const arena = h('button', 'btn btn--primary btn--sm', 'Pôr na arena');
-    arena.type = 'button';
-    arena.setAttribute('aria-label', 'Pôr ' + e.name + ' na arena');
-    arena.addEventListener('click', () => placeFoe(deep(e)));
-    const read = h('button', 'btn btn--ghost btn--sm', 'Ficha completa');
-    read.type = 'button';
-    read.addEventListener('click', () => openEntry(e));
+    const kills = camp ? fallen.filter((f) => (f.npcId && f.npcId === e.id) || nameKey(f.name) === nameKey(e.name)).length : 0;
+    const btn = (label, cls, onClick, aria) => {
+      const b = h('button', 'btn btn--sm ' + cls, label);
+      b.type = 'button';
+      if (aria) b.setAttribute('aria-label', aria);
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    const read = btn('Ficha completa', 'btn--ghost', () => openEntry(e));
+    const slot = $(camp ? '#beast-form-slot' : '#bst-form-slot');
+    const rerun = camp ? runBeast : runBestiary;
+    const acts = [read];
+    if (e.mine) acts.push(btn('Editar', 'btn--ghost', () => openHostedForm(slot, 'npc', e, rerun), 'Editar ' + e.name));
+    if (camp) acts.push(btn('Pôr na arena', 'btn--primary', () => placeFoe(deep(e)), 'Pôr ' + e.name + ' na arena'));
+    else {
+      acts.push(btn('Usar de base', 'btn--ghost', () => openHostedForm(slot, 'npc', Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' }), rerun), 'Usar ' + e.name + ' de base'));
+      if (e.mine) {
+        acts.push(btn('Excluir', 'btn--danger', async () => {
+          const ok = await askConfirm({ title: 'Excluir ' + e.name + '?', text: 'Sai do bestiário para todos. Quem já está numa arena continua lá.', ok: 'Excluir' });
+          if (!ok) return;
+          try { await db.deleteLibrary(e.id); toast(e.name + ' foi excluído.'); runBestiary(); }
+          catch (err) { toast(errorMessage(err)); }
+        }, 'Excluir ' + e.name));
+      }
+    }
     const page = h('article', 'mag__page', cover,
       h('div', 'mag__body',
-        h('p', 'mag__kicker', 'Ameaça' + (e.oficial ? ' · oficial' : '') + (kills ? ' · derrotado ' + (kills === 1 ? '1 vez' : kills + ' vezes') : '')),
+        h('div', 'mag__head', h('p', 'mag__kicker', 'Ameaça' + (e.oficial ? ' · oficial' : e.mine ? ' · sua' : '') + (kills ? ' · derrotado ' + (kills === 1 ? '1 vez' : kills + ' vezes') : '')),
+          camp ? null : starButton(e, () => { if ($('#bst-fav').checked) runBestiary(); })),
         h('h3', 'mag__title', e.name),
         h('div', 'mag__pills', ...layers),
         h('div', 'mag__stats', stat('corpo', 'Corpo'), stat('precisao', 'Precisão'), stat('essencia', 'Essência'), stat('luta', 'Luta'), stat('mira', 'Mira'), stat('resistencia', 'Resist.')),
         atk ? h('p', 'mag__atk', h('b', '', 'Ataque '), atk) : null,
         v.descricao ? h('p', 'mag__desc', v.descricao) : null,
         v.lore ? h('blockquote', 'mag__lore', v.lore) : null,
-        h('p', 'mag__drops', h('b', '', 'Deixa ao cair '), drops.length ? drops.join(', ') : 'nada anotado (edite o campo Saque na Oficina)'),
-        h('div', 'mag__foot', read, arena)));
+        h('p', 'mag__drops', h('b', '', 'Deixa ao cair '), drops.length ? drops.join(', ') : 'nada anotado (campo Saque da criatura)'),
+        h('div', 'mag__foot', ...acts)));
     page.style.setProperty('--cat', NPC_CAT_COLOR[cat] || 'var(--ambar)');
     return page;
   }
@@ -13006,6 +13058,43 @@ const FIREBASE_CONFIG = {
   $('#gmlib-kind').addEventListener('change', () => { gmFacets.reset(); runItems(); });
   $('#gmlib-q').addEventListener('input', debounce(runItems, 250));
   $('#beast-q').addEventListener('input', debounce(runBeast, 250));
+  $('#beast-new').addEventListener('click', () => openHostedForm($('#beast-form-slot'), 'npc', null, runBeast));
+
+  /* ---------- Bestiário (tela própria, para todos) ----------
+     A mesma revista do mestre, fora da campanha: busca por relevância com "Você quis dizer", chips de categoria,
+     filtros por especificação, favoritos e "só as minhas", e o formulário de NPC da Oficina para criar e editar. */
+  let bstSeq = 0;
+  let bstCat = '';
+  async function runBestiary() {
+    const kinds = GMLIB_KINDS.bestiario;
+    const seq = ++bstSeq;
+    const q = $('#bst-q').value;
+    const r = await libFind(kinds, q);
+    if (seq !== bstSeq) return;
+    let list = r.list;
+    const favs = favLoad();
+    if ($('#bst-fav').checked) list = list.filter((e) => favs.has(e.id));
+    if ($('#bst-mine').checked) list = list.filter((e) => e.mine);
+    if (!hasQuery(q)) list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || a.name.localeCompare(b.name, 'pt-BR'));
+    bstCat = beastCats($('#bst-cats'), list, bstCat, (c) => { bstCat = c; runBestiary(); });
+    if (bstCat) list = list.filter((e) => npcCat(e) === bstCat);
+    list = bstFacets.apply(list, kinds);
+    suggestAfter($('#bst-mag'), list.length ? '' : r.suggest, $('#bst-q'), runBestiary);
+    $('#bst-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => magPage(e, 'lib')));
+    $('#bst-empty').hidden = list.length > 0;
+    $('#bst-hint').textContent = r.warn ? 'Só o catálogo oficial. O banco compartilhado não abriu: ' + r.warn
+      : plural(list.length, 'criatura', 'criaturas') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '')
+        + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
+  }
+  const bstFacets = facetBox(() => runBestiary(), { skip: ['categoria'] });
+  $('#bst-cats').after(bstFacets.box);
+  $('#bst-q').addEventListener('input', debounce(runBestiary, 250));
+  ['#bst-fav', '#bst-mine'].forEach((sel) => $(sel).addEventListener('change', runBestiary));
+  $('#bst-new').addEventListener('click', () => openHostedForm($('#bst-form-slot'), 'npc', null, runBestiary));
+  views.bestiario = async function showBestiario() {
+    if (itemState.host) closeHostedForm();
+    await runBestiary();
+  };
 
   /* ---------- Saque, armazéns e monstros derrotados ----------
      loot: listas de saque que o mestre entrega ao grupo (todos ou só alguns personagens pegam).
