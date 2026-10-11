@@ -5865,6 +5865,7 @@ const FIREBASE_CONFIG = {
     if (!vxDlg) {
       vxDlg = h('dialog', 'vxhack');
       vxDlg.setAttribute('aria-labelledby', 'vx-title');
+      vxDlg.addEventListener('close', () => { vxHackSound(null); vxMusic(); }); // a trilha do tema volta
       document.body.append(vxDlg);
     }
     const on = themeState.active === 'vortice';
@@ -5897,7 +5898,94 @@ const FIREBASE_CONFIG = {
         ...LINES.map((t, i) => { const p = h('p', 'vxhack__line' + (t.charAt(0) === '>' ? ' is-cmd' : ''), t); p.style.animationDelay = (0.25 + i * 0.32) + 's'; return p; }),
         vxProse(sw, 0.25 + LINES.length * 0.32))));
     $('.vxhack__title', vxDlg).id = 'vx-title';
-    if (!vxDlg.open) openDialog(vxDlg);
+    if (!vxDlg.open) {
+      openDialog(vxDlg);
+      vxMusStop();
+      // aberta pela URL, ainda sem nenhum toque: o navegador não deixa tocar; a trilha começa no primeiro toque
+      if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+        const once = () => { ['pointerdown', 'keydown'].forEach((e) => document.removeEventListener(e, once, true)); if (vxDlg.open) vxHackSound([]); };
+        ['pointerdown', 'keydown'].forEach((e) => document.addEventListener(e, once, true));
+      } else vxHackSound(LINES);
+    }
+  }
+  /* Sons da tela HORIZONTE DE EVENTOS, feitos na hora (Web Audio): cada linha do terminal chega digitada, "NEGADO"
+     dá um zumbido de erro, "concedido?" um acorde que sobe e engasga, e por baixo uma trilha de invasão de sistema
+     (baixo pulsando em lá frígio, bumbo, chimbal, um arpejo de dados e bipes de modem) enquanto a tela estiver aberta.
+     Respeita o botão de som do site. */
+  var vxHack = null;
+  function vxHackSound(lines) {
+    if (vxHack) { // parar (ou recomeçar)
+      const m = vxHack;
+      vxHack = null;
+      clearInterval(m.timer);
+      const t = m.ac.currentTime;
+      m.out.gain.cancelScheduledValues(t);
+      m.out.gain.setValueAtTime(m.out.gain.value, t);
+      m.out.gain.linearRampToValueAtTime(0, t + 0.35);
+      setTimeout(() => { try { m.out.disconnect(); } catch (e) { /* ok */ } }, 500);
+    }
+    if (!lines || !sfx.on) return;
+    const ac = sfxCtx();
+    if (!ac) return;
+    const out = ac.createGain();
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 4;
+    out.gain.value = 0;
+    out.connect(comp); comp.connect(ac.destination);
+    const t0 = ac.currentTime + 0.05;
+    out.gain.linearRampToValueAtTime(0.5, t0 + 0.6);
+    const m = { ac, out, timer: null };
+    vxHack = m;
+    // peças de som: tom com envelope, rajada de ruído filtrado
+    const tone = (type, f0, f1, t, dur, vol, dest) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.01, dur / 4));
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(dest || out);
+      o.start(t); o.stop(t + dur + 0.02);
+    };
+    const noise = (t, dur, vol, type, f, q) => {
+      const n = ac.createBufferSource(), b = ac.createBiquadFilter(), g = ac.createGain();
+      n.buffer = sfxNoise(ac); b.type = type; b.frequency.value = f; b.Q.value = q || 0.7;
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      n.connect(b); b.connect(g); g.connect(out);
+      n.start(t, Math.random() * 0.3); n.stop(t + dur + 0.02);
+    };
+    // as linhas do terminal: teclas (cliques curtos), e o som do que cada uma diz
+    lines.forEach((line, i) => {
+      const ts = t0 + 0.25 + i * 0.32;
+      const keys = Math.min(14, Math.ceil(line.length / 4));
+      for (let k = 0; k < keys; k++) noise(ts + k * 0.022 + Math.random() * 0.01, 0.018, 0.25, 'bandpass', vxR(2500, 4500), 2);
+      const te = ts + keys * 0.022 + 0.04;
+      if (/NEGADO/.test(line)) { tone('square', 110, 108, te, 0.38, 0.22); tone('square', 116.5, 115, te, 0.38, 0.18); }
+      else if (/concedido/.test(line)) { [440, 554, 659, 880].forEach((f, j) => tone('triangle', f, f, te + j * 0.06, 0.18, 0.12)); tone('sawtooth', 880, 220, te + 0.28, 0.25, 0.06); }
+      else tone('square', 1320, 1320, te, 0.05, 0.06);
+    });
+    // a trilha: 16 passos por compasso a 132 bpm, agendados um pouco à frente
+    const step = 60 / 132 / 4;
+    const BASS = [55, 0, 55, 58.27, 0, 55, 65.41, 0, 55, 0, 55, 82.41, 0, 58.27, 55, 0]; // lá frígio
+    const ARP = [440, 523.25, 659.25, 466.16, 880, 659.25, 523.25, 698.46];
+    const bassF = ac.createBiquadFilter();
+    bassF.type = 'lowpass'; bassF.frequency.value = 420; bassF.Q.value = 8; bassF.connect(out);
+    let n = 0, next = t0 + 0.25 + lines.length * 0.32; // começa quando as linhas terminam de chegar
+    const play = (s, t) => {
+      const bar = Math.floor(s / 16), i = s % 16;
+      const drums = bar >= 2;
+      if (BASS[i]) tone('sawtooth', BASS[i], BASS[i], t, step * 1.6, 0.32, bassF);
+      if (drums && i % 4 === 0) tone('sine', 150, 42, t, 0.22, 0.9);
+      if (drums && (i === 4 || i === 12)) noise(t, 0.12, 0.35, 'bandpass', 1800, 0.8);
+      if (drums || i % 2 === 0) noise(t, i % 4 === 2 ? 0.06 : 0.025, i % 4 === 2 ? 0.12 : 0.06, 'highpass', 7500);
+      if (bar >= 1 && Math.random() < 0.8) { const f = ARP[(s * 3 + bar) % ARP.length] * (Math.random() < 0.15 ? 2 : 1); tone('square', f, f, t, step * 0.7, 0.045); }
+      if (Math.random() < 0.18) tone('sine', vxR(900, 3800), vxR(900, 3800), t + Math.random() * step, 0.04, 0.05); // bipes de modem
+      if (bar % 4 === 3 && i === 15) noise(t, 0.4, 0.2, 'bandpass', 600, 4); // um engasgo a cada 4 compassos
+    };
+    m.timer = setInterval(() => {
+      while (next < ac.currentTime + 0.12) { play(n++, next); next += step; }
+    }, 30);
   }
 
   /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
