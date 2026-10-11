@@ -4603,7 +4603,9 @@ const FIREBASE_CONFIG = {
     };
     level();
     vxClock = setInterval(() => { // o relógio do vórtex só anda com a página à vista
-      if (document.hidden || vxFrozen || vxState.stable || document.querySelector('.vx-boom')) return;
+      if (document.hidden || vxFrozen || document.querySelector('.vx-boom')) return;
+      if (vxScareIn > 0 && --vxScareIn === 0) vxFireScare();
+      if (vxState.stable) return;
       vxState.t += 1;
       if (vxState.t % 5 === 0) saveVx();
       if (level() >= 1) vortexExplode();
@@ -4621,7 +4623,7 @@ const FIREBASE_CONFIG = {
       vxTimer = setTimeout(tick, 1700 - 1300 * L + Math.random() * 400);
     };
     vxTimer = setTimeout(tick, 900);
-    vxMaybeScare(0.2);
+    vxArmScare();
   }
   /* Trilha do Vórtex ∞, gerada aqui mesmo (Web Audio, sem arquivo nenhum). Segue o relógio do instável
      (VX_LIMIT = 8 min): começa num zumbido de fita VHS, entram drones graves, chiado, notas que desafinam e
@@ -4797,12 +4799,21 @@ const FIREBASE_CONFIG = {
     vxMus = m;
     step();
   }
-  /* O susto do vórtex: quando o buraco aparece, há uma chance de a tela travar por alguns segundos
-     e então um rosto feito do próprio vórtex pular na tela com um som alto. Só uma vez por pessoa (neste aparelho). */
+  /* O susto do vórtex: na primeira vez com o tema ligado (depois da tela inicial que ativa o vórtex), num momento
+     sorteado das primeiras fases, a tela trava por alguns segundos e então um rosto feito do próprio vórtex pula na
+     tela com um som alto. Só uma vez por pessoa (neste aparelho); se a pessoa sair antes, fica para a próxima vez. */
   var VXS_KEY = 'vortex.vxscare.v1';
   var vxFrozen = false;
-  function vxMaybeScare(chance) {
-    if (vxFrozen || Math.random() >= chance) return;
+  var vxScareIn = 0; // segundos de tema à vista até o susto (0 = nenhum marcado)
+  function vxArmScare() {
+    vxScareIn = 0;
+    try { if (localStorage.getItem(VXS_KEY)) return; } catch (e) { return; }
+    // até a metade do relógio (fim da primeira fase); quem já passou disso leva o susto logo
+    const room = VX_LIMIT * 0.5 - vxState.t;
+    vxScareIn = Math.round(room > 60 ? vxR(20, room) : vxR(20, 60));
+  }
+  function vxFireScare() {
+    if (vxFrozen) { vxScareIn = 5; return; }
     try { if (localStorage.getItem(VXS_KEY)) return; localStorage.setItem(VXS_KEY, String(Date.now())); } catch (e) { return; }
     const go = () => setTimeout(vxScare, vxR(700, 1800));
     // sem nenhum toque ainda o navegador não deixa tocar som: o susto espera o primeiro toque
@@ -5886,7 +5897,7 @@ const FIREBASE_CONFIG = {
         ...LINES.map((t, i) => { const p = h('p', 'vxhack__line' + (t.charAt(0) === '>' ? ' is-cmd' : ''), t); p.style.animationDelay = (0.25 + i * 0.32) + 's'; return p; }),
         vxProse(sw, 0.25 + LINES.length * 0.32))));
     $('.vxhack__title', vxDlg).id = 'vx-title';
-    if (!vxDlg.open) { openDialog(vxDlg); vxMaybeScare(0.25); }
+    if (!vxDlg.open) openDialog(vxDlg);
   }
 
   /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
