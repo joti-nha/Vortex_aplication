@@ -14664,7 +14664,7 @@ const FIREBASE_CONFIG = {
   const rulesBackdrop = $('#rules-backdrop');
   const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const slugify = (s) => nameKey(s).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'secao';
-  const plainText = (s) => String(s).replace(/\*/g, '');
+  const plainText = (s) => String(s).replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, '$1').replace(/\*/g, '');
   const ruleHref = (tab, slug) => '#/rules/' + tab + (slug ? '/' + slug : '');
 
   // todo o texto de um bloco (parágrafos, listas, tabelas), para a busca nas regras
@@ -14697,11 +14697,23 @@ const FIREBASE_CONFIG = {
     return toc;
   }
 
-  // **negrito** e *itálico* do texto viram elementos (nunca HTML solto)
+  // **negrito**, *itálico* e [link](capítulo#Título da seção) do texto viram elementos (nunca HTML solto)
   function rich(text) {
     const frag = document.createDocumentFragment();
-    String(text).split(/(\*\*[^*]+\*\*|\*[^*]+\*)/).forEach((part) => {
+    String(text).split(/(\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([a-z0-9-]+(?:#(?:[^()]|\([^()]*\))*)?\))/).forEach((part) => {
       if (!part) return;
+      const link = /^\[([^\]]+)\]\(([a-z0-9-]+)(?:#((?:[^()]|\([^()]*\))*))?\)$/.exec(part);
+      if (link) {
+        const ch = CHAPTERS.find((c) => c.id === link[2]);
+        const t = ch && link[3] ? indexChapter(ch).find((x) => x.title === link[3]) : null;
+        if (!ch) { frag.append(link[1]); return; }
+        const a = h('a', 'r-link', link[1]);
+        a.href = ruleHref(ch.id, t ? t.slug : null);
+        a.dataset.tab = ch.id;
+        if (t) a.dataset.slug = t.slug;
+        frag.append(a);
+        return;
+      }
       if (part.slice(0, 2) === '**' && part.length > 4) frag.append(h('strong', '', part.slice(2, -2)));
       else if (part[0] === '*' && part.length > 2) frag.append(h('em', '', part.slice(1, -1)));
       else frag.append(part);
