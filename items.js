@@ -813,7 +813,7 @@ window.VORTEX_ITEMS = {
     'Heartbreaker': 'customizada no tema coração partido: a lâmina tem a forma de meio coração, com uma rachadura rosa que brilha.',
     'Rose Glaive': 'customizada no tema roseira: a haste tem espinhos de metal e a ponta abre como um botão de rosa.',
     'Black Bubble Hammer': 'customizada no tema chiclete: a cabeça é uma bolha preta translúcida com o núcleo rosa girando dentro.',
-    'Valentina': 'customizada e reativa no tema dança: a lâmina acende mais rosa a cada acúmulo de Ritmo e volta ao preto quando os acúmulos zeram.',
+    'Valentina': 'customizada e reativa no tema dança: a lâmina acende mais rosa a cada acúmulo de Ritmo, volta ao preto quando os acúmulos zeram e abre um olho rosa quando a espada desperta.',
     'Pink Pop': 'pintada de rosa, com faixas pretas.',
     'Static Candy': 'pintada como uma bala de goma, rosa e preta.',
     'Blush Smoke': 'pintada de preto, com a tampa rosa.',
@@ -866,7 +866,7 @@ window.VORTEX_ITEMS = {
     ['Black Bubble Hammer', 'Marreta', 'BB-9', 'Epica', 'Contundente', 3, 'Duas mãos', '2.600',
       'Propriedade: 1\nEspecial (exótica): Núcleo gravitacional.\nUma vez por cena, ao acertar, as criaturas adjacentes ao alvo fazem Reflexos (CD 9) ou ficam Caídas.'],
     ['Valentina', 'Espada', 'VAL-01', 'Lendária', 'Cortante', 2, 'Uma mão', '4.800',
-      'Propriedade: 1 + Especial: Dança Rosa\nUtilize 3 PE. Até o fim da cena, cada acerto com esta espada dá um acúmulo de Ritmo (máximo igual à sua Precisão). Cada acúmulo dá +1 nos ataques com ela e +1 de Defesa. Errar um ataque zera os acúmulos.\nA espada não pode ser desarmada contra a vontade do portador.']
+      'Propriedade: 1 + Especial: Ritmo Crescente\nUtilize 3 PE. Até o fim da cena, cada acerto com esta espada dá um acúmulo de Ritmo, até um máximo igual ao atributo que você usa para atacar com ela (Corpo ou Precisão). Cada acúmulo dá +1 de dano fixo nos acertos com ela. Errar um ataque zera os acúmulos.\nDespertar: quando você acerta um crítico com esta espada, ela acorda e repete no alvo todos os efeitos que os seus golpes anteriores com ela aplicaram nesta cena (como sangramento, atordoamento, empurrão ou manobras).\nA espada não pode ser desarmada contra a vontade do portador.']
   ].forEach(function (a) {
     cat.push({
       id: 'of-pin-' + slug(a[0]), kind: 'arma-melee', typeId: TIPO_MELEE[a[1]], name: a[0],
