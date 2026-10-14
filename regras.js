@@ -342,7 +342,7 @@ window.VORTEX_REGRAS = {
         ['ul', [
           '**Vestíveis** (roupas, mochilas, escudos energéticos...): você se beneficia de até **3 + Corpo** deles.',
           '**Próteses**: limitadas pela sua Carga Cibernética (CC).',
-          '**Módulos**: limitados pela CC, com a reserva da Essência.'
+          '**Módulos**: só abrem espaço com ao menos uma prótese implantada; limitados pela CC, com a reserva da Essência.'
         ]],
         ['note', 'Bônus de mesma fonte', '**Qualquer bônus de mesma fonte não acumula.** Dois itens iguais equipados (duas camisas iguais, dois escudos do mesmo modelo) valem como um só.'],
 

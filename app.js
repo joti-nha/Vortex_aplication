@@ -1811,7 +1811,7 @@ const FIREBASE_CONFIG = {
     },
     inventario: {
       title: 'Inventário',
-      text: 'Em cima, o que está equipado: armadura, núcleo e as duas mãos (arma de duas mãos ocupa as duas), mais as fileiras de vestíveis (até 3 + Corpo; bônus de mesma fonte não acumula), próteses (pela CC) e módulos. Cada fileira abre uma vaga nova quando a anterior é ocupada. Embaixo, a mochila. Passe o mouse (ou toque) num bloco para ver os detalhes e equipar; também dá para arrastar. Carga = 2 + Corpo × 5 + Precisão + Essência × 2, e só a mochila conta. Em "Detalhes" ficam os slots de mod, propriedade e acessórios.',
+      text: 'Em cima, o que está equipado: armadura, núcleo e as duas mãos (arma de duas mãos ocupa as duas), mais as fileiras de vestíveis (até 3 + Corpo; bônus de mesma fonte não acumula), próteses (pela CC) e módulos (só com ao menos uma prótese). Cada fileira abre uma vaga nova quando a anterior é ocupada. Embaixo, a mochila. Passe o mouse (ou toque) num bloco para ver os detalhes e equipar; também dá para arrastar. Carga = 2 + Corpo × 5 + Precisão + Essência × 2, e só a mochila conta. Em "Detalhes" ficam os slots de mod, propriedade e acessórios.',
       rule: 'carga'
     },
     banco: {
@@ -8127,6 +8127,7 @@ const FIREBASE_CONFIG = {
       const m = compute(sheetChar);
       const mod = isModule(i);
       if (mod && !m.nucleo) { toast('Sem um Núcleo ativo os módulos ficam inativos. Implante um núcleo (ou vista uma armadura com núcleo) antes.'); return false; }
+      if (mod && !s.inventory.some((x) => x.slot === 'protese')) { toast('Os módulos só abrem espaço com ao menos uma prótese implantada.'); return false; }
       if (m.nucleo) {
         const freed = occupant && occupant.kind === 'protese-modulo' ? ccOf(occupant) : 0;
         const prot = m.protUsed + (mod ? 0 : ccOf(i)) - (i.slot && !mod ? ccOf(i) : 0) - freed;
@@ -8337,7 +8338,10 @@ const FIREBASE_CONFIG = {
       return makeCell(i || null, m, def, ghost);
     }));
     const mods = inv.filter((x) => x.slot === 'modulo');
-    $('#equip-mods').replaceChildren(...mods.map((x) => makeCell(x, m, MODULE_SLOT, false)), makeCell(null, m, MODULE_SLOT, false));
+    // a vaga de módulo só abre com ao menos uma prótese implantada
+    const modOpen = prots.length > 0;
+    $('#equip-mods').replaceChildren(...mods.map((x) => makeCell(x, m, MODULE_SLOT, false)), ...(modOpen ? [makeCell(null, m, MODULE_SLOT, false)] : []),
+      ...(!modOpen && !mods.length ? [Object.assign(h('p', 'field__hint', 'Implante ao menos uma prótese para abrir espaço de módulos.'), { style: 'grid-column: 1 / -1; margin: 0' })] : []));
 
     const hands = ['mao-d', 'mao-e'].map((id) => inv.find((x) => x.slot === id));
     const handText = hands[0] && twoHanded(hands[0]) ? hands[0].name + ' (duas mãos)' : [hands[0] ? hands[0].name : 'direita livre', hands[1] ? hands[1].name : 'esquerda livre'].join(' · ');
