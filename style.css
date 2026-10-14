@@ -633,6 +633,9 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
   .profile-btn { max-width: 8rem; padding-inline: 0.6rem; }
   .row:has(> .star) .row__open > .badge { display: none; } /* a cor do avatar já diz o tipo */
   .row:has(> .star) .row__open { gap: 0.6rem; }
+  /* ficha sua no perfil: Tirar e Excluir descem para uma linha própria */
+  .row--own { flex-wrap: wrap; justify-content: flex-end; row-gap: 0.25rem; }
+  .row--own > .row__open { flex-basis: 100%; }
 }
 @media (max-width: 640px) {
   .hero__spiral { opacity: 0.4; }

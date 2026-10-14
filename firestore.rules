@@ -7,7 +7,8 @@ rules_version = '2';
 //
 // Modelo de confiança: o jogo funciona na boa-fé.
 //  - Qualquer pessoa logada LÊ e EDITA qualquer ficha.
-//  - Só quem criou a ficha (ownerUid) pode EXCLUIR.
+//  - Só o dono pode EXCLUIR a ficha: quem a criou (ownerUid) ou um aparelho que entrou
+//    no perfil dono dela (ownerProfile; o perfil guarda esses aparelhos em uids).
 //  - Para restringir a edição só ao dono, troque a regra "allow update" de /characters.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -23,6 +24,15 @@ service cloud.firestore {
     }
     function isCampaignMember(id) {
       return request.auth.uid in get(campaignRef(id)).data.memberUids;
+    }
+    function profileRef(code) {
+      return /databases/$(database)/documents/profiles/$(code);
+    }
+    // a ficha tem perfil dono e este aparelho já entrou nele
+    function inOwnerProfile(d) {
+      return d.get('ownerProfile', '') is string && d.get('ownerProfile', '').matches('[0-9]{1,6}')
+          && exists(profileRef(d.ownerProfile))
+          && request.auth.uid in get(profileRef(d.ownerProfile)).data.get('uids', []);
     }
 
     // ---------- Nomes reservados (impede nomes repetidos) ----------
@@ -45,12 +55,13 @@ service cloud.firestore {
     match /profiles/{code} {
       function validProfile() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['name', 'chars', 'camps', 'gm', 'favs', 'updatedAt'])
+        return d.keys().hasOnly(['name', 'chars', 'camps', 'gm', 'favs', 'uids', 'updatedAt'])
             && d.name is string && d.name.size() <= 40
             && d.chars is list && d.chars.size() <= 300
             && d.camps is list && d.camps.size() <= 300
             && d.gm is list && d.gm.size() <= 300
-            && d.favs is list && d.favs.size() <= 300;
+            && d.favs is list && d.favs.size() <= 300
+            && (!('uids' in d) || (d.uids is list && d.uids.size() <= 40));
       }
       allow get: if signedIn() && code.matches('[0-9]{1,6}');
       allow create, update: if signedIn() && code.matches('[0-9]{1,6}') && validProfile();
@@ -81,7 +92,8 @@ service cloud.firestore {
       function validChar() {
         let d = request.resource.data;
         return d.keys().hasOnly(['ownerUid', 'name', 'nameKey', 'type', 'image', 'thumb', 'species', 'age',
-                                 'origin', 'campaignIds', 'searchKeys', 'createdAt', 'updatedAt', 'sheet'])
+                                 'origin', 'campaignIds', 'searchKeys', 'createdAt', 'updatedAt', 'sheet', 'ownerProfile'])
+            && (!('ownerProfile' in d) || (d.ownerProfile is string && d.ownerProfile.matches('[0-9]{0,6}')))
             && d.type in ['personagem', 'criatura']
             && d.name is string && d.name.size() >= 2 && d.name.size() <= 40
             && d.species.size() <= 40 && d.age.size() <= 20 && d.origin.size() <= 60
@@ -97,9 +109,12 @@ service cloud.firestore {
       allow update: if signedIn()
                     && validChar()
                     && request.resource.data.ownerUid == resource.data.ownerUid
-                    && request.resource.data.type == resource.data.type;
+                    && request.resource.data.type == resource.data.type
+                    // só o aparelho que criou a ficha escolhe o perfil dono
+                    && (request.resource.data.get('ownerProfile', '') == resource.data.get('ownerProfile', '')
+                        || resource.data.ownerUid == request.auth.uid);
 
-      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if signedIn() && (resource.data.ownerUid == request.auth.uid || inOwnerProfile(resource.data));
     }
 
     // ---------- Campanhas ----------
