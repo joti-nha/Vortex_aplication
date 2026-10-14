@@ -450,6 +450,8 @@ window.VORTEX_ITEMS = {
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'opcoes', label: 'Poder-lista: opções', kind: 'powerlines', big: true, hint: 'Com opções, o poder vira uma lista: cada opção comprada custa o Custo acima. "+ Poder do banco" traz um poder pronto como opção, com efeito e script.' },
         { key: 'melhorias', label: 'Melhorias', kind: 'powerlines', big: true, hint: 'Somam ao poder, cada uma com seu custo em UP. Podem vir de poderes do banco.' },
+        { key: 'prereq', label: 'Pré-requisitos (opcional)', kind: 'textarea', big: true, placeholder: 'Ex.: Corpo 2 e ser Etheriano. Escreva como quiser; o script abaixo é o que o site confere sozinho.' },
+        { key: 'prereqScript', label: 'Pré-requisitos (script)', kind: 'prereqscript', big: true },
         { key: 'script', label: 'Script', kind: 'script', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]

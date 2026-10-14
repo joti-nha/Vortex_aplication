@@ -3912,3 +3912,5 @@ html, body { max-width: 100%; overflow-x: clip; }
 @keyframes vx-music-pulse { 50% { box-shadow: 0 0 22px #ff4fd8, inset 0 0 12px #4ff7ff; } }
 @media (min-width: 900px) { .vx-music { bottom: 16px; right: 16px; } }
 @media (prefers-reduced-motion: reduce) { .vx-music { animation: none !important; } }
+.script__tools { margin: 0; }
+.pw-prereq { display: block; margin-top: 0.3rem; font-size: 0.8rem; color: var(--erro); }
