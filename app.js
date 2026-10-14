@@ -1811,7 +1811,7 @@ const FIREBASE_CONFIG = {
     },
     inventario: {
       title: 'Inventário',
-      text: 'Em cima, o que está equipado: armadura, núcleo e as duas mãos (arma de duas mãos ocupa as duas), mais as fileiras de vestíveis (até 3 + Corpo; peças iguais não somam benefícios), próteses (pela CC) e módulos. Cada fileira abre uma vaga nova quando a anterior é ocupada. Embaixo, a mochila. Passe o mouse (ou toque) num bloco para ver os detalhes e equipar; também dá para arrastar. Carga = 2 + Corpo × 5 + Precisão + Essência × 2, e só a mochila conta. Em "Detalhes" ficam os slots de mod, propriedade e acessórios.',
+      text: 'Em cima, o que está equipado: armadura, núcleo e as duas mãos (arma de duas mãos ocupa as duas), mais as fileiras de vestíveis (até 3 + Corpo; bônus de mesma fonte não acumula), próteses (pela CC) e módulos. Cada fileira abre uma vaga nova quando a anterior é ocupada. Embaixo, a mochila. Passe o mouse (ou toque) num bloco para ver os detalhes e equipar; também dá para arrastar. Carga = 2 + Corpo × 5 + Precisão + Essência × 2, e só a mochila conta. Em "Detalhes" ficam os slots de mod, propriedade e acessórios.',
       rule: 'carga'
     },
     banco: {
@@ -6427,18 +6427,18 @@ const FIREBASE_CONFIG = {
     s.powers.forEach((p) => sources.push({ name: p.name, b: p.bonus || {} }));
     mech.bonus.forEach((x) => sources.push(x));
     // sem núcleo, próteses só substituem o órgão e módulos ficam inativos: não dão bônus.
-    // Vestíveis: só os primeiros 3 + Corpo dão benefício, e peças iguais não somam.
+    // Vestíveis: só os primeiros 3 + Corpo dão benefício. Regra geral: bônus de mesma fonte não acumula
+    // (dois itens iguais equipados valem como um).
     const vestMax = vestMaxOf(s);
-    const vestKeys = new Set();
-    let vestUsed = 0;
+    const srcKeys = new Set();
+    let vestUsed = 0, vestOn = 0;
     equipped.forEach((i) => {
+      if (i.slot === 'vestivel') vestUsed += 1;
       if (i.kind === 'protese-modulo' && !(nucleo > 0)) return;
-      if (i.slot === 'vestivel') {
-        vestUsed += 1;
-        const key = i.id || nameKey(i.name);
-        if (vestKeys.has(key) || vestKeys.size >= vestMax) return;
-        vestKeys.add(key);
-      }
+      const key = i.id || nameKey(i.name);
+      if (srcKeys.has(key)) return;
+      if (i.slot === 'vestivel') { if (vestOn >= vestMax) return; vestOn += 1; }
+      srcKeys.add(key);
       sources.push({ name: i.name, b: entryBonus(i) });
     });
     sources.push({ name: 'ajuste manual', b: s.extra });
@@ -8344,7 +8344,7 @@ const FIREBASE_CONFIG = {
     const line = (k, v, bad) => h('div', 'equip-line' + (bad ? ' equip-line--bad' : ''), h('span', 'equip-line__k', k), h('span', 'equip-line__v', v));
     $('#equip-info').replaceChildren(
       line('Mãos', handText),
-      line('Vestíveis', m.vestUsed + ' / ' + m.vestMax + ' (3 + Corpo)' + (m.vestUsed > m.vestMax ? ': os excedentes não dão benefício' : '') + '. Peças iguais não somam os benefícios.', m.vestUsed > m.vestMax),
+      line('Vestíveis', m.vestUsed + ' / ' + m.vestMax + ' (3 + Corpo)' + (m.vestUsed > m.vestMax ? ': os excedentes não dão benefício' : '') + '. Bônus de mesma fonte não acumula.', m.vestUsed > m.vestMax),
       line('Defesa mínima', m.defMin + ' = ' + srcText(m.src.armadura) + ' · Corpo ' + signed(attrOf(s, 'corpo')) + ' · Resistência +' + num(s.skills.resistencia)),
       line('Armadura', m.armor ? m.armor.name + (m.armorProf ? ' · proficiente' : ' · sem proficiência') + (m.pen ? ' · penalidade –' + m.pen : '') : 'nenhuma (vale a básica, ' + ARMOR_BASE + ')'),
       line('Núcleo', m.nucleo ? '+' + m.nucleo + ' ativo' : 'sem núcleo: próteses só substituem o órgão; módulos inativos'),

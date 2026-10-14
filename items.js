@@ -310,7 +310,7 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'vestivel', title: 'Vestível', group: 'Proteção', inventory: true, image: true, bonus: true,
-      hint: 'Roupas, capacetes, mochilas, luvas, botas: entram na fileira de vestíveis do inventário, sem gastar CC. A região é só descritiva. Cada personagem se beneficia de até 3 + Corpo vestíveis, e peças iguais não somam os benefícios.',
+      hint: 'Roupas, capacetes, mochilas, luvas, botas: entram na fileira de vestíveis do inventário, sem gastar CC. A região é só descritiva. Cada personagem se beneficia de até 3 + Corpo vestíveis, e bônus de mesma fonte não acumula.',
       types: [
         { id: 'cabeca', title: 'Cabeça' },
         { id: 'tronco', title: 'Tronco' },

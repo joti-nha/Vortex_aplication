@@ -337,6 +337,15 @@ window.VORTEX_REGRAS = {
         ['example', 'Um personagem com Corpo 2, Precisão 1 e Essência 2 possui: 2 + (2 × 4) + 1 + (2 × 2) = 15 Carga. Portanto, seu limite é de 17 Cargas.'],
         ['p', 'Itens equipados normalmente não ocupam Carga. Itens transportados ocupam a quantidade indicada em sua ficha.'],
 
+        ['h2', 'Equipado'],
+        ['p', 'Os únicos espaços fixos são a **armadura**, o **núcleo** e as **duas mãos** (empunhadura). Não há espaço por parte do corpo: dá para vestir três camisas uma por cima da outra, ou três mochilas.'],
+        ['ul', [
+          '**Vestíveis** (roupas, mochilas, escudos energéticos...): você se beneficia de até **3 + Corpo** deles.',
+          '**Próteses**: limitadas pela sua Carga Cibernética (CC).',
+          '**Módulos**: limitados pela CC, com a reserva da Essência.'
+        ]],
+        ['note', 'Bônus de mesma fonte', '**Qualquer bônus de mesma fonte não acumula.** Dois itens iguais equipados (duas camisas iguais, dois escudos do mesmo modelo) valem como um só.'],
+
         ['h2', 'Sobrecarga'],
         ['p', 'Quando a Carga transportada ultrapassa o limite do personagem, ele fica **Sobrecarregado**.'],
         ['p', 'Enquanto estiver Sobrecarregado:'],
