@@ -30,6 +30,7 @@ const FIREBASE_CONFIG = {
 
   const TYPE_LABEL = { personagem: 'Personagem', criatura: 'Criatura' };
   const DUP_CHARACTER = 'Já existe um personagem ou criatura com esse nome. Escolha outro.';
+  const RENAME_OWNER_ONLY = 'Só quem criou a ficha troca o nome.';
   const OWNER_ONLY = 'Só o dono desta ficha pode excluí-la: o aparelho que a criou ou o perfil dono dela.';
   const DUP_CAMPAIGN = 'Já existe uma campanha com esse nome. Escolha outro.';
   const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem O, 0, I, 1
@@ -7185,6 +7186,10 @@ const FIREBASE_CONFIG = {
 
   function renderSheetHeader() {
     $('#sheet-title').textContent = sheetChar.name;
+    const own = ownsChar(sheetChar); // só o dono troca o nome da ficha
+    $('#rename-open').hidden = !own;
+    fName.readOnly = !own;
+    $('#f-name-lock').hidden = own;
     setBadge($('#sheet-badge'), sheetChar.type);
     document.title = 'Ficha de ' + sheetChar.name + ' | Vortex';
   }
@@ -9721,6 +9726,7 @@ const FIREBASE_CONFIG = {
   fName.addEventListener('change', async () => {
     const ch = sheetChar;
     const name = cleanName(fName.value);
+    if (!ownsChar(ch)) { fName.value = ch.name; setError(errName, fName, RENAME_OWNER_ONLY); return; }
     const bad = validateName(name);
     if (bad) { setError(errName, fName, bad); return; }
     if (name === ch.name) { fName.value = name; setError(errName, fName, ''); return; }
@@ -9873,6 +9879,11 @@ const FIREBASE_CONFIG = {
   $('#fav-toggle').addEventListener('click', () => {
     toast(charFavToggle(sheetChar.id) ? sheetChar.name + ' está nos favoritos.' : 'Tirado dos favoritos.');
     renderSheetFav();
+  });
+  $('#rename-open').addEventListener('click', () => { // leva ao campo Nome, na aba Descrição
+    showSheetTab($('#spanel-descricao'));
+    fName.focus();
+    fName.select();
   });
   $('#profile-toggle').addEventListener('click', () => {
     const on = !isMyChar(sheetChar.id);

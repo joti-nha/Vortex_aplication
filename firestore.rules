@@ -38,8 +38,8 @@ service cloud.firestore {
     // ---------- Nomes reservados (impede nomes repetidos) ----------
     // Cada nome vira um documento c_nome (personagem/criatura) ou k_nome (campanha).
     // Criar um documento que já existe é uma atualização, e atualização é proibida:
-    // por isso dois nomes iguais nunca passam. Como qualquer pessoa pode renomear
-    // uma ficha, qualquer pessoa logada também pode apagar uma reserva antiga.
+    // por isso dois nomes iguais nunca passam. Como o dono pode renomear a ficha
+    // de qualquer aparelho do perfil, qualquer pessoa logada também pode apagar uma reserva antiga.
     match /names/{key} {
       allow get: if signedIn();
       allow create: if signedIn()
@@ -112,7 +112,11 @@ service cloud.firestore {
                     && request.resource.data.type == resource.data.type
                     // só o aparelho que criou a ficha escolhe o perfil dono
                     && (request.resource.data.get('ownerProfile', '') == resource.data.get('ownerProfile', '')
-                        || resource.data.ownerUid == request.auth.uid);
+                        || resource.data.ownerUid == request.auth.uid)
+                    // só o dono (aparelho criador ou perfil dono) troca o nome
+                    && (request.resource.data.name == resource.data.name
+                        || resource.data.ownerUid == request.auth.uid
+                        || inOwnerProfile(resource.data));
 
       allow delete: if signedIn() && (resource.data.ownerUid == request.auth.uid || inOwnerProfile(resource.data));
     }
