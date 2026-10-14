@@ -1058,7 +1058,7 @@ window.VORTEX_REGRAS = {
           ['p', 'Pode gastar +1 Up point para contar na defesa básica também.']
         ]],
         ['card', 'Regeneração', [
-          ['kv', '', [['Custo', '2 Up points']]],
+          ['kv', '', [['Custo', '1 Up point']]],
           ['p', 'Se for uma criatura biológica. Recupere 3 PVs por turno.'],
           ['p', 'Se caído, pode recobrar a consciência quando recuperar todos os PV.'],
           ['p', 'A cada Up point utilizado para essa habilidade acima do primeiro, aumente em +1 a recuperação de PVs.']
