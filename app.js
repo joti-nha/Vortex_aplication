@@ -8074,9 +8074,9 @@ const FIREBASE_CONFIG = {
     { id: 'nucleo', label: 'Núcleo', full: 'Núcleo', kind: 'nucleo', accepts: 'um núcleo' },
     { id: 'cabeca', label: 'Cabeça', full: 'Cabeça', region: 'cabeca', accepts: 'vestível ou prótese de cabeça' },
     { id: 'orgaos', label: 'Órgãos', full: 'Órgãos internos', region: 'orgaos-internos', accepts: 'vestível ou prótese de órgãos internos' },
-    { id: 'braco-d', label: 'Braço dir.', full: 'Braço direito', region: 'membros-superiores', accepts: 'vestível, prótese de membros superiores ou escudo energético' },
+    { id: 'braco-d', label: 'Braço dir.', full: 'Braço direito', region: 'membros-superiores', accepts: 'vestível ou prótese de membros superiores' },
     { id: 'tronco', label: 'Tronco', full: 'Tronco', region: 'tronco', accepts: 'vestível ou prótese de tronco' },
-    { id: 'braco-e', label: 'Braço esq.', full: 'Braço esquerdo', region: 'membros-superiores', accepts: 'vestível, prótese de membros superiores ou escudo energético' },
+    { id: 'braco-e', label: 'Braço esq.', full: 'Braço esquerdo', region: 'membros-superiores', accepts: 'vestível ou prótese de membros superiores' },
     { id: 'mao-d', label: 'Mão direita', full: 'Mão direita', hand: true, accepts: 'arma ou item empunhado' },
     { id: 'armadura', label: 'Armadura', full: 'Armadura', kind: 'armadura', accepts: 'uma armadura' },
     { id: 'mao-e', label: 'Mão esquerda', full: 'Mão esquerda', hand: true, accepts: 'arma ou item empunhado' },
@@ -8092,8 +8092,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'armadura') return ['armadura'];
     if (i.kind === 'nucleo') return ['nucleo'];
     if (isModule(i)) return ['modulo'];
-    if (i.kind === 'protese-modulo' || i.kind === 'vestivel') return EQUIP.filter((e) => e.region && e.region === i.typeId).map((e) => e.id);
-    if (i.kind === 'escudo-energetico') return ['braco-d', 'braco-e'];
+    if (i.kind === 'protese-modulo' || i.kind === 'vestivel' || i.kind === 'escudo-energetico') return EQUIP.filter((e) => e.region && e.region === i.typeId).map((e) => e.id);
     return ['mao-d', 'mao-e'];
   }
   const itemBy = (u) => (sheetChar ? sheetChar.sheet.inventory.find((x) => x.uid === u) : null);
