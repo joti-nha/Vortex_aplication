@@ -10046,8 +10046,17 @@ const FIREBASE_CONFIG = {
     if (g.origin !== name) {
       g.origin = name;
       g.lines = origin ? origin.items.map((t) => Object.assign(parseOriginLine(t), { take: true, opt: 0, bank: null })) : [];
+      // linha com o nome de um item do banco (a origem feita na Oficina grava o nome) entra como o item de verdade
+      const fill = (list) => g.lines.filter((l) => !l.bank && !l.unbanked).reduce((hit, l) => { l.bank = gearMatch(l, list); return hit || Boolean(l.bank); }, false);
+      fill(gearLib || BUILTINS);
+      if (!gearLib && origin) libSearch(INVENTORY_KINDS, '').then((list) => { gearLib = list; if (wz && wz.gear === g && g.origin === name && fill(list)) renderSetup(); }).catch(() => { /* fica o catálogo oficial */ });
     }
     return g;
+  }
+  let gearLib = null; // itens do banco (oficiais e da Oficina), buscados uma vez
+  function gearMatch(l, list) {
+    const keys = [nameKey(String(l.text).replace(/[;.]\s*$/, '').replace(/^1\s+/, ''))].concat(l.opts.length === 1 ? [nameKey(l.opts[0])] : []);
+    return list.find((x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 && keys.indexOf(nameKey(x.name)) >= 0) || null;
   }
   const cartTotal = (g) => g.cart.reduce((t, e) => t + priceOf(e), 0);
   function gearEntries(g) { // o que entra no inventário ao concluir
@@ -10192,7 +10201,7 @@ const FIREBASE_CONFIG = {
         if (l.bank) {
           const back = h('button', 'btn btn--ghost btn--sm', 'Voltar ao texto da origem');
           back.type = 'button';
-          back.addEventListener('click', () => { l.bank = null; renderSetup(); });
+          back.addEventListener('click', () => { l.bank = null; l.unbanked = true; renderSetup(); });
           acts.append(back);
         }
         box.append(acts);
