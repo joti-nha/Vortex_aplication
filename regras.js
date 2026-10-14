@@ -6,7 +6,7 @@
    Cada capítulo vira uma aba: { id, title, group, blocks: [...] }
    Blocos (cada um é uma lista [tipo, ...]):
      ['h2', 'Título']            seção (numerada)      ['h3', ...] ['h4', ...] subseções
-     ['p', 'texto']              parágrafo (**negrito**, *itálico*)
+     ['p', 'texto']              parágrafo (**negrito**, *itálico*, [link](capítulo#Título da seção))
      ['ul', ['item', ...]]       lista
      ['formula', 'rótulo', 'texto']    fórmula em destaque
      ['example', 'texto']        exemplo
@@ -279,12 +279,15 @@ window.VORTEX_REGRAS = {
         ]],
 
         ['h2', 'Lista de Perícias'],
-        ['p', 'Cada perícia está atrelada a um atributo: o teste soma 2d6 + o atributo + o bônus da perícia. A tabela diz para que cada uma serve e em que situações ela entra no jogo.'],
+        ['p', 'Cada perícia está atrelada a um atributo: o teste soma 2d6 + o atributo + o bônus da perícia. As tabelas dizem tudo o que cada perícia faz nas regras; os links levam às regras em que ela entra.'],
         ...[['Corpo', 'corpo'], ['Precisão', 'precisao'], ['Essência', 'essencia']].flatMap(([label, tone]) => [
           ['h3', 'Perícias de ' + label],
-          ['table', ['Perícia', 'Para que serve', 'Usos em jogo'], PERICIAS.filter((x) => x.tone === tone).map((x) => [x.name, x.summary, x.uses])]
+          ['table', ['Perícia', 'O que pode fazer'], PERICIAS.filter((x) => x.tone === tone).map((x) => [
+            x.name,
+            '**' + x.summary + '** ' + (x.faz || x.uses) +
+              ((x.regras || []).length ? ' **Regras:** ' + x.regras.map((l) => '[' + l[0] + '](' + l[1] + (l[2] ? '#' + l[2] : '') + ')').join(' · ') : '')
+          ])]
         ]),
-        ['p', '**Ofício:** ao escolher essa perícia, você escolhe a profissão na qual é proficiente.'],
 
         ['h2', 'Proficiência'],
         ['p', 'É um bônus cedido pela vantagem “perito em”. Em geral, concedem bônus atrelados ao tipo de equipamento.'],
