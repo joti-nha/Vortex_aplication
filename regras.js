@@ -1044,6 +1044,17 @@ window.VORTEX_REGRAS = {
           ['h4', 'Humanidade'],
           ['p', 'Você pode fazer testes para resistir a efeitos de PE se tiver CD, e metade da sua blindagem pode ser regenerada como se fossem PVs.'],
           ['p', 'Efeitos de PE causam atordoamento automático em seres elétricos ou eletrônicos e desativam shields; com a Humanidade, o Android faz o teste quando houver CD.']
+        ]],
+        ['card', 'Simbionte', [
+          ['p', 'Massa amorfa e viva que se une a um hospedeiro. Os dois dividem o mesmo corpo: o simbionte dá força, cura e armas feitas da própria matéria; o hospedeiro dá a forma e a vontade.'],
+          ['h4', 'Força e Agilidade Ampliadas'],
+          ['p', 'Aumenta a força física do hospedeiro a níveis devastadores, permitindo erguer toneladas e enfrentar inimigos do alto escalão. Ganha +6 m de deslocamento e, uma vez por turno, ao custo de 1 PA ou 7 PE, um ganho em um teste de Corpo.'],
+          ['h4', 'Cura Regenerativa'],
+          ['p', 'Cura ferimentos mortais no hospedeiro em questão de segundos, regenera membros decepados e pode até neutralizar doenças terminais ou ressuscitar o usuário em casos extremos.'],
+          ['p', 'No início de cada turno, faça um teste para regenerar o hospedeiro: 2d6 + Fortitude + Medicina (Ofício). O hospedeiro recupera PV igual ao resultado.'],
+          ['h4', 'Geração de Matéria Simbiôntica'],
+          ['p', 'O simbionte estica a própria massa amorfa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões e martelos sólidos. Simbionte e hospedeiro devem entrar em consenso na criação das armas e do tipo de dano.'],
+          ['p', 'Os simbiontes não criam armas de dano de Fogo nem Explosivo.']
         ]]
       ]
     },

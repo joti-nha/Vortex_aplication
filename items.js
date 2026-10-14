@@ -590,6 +590,11 @@ window.VORTEX_ITEMS = {
       values: { descricao: 'Cria do Éter.',
         racial: 'Cria do Éter | Quando é afetado por energia Ether pura, recupera recursos iguais ao tamanho do Ether (10 de Resistência e PE para pequena, 25 para média, 50 para grande); o excesso conta como recurso bônus até o próximo descanso. Pode tornar um Éter instável e forçar sua absorção. | 1\nDom do Éter | 2 Up points extras iniciais, que também podem comprar características raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais). Só o Etheriano faz isso. | 1 | up: 2' }
     },
+    {
+      id: 'of-esp-simbionte', kind: 'especime', name: 'Simbionte',
+      values: { descricao: 'Massa amorfa e viva que se une a um hospedeiro. Os dois dividem o mesmo corpo: o simbionte dá força, cura e armas feitas da própria matéria; o hospedeiro dá a forma e a vontade.',
+        racial: 'Força e Agilidade Ampliadas | Leva a força física do hospedeiro a níveis devastadores: ergue toneladas e enfrenta inimigos do alto escalão. Ganha +6 m de deslocamento (15 m). Uma vez por turno, ao custo de 1 PA ou 7 PE, tem um ganho (um dado a mais) num teste de Corpo. | 1 | deslocamento: 6\nCura Regenerativa | Cura ferimentos mortais em segundos, regenera membros decepados e pode neutralizar doenças terminais ou até ressuscitar o hospedeiro em casos extremos. No início de cada turno, faz um teste de regeneração: 2d6 + Fortitude + Medicina (Ofício), e o hospedeiro recupera PV igual ao resultado. | 1\nGeração de Matéria Simbiôntica | Estica a própria massa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões e martelos sólidos. Simbionte e hospedeiro entram em consenso sobre a arma criada e o tipo de dano. Não cria armas de dano Fogo nem Explosivo. | 1' }
+    },
     // espécime secreto: só aparece quando alguém pesquisa "neko" (secreto: true esconde nas listas)
     {
       id: 'of-esp-neko', kind: 'especime', name: 'Neko', secreto: true,
