@@ -17,6 +17,8 @@
      ['fields', ['campo', ...]]  campos em branco (modelo de ficha)
      ['card', 'Título', [blocos]] cartão com título (aparece no índice)
    ===================================================================== */
+/* Perícias com descrição de uso (pericias.js, carregado antes deste arquivo). O capítulo Perícias monta a tabela a partir daqui. */
+const PERICIAS = window.VORTEX_PERICIAS || [];
 /* Efeitos marciais básicos do poder Luta: [efeito, custo em ataques da rodada, o que faz].
    Só as capacidades genéricas; os estilos de luta (abaixo) trazem as técnicas e passivas próprias.
    A ficha (poder Luta, em items.js) e o capítulo Habilidades usam esta mesma tabela. */
@@ -277,33 +279,12 @@ window.VORTEX_REGRAS = {
         ]],
 
         ['h2', 'Lista de Perícias'],
-        ['h3', 'Perícias de Corpo'],
-        ['dl', [
-          ['Luta', 'combate corpo a corpo.'],
-          ['Resistência', 'resistir dano direto.'],
-          ['Atletismo', 'força física e mobilidade.'],
-          ['Fortitude', 'resistência a efeitos físicos internos (toxinas, radiação etc.).']
-        ]],
-        ['h3', 'Perícias de Precisão'],
-        ['dl', [
-          ['Mira', 'com armas de fogo e destreza.'],
-          ['Tecnologia', 'uso e manipulação de tecnologias.'],
-          ['Iniciativa', 'velocidade de iniciação de atividades hostis.'],
-          ['Manha', 'coordenação fina e prestidigitação.'],
-          ['Pilotagem', 'veículos, drones e mechas.'],
-          ['Intelecto', 'conhecimento de mundo e coesão lógica.'],
-          ['Reflexos', 'capacidade cognitiva de reação.'],
-          ['Ofício', 'sua experiência em uma função específica. Ao escolher essa perícia você escolhe a profissão a qual é proficiente.']
-        ]],
-        ['h3', 'Perícias de Essência'],
-        ['dl', [
-          ['Operações', 'tecnomancia e módulos energéticos.'],
-          ['Sentidos', 'capacidade de usar seus sentidos para compreensão, foco e reconhecimento de situações.'],
-          ['Vontade', 'resistência mental.'],
-          ['Intimidação', 'presença dominante.'],
-          ['Diplomacia', 'negociação e persuasão.'],
-          ['Enganação', 'blefe e manipulação.']
-        ]],
+        ['p', 'Cada perícia está atrelada a um atributo: o teste soma 2d6 + o atributo + o bônus da perícia. A tabela diz para que cada uma serve e em que situações ela entra no jogo.'],
+        ...[['Corpo', 'corpo'], ['Precisão', 'precisao'], ['Essência', 'essencia']].flatMap(([label, tone]) => [
+          ['h3', 'Perícias de ' + label],
+          ['table', ['Perícia', 'Para que serve', 'Usos em jogo'], PERICIAS.filter((x) => x.tone === tone).map((x) => [x.name, x.summary, x.uses])]
+        ]),
+        ['p', '**Ofício:** ao escolher essa perícia, você escolhe a profissão na qual é proficiente.'],
 
         ['h2', 'Proficiência'],
         ['p', 'É um bônus cedido pela vantagem “perito em”. Em geral, concedem bônus atrelados ao tipo de equipamento.'],
@@ -368,8 +349,11 @@ window.VORTEX_REGRAS = {
       id: 'combate', title: 'Combate', group: 'Combate',
       blocks: [
         ['h2', 'Iniciativa'],
-        ['p', 'Ao adentrar em algum combate, todos os envolvidos fazem um teste de precisão, que define a ordem dos turnos: começando daquele que teve a maior rolagem no teste e indo para o com menor (decrescente). A ordem se mantém a mesma pelo restante do combate; também é jogada a defesa da cena (veja em Ataque e Defesa).'],
-        ['p', 'A iniciativa é jogada ao início de qualquer combate.'],
+        ['formula', 'Iniciativa', '2d6 + Precisão + Iniciativa'],
+        ['p', 'Ao adentrar em algum combate, todos os envolvidos rolam a iniciativa: um teste de Precisão somado à perícia Iniciativa. O resultado define a ordem dos turnos, começando daquele que teve a maior rolagem e indo para o de menor (decrescente). A ordem se mantém a mesma pelo restante do combate.'],
+        ['p', 'Em caso de empate, age primeiro quem tiver a maior Precisão; se ainda houver empate, a ordem é decidida na sorte.'],
+        ['p', 'Quem entra no combate depois que ele começou rola a iniciativa ao chegar e entra na ordem na posição do seu resultado.'],
+        ['p', 'Junto com a iniciativa também é jogada a defesa da cena (veja em Ataque e Defesa). A iniciativa é jogada ao início de qualquer combate.'],
 
         ['h2', 'Cena'],
         ['p', 'Marcação de tempo usada para todo o momento de um determinado evento.'],
