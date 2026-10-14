@@ -3065,6 +3065,7 @@ const FIREBASE_CONFIG = {
       if (e.kind === 'escudo-energetico' && f.key === 'escudo') return; // aparece no Bônus (quando equipado)
       const label = f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '');
       if (f.kind === 'script') { add(f.key, 'Script', String(val), 'text', { code: true }); return; }
+      if (f.kind === 'prereqscript') { const r = parsePrereq(val); if (prereqLine(r)) add(f.key, 'Pré-requisitos conferidos', prereqLine(r), 'text'); return; }
       if (f.kind === 'racial3') { add(f.key, 'Habilidades raciais', h('div', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : ''))), 'text'); return; }
       if (f.key === 'fabricante') { add(f.key, label, makerTag(String(val)), 'stat'); return; }
       if (f.key === 'preco') { add(f.key, label, priceText(val), 'stat'); return; }
@@ -3711,6 +3712,80 @@ const FIREBASE_CONFIG = {
         h('ul', 'script__help', ...SCRIPT_HELP.map((x) => h('li', '', h('code', '', x[0]), ' ' + x[1])))));
     return box;
   }
+  /* Pré-requisitos de um poder: o texto livre fica no campo "Pré-requisitos"; o script (opcional) é o que o
+     site confere sozinho ao adicionar o poder na ficha. Por enquanto: atributo mínimo e espécime (qualquer
+     espécime do banco, inclusive os criados na Oficina). Uma regra por linha, "chave: valor". */
+  const PREREQ_ATTRS = { corpo: 'Corpo', precisao: 'Precisão', essencia: 'Essência' };
+  const PREREQ_HELP = [
+    ['corpo: 2', 'atributo mínimo (também precisao e essencia)'],
+    ['especime: Etheriano', 'só para quem é deste espécime; vários separados por vírgula valem como "ou"']
+  ];
+  function parsePrereq(txt) {
+    const out = { attrs: {}, especimes: [], bad: [] };
+    String(txt || '').split(/[\n;]/).forEach((raw) => {
+      const line = raw.replace(/\/\/.*$|#.*$/, '').trim();
+      if (!line) return;
+      const i = line.search(/[:=]/);
+      const key = nameKey(i < 0 ? line : line.slice(0, i)).replace(/\s+/g, '');
+      const val = i < 0 ? '' : line.slice(i + 1).trim();
+      if (PREREQ_ATTRS[key] && /^[+-]?\d+$/.test(val)) { out.attrs[key] = num(val); return; }
+      if ((key === 'especime' || key === 'especimes') && val) {
+        val.split(/,|\bou\b/).map(cleanName).filter(Boolean).forEach((n) => { if (!out.especimes.some((x) => nameKey(x) === nameKey(n))) out.especimes.push(n); });
+        return;
+      }
+      out.bad.push(line);
+    });
+    return out;
+  }
+  const prereqLine = (r) => Object.keys(r.attrs).map((k) => PREREQ_ATTRS[k] + ' ' + r.attrs[k]).concat(r.especimes.length ? ['espécime ' + r.especimes.join(' ou ')] : []).join(' · ');
+  // o que falta na ficha para o poder (vazio = cumpre tudo ou não tem script)
+  function prereqMissing(s, e) {
+    const r = parsePrereq(e && e.values && e.values.prereqScript);
+    const miss = Object.keys(r.attrs).filter((k) => attrOf(s, k) < r.attrs[k]).map((k) => PREREQ_ATTRS[k] + ' ' + r.attrs[k] + ' (tem ' + attrOf(s, k) + ')');
+    if (r.especimes.length && !(s.specimen && r.especimes.some((n) => nameKey(n) === nameKey(s.specimen.name)))) miss.push('ser ' + r.especimes.join(' ou ') + (s.specimen ? ' (é ' + s.specimen.name + ')' : ' (sem espécime)'));
+    return miss;
+  }
+  function prereqField(id, value, onChange) {
+    const box = h('details', 'script');
+    box.open = Boolean(String(value || '').trim());
+    const ta = h('textarea', 'input script__code');
+    ta.id = id;
+    ta.rows = 3;
+    ta.maxLength = 400;
+    ta.spellcheck = false;
+    ta.autocapitalize = 'off';
+    ta.value = value || '';
+    ta.placeholder = 'corpo: 2\nespecime: Etheriano';
+    const state = h('p', 'script__state');
+    const check = () => {
+      const r = parsePrereq(ta.value);
+      state.classList.toggle('script__state--bad', r.bad.length > 0);
+      state.textContent = r.bad.length ? 'Não entendi: ' + r.bad.join(' · ') : (ta.value.trim() ? 'O site confere: ' + (prereqLine(r) || 'nada') + '.' : '');
+    };
+    const set = (v) => { ta.value = v; onChange(v); check(); };
+    ta.addEventListener('input', () => { onChange(ta.value); check(); });
+    check();
+    const sp = h('button', 'btn btn--ghost btn--sm', '+ Espécime do banco');
+    sp.type = 'button';
+    sp.addEventListener('click', async () => {
+      const e = await openPicker({ title: 'Espécime necessário', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime' });
+      if (!e) return;
+      const r = parsePrereq(ta.value);
+      if (r.especimes.some((n) => nameKey(n) === nameKey(e.name))) return;
+      const lines = ta.value.split('\n');
+      const k = lines.findIndex((l) => /^\s*esp[eé]cimes?\s*[:=]/i.test(l));
+      if (k >= 0) lines[k] = lines[k].replace(/\s*$/, '') + ', ' + e.name;
+      else lines.push('especime: ' + e.name);
+      set(lines.filter((l, i) => l.trim() || i < lines.length - 1).join('\n').replace(/^\n+/, ''));
+      box.open = true;
+    });
+    const lab = h('label', 'visually-hidden', 'Script dos pré-requisitos');
+    lab.htmlFor = id;
+    box.append(h('summary', 'script__sum', h('span', 'script__icon', '</>'), ' script dos pré-requisitos (o site confere sozinho)'),
+      h('div', 'script__body', lab, ta, state, h('p', 'script__tools', sp),
+        h('ul', 'script__help', ...PREREQ_HELP.map((x) => h('li', '', h('code', '', x[0]), ' ' + x[1])))));
+    return box;
+  }
   // o script de uma habilidade racial vai na mesma linha do texto: regras separadas por ";"
   const scriptOneLine = (txt) => String(txt || '').split(/[\n;]/).map((x) => x.replace(/\|/g, '/').trim()).filter(Boolean).join('; ');
   function racial3Field(field, value, onChange) {
@@ -3941,6 +4016,7 @@ const FIREBASE_CONFIG = {
     }
     if (field.kind === 'racial3') return racial3Field(field, value, onChange);
     if (field.kind === 'script') return scriptField(id, value, onChange);
+    if (field.kind === 'prereqscript') return prereqField(id, value, onChange);
     if (field.kind === 'banklines') return bankLinesField(field, value, onChange);
     if (field.kind === 'powerlines') return powerLinesField(field, value, onChange);
     if (field.kind === 'textarea') {
@@ -4007,7 +4083,7 @@ const FIREBASE_CONFIG = {
       if (f.onlyWithOpts && !(type && type.opts && type.opts[f.optKey])) return; // campo que só existe em alguns tipos
       if (f.hidden) return; // escrito por outro campo (o roteiro da build)
       if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
-      if (f.kind === 'script') { grid.append(h('div', 'field field--wide', fieldControl(f, type, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
+      if (f.kind === 'script' || f.kind === 'prereqscript') { grid.append(h('div', 'field field--wide', fieldControl(f, type, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
         if (isName) d.name = v; else d.values[f.key] = v;
@@ -8094,6 +8170,8 @@ const FIREBASE_CONFIG = {
       const meta = [costTxt, v.custoUso ? 'Uso: ' + v.custoUso : '', bonusLine(p.bonus || {})].filter(Boolean).join(' · ');
       const main = h('span', 'row__main', h('span', 'row__title', p.name, ...(entryLore(p) ? [' ', entryLore(p)] : [])), h('span', 'row__meta', meta));
       if (v.efeito) main.append(h('span', 'row__text', v.efeito));
+      const miss = prereqMissing(s, p);
+      if (miss.length) main.append(h('span', 'pw-prereq', '⚠ Pré-requisito não cumprido: ' + miss.join('; ')));
       if (opts.length) {
         const more = h('button', 'link-btn pw-sub__more', 'Ver opções');
         more.type = 'button';
@@ -9322,6 +9400,9 @@ const FIREBASE_CONFIG = {
     const have = ch.sheet.powers.map((p) => p.id).filter((id) => id && !CHOICE_POWERS[id]);
     const e = await openPicker({ title: 'Adicionar poder', kinds: ['poder'], chips: ['Poder'], filter: (x) => x.kind === 'poder' && have.indexOf(x.id) < 0 });
     if (!e || sheetChar !== ch) return;
+    const miss = prereqMissing(ch.sheet, e);
+    if (miss.length && !(await askConfirm({ title: 'Pré-requisito não cumprido', text: e.name + ' pede: ' + miss.join('; ') + '. Pegar mesmo assim?', ok: 'Pegar mesmo assim' }))) return;
+    if (sheetChar !== ch) return;
     const kind = CHOICE_POWERS[e.id];
     if (kind) {
       const s = ch.sheet;
@@ -10168,8 +10249,17 @@ const FIREBASE_CONFIG = {
     if (g.origin !== name) {
       g.origin = name;
       g.lines = origin ? origin.items.map((t) => Object.assign(parseOriginLine(t), { take: true, opt: 0, bank: null })) : [];
+      // linha com o nome de um item do banco (a origem feita na Oficina grava o nome) entra como o item de verdade
+      const fill = (list) => g.lines.filter((l) => !l.bank && !l.unbanked).reduce((hit, l) => { l.bank = gearMatch(l, list); return hit || Boolean(l.bank); }, false);
+      fill(gearLib || BUILTINS);
+      if (!gearLib && origin) libSearch(INVENTORY_KINDS, '').then((list) => { gearLib = list; if (wz && wz.gear === g && g.origin === name && fill(list)) renderSetup(); }).catch(() => { /* fica o catálogo oficial */ });
     }
     return g;
+  }
+  let gearLib = null; // itens do banco (oficiais e da Oficina), buscados uma vez
+  function gearMatch(l, list) {
+    const keys = [nameKey(String(l.text).replace(/[;.]\s*$/, '').replace(/^1\s+/, ''))].concat(l.opts.length === 1 ? [nameKey(l.opts[0])] : []);
+    return list.find((x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 && keys.indexOf(nameKey(x.name)) >= 0) || null;
   }
   const cartTotal = (g) => g.cart.reduce((t, e) => t + priceOf(e), 0);
   function gearEntries(g) { // o que entra no inventário ao concluir
@@ -10314,7 +10404,7 @@ const FIREBASE_CONFIG = {
         if (l.bank) {
           const back = h('button', 'btn btn--ghost btn--sm', 'Voltar ao texto da origem');
           back.type = 'button';
-          back.addEventListener('click', () => { l.bank = null; renderSetup(); });
+          back.addEventListener('click', () => { l.bank = null; l.unbanked = true; renderSetup(); });
           acts.append(back);
         }
         box.append(acts);
@@ -10387,7 +10477,7 @@ const FIREBASE_CONFIG = {
     const grid = h('div', 'fields-grid');
     cat.fields.filter((f) => f.key !== 'lore' && !f.hidden).forEach((f) => {
       if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
-      if (f.kind === 'script') { grid.append(h('div', 'field field--wide', fieldControl(f, null, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
+      if (f.kind === 'script' || f.kind === 'prereqscript') { grid.append(h('div', 'field field--wide', fieldControl(f, null, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, null, isName ? d.name : d.values[f.key], (v) => { if (isName) d.name = v; else d.values[f.key] = v; });
       const fid = 'wzc-' + kind + '-' + f.key;

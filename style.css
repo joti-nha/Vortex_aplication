@@ -3942,3 +3942,5 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .rulepop__sub { font-weight: 800; color: var(--ambar) !important; }
 .rulepop__more { font-size: 0.82rem; font-style: italic; color: var(--nevoa-2) !important; }
 .rulepop__link { display: inline-flex; }
+.script__tools { margin: 0; }
+.pw-prereq { display: block; margin-top: 0.3rem; font-size: 0.8rem; color: var(--erro); }
