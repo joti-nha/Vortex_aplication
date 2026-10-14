@@ -7,7 +7,8 @@
   const PAL = {
     k: '#12161d', d: '#3b4352', m: '#6c7787', l: '#b4bdca', w: '#eef1f5',
     g: '#5b3c29', G: '#8a5c3c', r: '#d9434a', R: '#8f2228', y: '#f2c14e',
-    c: '#5fe3ff', C: '#2a8fb0', p: '#b57bff', v: '#5fd38a', o: '#e88a3a', s: '#2b313c'
+    c: '#5fe3ff', C: '#2a8fb0', p: '#b57bff', v: '#5fd38a', o: '#e88a3a', s: '#2b313c',
+    P: '#ff5fa8', q: '#b8286f' // rosa da Pinger
   };
   const RAR = { Comum: ['#9aa6b6', '#5d6878'], Incomum: ['#5fd38a', '#2f8a52'], Rara: ['#5aa6ff', '#2b5fb0'], Epica: ['#b57bff', '#6a3cb0'], 'Épica': ['#b57bff', '#6a3cb0'], 'Lendária': ['#f2c14e', '#b07a1c'] };
 
@@ -481,6 +482,107 @@
       '....kkmmmmmkk...',
       '...kdddddddddk..',
       '...kkkkkkkkkkk..'
+    ],
+    // Pinger: armas corpo a corpo, granadas e escudos (rosa e preto; "a" é a raridade)
+    espada: [
+      '.............kk.',
+      '............kwk.',
+      '...........kwPk.',
+      '..........kwPk..',
+      '.........kwPk...',
+      '........kwPk....',
+      '.......kwPk.....',
+      '..kk..kwPk......',
+      '..kakkwPk.......',
+      '...kaaPk........',
+      '....kaak........',
+      '...kqkkak.......',
+      '..kqk..kk.......',
+      '.kqk............',
+      'kak.............',
+      'kk..............'
+    ],
+    lanca: [
+      '............kkk.',
+      '...........kwPPk',
+      '..........kwPPk.',
+      '.........kwPPk..',
+      '.........kaak...',
+      '........kak.k...',
+      '.......kqk......',
+      '......kqk.......',
+      '.....kqk........',
+      '....kqk.........',
+      '...kak..........',
+      '..kqk...........',
+      '.kqk............',
+      'kak.............',
+      'kk..............'
+    ],
+    marreta: [
+      '.....kkkkkk.....',
+      '....kPPPPPPk....',
+      '...kPPwPPPPPk...',
+      '...kkkkkkkkkk...',
+      '...kaaaaaaaak...',
+      '...kkkkkkkkkk...',
+      '....kqqqqqqk....',
+      '....kkkkkkkk....',
+      '......kqk.......',
+      '......kqk.......',
+      '......kak.......',
+      '......kqk.......',
+      '......kqk.......',
+      '......kak.......',
+      '......kqk.......',
+      '.....kaaak......'
+    ],
+    machado: [
+      '....kkkk........',
+      '...kwPPPkk......',
+      '..kwPPPPPkk.....',
+      '..kwPPPPPkkk....',
+      '..kwPPPPaakk....',
+      '...kwPPPakqk....',
+      '....kkkk.kqk....',
+      '.........kqk....',
+      '.........kak....',
+      '.........kqk....',
+      '.........kqk....',
+      '.........kak....',
+      '.........kqk....',
+      '.........kkk....'
+    ],
+    granada: [
+      '.......kkk......',
+      '......kaaak.kk..',
+      '......kmmmkkak..',
+      '.....kkkkkkkk...',
+      '....kPPPPPPk....',
+      '...kPwPPPPPPk...',
+      '...kwPPPPPPPk...',
+      '...kkkkkkkkkk...',
+      '...kPPPPPPPPk...',
+      '...kPPPPPPPqk...',
+      '...kkkkkkkkkk...',
+      '...kPPPPPPPqk...',
+      '....kPPPPPqk....',
+      '.....kkkkkk.....'
+    ],
+    escudo: [
+      '..kkkk....kkkk..',
+      '.kPPPPk..kPPPPk.',
+      'kPwwPPPkkPPPPPqk',
+      'kPwPPPPPPPPPPPqk',
+      'kPPPPPPPPPPPPPqk',
+      'kPPPPPPkkPPPPPqk',
+      '.kPPPPkaakPPPqk.',
+      '..kPPPkaakPPqk..',
+      '...kPPPkkPPqk...',
+      '....kPPPPPqk....',
+      '.....kPPPqk.....',
+      '......kPqk......',
+      '.......kk.......'
     ]
   };
 
@@ -535,6 +637,7 @@
     let pick = ART[e.id];
     if (!pick && String(e.id).indexOf('of-') === 0 && (e.kind === 'arma-fogo' || e.kind === 'armadura') && BY_TYPE[e.typeId]) pick = [BY_TYPE[e.typeId]];
     if (!pick && String(e.id).indexOf('of-') === 0 && e.kind === 'municao' && AMMO[e.typeId]) pick = [AMMO[e.typeId], AMMO_TINT[e.id]];
+    if (!pick && String(e.id).indexOf('of-pin-') === 0) pick = [e.kind === 'granada' ? 'granada' : e.kind === 'escudo-energetico' ? 'escudo' : e.typeId];
     if (!pick || !SPR[pick[0]]) return (cache[e.id] = '');
     const rar = RAR[(e.values && e.values.raridade) || 'Comum'] || RAR.Comum;
     const pal = Object.assign({}, PAL, { a: rar[0], A: rar[1] }, pick[1] || {});

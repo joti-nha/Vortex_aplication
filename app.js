@@ -2983,7 +2983,7 @@ const FIREBASE_CONFIG = {
       ['Defesas', ['defesa', 'armadura', 'pv', 'escudo', 'blindagem']], ['Ataque', ['arma', 'ataque', 'dano', 'cadencia', 'efetivo']]],
     build: [['Build', ['tipo', 'papel']], ['Atributos', ['corpo', 'precisao', 'essencia']], ['Perícias e proficiências', ['pericia2a', 'pericia2b', 'pericia1', 'profs']]],
     '*': [['Ficha', ['fabricante', 'modelo', 'raridade', 'preco', 'classe', 'tipo', 'subtipo', 'posicao', 'para', 'custoUso']],
-      ['Combate', ['dano', 'modo', 'cadencia', 'pente', 'municao', 'disparos', 'alcance']],
+      ['Combate', ['dano', 'danoFixo', 'area', 'cd', 'modo', 'cadencia', 'pente', 'municao', 'disparos', 'alcance']],
       ['Proteção', ['armadura', 'penalidade', 'nucleo', 'capacidade', 'cc']],
       ['Uso', ['empunhadura', 'carga', 'tipoUso', 'usos', 'bonusRec', 'bonus', 'encaixes']]]
   };
@@ -3007,6 +3007,7 @@ const FIREBASE_CONFIG = {
       if (seen.has(f.key)) return;
       seen.add(f.key);
       if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
+      if (e.kind === 'escudo-energetico' && f.key === 'escudo') return; // aparece no Bônus (quando equipado)
       const label = f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '');
       if (f.kind === 'script') { add(f.key, 'Script', String(val), 'text', { code: true }); return; }
       if (f.kind === 'racial3') { add(f.key, 'Habilidades raciais', h('div', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : ''))), 'text'); return; }
@@ -3699,7 +3700,7 @@ const FIREBASE_CONFIG = {
       const e = await openPicker(field.bank === 'poder'
         ? { title: 'Poder de nascença', kinds, chips: ['Poder'], filter: (x) => x.kind === 'poder' }
         : { title: 'Item inicial (sobram ' + fmtCronos(Math.max(0, left)) + ' Cronos)', kinds, chips: [
-          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
           { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }],
         filter: (x) => kinds.indexOf(x.kind) >= 0 && (!field.budget || priceOf(x) <= left) });
       if (!e) return;
@@ -6050,9 +6051,9 @@ const FIREBASE_CONFIG = {
     { label: 'Espécimes', kinds: ['especime'] },
     { label: 'Builds', kinds: ['build'] },
     { label: 'Poderes', kinds: ['poder'] },
-    { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] },
+    { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] },
     { label: 'Munições', kinds: ['municao'] },
-    { label: 'Proteção', kinds: ['armadura', 'vestivel'] },
+    { label: 'Proteção', kinds: ['armadura', 'vestivel', 'escudo-energetico'] },
     { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] },
     { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] },
     { label: 'Itens gerais', kinds: ['item-geral'] },
@@ -6254,6 +6255,7 @@ const FIREBASE_CONFIG = {
     const out = {};
     const add = (b) => { if (b) BONUS_KEYS.forEach((k) => { if (num(b[k[0]])) out[k[0]] = (out[k[0]] || 0) + num(b[k[0]]); }); };
     add(e.bonus);
+    if (e.kind === 'escudo-energetico') add({ escudo: (e.values || {}).escudo }); // o campo do escudo energético
     if (e.slots) (e.slots.mods || []).concat(e.slots.props || []).forEach((x) => add(x.bonus));
     return out;
   }
@@ -6865,7 +6867,7 @@ const FIREBASE_CONFIG = {
     add.dataset.fid = 'rt-item-add';
     add.addEventListener('click', async () => {
       const picked = await openPickerMany({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
-        { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+        { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
         { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
       if (!picked.length || rt.r !== r) return;
       picked.forEach((e) => r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) }));
@@ -8072,9 +8074,9 @@ const FIREBASE_CONFIG = {
     { id: 'nucleo', label: 'Núcleo', full: 'Núcleo', kind: 'nucleo', accepts: 'um núcleo' },
     { id: 'cabeca', label: 'Cabeça', full: 'Cabeça', region: 'cabeca', accepts: 'vestível ou prótese de cabeça' },
     { id: 'orgaos', label: 'Órgãos', full: 'Órgãos internos', region: 'orgaos-internos', accepts: 'vestível ou prótese de órgãos internos' },
-    { id: 'braco-d', label: 'Braço dir.', full: 'Braço direito', region: 'membros-superiores', accepts: 'vestível ou prótese de membros superiores' },
+    { id: 'braco-d', label: 'Braço dir.', full: 'Braço direito', region: 'membros-superiores', accepts: 'vestível, prótese de membros superiores ou escudo energético' },
     { id: 'tronco', label: 'Tronco', full: 'Tronco', region: 'tronco', accepts: 'vestível ou prótese de tronco' },
-    { id: 'braco-e', label: 'Braço esq.', full: 'Braço esquerdo', region: 'membros-superiores', accepts: 'vestível ou prótese de membros superiores' },
+    { id: 'braco-e', label: 'Braço esq.', full: 'Braço esquerdo', region: 'membros-superiores', accepts: 'vestível, prótese de membros superiores ou escudo energético' },
     { id: 'mao-d', label: 'Mão direita', full: 'Mão direita', hand: true, accepts: 'arma ou item empunhado' },
     { id: 'armadura', label: 'Armadura', full: 'Armadura', kind: 'armadura', accepts: 'uma armadura' },
     { id: 'mao-e', label: 'Mão esquerda', full: 'Mão esquerda', hand: true, accepts: 'arma ou item empunhado' },
@@ -8091,6 +8093,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'nucleo') return ['nucleo'];
     if (isModule(i)) return ['modulo'];
     if (i.kind === 'protese-modulo' || i.kind === 'vestivel') return EQUIP.filter((e) => e.region && e.region === i.typeId).map((e) => e.id);
+    if (i.kind === 'escudo-energetico') return ['braco-d', 'braco-e'];
     return ['mao-d', 'mao-e'];
   }
   const itemBy = (u) => (sheetChar ? sheetChar.sheet.inventory.find((x) => x.uid === u) : null);
@@ -8149,6 +8152,8 @@ const FIREBASE_CONFIG = {
       if (v.nucleo === 'Sim') add('Núcleo', '+' + num(v.capacidade));
     }
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
+    if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', v.cd); add('Efeito', v.efeito); }
+    if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     if (i.kind === 'municao') { add('Serve no', v.pente); add('Por unidade', ammoUnitText(i)); add('Só para', v.para); add('Efeito', v.efeito); }
     add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
@@ -9054,7 +9059,7 @@ const FIREBASE_CONFIG = {
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
     const picked = await openPickerMany({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
-      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
       { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!picked.length || sheetChar !== ch) return;
     const wasOver = compute(ch).over;
@@ -10074,7 +10079,7 @@ const FIREBASE_CONFIG = {
       more.type = 'button';
       more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
         const picked = await openPickerMany({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
-          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
           { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
         if (!picked.length || !wz) return;
         picked.forEach((e) => g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e }));
@@ -12939,7 +12944,7 @@ const FIREBASE_CONFIG = {
   /* ---------- Bestiário e itens (só o mestre) ----------
      Bestiário como uma revista de monstros (uma página por criatura), para pôr na arena num time;
      itens para dar direto na mochila de um personagem da campanha. */
-  const GMLIB_KINDS = { bestiario: ['npc'], armas: ['arma-melee', 'arma-fogo'], municao: ['municao'], protecao: ['armadura', 'vestivel'], implantes: ['nucleo', 'protese-modulo'], gerais: ['item-geral'] };
+  const GMLIB_KINDS = { bestiario: ['npc'], armas: ['arma-melee', 'arma-fogo', 'granada'], municao: ['municao'], protecao: ['armadura', 'vestivel', 'escudo-energetico'], implantes: ['nucleo', 'protese-modulo'], gerais: ['item-geral'] };
   const GMLIB_MAX = 80;
   const NPC_CAT_COLOR = { 'Comum': '#7fa6bf', 'Maior': '#c58b3a', 'Chefão': '#d0453f' };
   let gmlibSeq = 0;
@@ -13778,7 +13783,7 @@ const FIREBASE_CONFIG = {
     ['Armas em falta (+40%)', { cat: { armas: 40 } }],
     ['Mercado instável (±15%)', { jitter: 15 }]
   ];
-  const priceCat = (kind) => (/^arma/.test(kind) ? 'armas' : kind === 'armadura' || kind === 'vestivel' ? 'protecao' : kind === 'nucleo' || kind === 'protese-modulo' ? 'implantes' : kind === 'item-geral' ? 'gerais' : 'outros');
+  const priceCat = (kind) => (/^arma/.test(kind) || kind === 'granada' ? 'armas' : kind === 'armadura' || kind === 'vestivel' || kind === 'escudo-energetico' ? 'protecao' : kind === 'nucleo' || kind === 'protese-modulo' ? 'implantes' : kind === 'item-geral' ? 'gerais' : 'outros');
   const rarKey = (r) => String(r || '').replace('Epica', 'Épica');
   function seededUnit(str) { // de –1 a 1, sempre o mesmo para o mesmo texto
     let x = 2166136261;
@@ -13903,7 +13908,7 @@ const FIREBASE_CONFIG = {
 
   async function addBankItem(sh) {
     const picked = await openPickerMany({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
-      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
+      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
       { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!picked.length) return;
     const fresh = shops.find((x) => x.id === sh.id) || sh;

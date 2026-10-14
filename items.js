@@ -43,7 +43,7 @@ window.VORTEX_ITEMS = {
   fabricantesLore: {
     'Tnnaks': 'A Tnnak fabrica equipamentos de proteção voltados para uso civil, industrial e militar. Seu catálogo básico prioriza proteção confiável e produção em larga escala, enquanto os modelos especiais incorporam sistemas experimentais e propriedades próprias.',
     'Wathrever': '',
-    'Pinger': '',
+    'Pinger': 'A Pinger fabrica armas exóticas e customizadas, feitas sob medida para quem quer ser lembrado. Toda peça sai da linha no padrão da casa, rosa e preto, e o acabamento sobe com a raridade: as comuns são pintadas, as incomuns trazem camuflagens que variam muito de uma peça para outra, as raras têm pintura artística, as épicas são customizadas com um tema e as lendárias são customizadas e reativas, mudando conforme o tema e a função. Seu catálogo cobre armas corpo a corpo, granadas e escudos energéticos.',
     'Live Service': ''
   },
   classesImplante: ['Prótese', 'Módulo'],
@@ -263,6 +263,26 @@ window.VORTEX_ITEMS = {
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
+    {
+      id: 'granada', title: 'Granada', group: 'Armas', inventory: true, image: true,
+      hint: 'Arremessada até o alcance, explode na área. O dano é fixo (rola os dados): quem passar no teste de Reflexos contra a CD sofre metade. Cada granada é usada uma vez.',
+      defaults: { empunhadura: 'Saque', carga: '0.25' },
+      fields: [
+        { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
+        { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 100' },
+        { key: 'dano', label: 'Tipo de dano', kind: 'select', options: 'tiposDano', blank: 'Sem dano' },
+        { key: 'danoFixo', label: 'Dano fixo', kind: 'text', placeholder: 'Ex.: 2d6' },
+        { key: 'area', label: 'Área', kind: 'text', placeholder: 'Ex.: Raio 3 m' },
+        { key: 'alcance', label: 'Alcance do arremesso', kind: 'select', options: 'alcances' },
+        { key: 'cd', label: 'CD de Reflexos', kind: 'number', min: 0, step: 1 },
+        { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
+        { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
+        { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true, placeholder: 'O que acontece na área além do dano.' },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
+      ]
+    },
 
     /* ------------------------------ Proteção ------------------------------ */
     {
@@ -305,6 +325,22 @@ window.VORTEX_ITEMS = {
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
+      ]
+    },
+    {
+      id: 'escudo-energetico', title: 'Escudo energético', group: 'Proteção', inventory: true, image: true, bonus: true,
+      hint: 'Emissor de campo usado no braço. Equipado, soma o valor de Escudo dele ao Escudo do personagem.',
+      defaults: { carga: '1' },
+      fields: [
+        { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
+        { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
+        { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
+        { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
+        { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
+        { key: 'escudo', label: 'Escudo (pontos que o campo dá)', kind: 'number', min: 0, step: 1 },
+        { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
+        { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
     },
@@ -750,6 +786,135 @@ window.VORTEX_ITEMS = {
     cat.push({
       id: 'of-ls-' + slug(a[0]), kind: 'item-geral', typeId: '', name: a[0],
       values: { fabricante: 'Live Service', raridade: a[1], tipoUso: a[2], usos: a[3], carga: String(a[4]), bonusRec: a[5], efeito: a[6], preco: a[7] }
+    });
+  });
+
+  /* Pinger (armas exóticas e customizadas; acabamento padrão rosa e preto).
+     Armas corpo a corpo: [nome, tipo, modelo, raridade, dano, carga, empunhadura, preço, especial] */
+  /* Acabamento de cada peça (vai no Lore). Comum: pintada · Incomum: camuflagem · Rara: pintura artística ·
+     Épica: customizada temática · Lendária: customizada e reativa (muda com o tema e a função) */
+  var ACABAMENTO = {
+    'Pink Fang': 'pintada de rosa, com guarda e cabo pretos.',
+    'Stiletto Noir': 'pintado de preto fosco, com o fio rosa.',
+    'Spike Lily': 'pintada de rosa, com a ponta preta.',
+    'Kiss Hammer': 'pintada de preto, com a cabeça rosa.',
+    'Bubblegum Hatchet': 'pintado de rosa chiclete, com o cabo preto.',
+    'Neon Cleaver': 'pintado de preto, com o fio em rosa neon.',
+    'Razor Kiss': 'camuflagem tigrada rosa e preta.',
+    'Twin Blush': 'camuflagem digital em pixels rosa, preto e cinza.',
+    'Thorn Pike': 'camuflagem de oncinha rosa sobre preto.',
+    'Velvet Maul': 'camuflagem de fibra de carbono com trama rosa.',
+    'Hex Hatchet': 'camuflagem hexagonal rosa e preta.',
+    'Chainsaw Rosé': 'pintura de rosas aerografadas subindo pela serra.',
+    'Neon Katana': 'pintura em degradê de rosa neon para preto, como um pôr do sol na lâmina.',
+    'Stinger Coil': 'pintura de escamas de serpente, preta com ventre rosa.',
+    'Pulse Gavel': 'pintura de ondas sonoras rosa contornando a cabeça.',
+    'Butterfly Guillotine': 'pintura de asas de borboleta nas duas lâminas.',
+    'Heartbreaker': 'customizada no tema coração partido: a lâmina tem a forma de meio coração, com uma rachadura rosa que brilha.',
+    'Rose Glaive': 'customizada no tema roseira: a haste tem espinhos de metal e a ponta abre como um botão de rosa.',
+    'Black Bubble Hammer': 'customizada no tema chiclete: a cabeça é uma bolha preta translúcida com o núcleo rosa girando dentro.',
+    'Valentina': 'customizada e reativa no tema dança: a lâmina acende mais rosa a cada acúmulo de Ritmo e volta ao preto quando os acúmulos zeram.',
+    'Pink Pop': 'pintada de rosa, com faixas pretas.',
+    'Static Candy': 'pintada como uma bala de goma, rosa e preta.',
+    'Blush Smoke': 'pintada de preto, com a tampa rosa.',
+    'Kiss Flash': 'camuflagem de oncinha rosa e preta.',
+    'Thermite Lipstick': 'camuflagem tigrada no tubo do batom.',
+    'Acid Bloom': 'pintura de pétalas que se abrem quando o pino sai.',
+    'Magnet Heart': 'pintura de coração anatômico em rosa e preto.',
+    'Black Rose': 'customizada no tema rosa negra: abre em pétalas pretas antes da primeira explosão e em rosas antes da segunda.',
+    'Pink Nova': 'customizada no tema estrela: a casca é uma pequena estrela rosa que pisca antes do pulso.',
+    'Pinger Finale': 'customizada e reativa no tema fogos de artifício: o desenho dos fogos muda conforme o número de criaturas na área.',
+    'Pink Veil': 'pintado de rosa, com o campo em rosa claro.',
+    'Pinger Halo': 'pintado de preto, com o campo rosa.',
+    'Bubble Guard': 'pintado de rosa chiclete, com o campo em forma de bolha.',
+    'Noir Field': 'camuflagem digital preta, com o campo quase invisível.',
+    'Rose Barrier': 'camuflagem floral rosa e preta, que o campo repete.',
+    'Thorn Dome': 'pintura de espinhos de roseira no braçal, que viram fios de luz no campo.',
+    'Prism Shell': 'pintura perolada que espalha o campo em reflexos rosa.',
+    'Blackout Mantle': 'customizado no tema eclipse: o campo é preto, com uma borda rosa que só aparece quando é atingido.',
+    'Heartcore Aegis': 'customizado no tema coração: o braçal tem um núcleo rosa que pulsa como um batimento.',
+    'Sakura Overdrive': 'customizado e reativo no tema cerejeira: o campo solta pétalas rosa a cada golpe recebido e fica mais denso quando é partilhado com os aliados.'
+  };
+  var pingerLore = function (n) { return 'Acabamento: ' + ACABAMENTO[n]; };
+  var TIPO_MELEE = { 'Espada': 'espada', 'Lança': 'lanca', 'Marreta': 'marreta', 'Machado': 'machado' };
+  [
+    ['Pink Fang', 'Espada', 'PF-1', 'Comum', 'Cortante', 1, 'Uma mão', '250'],
+    ['Stiletto Noir', 'Espada', 'SN-0', 'Comum', 'Cortante', 0.5, 'Saque', '150'],
+    ['Spike Lily', 'Lança', 'SL-2', 'Comum', 'Perfurante', 2, 'Duas mãos', '300'],
+    ['Kiss Hammer', 'Marreta', 'KH-3', 'Comum', 'Contundente', 2, 'Duas mãos', '350'],
+    ['Bubblegum Hatchet', 'Machado', 'BH-1', 'Comum', 'Cortante', 1, 'Uma mão', '200'],
+    ['Neon Cleaver', 'Machado', 'NC-2', 'Comum', 'Cortante', 2, 'Duas mãos', '400'],
+    ['Razor Kiss', 'Espada', 'RK-7', 'Incomum', 'Cortante', 2, 'Duas mãos', '600', 'Propriedade: 1'],
+    ['Twin Blush', 'Espada', 'TB-2', 'Incomum', 'Cortante', 1, 'Uma mão', '550', 'Propriedade: 1'],
+    ['Thorn Pike', 'Lança', 'TP-4', 'Incomum', 'Perfurante', 3, 'Duas mãos', '650', 'Propriedade: 1'],
+    ['Velvet Maul', 'Marreta', 'VM-5', 'Incomum', 'Contundente', 3, 'Duas mãos', '750', 'Propriedade: 1'],
+    ['Hex Hatchet', 'Machado', 'HX-2', 'Incomum', 'Contundente', 1, 'Uma mão', '500', 'Propriedade: 1'],
+    ['Chainsaw Rosé', 'Espada', 'CR-9', 'Rara', 'Cortante', 2, 'Duas mãos', '1.200',
+      'Especial (exótica): Lâmina-serra.\nO sangramento causado pelo crítico desta espada é de 2d6 em vez de d6.'],
+    ['Neon Katana', 'Espada', 'NK-1', 'Rara', 'Cortante', 2, 'Duas mãos', '1.500',
+      'Especial (exótica): Fio térmico.\nSeus acertos causam +1d4 de dano de fogo (dano de efeito).'],
+    ['Stinger Coil', 'Lança', 'SC-6', 'Rara', 'Perfurante', 2, 'Uma mão', '1.100',
+      'Especial (exótica): Haste retrátil.\nComo ação livre, uma vez por turno, a haste encolhe (carga ½, empunhadura Saque) ou estende de volta. O alcance da lança segue a carga atual.'],
+    ['Pulse Gavel', 'Marreta', 'PG-8', 'Rara', 'Contundente', 3, 'Duas mãos', '1.400',
+      'Especial (exótica): Cabeça de pulso.\nAo acertar, você pode gastar 1 PE para empurrar o alvo 3 m em linha reta para longe de você.'],
+    ['Butterfly Guillotine', 'Machado', 'BG-3', 'Rara', 'Cortante', 2, 'Uma mão', '1.300',
+      'Especial (exótica): Cabo magnético.\nPode ser arremessado até alcance Curto com o mesmo teste de ataque corpo a corpo. Volta à sua mão no fim do seu turno.'],
+    ['Heartbreaker', 'Machado', 'HB-X', 'Epica', 'Cortante', 3, 'Duas mãos', '2.300',
+      'Propriedade: 1\nEspecial (exótica): Quando um golpe seu zera o Escudo de um alvo, seu próximo ataque contra ele neste turno recebe +2.'],
+    ['Rose Glaive', 'Lança', 'RG-5', 'Epica', 'Perfurante', 3, 'Duas mãos', '2.100',
+      'Propriedade: 1\nEspecial (exótica): Ponta de plasma rosa.\nO dano desta lança ignora a resistência do Escudo a Perfurante.'],
+    ['Black Bubble Hammer', 'Marreta', 'BB-9', 'Epica', 'Contundente', 3, 'Duas mãos', '2.600',
+      'Propriedade: 1\nEspecial (exótica): Núcleo gravitacional.\nUma vez por cena, ao acertar, as criaturas adjacentes ao alvo fazem Reflexos (CD 9) ou ficam Caídas.'],
+    ['Valentina', 'Espada', 'VAL-01', 'Lendária', 'Cortante', 2, 'Uma mão', '4.800',
+      'Propriedade: 1 + Especial: Dança Rosa\nUtilize 3 PE. Até o fim da cena, cada acerto com esta espada dá um acúmulo de Ritmo (máximo igual à sua Precisão). Cada acúmulo dá +1 nos ataques com ela e +1 de Defesa. Errar um ataque zera os acúmulos.\nA espada não pode ser desarmada contra a vontade do portador.']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-pin-' + slug(a[0]), kind: 'arma-melee', typeId: TIPO_MELEE[a[1]], name: a[0],
+      values: { fabricante: 'Pinger', modelo: a[2] + ' / Pinger', raridade: a[3], preco: a[7], dano: a[4], carga: String(a[5]), empunhadura: a[6], especial: a[8] || '', lore: pingerLore(a[0]) }
+    });
+  });
+
+  /* Granadas Pinger: [nome, raridade, dano, dano fixo, área, alcance, CD de Reflexos, carga, preço, efeito] */
+  [
+    ['Pink Pop', 'Comum', 'Explosivo', '2d6', 'Raio 3 m', 'Curto', 7, 0.25, '80', 'Fragmentação. Quem passa no teste de Reflexos sofre metade do dano.'],
+    ['Static Candy', 'Comum', 'Elétrico', '1d6', 'Raio 3 m', 'Curto', 7, 0.25, '90', 'Pulso elétrico. Quem passa no teste de Reflexos sofre metade do dano.'],
+    ['Blush Smoke', 'Comum', '', '', 'Raio 6 m', 'Curto', 0, 0.25, '50', 'Fumaça rosa: a área fica obscurecida por 2 rodadas. Quem está dentro dela tem cobertura leve contra ataques à distância.'],
+    ['Kiss Flash', 'Incomum', '', '', 'Raio 6 m', 'Curto', 8, 0.25, '200', 'Clarão rosa. Quem falhar no teste de Reflexos fica Ofuscado até o fim do próximo turno dele.'],
+    ['Thermite Lipstick', 'Incomum', 'Fogo', '2d6', 'Raio 3 m', 'Curto', 8, 0.25, '250', 'Tem formato de batom. A área queima por 2 rodadas: quem começar o turno nela sofre 1d6 de fogo.'],
+    ['Acid Bloom', 'Rara', 'Ácido/químico', '3d6', 'Raio 3 m', 'Médio', 9, 0.25, '450', 'Abre como uma flor. Quem falhar no teste de Reflexos fica com –1 de Armadura até o fim da cena (corrosão).'],
+    ['Magnet Heart', 'Rara', 'Impacto', '2d6', 'Raio 6 m', 'Curto', 9, 0.5, '500', 'Núcleo gravitacional: antes do dano, puxa as criaturas da área 3 m em direção ao centro.'],
+    ['Black Rose', 'Epica', 'Explosivo', '4d6', 'Raio 6 m', 'Médio', 10, 0.5, '900', 'Explode duas vezes: a segunda explosão (2d6 explosivo, mesma área e CD) acontece no começo da próxima rodada.'],
+    ['Pink Nova', 'Epica', 'Elétrico', '3d6', 'Raio 6 m', 'Médio', 10, 0.5, '1.000', 'Pulso eletromagnético. Quem falhar no teste de Reflexos fica com os módulos inativos até o fim do próximo turno dele.'],
+    ['Pinger Finale', 'Lendária', 'Explosivo', '6d6', 'Raio 9 m', 'Médio', 12, 1, '3.000',
+      'Especial: Grand Finale\nUm show de fogos rosa e preto. Quem falhar no teste de Reflexos também fica Atordoado. Você escolhe até [Precisão] criaturas na área que não são afetadas.']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-pin-' + slug(a[0]), kind: 'granada', typeId: '', name: a[0],
+      values: { fabricante: 'Pinger', raridade: a[1], preco: a[8], dano: a[2], danoFixo: a[3], area: a[4], alcance: a[5], cd: a[6] ? String(a[6]) : '', empunhadura: 'Saque', carga: String(a[7]), efeito: a[9], lore: pingerLore(a[0]) }
+    });
+  });
+
+  /* Escudos energéticos Pinger: [nome, modelo, raridade, escudo, carga, preço, especial] */
+  [
+    ['Pink Veil', 'PV-1', 'Comum', 4, 0.5, '300'],
+    ['Pinger Halo', 'HL-2', 'Comum', 5, 1, '400'],
+    ['Bubble Guard', 'BG-3', 'Comum', 6, 1, '500'],
+    ['Noir Field', 'NF-4', 'Incomum', 7, 0.5, '800', 'Propriedade: 1'],
+    ['Rose Barrier', 'RB-5', 'Incomum', 8, 1, '900', 'Propriedade: 1'],
+    ['Thorn Dome', 'TD-6', 'Rara', 10, 1, '1.500',
+      'Especial (exótica): Espinhos de luz.\nQuem acertar você corpo a corpo enquanto seu Escudo estiver acima de 0 sofre 1d4 de dano elétrico.'],
+    ['Prism Shell', 'PS-7', 'Rara', 10, 1, '1.600',
+      'Especial (exótica): Refração.\nQuando um ataque de Laser ou de dano de Energia atinge seu Escudo, o atacante sofre 1d4 de dano de energia.'],
+    ['Blackout Mantle', 'BM-8', 'Epica', 12, 1, '2.400',
+      'Propriedade: 1\nEspecial (exótica): Com o Escudo acima de 0, você pode gastar 2 PE para ficar camuflado (–3 para ser percebido e nos ataques à distância contra você) até se mover ou atacar.'],
+    ['Heartcore Aegis', 'HA-9', 'Epica', 14, 1, '2.600',
+      'Propriedade: 1\nEspecial (exótica): Uma vez por cena, quando seu Escudo chega a 0, ele volta com metade do valor máximo no começo do seu próximo turno.'],
+    ['Sakura Overdrive', 'SO-X', 'Lendária', 20, 1, '5.500',
+      'Propriedade: 1 + Especial: Coração Partilhado\nUtilize 4 PE. Projete o campo em até [Essência] aliados em alcance Curto: cada um ganha Escudo temporário igual à metade do seu Escudo atual até o fim da cena. Enquanto durar, dano elétrico e contundente não é dobrado contra esses Escudos.']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-pin-' + slug(a[0]), kind: 'escudo-energetico', typeId: '', name: a[0],
+      values: { fabricante: 'Pinger', modelo: a[1] + ' / Pinger', raridade: a[2], preco: a[5], escudo: String(a[3]), carga: String(a[4]), especial: a[6] || '', lore: pingerLore(a[0]) }
     });
   });
 })();
