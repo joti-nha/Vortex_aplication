@@ -193,15 +193,23 @@
 
       <section class="block" aria-labelledby="cat-title">
         <h2 class="block__title" id="cat-title">Origens, espécimes, poderes e itens</h2>
-        <p class="block__hint">Toque numa categoria para ver tudo dela, ou busque pelo nome. Toque num registro para ver todos os dados. Mostra o catálogo oficial e o que as pessoas salvaram no banco.</p>
-        <div class="cat-chips" id="cat-chips" role="group" aria-label="Categorias"></div>
-        <div class="field">
-          <label class="field__label" for="cat-q">Buscar no catálogo</label>
-          <input class="input" id="cat-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ex.: Android, Mercenário, kit médico">
+        <p class="block__hint">Tudo do catálogo oficial e do banco, em ordem alfabética. Busque pelo nome, escolha a categoria ou filtre pela especificação. Toque num registro para ver todos os dados.</p>
+        <div class="lib-tools">
+          <div class="field">
+            <label class="field__label" for="cat-q">Buscar pelo nome</label>
+            <input class="input" id="cat-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ex.: Android, Mercenário, kit médico">
+          </div>
+          <div class="field">
+            <label class="field__label" for="cat-kind">Categoria</label>
+            <select class="input" id="cat-kind"></select>
+          </div>
+          <label class="check" title="Procura também na descrição, nos efeitos, na lore e em tudo o que o registro guarda, aceitando erros de digitação"><input type="checkbox" id="cat-deep"><span>Busca aprofundada</span></label>
+          <label class="check"><input type="checkbox" id="cat-fav"><span>Só favoritos</span></label>
+          <label class="check"><input type="checkbox" id="cat-mine"><span>Só os meus</span></label>
         </div>
         <p class="block__hint" id="cat-hint" role="status"></p>
         <ul class="rows" id="cat-list"></ul>
-        <p class="empty" id="cat-empty" hidden>Nada encontrado nessa categoria.</p>
+        <p class="empty" id="cat-empty" hidden>Nada encontrado. Mude a busca ou a categoria, ou marque a busca aprofundada.</p>
       </section>
     </section>
 
@@ -412,6 +420,7 @@
             <label class="field__label" for="lib-kind">Categoria</label>
             <select class="input" id="lib-kind"></select>
           </div>
+          <label class="check" title="Procura também na descrição, nos efeitos, na lore e em tudo o que o registro guarda, aceitando erros de digitação"><input type="checkbox" id="lib-deep"><span>Busca aprofundada</span></label>
           <label class="check"><input type="checkbox" id="lib-fav"><span>Só favoritos</span></label>
           <label class="check"><input type="checkbox" id="lib-mine"><span>Só os meus</span></label>
         </div>

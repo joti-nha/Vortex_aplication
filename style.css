@@ -1220,7 +1220,9 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 .star[aria-pressed="true"] { color: var(--ambar); }
 .star:hover { color: var(--ambar); }
 .lib-block { margin-top: 3rem; }
-.lib-tools { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto auto; align-items: end; gap: 0.75rem 1.25rem; margin-bottom: 0.75rem; }
+.lib-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 1.25rem; margin-bottom: 0.75rem; }
+.lib-tools .field { flex: 1 1 12rem; margin: 0; }
+.lib-tools .field:first-child { flex: 2 1 16rem; }
 
 /* ---------- Oficina: formulário ---------- */
 .item-form__top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.25rem 1.75rem; }
@@ -1327,8 +1329,7 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
   .res-other, .stats { grid-template-columns: 1fr; }
   .res { grid-template-columns: minmax(0, 1fr) auto; }
   .res__src { grid-column: 1 / -1; }
-  .lib-tools { grid-template-columns: 1fr 1fr; }
-  .lib-tools .field { grid-column: 1 / -1; }
+  .lib-tools .field { flex-basis: 100%; }
   .quick-item { grid-template-columns: minmax(0, 1fr) 6rem; }
   .quick-item .btn { grid-column: 1 / -1; }
   .inv__panel { padding-left: 0.25rem; }
@@ -1478,8 +1479,6 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 
 .chip--toggle { min-height: 32px; color: var(--nevoa-2); cursor: pointer; }
 .chip--toggle:hover { border-color: var(--nevoa); }
-.cat-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
-.cat-chips .chip--toggle { min-height: 40px; padding-inline: 0.9rem; }
 .chip--toggle[aria-pressed="true"] { border-color: var(--ambar); background: rgba(var(--ambar-rgb), 0.16); color: var(--nevoa); }
 
 .member__sub { margin: 1rem 0 0.5rem; font: 700 var(--t-m)/1.2 var(--fonte-titulo); }

@@ -221,6 +221,18 @@ const FIREBASE_CONFIG = {
     const rest = Object.keys(v).filter((k) => ENTRY_TAGS.indexOf(k) < 0 && typeof v[k] === 'string').map((k) => v[k]);
     return [[e.name, 10], [tags.filter(Boolean).join(' '), 4], [rest.join(' '), 1]];
   }
+  // busca aprofundada: todo texto guardado no registro (listas, slots, peças instaladas, lore), aceitando erro de digitação
+  function deepText(v, out) {
+    if (v == null) return out;
+    if (typeof v === 'string' || typeof v === 'number') { if (typeof v === 'string' && /^(data:|https?:)/.test(v)) return out; out.push(String(v)); return out; }
+    if (Array.isArray(v)) { v.forEach((x) => deepText(x, out)); return out; }
+    if (typeof v === 'object') Object.keys(v).forEach((k) => { if (k !== 'image' && k !== 'thumb' && k !== 'id') deepText(v[k], out); });
+    return out;
+  }
+  function entryFieldsDeep(e) {
+    const f = entryFields(e);
+    return [f[0], f[1], [deepText([e.values, e.slots, e.bonus], []).join(' '), 4]];
+  }
   function matchesText(hay, q) { return searchScore([[hay, 4]], q) > 0; }
   const fileSlug = (name) => nameKey(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'ficha';
 
@@ -2692,7 +2704,7 @@ const FIREBASE_CONFIG = {
   // Catálogo oficial sempre aparece; se o banco compartilhado falhar, o aviso fica em libSearch.warn
   /* Busca do banco (oficiais + criados), já ordenada por relevância quando há texto.
      Sem resultado, libSearch.suggest traz um "Você quis dizer…?" montado com os nomes da categoria. */
-  async function libSearch(kinds, q) {
+  async function libSearch(kinds, q, opts) {
     const inKinds = (e) => !kinds || kinds.indexOf(e.kind) >= 0;
     libSearch.warn = '';
     libSearch.suggest = '';
@@ -2700,7 +2712,7 @@ const FIREBASE_CONFIG = {
     try { own = (await db.searchLibrary({ kinds, query: '' })).map(decorate); }
     catch (err) { console.warn(err); libSearch.warn = errorMessage(err); }
     const all = BUILTINS.filter(inKinds).filter((e) => secretOk(e, q)).concat(own.filter(inKinds));
-    const found = rankSearch(all, q, entryFields);
+    const found = rankSearch(all, q, opts && opts.deep ? entryFieldsDeep : entryFields);
     if (!found.length && words(q || '').length) libSearch.suggest = suggestQuery(q, all.map((e) => [e.name, e.typeTitle, e.kindTitle].join(' ')));
     return found;
   }
@@ -6178,7 +6190,7 @@ const FIREBASE_CONFIG = {
     const q = $('#lib-q').value;
     const kind = $('#lib-kind').value;
     let list;
-    try { list = await libSearch(kind ? [kind] : ITEM_KINDS, q); }
+    try { list = await libSearch(kind ? [kind] : ITEM_KINDS, q, { deep: $('#lib-deep').checked }); }
     catch (err) { if (seq === libSeq) $('#lib-hint').textContent = errorMessage(err); return; }
     if (seq !== libSeq) return;
     const favs = favLoad();
@@ -6213,7 +6225,7 @@ const FIREBASE_CONFIG = {
   const libFacets = facetBox(() => runLib());
   $('#lib-hint').before(libFacets.box);
   $('#lib-kind').addEventListener('change', () => { libFacets.reset(); runLib(); });
-  ['#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
+  ['#lib-fav', '#lib-mine', '#lib-deep'].forEach((sel) => $(sel).addEventListener('change', runLib));
   (function fillLibKinds() {
     const sel = $('#lib-kind');
     const all = h('option', '', 'Todas');
@@ -6222,8 +6234,10 @@ const FIREBASE_CONFIG = {
     ITEM_DATA.categories.filter((c) => ITEM_KINDS.indexOf(c.id) >= 0).forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
   })();
 
-  /* Catálogo na tela Personagens: ver todas as origens, espécimes, poderes e itens, só leitura */
+  /* Catálogo na tela Personagens: igual ao banco de dados da Oficina, mas com origens, espécimes, poderes,
+     builds, itens e NPCs. Já abre com tudo em ordem alfabética; a busca, a categoria e os filtros só estreitam */
   const CAT_GROUPS = [
+    { label: 'Tudo', kinds: null },
     { label: 'Origens', kinds: ['origem'] },
     { label: 'Espécimes', kinds: ['especime'] },
     { label: 'Builds', kinds: ['build'] },
@@ -6234,52 +6248,40 @@ const FIREBASE_CONFIG = {
     { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] },
     { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] },
     { label: 'Itens gerais', kinds: ['item-geral'] },
-    { label: 'NPCs e inimigos', kinds: ['npc'] },
-    { label: 'Tudo', kinds: null }
+    { label: 'NPCs e inimigos', kinds: ['npc'] }
   ];
-  const catState = { group: null, seq: 0 };
+  const catState = { seq: 0 };
   async function runCatalog() {
     const seq = ++catState.seq;
     const q = $('#cat-q').value.trim();
-    const g = catState.group;
-    if (!g && !q) {
-      $('#cat-list').replaceChildren();
-      $('#cat-empty').hidden = true;
-      $('#cat-hint').textContent = '';
-      catFacets.box.hidden = true;
-      return;
-    }
-    $('#cat-hint').textContent = 'Buscando...';
-    let list = await libSearch(g ? g.kinds : null, q);
+    const g = CAT_GROUPS[Number($('#cat-kind').value)] || CAT_GROUPS[0];
+    let list;
+    try { list = await libSearch(g.kinds, q, { deep: $('#cat-deep').checked }); }
+    catch (err) { if (seq === catState.seq) $('#cat-hint').textContent = errorMessage(err); return; }
     if (seq !== catState.seq) return;
+    const favs = favLoad();
+    if ($('#cat-fav').checked) list = list.filter((e) => favs.has(e.id));
+    if ($('#cat-mine').checked) list = list.filter((e) => e.mine);
     const suggest = list.length ? '' : libSearch.suggest;
-    list = catFacets.apply(list, g && g.kinds ? g.kinds : ITEM_DATA.categories.map((c) => c.id));
-    if (!hasQuery(q)) list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+    list = catFacets.apply(list, g.kinds || ITEM_DATA.categories.map((c) => c.id));
+    if (!hasQuery(q)) list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
-    $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
+    $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e,
+      e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [],
+      () => { if ($('#cat-fav').checked) runCatalog(); })));
     $('#cat-empty').hidden = list.length > 0 || Boolean(secret);
     suggestAfter($('#cat-list'), secret ? '' : suggest, $('#cat-q'), runCatalog);
-    $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
+    $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g.kinds ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
       + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');
   }
-  (function fillCatChips() {
-    $('#cat-chips').replaceChildren(...CAT_GROUPS.map((g) => {
-      const b = h('button', 'chip chip--toggle', g.label);
-      b.type = 'button';
-      b.setAttribute('aria-pressed', 'false');
-      b.addEventListener('click', () => {
-        catState.group = catState.group === g ? null : g;
-        catFacets.reset();
-        $$('#cat-chips .chip--toggle').forEach((x) => x.setAttribute('aria-pressed', String(x === b && catState.group === g)));
-        runCatalog();
-      });
-      return b;
-    }));
+  (function fillCatKinds() {
+    $('#cat-kind').replaceChildren(...CAT_GROUPS.map((g, i) => { const o = h('option', '', g.label); o.value = String(i); return o; }));
   })();
   const catFacets = facetBox(() => runCatalog());
-  catFacets.box.hidden = true;
   $('#cat-hint').before(catFacets.box);
   $('#cat-q').addEventListener('input', debounce(runCatalog, 300));
+  $('#cat-kind').addEventListener('change', () => { catFacets.reset(); runCatalog(); });
+  ['#cat-fav', '#cat-mine', '#cat-deep'].forEach((sel) => $(sel).addEventListener('change', runCatalog));
 
   // Itens da versão anterior (salvos só neste aparelho): entram no banco uma única vez
   async function migrateOldItems() {
