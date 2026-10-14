@@ -1043,7 +1043,8 @@ window.VORTEX_REGRAS = {
           ['p', 'No início de cada turno, faça um teste para regenerar o hospedeiro: 2d6 + Fortitude + Tecnologia. A regeneração segue a regra normal de Cura: o teste é contra a CD do recurso (6, ou 10 se estiver abaixo da metade, +2 por condição negativa) e o hospedeiro recupera a diferença entre o resultado e a CD. Cura PV e também Blindagem.'],
           ['h4', 'Geração de Matéria Simbiôntica'],
           ['p', 'O simbionte estica a própria massa amorfa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões e martelos sólidos. Simbionte e hospedeiro devem entrar em consenso na criação das armas e do tipo de dano.'],
-          ['p', 'Os simbiontes não criam armas de dano de Fogo nem Explosivo.']
+          ['p', 'Os simbiontes não criam armas de dano de Fogo nem Explosivo.'],
+          ['p', 'O simbionte também é capaz de replicar mods e acessórios que tenha assimilado alguma vez.']
         ]]
       ]
     },
