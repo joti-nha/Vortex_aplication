@@ -6295,7 +6295,9 @@ const FIREBASE_CONFIG = {
   const tecnoLists = () => (window.VORTEX_REGRAS || {}).tecnoListas || [];
   const tecnoPicks = (p) => { const n = tecnoLevel(p); const l = Array.isArray(p.listas) ? p.listas : []; return Array.from({ length: n }, (_, k) => (tecnoLists().some((x) => x[0] === l[k]) ? l[k] : '')); };
   function powerUpCost(p) {
-    const custo = num(p.values && p.values.custo);
+    // poder oficial: vale o custo atual do banco, mesmo numa ficha que guardou o custo antigo
+    const off = p && p.id ? BUILTINS.find((x) => x.id === p.id && x.kind === 'poder') : null;
+    const custo = num(((off || p).values || {}).custo);
     const base = (powerOpts(p).length ? custo * powerPicks(p).length : custo) + (styleOf(p) ? styleOf(p).cost : 0);
     return base + powerUps(p).reduce((t, u) => t + (u.cost === '' ? 1 : num(u.cost)) * upCount(p, u.name), 0);
   }
