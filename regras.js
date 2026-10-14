@@ -269,6 +269,7 @@ window.VORTEX_REGRAS = {
 
         ['h2', 'Distribuição Inicial'],
         ['ul', ['2 perícias +2', '1 perícia +1']],
+        ['p', 'Ou **distribuição livre**: os mesmos 5 pontos vão onde você quiser, respeitando o limite de +3 por perícia.'],
 
         ['h2', 'Progressão'],
         ['ul', [

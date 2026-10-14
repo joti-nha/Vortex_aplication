@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=157">
+  <link rel="stylesheet" href="style.css?v=160">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -1033,6 +1033,17 @@
     </div>
   </dialog>
 
+  <!-- Regra de um campo do item (cadência, pente...): resumo tirado do Compêndio e link para a regra completa -->
+  <dialog class="dialog rulepop" id="rule-dialog" aria-labelledby="rule-title">
+    <div class="picker__head">
+      <h2 id="rule-title"></h2>
+      <button class="btn btn--ghost btn--sm" type="button" id="rule-close">Fechar</button>
+    </div>
+    <p class="block__hint" id="rule-meta"></p>
+    <div class="rulepop__body" id="rule-body"></div>
+    <a class="btn btn--primary btn--sm rulepop__link" id="rule-link" href="#/rules">Ir para a regra completa no Compêndio</a>
+  </dialog>
+
   <!-- Escolha de um poder: a perícia do Doutor ou o tipo de arma/armadura da proficiência -->
   <dialog class="dialog" id="choice-dialog" aria-labelledby="choice-title">
     <form class="picker" method="dialog">
@@ -1065,9 +1076,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=157"></script>
-  <script src="items.js?v=157"></script>
-  <script src="pixelart.js?v=157"></script>
-  <script src="app.js?v=157"></script>
+  <script src="regras.js?v=160"></script>
+  <script src="items.js?v=160"></script>
+  <script src="pixelart.js?v=160"></script>
+  <script src="app.js?v=160"></script>
 </body>
 </html>
