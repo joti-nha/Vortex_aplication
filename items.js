@@ -37,6 +37,7 @@ window.VORTEX_ITEMS = {
   categoriasNpc: ['Comum', 'Maior', 'Chefão'],
   formasAtaque: ['Corpo a corpo', 'À distância', 'Tecnológico'],
   efetivoContra: ['Escudo', 'Blindagem', 'Vida'],
+  atributosReq: ['Corpo', 'Precisão', 'Essência'], // requisito de atributo bruto (vestíveis, mochilas)
   // criadoras/companhias/corporações do mundo (tag opcional dos itens; só se escolhe na criação)
   fabricantes: ['Wathrever', 'Pinger', 'Live Service', 'Tnnaks'],
   // lore de cada criadora: aparece ao tocar no selo dela (escreva aqui o texto do mundo)
@@ -316,7 +317,8 @@ window.VORTEX_ITEMS = {
         { id: 'tronco', title: 'Tronco' },
         { id: 'membros-superiores', title: 'Membros superiores', sub: 'um braço' },
         { id: 'membros-inferiores', title: 'Membros inferiores', sub: 'uma perna' },
-        { id: 'orgaos-internos', title: 'Órgãos internos' }
+        { id: 'orgaos-internos', title: 'Órgãos internos' },
+        { id: 'mochila', title: 'Mochila', sub: '+1 de Carga a cada 2 espaços' }
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
@@ -324,6 +326,9 @@ window.VORTEX_ITEMS = {
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
+        { key: 'espacos', label: 'Espaços (mochila: +1 de Carga a cada 2)', kind: 'number', min: 0, step: 1 },
+        { key: 'reqAtributo', label: 'Requisito: atributo', kind: 'select', options: 'atributosReq', blank: 'Nenhum' },
+        { key: 'reqValor', label: 'Requisito: valor mínimo (bruto)', kind: 'number', min: 0, step: 1 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
@@ -923,6 +928,30 @@ window.VORTEX_ITEMS = {
 (function () {
   window.VORTEX_ITEMS.catalogo.forEach(function (e) {
     if (e.kind === 'acessorio' && !(e.values || {}).preco) e.values.preco = '17';
+  });
+})();
+
+/* Mochilas (vestíveis): +1 de Carga a cada 2 espaços, só com o requisito de atributo bruto cumprido.
+   [nome, raridade, espaços, requisito (atributo), valor, carga, preço, efeito] */
+(function () {
+  var cat = window.VORTEX_ITEMS.catalogo;
+  var slug = function (t) { return String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+  [
+    ['Mochila escolar', 'Comum', 2, '', 0, 0.5, '80', ''],
+    ['Pochete tática', 'Comum', 2, 'Precisão', 1, 0.25, '120', 'Fica na cintura: sacar um item dela conta como Saque.'],
+    ['Mochila de trilha', 'Comum', 4, 'Corpo', 1, 1, '150', ''],
+    ['Mochila cargueira', 'Incomum', 6, 'Corpo', 2, 1, '400', ''],
+    ['Mochila modular', 'Incomum', 6, 'Precisão', 2, 1, '450', 'Bolsos modulares: uma vez por cena, pegar um item dela custa uma ação a menos (Movimento vira Bônus).'],
+    ['Mochila de expedição', 'Rara', 8, 'Corpo', 3, 1.5, '900', 'Armação reforçada: ganho em testes de Atletismo para não cair ou ser derrubado enquanto estiver sobrecarregado.'],
+    ['Mochila de compressão', 'Rara', 8, 'Essência', 2, 1, '1.000', 'Um campo leve comprime o conteúdo; não faz barulho nem chacoalha (não atrapalha a furtividade).'],
+    ['Mochila de operações', 'Epica', 10, 'Precisão', 3, 1, '2.000', 'Organização perfeita: recarregar com munição desta mochila custa uma categoria de ação a menos, uma vez por rodada.'],
+    ['Exomochila servoassistida', 'Epica', 10, 'Essência', 3, 2, '2.200', 'Braços servo seguram a carga: enquanto vestida, estar sobrecarregado não reduz seu deslocamento.'],
+    ['Mochila dimensional', 'Lendária', 14, 'Essência', 4, 0.5, '5.000', 'Especial: Bolso de Bolso\nO interior é maior que o exterior. Uma vez por rodada, tirar um item guardado nela é ação livre.']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-moc-' + slug(a[0]), kind: 'vestivel', typeId: 'mochila', name: a[0],
+      values: { raridade: a[1], espacos: String(a[2]), reqAtributo: a[3], reqValor: a[3] ? String(a[4]) : '', carga: String(a[5]), preco: a[6], efeito: a[7] }
+    });
   });
 })();
 
