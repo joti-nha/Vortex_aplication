@@ -6228,6 +6228,9 @@ const FIREBASE_CONFIG = {
   // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
   // atributo efetivo: o da ficha + o +1 dos UP (a cada 4) + o ajuste manual
   const attrOf = (s, id) => num(s.attrs[id]) + num((s.upAttr || {})[id]) + num((s.attrMod || {})[id]);
+  // requisito de atributo bruto (mochilas e outros vestíveis): sem ele, o item vestido não dá benefício
+  const REQ_ATTR = { 'Corpo': 'corpo', 'Precisão': 'precisao', 'Essência': 'essencia' };
+  const reqMet = (s, i) => { const v = i.values || {}; return !REQ_ATTR[v.reqAtributo] || attrOf(s, REQ_ATTR[v.reqAtributo]) >= num(v.reqValor); };
   /* perícias dadas pela espécime (script "pericia:"): somam por fora dos pontos da ficha, até o limite da perícia;
      o que passar do limite vira ponto livre para investir em outra perícia */
   function skillGrant(s) {
@@ -6324,6 +6327,7 @@ const FIREBASE_CONFIG = {
     const add = (b) => { if (b) BONUS_KEYS.forEach((k) => { if (num(b[k[0]])) out[k[0]] = (out[k[0]] || 0) + num(b[k[0]]); }); };
     add(e.bonus);
     if (e.kind === 'escudo-energetico') add({ escudo: (e.values || {}).escudo }); // o campo do escudo energético
+    if (e.kind === 'vestivel' && num((e.values || {}).espacos)) add({ carga: Math.floor(num(e.values.espacos) / 2) }); // mochila: +1 a cada 2 espaços
     if (e.slots) (e.slots.mods || []).concat(e.slots.props || []).forEach((x) => add(x.bonus));
     return out;
   }
@@ -6506,7 +6510,7 @@ const FIREBASE_CONFIG = {
       if (i.kind === 'protese-modulo' && !(nucleo > 0)) return;
       const key = i.id || nameKey(i.name);
       if (srcKeys.has(key)) return;
-      if (i.slot === 'vestivel') { if (vestOn >= vestMax) return; vestOn += 1; }
+      if (i.slot === 'vestivel') { if (vestOn >= vestMax || !reqMet(s, i)) return; vestOn += 1; }
       srcKeys.add(key);
       sources.push({ name: i.name, b: entryBonus(i) });
     });
@@ -8246,6 +8250,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', v.cd); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
+    if (i.kind === 'vestivel') add('Espaços', num(v.espacos) ? v.espacos + ' (+' + Math.floor(num(v.espacos) / 2) + ' de Carga)' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     if (i.kind === 'municao') { add('Serve no', v.pente); add('Por unidade', ammoUnitText(i)); add('Só para', v.para); add('Efeito', v.efeito); }
     add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
@@ -8275,6 +8280,7 @@ const FIREBASE_CONFIG = {
     const pid = profIdOf(i);
     if (pid) card.append(h('p', 'cell__tag' + (isProficient(s, i) ? ' cell__tag--on' : ''), isProficient(s, i) ? 'Proficiente' : 'Sem proficiência'));
     if (i.kind === 'protese-modulo' && i.slot && !m.nucleo) card.append(h('p', 'cell__tag', 'Sem núcleo: só substitui o órgão natural'));
+    if (REQ_ATTR[i.values.reqAtributo]) card.append(h('p', 'cell__tag' + (reqMet(s, i) ? ' cell__tag--on' : ''), 'Requisito: ' + i.values.reqAtributo + ' ' + num(i.values.reqValor) + (reqMet(s, i) ? '' : ' (não cumprido: sem benefício)')));
     const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);
     if (parts.length) card.append(h('p', 'cell__text', 'Encaixes: ' + parts.join(', ')));
     if (isGun(i)) card.append(h('p', 'cell__text', 'Munição: ' + ammoLine(i, s)));

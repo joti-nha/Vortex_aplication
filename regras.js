@@ -345,6 +345,7 @@ window.VORTEX_REGRAS = {
         ['p', 'Os únicos espaços fixos são a **armadura**, o **núcleo** e as **duas mãos** (empunhadura). Não há espaço por parte do corpo: dá para vestir três camisas uma por cima da outra, ou três mochilas.'],
         ['ul', [
           '**Vestíveis** (roupas, mochilas, escudos energéticos...): você se beneficia de até **3 + Corpo** deles.',
+          '**Mochilas**: cada uma tem espaços e aumenta sua Carga em **+1 a cada 2 espaços**. Muitas têm requisito de atributo bruto (Corpo, Precisão ou Essência); sem cumprir, ela não dá benefício.',
           '**Próteses**: limitadas pela sua Carga Cibernética (CC).',
           '**Módulos**: só abrem espaço com ao menos uma prótese implantada; limitados pela CC, com a reserva da Essência.'
         ]],
