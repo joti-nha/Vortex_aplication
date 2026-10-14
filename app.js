@@ -3077,7 +3077,7 @@ const FIREBASE_CONFIG = {
       const t = h('div', 'fact' + (FACT_HI[f.key] ? ' fact--hi' : ''), h('span', 'fact__k', f.label), h('span', 'fact__v', f.val), f.hint ? h('span', 'fact__hint', f.hint) : null);
       const c = f.key === 'raridade' ? rarColor(f.val) : '';
       if (c) { t.classList.add('fact--rar'); t.style.setProperty('--rar', c); }
-      return t;
+      return typeof f.val === 'string' ? ruleClickable(t, f.key === 'tipo' && e.kind === 'protese-modulo' ? 'cc' : f.key, f.val, e.kind, f.label) : t;
     };
     const stats = facts.filter((f) => f.type === 'stat');
     const used = new Set();
@@ -3093,6 +3093,117 @@ const FIREBASE_CONFIG = {
     facts.filter((f) => f.type === 'text').forEach((f) => out.push(h('section', 'facts__group', h('h3', 'facts__title', f.label), h('div', 'facts__text' + (f.code ? ' entry__code' : ''), f.val))));
     facts.filter((f) => f.type === 'list').forEach((f) => out.push(h('section', 'facts__group', h('h3', 'facts__title', f.label), h('ul', 'facts__chips', ...f.items.map((x) => h('li', 'facts__chip', x))))));
     return h('div', 'facts', ...out);
+  }
+
+  /* Regra de um campo da ficha do item (cadência, pente, alcance...): tocar no campo abre um resumo tirado do
+     próprio Compêndio (regras.js, sem texto duplicado) e um link para a regra completa.
+     Cada campo aponta para [capítulo, título da seção]; sem título, vale o começo do capítulo. */
+  const RULE_FIELDS = {
+    cadencia: () => ['cadencia', ''],
+    pente: (v) => ['recarga', /parcial/i.test(v) ? 'Recarga parcial' : /superaquec/i.test(v) ? 'Superaquecimento' : /^pente (leve|medio|pesado)/.test(nameKey(v)) ? v : ''],
+    municao: () => ['recarga', ''],
+    alcance: () => ['penalidades', 'Alcance'],
+    empunhadura: (v) => ['empunhadura', /saque|uma m|duas m/.test(nameKey(v)) ? v : ''],
+    raridade: (v, kind) => ['raridade', /^arma/.test(kind) ? 'Em Armas' : kind === 'armadura' ? 'Em Armaduras' : /^mod/.test(kind) ? 'Em Mods' : ''],
+    dano: () => ['ataque-e-defesa', 'Tipo de dano'],
+    danoFixo: () => ['ataque-e-defesa', 'Danos'],
+    armadura: () => ['ataque-e-defesa', 'Defesa mínima'],
+    defesa: () => ['ataque-e-defesa', 'Defesa mínima'],
+    penalidade: () => ['armaduras', 'Penalidade de Armadura'],
+    nucleo: () => ['nucleo-proteses-modulos', 'Núcleo'],
+    capacidade: () => ['nucleo-proteses-modulos', 'Núcleo'],
+    classe: () => ['nucleo-proteses-modulos', 'Próteses e Módulos'],
+    cc: () => ['nucleo-proteses-modulos', 'Carga Cibernética (CC)'],
+    carga: () => ['carga', 'Cálculo da Carga'],
+    efetivo: () => ['ataque-e-defesa', 'Tipos de Resistência'],
+    escudo: () => ['ataque-e-defesa', 'Escudo (E)'],
+    bonusRec: () => ['cura', 'Itens de recuperação (Live Service)'],
+    encaixes: () => ['mods-e-acessorios', 'Mods'],
+    corpo: () => ['atributos-e-recursos', 'Atributos'], precisao: () => ['atributos-e-recursos', 'Atributos'], essencia: () => ['atributos-e-recursos', 'Atributos'],
+    luta: () => ['pericias', 'Lista de Perícias'], mira: () => ['pericias', 'Lista de Perícias'], operacoes: () => ['pericias', 'Lista de Perícias'], resistencia: () => ['pericias', 'Lista de Perícias'],
+    pv: () => ['atributos-e-recursos', 'Recursos'], blindagem: () => ['ataque-e-defesa', 'Blindagem (BL)']
+  };
+  // rótulos das listas curtas (ficha do equipamento, Armeiro) para a chave do campo
+  const RULE_LABELS = { 'Dano': 'dano', 'Cadência': 'cadencia', 'Pente': 'pente', 'Munição': 'municao', 'Alcance': 'alcance', 'Empunhadura': 'empunhadura',
+    'Defesa': 'armadura', 'Penalidade': 'penalidade', 'Núcleo': 'nucleo', 'Capacidade': 'capacidade', 'Carga': 'carga', 'Escudo': 'escudo', 'Classe': 'classe',
+    'Tipo': 'cc', 'Serve no': 'pente', 'Bônus de recuperação': 'bonusRec', 'Dano fixo': 'danoFixo', 'Raridade': 'raridade', 'Recarga': 'pente' };
+  // acha a seção no capítulo: devolve { ch, slug, title, blocks } ou null
+  function ruleSection(key, val, kind) {
+    const fn = RULE_FIELDS[key];
+    if (!fn) return null;
+    const ref = fn(String(val == null ? '' : val), kind || '');
+    const ch = ((window.VORTEX_REGRAS && window.VORTEX_REGRAS.chapters) || []).find((c) => c.id === ref[0]);
+    if (!ch) return null;
+    const toc = indexChapter(ch);
+    if (!ref[1]) { // começo do capítulo: o texto antes da primeira seção (ou a primeira seção, se não houver)
+      const i = ch.blocks.findIndex((b) => /^h[234]$|^card$/.test(b[0]));
+      const intro = ch.blocks.slice(0, i < 0 ? ch.blocks.length : i);
+      return { ch, slug: '', title: ch.title, blocks: intro.length ? intro : ch.blocks.slice(i + 1) };
+    }
+    const want = nameKey(ref[1]);
+    const t = toc.find((x) => nameKey(x.title) === want);
+    if (!t) return null;
+    let at = null;
+    let list = null;
+    (function walk(blocks) {
+      blocks.forEach((b, i) => {
+        if (at) return;
+        if (ch._slugs.get(b) === t.slug) { at = b; list = blocks.slice(i + 1); return; }
+        if (b[0] === 'card') walk(b[2]);
+      });
+    })(ch.blocks);
+    if (!at) return null;
+    let blocks;
+    if (at[0] === 'card') blocks = at[2];
+    else {
+      const level = Number(at[0].slice(1));
+      const end = list.findIndex((b) => /^h[234]$/.test(b[0]) && Number(b[0].slice(1)) <= level);
+      blocks = end < 0 ? list : list.slice(0, end);
+    }
+    return { ch, slug: t.slug, title: t.title, blocks };
+  }
+  const ruleDlg = $('#rule-dialog');
+  const RULE_SUMMARY_BLOCKS = 4; // o resumo mostra só o começo da seção
+  function openRuleSummary(label, sec) {
+    $('#rule-title').textContent = label;
+    $('#rule-meta').textContent = sec.ch.title + (sec.slug && nameKey(sec.title) !== nameKey(sec.ch.title) ? ' · ' + sec.title : '');
+    const body = $('#rule-body');
+    body.replaceChildren();
+    let n = 0;
+    const put = (b) => {
+      if (n >= RULE_SUMMARY_BLOCKS) return;
+      if (/^h[234]$/.test(b[0])) { body.append(h('p', 'rulepop__sub', plainText(b[1]))); return; }
+      if (b[0] === 'card') { body.append(h('p', 'rulepop__sub', plainText(b[1]))); b[2].forEach(put); return; }
+      if (b[0] === 'fields') return; // modelo de ficha em branco: não resume nada
+      body.append(renderBlock(sec.ch, b));
+      n += 1;
+    };
+    sec.blocks.forEach(put);
+    const total = (function count(bs) { return bs.reduce((t, b) => t + (b[0] === 'card' ? count(b[2]) : /^h[234]$|^fields$/.test(b[0]) ? 0 : 1), 0); })(sec.blocks);
+    if (total > n) body.append(h('p', 'rulepop__more', 'A regra continua no Compêndio.'));
+    if (!body.children.length) body.append(h('p', '', 'Veja a regra completa no Compêndio.'));
+    $('#rule-link').href = ruleHref(sec.ch.id, sec.slug);
+    openDialog(ruleDlg);
+  }
+  $('#rule-close').addEventListener('click', () => closeDialog(ruleDlg));
+  $('#rule-link').addEventListener('click', () => {
+    rulesBack = location.hash || '#/home';
+    rulesFromHelp = true;
+    $$('dialog[open]').forEach(closeDialog); // a ficha do item fecha junto, para o Compêndio aparecer
+  });
+  // deixa um elemento (tile, rótulo) clicável quando o campo tem regra no Compêndio
+  function ruleClickable(el, key, val, kind, label) {
+    const sec = ruleSection(key, val, kind);
+    if (!sec) return el;
+    el.classList.add('rule-hot');
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-haspopup', 'dialog');
+    el.title = 'Ver a regra: ' + sec.ch.title;
+    const open = (ev) => { ev.stopPropagation(); openRuleSummary(label, sec); };
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(ev); } });
+    return el;
   }
 
   /* Tela de um poder: o tipo (simples, lista, com escolha, com melhorias), como se obtém e
@@ -8275,7 +8386,10 @@ const FIREBASE_CONFIG = {
       h('p', 'cell__meta', [kindTitle(i.kind), i.typeTitle, i.values.raridade].filter(Boolean).join(' · ')));
     if (ghost) { card.append(h('p', 'cell__text', 'Arma de duas mãos: ocupa também esta mão.')); return card; }
     const dl = h('dl', 'cell__facts');
-    itemFacts(i).forEach((f) => dl.append(h('dt', '', f[0]), h('dd', '', f[1])));
+    itemFacts(i).forEach((f) => {
+      const dt = h('dt', '', f[0]);
+      dl.append(RULE_LABELS[f[0]] ? ruleClickable(dt, RULE_LABELS[f[0]], f[1], i.kind, f[0]) : dt, h('dd', '', f[1]));
+    });
     card.append(dl);
     const pid = profIdOf(i);
     if (pid) card.append(h('p', 'cell__tag' + (isProficient(s, i) ? ' cell__tag--on' : ''), isProficient(s, i) ? 'Proficiente' : 'Sem proficiência'));
@@ -9124,7 +9238,10 @@ const FIREBASE_CONFIG = {
       items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', none));
 
     // números da arma e munição
-    const stat = (k, v, changed) => h('div', 'armory__stat' + (changed ? ' is-changed' : ''), h('span', '', k), h('strong', '', v || '—'));
+    const stat = (k, v, changed) => {
+      const el = h('div', 'armory__stat' + (changed ? ' is-changed' : ''), h('span', '', k), h('strong', '', v || '—'));
+      return RULE_LABELS[k] ? ruleClickable(el, RULE_LABELS[k], k === 'Recarga' ? w.values.pente : v, w.kind, k) : el;
+    };
     const stats = h('div', 'armory__stats');
     const ammoBox = h('div', 'armory__ammo');
     if (isGun(w)) {
@@ -9934,7 +10051,7 @@ const FIREBASE_CONFIG = {
     { id: 'especime', tab: 'Espécime', title: 'Espécime', lead: 'A espécie traz descrição e 3 habilidades raciais; são elas que definem a vida base, os UP iniciais e o núcleo.', search: true },
     { id: 'origem', tab: 'Origem', title: 'Origem e apresentação', lead: 'A origem traz o kit de itens iniciais. Idade, altura e sexo podem ser mudados depois na ficha.', search: true },
     { id: 'atributos', tab: 'Atributos', title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
-    { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 com +1, ou, se preferir, espalhe os mesmos 5 pontos como quiser, até +2 em cada. Toque para alternar entre nada, +1 e +2.', search: true },
+    { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 com +1, ou use a distribuição livre: os mesmos 5 pontos vão onde você quiser, até o limite de +3 por perícia. Toque numa perícia para subir o bônus.', search: true },
     { id: 'profs', tab: 'Proficiências', title: 'Proficiências', lead: 'Escolha 4 tipos de arma ou armadura em que o personagem é proficiente desde o início.', search: true },
     { id: 'equip', tab: 'Itens iniciais', title: 'Itens iniciais', lead: 'Leve o kit da origem (trocando o que quiser por itens do banco) ou compre do banco com o dinheiro inicial, igual para todos.', search: true },
     { id: 'resumo', tab: 'Resumo', title: 'Tudo pronto?', lead: 'Confira a ficha. Os recursos já saem calculados dos atributos.' }
@@ -9981,8 +10098,9 @@ const FIREBASE_CONFIG = {
     const vals = Object.keys(sk).map((k) => sk[k]);
     return { two: vals.filter((v) => v === 2).length, one: vals.filter((v) => v === 1).length, sum: vals.reduce((t, v) => t + v, 0) };
   };
-  // perícias: o padrão é 2 com +2 e 1 com +1; no modo livre, os mesmos 5 pontos vão onde quiser, até +2 em cada
+  // perícias: o padrão é 2 com +2 e 1 com +1; na distribuição livre, os mesmos 5 pontos vão onde quiser, até o limite da perícia (+3)
   const SKILL_POINTS = 5;
+  const SKILL_FREE_MAX = 3;
   const skillsOk = (sk, mode) => { const c = skillCount(sk); return mode === 'livre' ? c.sum === SKILL_POINTS : c.two === 2 && c.one === 1; };
   function stepProblem(step) {
     if (step === STEP.atributos) {
@@ -10462,7 +10580,7 @@ const FIREBASE_CONFIG = {
     if (wz.step === STEP.pericias) {
       const c = skillCount(wz.skills);
       const livre = wz.skillMode === 'livre';
-      body.append(h('div', 'segmented skill-modes', ...[['padrao', '2 com +2 e 1 com +1'], ['livre', '5 pontos livres (até +2)']].map((m) => {
+      body.append(h('div', 'segmented skill-modes', ...[['padrao', '2 com +2 e 1 com +1'], ['livre', 'Distribuição livre']].map((m) => {
         const inp = h('input');
         inp.type = 'radio';
         inp.name = 'skill-mode';
@@ -10473,7 +10591,7 @@ const FIREBASE_CONFIG = {
         return h('label', 'segmented__opt', inp, h('span', '', m[1]));
       })));
       body.append(livre
-        ? h('p', 'setup__pool' + (c.sum > SKILL_POINTS ? ' setup__pool--over' : ''), 'Pontos para distribuir: ', h('strong', '', String(SKILL_POINTS - c.sum)), ' de ' + SKILL_POINTS + ' (no máximo +2 em cada perícia)')
+        ? h('p', 'setup__pool' + (c.sum > SKILL_POINTS ? ' setup__pool--over' : ''), 'Pontos para distribuir: ', h('strong', '', String(SKILL_POINTS - c.sum)), ' de ' + SKILL_POINTS + ' (no máximo +' + SKILL_FREE_MAX + ' em cada perícia)')
         : h('p', 'setup__pool', 'Com +2: ', h('strong', '', c.two + ' de 2'), ' · Com +1: ', h('strong', '', c.one + ' de 1')));
       ATTRS.forEach((at) => {
         const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(wz.attrs[at.id]))));
@@ -10486,10 +10604,14 @@ const FIREBASE_CONFIG = {
           b.type = 'button';
           b.dataset.fid = 'wzs-' + sk[0];
           b.setAttribute('aria-label', sk[1] + ': ' + (v ? '+' + v : 'sem bônus') + '. Toque para alternar.');
+          const top = livre ? SKILL_FREE_MAX : 2; // livre: sobe até +3; no padrão, só +1 e +2
           if (info.summary) b.title = info.summary + ' ' + (info.uses || '');
           b.addEventListener('click', () => {
-            const next = (v + 1) % 3;
-            if (livre && next > v && c.sum >= SKILL_POINTS) { toast('Os ' + SKILL_POINTS + ' pontos já foram usados. Tire de outra perícia primeiro.'); return; }
+            let next = (v + 1) % (top + 1);
+            if (livre && next > v && c.sum >= SKILL_POINTS) { // sem pontos sobrando: zera esta perícia e devolve os pontos dela
+              if (!v) { toast('Os ' + SKILL_POINTS + ' pontos já foram usados. Tire de outra perícia primeiro.'); return; }
+              next = 0;
+            }
             if (next) wz.skills[sk[0]] = next; else delete wz.skills[sk[0]];
             renderSetup('wzs-' + sk[0]);
           });

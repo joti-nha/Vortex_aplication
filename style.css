@@ -1312,9 +1312,10 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 .skill-picks { display: flex; flex-wrap: wrap; gap: 0.45rem; padding: 0.4rem 0 0.2rem; }
 .skill-pick { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 40px; padding: 0 0.85rem; border: 1px solid var(--linha-forte); border-radius: 999px; background: none; font-weight: 600; color: var(--nevoa-2); }
 .skill-pick__v { font-weight: 800; }
-.skill-pick--1, .skill-pick--2 { border-color: var(--c); color: var(--nevoa); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.skill-pick--1, .skill-pick--2, .skill-pick--3 { border-color: var(--c); color: var(--nevoa); background: color-mix(in srgb, var(--c) 14%, transparent); }
 .skill-pick--2 { box-shadow: inset 0 0 0 1px var(--c); }
-.skill-pick--1 .skill-pick__v, .skill-pick--2 .skill-pick__v { color: var(--c); }
+.skill-pick--3 { box-shadow: inset 0 0 0 2px var(--c); font-weight: 800; }
+.skill-pick--1 .skill-pick__v, .skill-pick--2 .skill-pick__v, .skill-pick--3 .skill-pick__v { color: var(--c); }
 
 @media (max-width: 760px) {
   .attr-band { grid-template-columns: 1fr; gap: 0.6rem; }
@@ -3926,3 +3927,17 @@ html, body { max-width: 100%; overflow-x: clip; }
 @keyframes vx-music-pulse { 50% { box-shadow: 0 0 22px #ff4fd8, inset 0 0 12px #4ff7ff; } }
 @media (min-width: 900px) { .vx-music { bottom: 16px; right: 16px; } }
 @media (prefers-reduced-motion: reduce) { .vx-music { animation: none !important; } }
+
+/* campos com regra no Compêndio (ficha do item, equipamento, Armeiro): tocar abre o resumo */
+.rule-hot { cursor: pointer; position: relative; transition: border-color 0.15s, background 0.15s; }
+.rule-hot:hover, .rule-hot:focus-visible { border-color: var(--mare, #5ef2ff); outline: none; }
+.fact.rule-hot .fact__k::after, .armory__stat.rule-hot span::after, dt.rule-hot::after { content: " ⓘ"; color: var(--mare, #5ef2ff); font-size: 0.85em; }
+dt.rule-hot { text-decoration: underline dotted; text-underline-offset: 3px; }
+dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
+.rulepop { width: min(94vw, 32rem); }
+.rulepop__body { display: grid; gap: 0.6rem; margin: 0.4rem 0 1rem; }
+.rulepop__body > * { margin: 0; }
+.rulepop__body p { color: var(--nevoa); }
+.rulepop__sub { font-weight: 800; color: var(--ambar) !important; }
+.rulepop__more { font-size: 0.82rem; font-style: italic; color: var(--nevoa-2) !important; }
+.rulepop__link { display: inline-flex; }
