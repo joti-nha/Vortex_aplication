@@ -170,7 +170,11 @@ window.VORTEX_REGRAS = {
         ['p', 'Você rola mais dados, porém, em vez de somar no teste, você escolhe o dado com maior valor.'],
 
         ['h2', 'Desvantagem'],
-        ['p', 'Você rola mais dados, e escolhe entre as opções o pior resultado.']
+        ['p', 'Você rola mais dados, e escolhe entre as opções o pior resultado.'],
+
+        ['h2', 'Bônus de mesma fonte'],
+        ['note', 'Regra geral', '**Qualquer bônus de mesma fonte não acumula.** Vale para itens, poderes, operações de Tecnomancia, habilidades e qualquer outra fonte: usar, vestir ou ativar a mesma fonte de novo não soma o bônus dela outra vez.'],
+        ['example', 'Duas camisas iguais vestidas valem como uma. Ativar duas vezes o mesmo poder que dá +2 de Defesa continua dando +2. Bônus de fontes diferentes somam normalmente.']
       ]
     },
 
@@ -336,6 +340,15 @@ window.VORTEX_REGRAS = {
         ]],
         ['example', 'Um personagem com Corpo 2, Precisão 1 e Essência 2 possui: 2 + (2 × 4) + 1 + (2 × 2) = 15 Carga. Portanto, seu limite é de 17 Cargas.'],
         ['p', 'Itens equipados normalmente não ocupam Carga. Itens transportados ocupam a quantidade indicada em sua ficha.'],
+
+        ['h2', 'Equipado'],
+        ['p', 'Os únicos espaços fixos são a **armadura**, o **núcleo** e as **duas mãos** (empunhadura). Não há espaço por parte do corpo: dá para vestir três camisas uma por cima da outra, ou três mochilas.'],
+        ['ul', [
+          '**Vestíveis** (roupas, mochilas, escudos energéticos...): você se beneficia de até **3 + Corpo** deles.',
+          '**Próteses**: limitadas pela sua Carga Cibernética (CC).',
+          '**Módulos**: só abrem espaço com ao menos uma prótese implantada; limitados pela CC, com a reserva da Essência.'
+        ]],
+        ['note', 'Bônus de mesma fonte', '**Qualquer bônus de mesma fonte não acumula** (regra geral, em Testes e Dados). Dois itens iguais equipados (duas camisas iguais, dois escudos do mesmo modelo) valem como um só.'],
 
         ['h2', 'Sobrecarga'],
         ['p', 'Quando a Carga transportada ultrapassa o limite do personagem, ele fica **Sobrecarregado**.'],
