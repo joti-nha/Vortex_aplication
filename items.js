@@ -310,7 +310,7 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'vestivel', title: 'Vestível', group: 'Proteção', inventory: true, image: true, bonus: true,
-      hint: 'Roupas, capacetes, mochilas, luvas, botas: ocupam um espaço do corpo no inventário, sem gastar CC. Escolha a região.',
+      hint: 'Roupas, capacetes, mochilas, luvas, botas: entram na fileira de vestíveis do inventário, sem gastar CC. A região é só descritiva. Cada personagem se beneficia de até 3 + Corpo vestíveis, e peças iguais não somam os benefícios.',
       types: [
         { id: 'cabeca', title: 'Cabeça' },
         { id: 'tronco', title: 'Tronco' },
@@ -330,14 +330,8 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'escudo-energetico', title: 'Escudo energético', group: 'Proteção', inventory: true, image: true, bonus: true,
-      hint: 'Resistência extra do tipo Escudo. Vestido como roupa (não ocupa as mãos): escolha a região do corpo. Equipado, soma o valor de Escudo dele ao Escudo do personagem.',
+      hint: 'Resistência extra do tipo Escudo. Vestido como roupa (não ocupa as mãos), entra na fileira de vestíveis. Equipado, soma o valor de Escudo dele ao Escudo do personagem.',
       defaults: { carga: '1' },
-      types: [
-        { id: 'cabeca', title: 'Cabeça' },
-        { id: 'tronco', title: 'Tronco' },
-        { id: 'membros-superiores', title: 'Membros superiores', sub: 'um braço' },
-        { id: 'membros-inferiores', title: 'Membros inferiores', sub: 'uma perna' }
-      ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
@@ -370,7 +364,7 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'protese-modulo', title: 'Prótese ou Módulo', group: 'Implantes', inventory: true, implant: true, image: true, bonus: true,
-      hint: 'Escolha a região do corpo. Próteses ocupam o espaço daquela região no inventário (como um vestível) e gastam CC; módulos vão na fileira de módulos.',
+      hint: 'Escolha a região do corpo (descritiva). Próteses entram na fileira de próteses do inventário e gastam CC; módulos vão na fileira de módulos.',
       defaults: { classe: 'Prótese', tipo: 'Suporte', cc: '1' },
       types: [
         { id: 'cabeca', title: 'Cabeça', sub: 'olhos, ouvidos, nariz, boca', rule: 'nucleo-proteses-modulos/regioes-do-corpo' },
@@ -900,27 +894,27 @@ window.VORTEX_ITEMS = {
     });
   });
 
-  /* Escudos energéticos Pinger (vestidos como roupa): [nome, região, modelo, raridade, escudo, carga, preço, especial] */
+  /* Escudos energéticos Pinger (vestidos como roupa): [nome, modelo, raridade, escudo, carga, preço, especial] */
   [
-    ['Pink Veil', 'tronco', 'PV-1', 'Comum', 4, 0.5, '300'],
-    ['Pinger Halo', 'cabeca', 'HL-2', 'Comum', 5, 1, '400'],
-    ['Bubble Guard', 'tronco', 'BG-3', 'Comum', 6, 1, '500'],
-    ['Noir Field', 'tronco', 'NF-4', 'Incomum', 7, 0.5, '800', 'Propriedade: 1'],
-    ['Rose Barrier', 'membros-superiores', 'RB-5', 'Incomum', 8, 1, '900', 'Propriedade: 1'],
-    ['Thorn Dome', 'membros-superiores', 'TD-6', 'Rara', 10, 1, '1.500',
+    ['Pink Veil', 'PV-1', 'Comum', 4, 0.5, '300'],
+    ['Pinger Halo', 'HL-2', 'Comum', 5, 1, '400'],
+    ['Bubble Guard', 'BG-3', 'Comum', 6, 1, '500'],
+    ['Noir Field', 'NF-4', 'Incomum', 7, 0.5, '800', 'Propriedade: 1'],
+    ['Rose Barrier', 'RB-5', 'Incomum', 8, 1, '900', 'Propriedade: 1'],
+    ['Thorn Dome', 'TD-6', 'Rara', 10, 1, '1.500',
       'Especial (exótica): Espinhos de luz.\nQuem acertar você corpo a corpo enquanto seu Escudo estiver acima de 0 sofre 1d4 de dano elétrico.'],
-    ['Prism Shell', 'cabeca', 'PS-7', 'Rara', 10, 1, '1.600',
+    ['Prism Shell', 'PS-7', 'Rara', 10, 1, '1.600',
       'Especial (exótica): Refração.\nQuando um ataque de Laser ou de dano de Energia atinge seu Escudo, o atacante sofre 1d4 de dano de energia.'],
-    ['Blackout Mantle', 'tronco', 'BM-8', 'Epica', 12, 1, '2.400',
+    ['Blackout Mantle', 'BM-8', 'Epica', 12, 1, '2.400',
       'Propriedade: 1\nEspecial (exótica): Com o Escudo acima de 0, você pode gastar 2 PE para ficar camuflado (–3 para ser percebido e nos ataques à distância contra você) até se mover ou atacar.'],
-    ['Heartcore Aegis', 'tronco', 'HA-9', 'Epica', 14, 1, '2.600',
+    ['Heartcore Aegis', 'HA-9', 'Epica', 14, 1, '2.600',
       'Propriedade: 1\nEspecial (exótica): Uma vez por cena, quando seu Escudo chega a 0, ele volta com metade do valor máximo no começo do seu próximo turno.'],
-    ['Sakura Overdrive', 'tronco', 'SO-X', 'Lendária', 20, 1, '5.500',
+    ['Sakura Overdrive', 'SO-X', 'Lendária', 20, 1, '5.500',
       'Propriedade: 1 + Especial: Coração Partilhado\nUtilize 4 PE. Projete o campo em até [Essência] aliados em alcance Curto: cada um ganha Escudo temporário igual à metade do seu Escudo atual até o fim da cena. Enquanto durar, dano elétrico e contundente não é dobrado contra esses Escudos.']
   ].forEach(function (a) {
     cat.push({
-      id: 'of-pin-' + slug(a[0]), kind: 'escudo-energetico', typeId: a[1], name: a[0],
-      values: { fabricante: 'Pinger', modelo: a[2] + ' / Pinger', raridade: a[3], preco: a[6], escudo: String(a[4]), carga: String(a[5]), especial: a[7] || '', lore: pingerLore(a[0]) }
+      id: 'of-pin-' + slug(a[0]), kind: 'escudo-energetico', typeId: '', name: a[0],
+      values: { fabricante: 'Pinger', modelo: a[1] + ' / Pinger', raridade: a[2], preco: a[5], escudo: String(a[3]), carga: String(a[4]), especial: a[6] || '', lore: pingerLore(a[0]) }
     });
   });
 })();

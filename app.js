@@ -1811,7 +1811,7 @@ const FIREBASE_CONFIG = {
     },
     inventario: {
       title: 'Inventário',
-      text: 'Em cima, o que está equipado: núcleo, corpo (vestíveis e próteses por região), armadura e as duas mãos; arma de duas mãos ocupa as duas. Embaixo, a mochila. Passe o mouse (ou toque) num bloco para ver os detalhes e equipar; também dá para arrastar. Carga = 2 + Corpo × 5 + Precisão + Essência × 2, e só a mochila conta. Em "Detalhes" ficam os slots de mod, propriedade e acessórios.',
+      text: 'Em cima, o que está equipado: armadura, núcleo e as duas mãos (arma de duas mãos ocupa as duas), mais as fileiras de vestíveis (até 3 + Corpo; peças iguais não somam benefícios), próteses (pela CC) e módulos. Cada fileira abre uma vaga nova quando a anterior é ocupada. Embaixo, a mochila. Passe o mouse (ou toque) num bloco para ver os detalhes e equipar; também dá para arrastar. Carga = 2 + Corpo × 5 + Precisão + Essência × 2, e só a mochila conta. Em "Detalhes" ficam os slots de mod, propriedade e acessórios.',
       rule: 'carga'
     },
     banco: {
@@ -6212,9 +6212,10 @@ const FIREBASE_CONFIG = {
     s.inventory.forEach((i) => {
       const was = i.equipped === true && !i.slot;
       delete i.equipped;
+      if (OLD_BODY_SLOTS.indexOf(i.slot) >= 0) i.slot = slotsFor(i)[0] || ''; // corpo por região virou fileira
       if (i.slot && slotsFor(i).indexOf(i.slot) < 0) i.slot = '';
       if (!was) return;
-      const free = slotsFor(i).find((id) => id === 'modulo' || !s.inventory.some((x) => x.slot === id));
+      const free = slotsFor(i).find((id) => MULTI_SLOTS[id] || !s.inventory.some((x) => x.slot === id));
       if (free && !(free === 'mao-e' && s.inventory.some((x) => x.slot === 'mao-d' && twoHanded(x)))) i.slot = twoHanded(i) && free === 'mao-e' ? '' : free;
     });
     s.v = 2;
@@ -6425,8 +6426,21 @@ const FIREBASE_CONFIG = {
     if (sp) sources.push({ name: sp.name, b: sp.bonus || {} });
     s.powers.forEach((p) => sources.push({ name: p.name, b: p.bonus || {} }));
     mech.bonus.forEach((x) => sources.push(x));
-    // sem núcleo, próteses só substituem o órgão e módulos ficam inativos: não dão bônus
-    equipped.forEach((i) => { if (i.kind !== 'protese-modulo' || nucleo > 0) sources.push({ name: i.name, b: entryBonus(i) }); });
+    // sem núcleo, próteses só substituem o órgão e módulos ficam inativos: não dão bônus.
+    // Vestíveis: só os primeiros 3 + Corpo dão benefício, e peças iguais não somam.
+    const vestMax = vestMaxOf(s);
+    const vestKeys = new Set();
+    let vestUsed = 0;
+    equipped.forEach((i) => {
+      if (i.kind === 'protese-modulo' && !(nucleo > 0)) return;
+      if (i.slot === 'vestivel') {
+        vestUsed += 1;
+        const key = i.id || nameKey(i.name);
+        if (vestKeys.has(key) || vestKeys.size >= vestMax) return;
+        vestKeys.add(key);
+      }
+      sources.push({ name: i.name, b: entryBonus(i) });
+    });
     sources.push({ name: 'ajuste manual', b: s.extra });
 
     const src = { pv: [], escudo: [], blindagem: [], pe: [], pa: [], carga: [], armadura: [] };
@@ -6472,7 +6486,7 @@ const FIREBASE_CONFIG = {
     const powerCost = s.powers.reduce((t, p) => t + powerUpCost(p), 0);
     const upEarned = Math.floor(num(s.xp) / 10); // os de origem/espécie não contam para os benefícios
     return {
-      max, src, base, pen, armor, armorProf, nucleo, core,
+      max, src, base, pen, armor, armorProf, nucleo, core, vestMax, vestUsed,
       cargaUsed: Math.round(cargaUsed * 100) / 100, cargaMax: max.carga, over: cargaUsed > max.carga,
       desloc: Math.max(0, 9 + mech.desloc) / (cargaUsed > max.carga ? 2 : 1), // sobrecarregado: metade
       defMin: max.armadura + a.corpo + num(s.skills.resistencia),
@@ -8072,19 +8086,19 @@ const FIREBASE_CONFIG = {
      Passar o mouse (ou tocar) num bloco estende um retângulo com os detalhes. */
   const EQUIP = [
     { id: 'nucleo', label: 'Núcleo', full: 'Núcleo', kind: 'nucleo', accepts: 'um núcleo' },
-    { id: 'cabeca', label: 'Cabeça', full: 'Cabeça', region: 'cabeca', accepts: 'vestível ou prótese de cabeça' },
-    { id: 'orgaos', label: 'Órgãos', full: 'Órgãos internos', region: 'orgaos-internos', accepts: 'vestível ou prótese de órgãos internos' },
-    { id: 'braco-d', label: 'Braço dir.', full: 'Braço direito', region: 'membros-superiores', accepts: 'vestível ou prótese de membros superiores' },
-    { id: 'tronco', label: 'Tronco', full: 'Tronco', region: 'tronco', accepts: 'vestível ou prótese de tronco' },
-    { id: 'braco-e', label: 'Braço esq.', full: 'Braço esquerdo', region: 'membros-superiores', accepts: 'vestível ou prótese de membros superiores' },
     { id: 'mao-d', label: 'Mão direita', full: 'Mão direita', hand: true, accepts: 'arma ou item empunhado' },
     { id: 'armadura', label: 'Armadura', full: 'Armadura', kind: 'armadura', accepts: 'uma armadura' },
-    { id: 'mao-e', label: 'Mão esquerda', full: 'Mão esquerda', hand: true, accepts: 'arma ou item empunhado' },
-    { id: 'perna-d', label: 'Perna dir.', full: 'Perna direita', region: 'membros-inferiores', accepts: 'vestível ou prótese de membros inferiores' },
-    { id: 'perna-e', label: 'Perna esq.', full: 'Perna esquerda', region: 'membros-inferiores', accepts: 'vestível ou prótese de membros inferiores' }
+    { id: 'mao-e', label: 'Mão esquerda', full: 'Mão esquerda', hand: true, accepts: 'arma ou item empunhado' }
   ];
+  /* Fileiras: vestíveis (até 3 + Corpo), próteses (pela CC) e módulos. Cada uma mostra uma vaga
+     vazia a mais só depois que a anterior foi ocupada. A região do corpo é só descritiva. */
   const MODULE_SLOT = { id: 'modulo', label: 'Módulo', full: 'Módulo', multi: true, accepts: 'um módulo (precisa de núcleo)' };
-  const slotDef = (id) => (id === 'modulo' ? MODULE_SLOT : EQUIP.find((e) => e.id === id));
+  const VEST_SLOT = { id: 'vestivel', label: 'Vestível', full: 'Vestível', multi: true, accepts: 'um vestível ou escudo energético' };
+  const PROT_SLOT = { id: 'protese', label: 'Prótese', full: 'Prótese', multi: true, accepts: 'uma prótese' };
+  const MULTI_SLOTS = { modulo: MODULE_SLOT, vestivel: VEST_SLOT, protese: PROT_SLOT };
+  const OLD_BODY_SLOTS = ['cabeca', 'orgaos', 'braco-d', 'tronco', 'braco-e', 'perna-d', 'perna-e']; // espaços do corpo das fichas antigas
+  const slotDef = (id) => MULTI_SLOTS[id] || EQUIP.find((e) => e.id === id);
+  const vestMaxOf = (s) => Math.max(0, 3 + attrOf(s, 'corpo'));
 
   // em quais espaços este item pode ser equipado
   function slotsFor(i) {
@@ -8092,7 +8106,8 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'armadura') return ['armadura'];
     if (i.kind === 'nucleo') return ['nucleo'];
     if (isModule(i)) return ['modulo'];
-    if (i.kind === 'protese-modulo' || i.kind === 'vestivel' || i.kind === 'escudo-energetico') return EQUIP.filter((e) => e.region && e.region === i.typeId).map((e) => e.id);
+    if (i.kind === 'protese-modulo') return ['protese'];
+    if (i.kind === 'vestivel' || i.kind === 'escudo-energetico') return ['vestivel'];
     return ['mao-d', 'mao-e'];
   }
   const itemBy = (u) => (sheetChar ? sheetChar.sheet.inventory.find((x) => x.uid === u) : null);
@@ -8102,7 +8117,11 @@ const FIREBASE_CONFIG = {
     if (slotsFor(i).indexOf(slotId) < 0) { toast((slotDef(slotId) || {}).full + ' não aceita ' + i.name + '.'); return false; }
     const hand = slotId === 'mao-d' || slotId === 'mao-e';
     const two = hand && twoHanded(i);
-    const occupant = slotId === 'modulo' ? null : s.inventory.find((x) => x.slot === slotId && x !== i);
+    const occupant = MULTI_SLOTS[slotId] ? null : s.inventory.find((x) => x.slot === slotId && x !== i);
+    if (slotId === 'vestivel' && i.slot !== 'vestivel' && s.inventory.filter((x) => x.slot === 'vestivel').length >= vestMaxOf(s)) {
+      toast('Limite de vestíveis: ' + vestMaxOf(s) + ' (3 + Corpo). Guarde um antes de vestir ' + i.name + '.');
+      return false;
+    }
 
     if (i.kind === 'protese-modulo') {
       const m = compute(sheetChar);
@@ -8194,7 +8213,8 @@ const FIREBASE_CONFIG = {
     if (i.slot) actions.append(act('Guardar', 'btn--primary', () => { i.slot = ''; changed(); }));
     else {
       const opts = slotsFor(i);
-      if (opts[0] === 'modulo') actions.append(act('Instalar', 'btn--primary', () => { if (equipItem(i, 'modulo')) changed(); }));
+      if (opts[0] === 'modulo' || opts[0] === 'protese') actions.append(act(opts[0] === 'modulo' ? 'Instalar' : 'Implantar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
+      else if (opts[0] === 'vestivel') actions.append(act('Vestir', 'btn--primary', () => { if (equipItem(i, 'vestivel')) changed(); }));
       else if (opts[0] === 'mao-d' && twoHanded(i)) actions.append(act('Empunhar (duas mãos)', 'btn--primary', () => { if (equipItem(i, 'mao-d')) changed(); }));
       else if (opts.length === 1) actions.append(act('Equipar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
       else opts.forEach((id) => actions.append(act(slotDef(id).full, 'btn--primary', () => { if (equipItem(i, id)) changed(); })));
@@ -8303,7 +8323,13 @@ const FIREBASE_CONFIG = {
     if (m.over) sum.append(h('p', 'res-state', OVERLOAD_TEXT + ' Excesso: ' + fmtNum(m.cargaUsed - m.cargaMax) + ' de carga.'));
     $('#inv-summary').replaceChildren(sum);
 
-    // equipado: boneco + fileira de módulos
+    // equipado: armadura, núcleo e mãos + fileiras de vestíveis, próteses e módulos
+    const vest = inv.filter((x) => x.slot === 'vestivel');
+    $('#vest-count').textContent = vest.length + ' / ' + m.vestMax;
+    $('#equip-vest').replaceChildren(...vest.map((x) => makeCell(x, m, VEST_SLOT, false)), ...(vest.length < m.vestMax ? [makeCell(null, m, VEST_SLOT, false)] : []));
+    const prots = inv.filter((x) => x.slot === 'protese');
+    $('#prot-count').textContent = m.nucleo ? m.protUsed + ' / ' + m.ccMax + ' CC' : 'sem núcleo';
+    $('#equip-prot').replaceChildren(...prots.map((x) => makeCell(x, m, PROT_SLOT, false)), ...(!m.nucleo || m.protUsed < m.ccMax ? [makeCell(null, m, PROT_SLOT, false)] : []));
     $('#equip-doll').replaceChildren(...EQUIP.map((def) => {
       let i = inv.find((x) => x.slot === def.id);
       let ghost = false;
@@ -8318,6 +8344,7 @@ const FIREBASE_CONFIG = {
     const line = (k, v, bad) => h('div', 'equip-line' + (bad ? ' equip-line--bad' : ''), h('span', 'equip-line__k', k), h('span', 'equip-line__v', v));
     $('#equip-info').replaceChildren(
       line('Mãos', handText),
+      line('Vestíveis', m.vestUsed + ' / ' + m.vestMax + ' (3 + Corpo)' + (m.vestUsed > m.vestMax ? ': os excedentes não dão benefício' : '') + '. Peças iguais não somam os benefícios.', m.vestUsed > m.vestMax),
       line('Defesa mínima', m.defMin + ' = ' + srcText(m.src.armadura) + ' · Corpo ' + signed(attrOf(s, 'corpo')) + ' · Resistência +' + num(s.skills.resistencia)),
       line('Armadura', m.armor ? m.armor.name + (m.armorProf ? ' · proficiente' : ' · sem proficiência') + (m.pen ? ' · penalidade –' + m.pen : '') : 'nenhuma (vale a básica, ' + ARMOR_BASE + ')'),
       line('Núcleo', m.nucleo ? '+' + m.nucleo + ' ativo' : 'sem núcleo: próteses só substituem o órgão; módulos inativos'),
@@ -8369,7 +8396,7 @@ const FIREBASE_CONFIG = {
     const s = sheetChar.sheet;
     const cat = findCategory(i.kind);
     $('#inv-dialog-title').replaceChildren(i.name, ...(entryLore(i) ? [' ', entryLore(i)] : []));
-    $('#inv-dialog-meta').textContent = [kindTitle(i.kind), i.typeTitle, i.values.raridade, i.slot ? 'Equipado: ' + slotDef(i.slot).full : 'Na mochila'].filter(Boolean).join(' · ');
+    $('#inv-dialog-meta').textContent = [kindTitle(i.kind), i.typeTitle, i.values.raridade, i.slot ? 'Equipado: ' + (slotDef(i.slot) || VEST_SLOT).full : 'Na mochila'].filter(Boolean).join(' · ');
     const body = $('#inv-dialog-body');
     const keepFocus = body.contains(document.activeElement) ? document.activeElement.id : '';
     const facts = entryFacts(i, new Set(['nome', 'lore', 'encaixes']), i.slot ? '' : ' (só quando equipado)'); // os encaixes têm editor próprio logo abaixo
@@ -8414,7 +8441,17 @@ const FIREBASE_CONFIG = {
       if (i.slot) { i.slot = ''; changed(); return; }
       s.inventory.splice(s.inventory.indexOf(i), 1); closeDialog(invDlg); changed();
     });
-    body.append(h('div', 'inv__foot', h('div', 'field inv__qty', qLab, qty), del));
+    // vestir/equipar direto do popup (o primeiro espaço que aceita o item)
+    const wear = slotsFor(i)[0];
+    const WEAR_LABEL = { vestivel: 'Vestir', protese: 'Implantar', modulo: 'Instalar', armadura: 'Vestir armadura', nucleo: 'Implantar', 'mao-d': 'Empunhar' };
+    let wearBtn = null;
+    if (!i.slot && wear) {
+      wearBtn = h('button', 'btn btn--primary btn--sm', WEAR_LABEL[wear] || 'Equipar');
+      wearBtn.type = 'button';
+      wearBtn.id = 'inv-foot-wear';
+      wearBtn.addEventListener('click', () => { if (equipItem(i, wear)) changed(); });
+    }
+    body.append(h('div', 'inv__foot', h('div', 'field inv__qty', qLab, qty), wearBtn, del));
     if (keepFocus) { const el = document.getElementById(keepFocus); if (el) el.focus({ preventScroll: true }); }
   }
   function openInvDialog(u) {
@@ -10501,7 +10538,7 @@ const FIREBASE_CONFIG = {
     const life = LIFE.filter((l) => m.max[l[0]] > 0).map((l) => l[1] + ' ' + getCur(s, l[0], m.max[l[0]]) + '/' + m.max[l[0]]);
     const inv = s.inventory.map((i) => {
       const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);
-      return i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '') + (i.slot ? ' [' + slotDef(i.slot).full + ']' : '') + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+      return i.name + ((i.qty || 1) > 1 ? ' ×' + i.qty : '') + (i.slot ? ' [' + (slotDef(i.slot) || VEST_SLOT).full + ']' : '') + (parts.length ? ' (' + parts.join(', ') + ')' : '');
     });
     return [
       ['Espécime', c.species], ['Idade', c.age], ['Altura e peso', [s.height, s.weight].filter(Boolean).join(' · ')], ['Sexo', s.sex], ['Origem', c.origin],

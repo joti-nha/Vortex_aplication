@@ -1349,17 +1349,15 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 .equip-doll {
   display: grid;
   grid-template-columns: repeat(3, var(--cell));
-  grid-template-areas: "nucleo cabeca orgaos" "braco-d tronco braco-e" "mao-d armadura mao-e" "perna-d . perna-e";
+  grid-template-areas: "mao-d armadura mao-e" ". nucleo .";
   gap: 0.4rem;
   padding: 0.75rem;
   border: 1px solid var(--linha);
   border-radius: 12px;
   background: var(--casco);
 }
-.cell--nucleo { grid-area: nucleo; } .cell--cabeca { grid-area: cabeca; } .cell--orgaos { grid-area: orgaos; }
-.cell--braco-d { grid-area: braco-d; } .cell--tronco { grid-area: tronco; } .cell--braco-e { grid-area: braco-e; }
+.cell--nucleo { grid-area: nucleo; }
 .cell--mao-d { grid-area: mao-d; } .cell--armadura { grid-area: armadura; } .cell--mao-e { grid-area: mao-e; }
-.cell--perna-d { grid-area: perna-d; } .cell--perna-e { grid-area: perna-e; }
 .equip-mods, .bag { display: grid; grid-template-columns: repeat(auto-fill, var(--cell)); gap: 0.4rem; }
 .bag { padding: 0.75rem; border: 1px solid var(--linha); border-radius: 12px; background: var(--casco); margin-bottom: 0.6rem; }
 .equip-info { display: grid; gap: 0; margin-top: 1rem; }
