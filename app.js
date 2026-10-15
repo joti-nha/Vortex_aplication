@@ -6256,9 +6256,9 @@ const FIREBASE_CONFIG = {
     }, 30);
   }
 
-  /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
+  /* Banco de dados na Oficina: todas as categorias. O catálogo da tela Personagens mostra só origens, espécimes, builds, poderes e NPCs */
   const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'build', 'npc'];
-  const ITEM_KINDS = ITEM_DATA.categories.map((c) => c.id).filter((k) => NON_ITEM_KINDS.indexOf(k) < 0);
+  const ALL_KINDS = ITEM_DATA.categories.map((c) => c.id);
   /* Excluir do banco: vale para tudo que não é oficial (o catálogo oficial vem do items.js e não sai) */
   function libDeleteAction(e, after) {
     if (e.oficial || !e.id) return null;
@@ -6281,13 +6281,13 @@ const FIREBASE_CONFIG = {
     const q = $('#lib-q').value;
     const kind = $('#lib-kind').value;
     let list;
-    try { list = await libSearch(kind ? [kind] : ITEM_KINDS, q, { deep: $('#lib-deep').checked }); }
+    try { list = await libSearch(kind ? [kind] : ALL_KINDS, q, { deep: $('#lib-deep').checked }); }
     catch (err) { if (seq === libSeq) $('#lib-hint').textContent = errorMessage(err); return; }
     if (seq !== libSeq) return;
     const favs = favLoad();
     if ($('#lib-fav').checked) list = list.filter((e) => favs.has(e.id));
     if ($('#lib-mine').checked) list = list.filter((e) => e.mine);
-    list = libFacets.apply(list, kind ? [kind] : ITEM_KINDS);
+    list = libFacets.apply(list, kind ? [kind] : ALL_KINDS);
     const suggest = list.length ? '' : libSearch.suggest;
     if (!hasQuery(q)) list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (Number(Boolean(a.oficial)) - Number(Boolean(b.oficial))) || a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
@@ -6314,23 +6314,17 @@ const FIREBASE_CONFIG = {
     const all = h('option', '', 'Todas');
     all.value = '';
     sel.append(all);
-    ITEM_DATA.categories.filter((c) => ITEM_KINDS.indexOf(c.id) >= 0).forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
+    ITEM_DATA.categories.forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
   })();
 
-  /* Catálogo na tela Personagens: igual ao banco de dados da Oficina, mas com origens, espécimes, poderes,
-     builds, itens e NPCs. Já abre com tudo em ordem alfabética; a busca, a categoria e os filtros só estreitam */
+  /* Catálogo na tela Personagens: igual ao banco de dados da Oficina, mas só com o que monta personagem
+     (origens, espécimes, builds, poderes e NPCs), sem itens. Já abre com tudo em ordem alfabética; a busca, a categoria e os filtros só estreitam */
   const CAT_GROUPS = [
-    { label: 'Tudo', kinds: null },
+    { label: 'Tudo', kinds: NON_ITEM_KINDS },
     { label: 'Origens', kinds: ['origem'] },
     { label: 'Espécimes', kinds: ['especime'] },
     { label: 'Builds', kinds: ['build'] },
     { label: 'Poderes', kinds: ['poder'] },
-    { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] },
-    { label: 'Munições', kinds: ['municao'] },
-    { label: 'Proteção', kinds: ['armadura', 'vestivel', 'escudo-energetico'] },
-    { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] },
-    { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] },
-    { label: 'Itens gerais', kinds: ['item-geral'] },
     { label: 'NPCs e inimigos', kinds: ['npc'] }
   ];
   const catState = { seq: 0 };
@@ -6346,7 +6340,7 @@ const FIREBASE_CONFIG = {
     if ($('#cat-fav').checked) list = list.filter((e) => favs.has(e.id));
     if ($('#cat-mine').checked) list = list.filter((e) => e.mine);
     const suggest = list.length ? '' : libSearch.suggest;
-    list = catFacets.apply(list, g.kinds || ITEM_DATA.categories.map((c) => c.id));
+    list = catFacets.apply(list, g.kinds);
     if (!hasQuery(q)) list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
     $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, [
@@ -6355,7 +6349,7 @@ const FIREBASE_CONFIG = {
     ].filter(Boolean), () => { if ($('#cat-fav').checked) runCatalog(); })));
     $('#cat-empty').hidden = list.length > 0 || Boolean(secret);
     suggestAfter($('#cat-list'), secret ? '' : suggest, $('#cat-q'), runCatalog);
-    $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g.kinds ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
+    $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g.kinds !== NON_ITEM_KINDS ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
       + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');
   }
   (function fillCatKinds() {
