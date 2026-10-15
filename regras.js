@@ -258,7 +258,7 @@ window.VORTEX_REGRAS = {
         ['p', 'Sempre que o personagem alcançar um número par de UP Points (desconsiderando aqueles provenientes da Origem), poderá escolher dois dos seguintes benefícios:'],
         ['ul', ['+5 PV;', '+5 PE;', '+1 PA.']],
         ['p', 'Sempre que alcançar um número ímpar de UP Points (também desconsiderando os provenientes da Origem), recebe +1 ponto em uma perícia à sua escolha.'],
-        ['p', 'Uma vez a cada 4 UP Points (também desconsiderando os da Origem), em vez de receber esse +1 ponto em uma perícia, pode trocá-lo por uma **proficiência** à sua escolha. Na ficha, a troca fica em Perícias → Proficiências.'],
+        ['p', 'Uma vez a cada 4 UP Points (também desconsiderando os da Origem), em vez de receber esse +1 ponto em uma perícia, pode trocá-lo por uma **proficiência** à sua escolha. Só esse ponto ganho pelo UP pode ser trocado: os pontos iniciais, os de UP investido em perícias e os de poderes não. Na ficha, a troca fica em Perícias → Proficiências; no roteiro da build, na folha do UP ímpar.'],
         ['p', 'Além disso, a cada 4 UP Points (também desconsiderando os da Origem), recebe +1 em um atributo à sua escolha. Na ficha, ele é escolhido na aba Progressão.']
       ]
     },
