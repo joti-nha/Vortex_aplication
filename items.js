@@ -318,7 +318,7 @@ window.VORTEX_ITEMS = {
         { id: 'membros-superiores', title: 'Membros superiores', sub: 'um braço' },
         { id: 'membros-inferiores', title: 'Membros inferiores', sub: 'uma perna' },
         { id: 'orgaos-internos', title: 'Órgãos internos' },
-        { id: 'mochila', title: 'Mochila', sub: '+X de Carga a cada 3 da sua Carga; não ocupa carga' }
+        { id: 'mochila', title: 'Mochila', sub: '+X% da sua Carga; não ocupa carga' }
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
@@ -326,7 +326,7 @@ window.VORTEX_ITEMS = {
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
-        { key: 'cargaPor3', label: 'Mochila: + de Carga a cada 3 da sua Carga', kind: 'number', min: 0, step: 1 },
+        { key: 'cargaPct', label: 'Mochila: +% da sua Carga (máx. 33)', kind: 'number', min: 0, max: 33, step: 1 },
         { key: 'reqAtributo', label: 'Requisito: atributo', kind: 'select', options: 'atributosReq', blank: 'Nenhum' },
         { key: 'reqValor', label: 'Requisito: valor mínimo (bruto)', kind: 'number', min: 0, step: 1 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
@@ -938,19 +938,19 @@ window.VORTEX_ITEMS = {
   });
 })();
 
-/* Mochilas (vestíveis): só três tamanhos, sem raridade e sem ocupar carga. Cada uma soma X de Carga
-   a cada 3 da Carga do personagem (antes da mochila); acima da pequena pede Corpo bruto.
-   Só a maior mochila vestida conta. [nome, X, Corpo mínimo, preço, efeito] */
+/* Mochilas (vestíveis): só três tamanhos, sem raridade e sem ocupar carga. Cada uma soma X% da Carga
+   do personagem (antes da mochila, arredondado para baixo); a maior chega a 33%. Acima da pequena pede
+   Corpo bruto. Só a maior mochila vestida conta. [nome, X%, Corpo mínimo, preço, efeito] */
 (function () {
   var cat = window.VORTEX_ITEMS.catalogo;
   [
-    ['Mochila pequena', 1, 0, '100', 'A cada 3 de Carga, +1 de Carga. Não ocupa carga.'],
-    ['Mochila média', 2, 2, '400', 'A cada 3 de Carga, +2 de Carga. Não ocupa carga. Requer Corpo 2.'],
-    ['Mochila grande', 3, 3, '1.000', 'A cada 3 de Carga, +3 de Carga. Não ocupa carga. Requer Corpo 3.']
+    ['Mochila pequena', 15, 0, '100', '+15% da sua Carga (arredondado para baixo). Não ocupa carga.'],
+    ['Mochila média', 25, 2, '400', '+25% da sua Carga (arredondado para baixo). Não ocupa carga. Requer Corpo 2.'],
+    ['Mochila grande', 33, 3, '1.000', '+33% da sua Carga (arredondado para baixo). Não ocupa carga. Requer Corpo 3.']
   ].forEach(function (a, i) {
     cat.push({
       id: 'of-moc-' + ['pequena', 'media', 'grande'][i], kind: 'vestivel', typeId: 'mochila', name: a[0],
-      values: { cargaPor3: String(a[1]), reqAtributo: a[2] ? 'Corpo' : '', reqValor: a[2] ? String(a[2]) : '', carga: '0', preco: a[3], efeito: a[4] }
+      values: { cargaPct: String(a[1]), reqAtributo: a[2] ? 'Corpo' : '', reqValor: a[2] ? String(a[2]) : '', carga: '0', preco: a[3], efeito: a[4] }
     });
   });
 })();

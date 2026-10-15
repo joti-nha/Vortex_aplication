@@ -2720,8 +2720,8 @@ const FIREBASE_CONFIG = {
   // filtros dos menus de item (inventário, kit, roteiro, loja): uma categoria por chip
   const INV_CHIPS = [
     { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Granadas', kinds: ['granada'] }, { label: 'Munições', kinds: ['municao'] },
-    { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] },
-    { label: 'Vestíveis', kinds: ['vestivel'], test: (e) => !isBackpack(e) }, { label: 'Mochilas', kinds: ['vestivel'], test: isBackpack },
+    { label: 'Armaduras', kinds: ['armadura'] },
+    { label: 'Vestíveis', kinds: ['vestivel', 'escudo-energetico'] }, // roupas, mochilas e escudos energéticos (Pinger)
     { label: 'Núcleos', kinds: ['nucleo'] }, { label: 'Próteses e módulos', kinds: ['protese-modulo'] },
     { label: 'Mods', kinds: ['mod-arma'] }, { label: 'Propriedades', kinds: ['propriedade'] }, { label: 'Acessórios', kinds: ['acessorio'] },
     { label: 'Itens gerais', kinds: ['item-geral'] }
@@ -6550,11 +6550,13 @@ const FIREBASE_CONFIG = {
       return q;
     });
     s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
-    // mochilas antigas (com espaços e raridade) viram uma das três novas, pelo tamanho
+    // mochilas antigas viram uma das três novas: as de espaços pelo tamanho, as de "+X a cada 3" pelo X
     s.inventory = s.inventory.map((i) => {
-      if (!isBackpack(i) || num((i.values || {}).cargaPor3) || !num((i.values || {}).espacos)) return i;
-      const sp = num(i.values.espacos);
-      const e = BUILTINS.find((x) => x.id === 'of-moc-' + (sp <= 2 ? 'pequena' : sp <= 6 ? 'media' : 'grande'));
+      const v = i.values || {};
+      if (!isBackpack(i) || num(v.cargaPct) || !(num(v.espacos) || num(v.cargaPor3))) return i;
+      const sz = num(v.cargaPor3) ? (num(v.cargaPor3) <= 1 ? 'pequena' : num(v.cargaPor3) <= 2 ? 'media' : 'grande')
+        : (num(v.espacos) <= 2 ? 'pequena' : num(v.espacos) <= 6 ? 'media' : 'grande');
+      const e = BUILTINS.find((x) => x.id === 'of-moc-' + sz);
       return e ? Object.assign(slotSnap(e), { thumb: e.thumb || '', uid: i.uid, qty: i.qty, slot: i.slot, slots: normSlots(e.slots) }) : i;
     });
     // kits de origem antigos gravavam só o texto (item geral sem dados): com o nome de um item oficial, vira o item de verdade
@@ -6805,7 +6807,7 @@ const FIREBASE_CONFIG = {
       if (srcKeys.has(key)) return;
       if (i.slot === 'vestivel') { if (vestOn >= vestMax || !reqMet(s, i)) return; vestOn += 1; }
       srcKeys.add(key);
-      if (isBackpack(i) && (!bag || num(i.values.cargaPor3) > num(bag.values.cargaPor3))) bag = i; // só a maior mochila conta
+      if (isBackpack(i) && (!bag || num(i.values.cargaPct) > num(bag.values.cargaPct))) bag = i; // só a maior mochila conta
       sources.push({ name: i.name, b: entryBonus(i) });
     });
     sources.push({ name: 'ajuste manual', b: s.extra });
@@ -6835,9 +6837,10 @@ const FIREBASE_CONFIG = {
     src.carga.push({ name: 'base', val: 2 }, { name: 'Corpo × 5', val: a.corpo * 5 }, { name: 'Precisão', val: a.precisao }, { name: 'Essência × 2', val: a.essencia * 2 });
     fromSources('carga');
     // mochila: +X de Carga a cada 3 da Carga que o personagem já tem
-    if (bag && num(bag.values.cargaPor3) > 0) {
-      const extra = Math.floor(Math.max(0, total('carga')) / 3) * num(bag.values.cargaPor3);
-      if (extra > 0) src.carga.push({ name: bag.name + ' (+' + num(bag.values.cargaPor3) + ' a cada 3)', val: extra });
+    if (bag && num(bag.values.cargaPct) > 0) {
+      const pct = Math.min(33, num(bag.values.cargaPct)); // nenhuma mochila passa de 33%
+      const extra = Math.floor(Math.max(0, total('carga')) * pct / 100);
+      if (extra > 0) src.carga.push({ name: bag.name + ' (+' + pct + '%)', val: extra });
     }
 
     // armadura: a básica de todos os seres é 6; a vestida vale quando for maior. Proficiência: +1 de defesa
@@ -8574,7 +8577,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', v.cd); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
-    if (isBackpack(i)) add('Mochila', num(v.cargaPor3) ? '+' + num(v.cargaPor3) + ' de Carga a cada 3 de Carga' : '');
+    if (isBackpack(i)) add('Mochila', num(v.cargaPct) ? '+' + Math.min(33, num(v.cargaPct)) + '% da Carga' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     if (i.kind === 'municao') { add('Serve no', v.pente); add('Por unidade', ammoUnitText(i)); add('Só para', v.para); add('Efeito', v.efeito); }
     add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
