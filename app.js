@@ -2650,6 +2650,16 @@ const FIREBASE_CONFIG = {
   const isWeapon = (k) => k === 'arma-fogo' || k === 'arma-melee';
   const WEAPON_PARA = { 'arma-fogo': 'Arma de fogo', 'arma-melee': 'Arma corpo a corpo' };
   const INVENTORY_KINDS = ITEM_DATA.categories.filter((c) => c.inventory).map((c) => c.id);
+  const isBackpack = (e) => e.kind === 'vestivel' && e.typeId === 'mochila';
+  // filtros dos menus de item (inventário, kit, roteiro, loja): uma categoria por chip
+  const INV_CHIPS = [
+    { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Granadas', kinds: ['granada'] }, { label: 'Munições', kinds: ['municao'] },
+    { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] },
+    { label: 'Vestíveis', kinds: ['vestivel'], test: (e) => !isBackpack(e) }, { label: 'Mochilas', kinds: ['vestivel'], test: isBackpack },
+    { label: 'Núcleos', kinds: ['nucleo'] }, { label: 'Próteses e módulos', kinds: ['protese-modulo'] },
+    { label: 'Mods', kinds: ['mod-arma'] }, { label: 'Propriedades', kinds: ['propriedade'] }, { label: 'Acessórios', kinds: ['acessorio'] },
+    { label: 'Itens gerais', kinds: ['item-geral'] }
+  ];
   const IMPLANT_KINDS = ITEM_DATA.categories.filter((c) => c.implant).map((c) => c.id);
   const rarColor = (r) => (ITEM_DATA.raridadeCor || {})[r] || '';
   const BONUS_KEYS = [['pv', 'PV'], ['escudo', 'Escudo'], ['blindagem', 'Blindagem'], ['pe', 'PE'], ['pa', 'PA'], ['carga', 'Carga'], ['armadura', 'Armadura']];
@@ -3526,7 +3536,8 @@ const FIREBASE_CONFIG = {
     // chips escolhidos pela pessoa: mostra só essas categorias (nenhum escolhido = todas)
     const picked = (o.chips || []).filter((c) => c && c.kinds && pk.on.has(c.label));
     const allowed = picked.length ? picked.reduce((t, c) => t.concat(c.kinds), []) : null;
-    list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)) && (!allowed || allowed.indexOf(e.kind) >= 0));
+    const chipOk = (e) => picked.some((c) => c.kinds.indexOf(e.kind) >= 0 && (!c.test || c.test(e)));
+    list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)) && (!picked.length || chipOk(e)));
     list = pkFacets.apply(list, allowed || o.kinds);
     // com texto, vale a relevância; sem texto, favoritos primeiro e o resto em ordem alfabética
     if (!hasQuery(q)) list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
@@ -3939,9 +3950,7 @@ const FIREBASE_CONFIG = {
       const left = START_CRONOS - total();
       const e = await openPicker(field.bank === 'poder'
         ? { title: 'Poder de nascença', kinds, chips: ['Poder'], filter: (x) => x.kind === 'poder' }
-        : { title: 'Item inicial (sobram ' + fmtCronos(Math.max(0, left)) + ' Cronos)', kinds, chips: [
-          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }],
+        : { title: 'Item inicial (sobram ' + fmtCronos(Math.max(0, left)) + ' Cronos)', kinds, chips: INV_CHIPS,
         filter: (x) => kinds.indexOf(x.kind) >= 0 && (!field.budget || priceOf(x) <= left) });
       if (!e) return;
       if (!lib.some((x) => nameKey(x.name) === nameKey(e.name))) lib = lib.concat([e]);
@@ -6469,6 +6478,13 @@ const FIREBASE_CONFIG = {
       return q;
     });
     s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
+    // mochilas antigas (com espaços e raridade) viram uma das três novas, pelo tamanho
+    s.inventory = s.inventory.map((i) => {
+      if (!isBackpack(i) || num((i.values || {}).cargaPor3) || !num((i.values || {}).espacos)) return i;
+      const sp = num(i.values.espacos);
+      const e = BUILTINS.find((x) => x.id === 'of-moc-' + (sp <= 2 ? 'pequena' : sp <= 6 ? 'media' : 'grande'));
+      return e ? Object.assign(slotSnap(e), { thumb: e.thumb || '', uid: i.uid, qty: i.qty, slot: i.slot, slots: normSlots(e.slots) }) : i;
+    });
     // kits de origem antigos gravavam só o texto (item geral sem dados): com o nome de um item oficial, vira o item de verdade
     s.inventory = s.inventory.map((i) => {
       if (i.id || i.kind !== 'item-geral') return i;
@@ -6524,7 +6540,6 @@ const FIREBASE_CONFIG = {
     const add = (b) => { if (b) BONUS_KEYS.forEach((k) => { if (num(b[k[0]])) out[k[0]] = (out[k[0]] || 0) + num(b[k[0]]); }); };
     add(e.bonus);
     if (e.kind === 'escudo-energetico') add({ escudo: (e.values || {}).escudo }); // o campo do escudo energético
-    if (e.kind === 'vestivel' && num((e.values || {}).espacos)) add({ carga: Math.floor(num(e.values.espacos) / 2) }); // mochila: +1 a cada 2 espaços
     if (e.slots) (e.slots.mods || []).concat(e.slots.props || []).forEach((x) => add(x.bonus));
     return out;
   }
@@ -6701,7 +6716,7 @@ const FIREBASE_CONFIG = {
     // (dois itens iguais equipados valem como um).
     const vestMax = vestMaxOf(s);
     const srcKeys = new Set();
-    let vestUsed = 0, vestOn = 0;
+    let vestUsed = 0, vestOn = 0, bag = null;
     equipped.forEach((i) => {
       if (i.slot === 'vestivel') vestUsed += 1;
       if (i.kind === 'protese-modulo' && !(nucleo > 0)) return;
@@ -6709,6 +6724,7 @@ const FIREBASE_CONFIG = {
       if (srcKeys.has(key)) return;
       if (i.slot === 'vestivel') { if (vestOn >= vestMax || !reqMet(s, i)) return; vestOn += 1; }
       srcKeys.add(key);
+      if (isBackpack(i) && (!bag || num(i.values.cargaPor3) > num(bag.values.cargaPor3))) bag = i; // só a maior mochila conta
       sources.push({ name: i.name, b: entryBonus(i) });
     });
     sources.push({ name: 'ajuste manual', b: s.extra });
@@ -6737,6 +6753,11 @@ const FIREBASE_CONFIG = {
     // Carga = 2 + (Corpo × 5) + Precisão + (Essência × 2)
     src.carga.push({ name: 'base', val: 2 }, { name: 'Corpo × 5', val: a.corpo * 5 }, { name: 'Precisão', val: a.precisao }, { name: 'Essência × 2', val: a.essencia * 2 });
     fromSources('carga');
+    // mochila: +X de Carga a cada 3 da Carga que o personagem já tem
+    if (bag && num(bag.values.cargaPor3) > 0) {
+      const extra = Math.floor(Math.max(0, total('carga')) / 3) * num(bag.values.cargaPor3);
+      if (extra > 0) src.carga.push({ name: bag.name + ' (+' + num(bag.values.cargaPor3) + ' a cada 3)', val: extra });
+    }
 
     // armadura: a básica de todos os seres é 6; a vestida vale quando for maior. Proficiência: +1 de defesa
     const armorProf = armor ? isProficient(s, armor) : false;
@@ -7150,9 +7171,7 @@ const FIREBASE_CONFIG = {
     add.type = 'button';
     add.dataset.fid = 'rt-item-add';
     add.addEventListener('click', async () => {
-      const picked = await openPickerMany({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
-        { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-        { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+      const picked = await openPickerMany({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
       if (!picked.length || rt.r !== r) return;
       picked.forEach((e) => r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) }));
       renderRoteiro();
@@ -8449,7 +8468,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', v.cd); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
-    if (i.kind === 'vestivel') add('Espaços', num(v.espacos) ? v.espacos + ' (+' + Math.floor(num(v.espacos) / 2) + ' de Carga)' : '');
+    if (isBackpack(i)) add('Mochila', num(v.cargaPor3) ? '+' + num(v.cargaPor3) + ' de Carga a cada 3 de Carga' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     if (i.kind === 'municao') { add('Serve no', v.pente); add('Por unidade', ammoUnitText(i)); add('Só para', v.para); add('Efeito', v.efeito); }
     add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
@@ -9382,9 +9401,7 @@ const FIREBASE_CONFIG = {
   $('#inv-armory').addEventListener('click', () => openArmory(''));
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
-    const picked = await openPickerMany({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
-      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    const picked = await openPickerMany({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!picked.length || sheetChar !== ch) return;
     const wasOver = compute(ch).over;
     picked.forEach((e) => ch.sheet.inventory.push(Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' })));
@@ -10421,9 +10438,7 @@ const FIREBASE_CONFIG = {
       const more = h('button', 'btn btn--ghost btn--sm', 'Adicionar item do banco');
       more.type = 'button';
       more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
-        const picked = await openPickerMany({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
-          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+        const picked = await openPickerMany({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
         if (!picked.length || !wz) return;
         picked.forEach((e) => g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e }));
         renderSetup();
@@ -14320,9 +14335,7 @@ const FIREBASE_CONFIG = {
   }
 
   async function addBankItem(sh) {
-    const picked = await openPickerMany({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
-      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    const picked = await openPickerMany({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!picked.length) return;
     const fresh = shops.find((x) => x.id === sh.id) || sh;
     await saveShop(fresh, { items: fresh.items.concat(picked.map((e) => ({ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }))) });
