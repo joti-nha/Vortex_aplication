@@ -8964,7 +8964,8 @@ const FIREBASE_CONFIG = {
     const tab = (id, label) => { const b = btn(label, asUi.view === id || (id === 'cat' && asUi.view !== 'slots') ? 'btn--primary' : 'btn--ghost', go(id), 'assim-tab-' + id); b.setAttribute('aria-pressed', String(asUi.view === id)); return b; };
     const head = h('div', 'picker__head', h('h2', '', 'Assimilar'), btn('Fechar', 'btn--ghost', () => closeDialog(asDlg)));
     head.querySelector('h2').id = 'assim-title';
-    const tabs = h('div', 'assim__tabs', tab('slots', 'Assimilados ' + slots.length + '/' + max), tab('cat', 'Catálogo (' + cat.length + ')'));
+    const tabs = h('div', 'assim__tabs', tab('slots', 'Assimilados ' + slots.length + '/' + max), tab('cat', 'Catálogo (' + cat.length + ')'),
+      cat.some(canArmory) ? btn('Armeiro', 'btn--ghost', () => openAssimArmory(''), 'assim-armory') : null);
     const body = h('div', 'assim__body');
     const card = (e, onOpen, extra) => {
       const c = h('button', 'assim__card');
@@ -9072,7 +9073,7 @@ const FIREBASE_CONFIG = {
       }
       body.append(grid);
       const foot = h('div', 'dialog__actions');
-      if (canArmory(e)) foot.append(btn('Armeiro do catálogo', 'btn--ghost', go('arm', asUi.key), 'assim-arm'));
+      if (canArmory(e)) foot.append(btn('Abrir no Armeiro', 'btn--primary', () => openAssimArmory(asUi.key), 'assim-arm'));
       foot.append(btn('Tirar do catálogo', 'btn--danger', async () => {
         if (!(await askConfirm({ title: 'Tirar ' + e.name + ' do catálogo?', text: 'Volta para cá se o item passar de novo pelo inventário.', ok: 'Tirar' }))) return;
         s.assim.cat.splice(s.assim.cat.indexOf(e), 1);
@@ -9080,33 +9081,6 @@ const FIREBASE_CONFIG = {
         asSave();
       }));
       body.append(foot);
-    } else if (asUi.view === 'arm') {
-      const e = byKey(asUi.key);
-      if (!e || !canArmory(e)) { asUi.view = 'cat'; drawAssim(); return; }
-      e.slots = normSlots(e.slots);
-      body.append(btn('← ' + e.name, 'btn--ghost', go('item', asUi.key)), h('h3', 'assim__title', 'Armeiro do catálogo: ' + e.name),
-        h('p', 'field__hint', 'As peças vêm do próprio catálogo e não se gastam: o simbionte replica. A próxima assimilação deste item já sai com elas.'));
-      const mounted = [['mods', 'Mod'], ['props', 'Propriedade'], ['accs', 'Acessório']].reduce((t, g) => t.concat((e.slots[g[0]] || []).map((x) => ({ x, g }))), []);
-      body.append(h('h3', 'inv-title', 'Montado'), mounted.length ? h('div', 'assim__choose', ...mounted.map((r) => btn('Tirar ' + r.x.name + ' (' + r.g[1] + ')', 'btn--ghost', () => {
-        e.slots[r.g[0]].splice(e.slots[r.g[0]].indexOf(r.x), 1);
-        asSave();
-      }))) : h('p', 'field__hint', 'Nada montado.'));
-      const pieces = cat.filter(isPiece).map((p) => ({ p, plan: planAttach(e, p) })).filter((r) => r.plan);
-      body.append(h('h3', 'inv-title', 'Peças do catálogo'));
-      if (!pieces.length) body.append(h('p', 'field__hint', 'Nenhum mod, propriedade ou acessório do catálogo serve neste item. Peças entram no catálogo quando passam pelo inventário.'));
-      pieces.forEach((r) => {
-        const row = h('div', 'assim__piece', h('span', '', r.p.name + ' · ' + kindTitle(r.p.kind)));
-        if (r.plan.already) row.append(h('span', 'chip', 'Montado'));
-        else if (r.plan.why) row.append(h('span', 'field__hint', r.plan.why));
-        else row.append(btn('Montar' + (r.plan.removed.length ? ' (troca ' + r.plan.removed.join(', ') + ')' : ''), 'btn--primary', () => {
-          const plan = planAttach(e, r.p);
-          if (!plan || !plan.slots) return;
-          e.slots = plan.slots;
-          asSave();
-          toast(r.p.name + ' montado em ' + e.name + ' no catálogo.');
-        }));
-        body.append(row);
-      });
     }
     const keep = asDlg.contains(document.activeElement) ? document.activeElement.dataset.fid : '';
     const sel = keep === 'assim-q' ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
@@ -9439,7 +9413,10 @@ const FIREBASE_CONFIG = {
      mudam na hora (pente, recarga, alcance), e a munição fica no mesmo lugar. */
   let armDlg = null;
   // m: membro da campanha (Armeiro da campanha: mochila, armazéns e lojas); sem m, a ficha aberta (só a mochila)
-  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false, cat: false };
+  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false, cat: false, assim: false };
+  // assim: Armeiro do simbionte (as armas e as peças são as do catálogo de assimilações, e montar não gasta nada)
+  const armGuns = (s) => (arm.assim ? s.assim.cat.filter(canArmory) : armoryItems(s));
+  const armId = (g) => (arm.assim ? assimKey(g) : g.uid);
   const armSheet = () => (arm.m ? arm.m.sheet : sheetChar && sheetChar.sheet);
   const ARM_SPOTS = {
     'arma-fogo': { Mira: 'top', Bocal: 'right', Carregador: 'bottom', Empunhadura: 'left' },
@@ -9449,17 +9426,30 @@ const FIREBASE_CONFIG = {
   const canArmory = (i) => Boolean(i) && (isWeapon(i.kind) || i.kind === 'armadura');
   const armoryItems = (s) => s.inventory.filter(canArmory)
     .sort((a, b) => (Number(isWeapon(b.kind)) - Number(isWeapon(a.kind))) || (Number(Boolean(b.slot)) - Number(Boolean(a.slot))));
+  // Armeiro do simbionte: o mesmo Armeiro, por cima do Assimilar, com as armas e peças do catálogo
+  function openAssimArmory(key) {
+    if (!sheetChar || !isSimb(sheetChar.sheet)) return;
+    const s = sheetChar.sheet;
+    arm.assim = true;
+    const guns = armGuns(s);
+    if (!guns.length) { arm.assim = false; toast('Nenhuma arma ou armadura no catálogo do simbionte.'); return; }
+    if (!armDlg) openArmory.init();
+    arm.uid = key && guns.some((g) => assimKey(g) === key) ? key : assimKey(guns[0]);
+    arm.sel = '';
+    arm.q = '';
+    arm.cat = false;
+    arm.lib = null;
+    arm.m = null;
+    drawArmory();
+    openDialog(armDlg);
+  }
   function openArmory(u, m) {
     const ch = m || sheetChar;
     if (!ch || !ch.sheet) return;
     const guns = armoryItems(ch.sheet);
     if (!guns.length) { toast('Nenhuma arma ou armadura no inventário. Adicione uma do banco para usar o Armeiro.'); return; }
-    if (!armDlg) {
-      armDlg = h('dialog', 'dialog armory');
-      armDlg.setAttribute('aria-labelledby', 'armory-title');
-      armDlg.addEventListener('close', () => { arm.lib = null; });
-      document.body.append(armDlg);
-    }
+    if (!armDlg) openArmory.init();
+    arm.assim = false;
     arm.uid = u && guns.some((w) => w.uid === u) ? u : guns[0].uid;
     arm.sel = '';
     arm.q = '';
@@ -9469,8 +9459,15 @@ const FIREBASE_CONFIG = {
     drawArmory();
     openDialog(armDlg);
   }
+  openArmory.init = () => {
+    armDlg = h('dialog', 'dialog armory');
+    armDlg.setAttribute('aria-labelledby', 'armory-title');
+    armDlg.addEventListener('close', () => { arm.lib = null; if (arm.assim) { arm.assim = false; if (asDlg && asDlg.open) drawAssim(); } });
+    document.body.append(armDlg);
+  };
   // salva: na ficha aberta, como qualquer edição; na campanha, grava a mochila (e o dinheiro) do personagem
   async function armSave() {
+    if (arm.assim) { touchSheet(); rerender(); drawArmory(); return; }
     if (!arm.m) { touchSheet(); rerender(); drawArmory(); return; }
     const local = arm.m.sheet;
     const camp = currentCamp && currentCamp.id;
@@ -9490,6 +9487,8 @@ const FIREBASE_CONFIG = {
      lojas (comprando). Cada fonte sabe tirar uma unidade e devolve true quando deu certo. */
   function armSources(s) {
     const out = [];
+    // simbionte: toda peça do catálogo serve, sem gastar (ele replica)
+    if (arm.assim) return s.assim.cat.filter(isPiece).map((x) => ({ e: x, where: 'No catálogo do simbionte', act: 'Montar', take: async () => true }));
     s.inventory.filter((x) => !x.slot && isPiece(x)).forEach((x) => out.push({
       e: x, where: 'Na mochila' + ((x.qty || 1) > 1 ? ' ×' + x.qty : ''), act: 'Montar',
       take: async () => { if (s.inventory.indexOf(x) < 0) return false; takeFromBag(s, x); return true; }
@@ -9532,10 +9531,10 @@ const FIREBASE_CONFIG = {
     const s = armSheet();
     if (!s || !armDlg) return;
     const ch = arm.m || sheetChar;
-    const guns = armoryItems(s);
-    const w = guns.find((x) => x.uid === arm.uid) || guns[0];
+    const guns = armGuns(s);
+    const w = guns.find((x) => armId(x) === arm.uid) || guns[0];
     if (!w) { closeDialog(armDlg); return; }
-    arm.uid = w.uid;
+    arm.uid = armId(w);
     w.slots = w.slots && w.slots.mods ? w.slots : normSlots(w.slots);
     const info = slotInfo(w);
     const use = slotUse(w);
@@ -9550,13 +9549,13 @@ const FIREBASE_CONFIG = {
     close.type = 'button';
     close.addEventListener('click', () => closeDialog(armDlg));
     const tabs = h('div', 'armory__guns', ...guns.map((g) => {
-      const b = h('button', 'armory__gun' + (g.uid === w.uid ? ' is-on' : ''), entryIcon(g), h('span', 'armory__gun-name', g.name));
+      const b = h('button', 'armory__gun' + (g === w ? ' is-on' : ''), entryIcon(g), h('span', 'armory__gun-name', g.name));
       b.type = 'button';
-      b.dataset.fid = 'arm-gun-' + g.uid;
-      b.setAttribute('aria-pressed', String(g.uid === w.uid));
+      b.dataset.fid = 'arm-gun-' + armId(g);
+      b.setAttribute('aria-pressed', String(g === w));
       const c = rarColor(g.values.raridade);
       if (c) b.style.setProperty('--rar', c);
-      b.addEventListener('click', () => { arm.uid = g.uid; arm.sel = ''; drawArmory(); });
+      b.addEventListener('click', () => { arm.uid = armId(g); arm.sel = ''; drawArmory(); });
       return b;
     }));
 
@@ -9604,7 +9603,7 @@ const FIREBASE_CONFIG = {
         h('span', 'armory__part-meta', [on ? 'Montado' : opt.where, e.values.raridade, e.values.para, e.kind === 'mod-arma' ? modCost(e) + (modCost(e) === 1 ? ' slot' : ' slots') : ''].filter(Boolean).join(' · ')),
         entryText(e) ? h('span', 'armory__part-text', entryText(e)) : null,
         e.slots && e.slots.accs && e.slots.accs.length ? h('span', 'armory__part-meta', 'Traz: ' + e.slots.accs.map((x) => x.name + ' (' + x.values.posicao + ')').join(', ')) : null,
-        opt.swap ? h('span', 'armory__why armory__why--swap', 'Troca: ' + opt.swap + ' (volta para a mochila)') : null,
+        opt.swap ? h('span', 'armory__why armory__why--swap', 'Troca: ' + opt.swap + (arm.assim ? '' : ' (volta para a mochila)')) : null,
         opt.why ? h('span', 'armory__why', opt.why) : null), btn);
       const c = rarColor(e.values.raridade);
       if (c) li.style.setProperty('--rar', c);
@@ -9612,7 +9611,12 @@ const FIREBASE_CONFIG = {
     };
     const match = (e) => !arm.q || searchScore(entryFields(e), arm.q) > 0;
     // tirar: a peça sai da arma e vai para a mochila
-    const unmount = (list, piece) => () => { list.splice(list.indexOf(piece), 1); returnToBag(s, [piece]); toast(piece.name + ' voltou para a mochila.'); armSave(); };
+    const unmount = (list, piece) => () => {
+      list.splice(list.indexOf(piece), 1);
+      if (arm.assim) toast('Tirou ' + piece.name + ' de ' + w.name + '.');
+      else { returnToBag(s, [piece]); toast(piece.name + ' voltou para a mochila.'); }
+      armSave();
+    };
     // montar: tira uma unidade da fonte e põe na arma (o que estava no lugar volta para a mochila)
     const mountFrom = (src, plan) => async () => {
       if (arm.busy) return;
@@ -9620,6 +9624,15 @@ const FIREBASE_CONFIG = {
       const ok = await src.take();
       arm.busy = false;
       if (!ok) { drawArmory(); return; }
+      if (arm.assim) {
+        // o simbionte replica: a peça não sai do catálogo e a que estava no lugar some
+        const p = planAttach(w, slotSnap(src.e));
+        if (!p || !p.slots) { toast('Não coube: ' + src.e.name + '.'); drawArmory(); return; }
+        w.slots = p.slots;
+        toast('Montou ' + src.e.name + ' em ' + w.name + '.' + (p.removed.length ? ' Saiu ' + p.removed.join(', ') + '.' : ''));
+        armSave();
+        return;
+      }
       const done = mountPiece(s, w, slotSnap(src.e));
       if (!done) { returnToBag(s, [slotSnap(src.e)]); toast('Não coube: ' + src.e.name + ' foi para a mochila.'); }
       else toast('Montou ' + src.e.name + ' em ' + w.name + '.' + (done.removed.length ? ' ' + done.removed.join(', ') + ' voltou para a mochila.' : ''));
@@ -9645,7 +9658,7 @@ const FIREBASE_CONFIG = {
       }).filter(Boolean);
       if (!arm.cat) return own.map((x) => x.li);
       const rest = libOf(kind).filter((e) => test(e) && match(e) && !sources.some((src) => samePiece(src.e, e))).filter((e) => { const plan = planAttach(w, e); return plan && !plan.already; })
-        .map((e) => row(e, false, { act: 'Sem a peça', where: 'Você não tem', n: 0, why: arm.m ? 'Não está na mochila, nos armazéns liberados nem nas lojas.' : 'Não está na mochila. Compre numa loja ou use o Armeiro da campanha.', run: () => {} }));
+        .map((e) => row(e, false, { act: 'Sem a peça', where: arm.assim ? 'Fora do catálogo' : 'Você não tem', n: 0, why: arm.assim ? 'O simbionte ainda não conhece esta peça: ela entra no catálogo quando passa pelo inventário.' : arm.m ? 'Não está na mochila, nos armazéns liberados nem nas lojas.' : 'Não está na mochila. Compre numa loja ou use o Armeiro da campanha.', run: () => {} }));
       return own.map((x) => x.li).concat(rest);
     };
     let items = [];
@@ -9669,7 +9682,7 @@ const FIREBASE_CONFIG = {
       if (w.kind === 'armadura') hint += ' Armadura não recebe mods nem acessórios, só propriedade.';
       items = w.slots.props.map((x) => row(x, true, { run: unmount(w.slots.props, x) })).concat(candRows((e) => e.kind === 'propriedade', 'propriedade'));
     }
-    hint += arm.m ? ' Peças da mochila, dos armazéns liberados e das lojas (comprando).' : ' Só aparecem as peças que estão na mochila; armazéns e lojas ficam no Armeiro da campanha.';
+    hint += arm.assim ? ' As peças vêm do catálogo do simbionte e não se gastam: ele replica. A próxima assimilação do item já sai assim.' : arm.m ? ' Peças da mochila, dos armazéns liberados e das lojas (comprando).' : ' Só aparecem as peças que estão na mochila; armazéns e lojas ficam no Armeiro da campanha.';
     const q = h('input', 'input');
     q.type = 'search';
     q.id = 'arm-q';
@@ -9690,7 +9703,7 @@ const FIREBASE_CONFIG = {
     };
     const modes = h('div', 'armory__modes', h('span', 'picker__filter-label', 'Mostrar:'), mode(false, 'Minhas'), mode(true, 'Compatíveis'));
     const none = arm.q ? 'Nenhuma peça com esse nome.' : arm.cat ? 'Nenhuma peça do catálogo encaixa em ' + title + '.'
-      : (arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.') + ' Toque em "Compatíveis" para ver tudo o que encaixa aqui.';
+      : (arm.assim ? 'Nenhuma peça do catálogo do simbionte serve aqui.' : arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.') + ' Toque em "Compatíveis" para ver tudo o que encaixa aqui.';
     panel.append(h('h3', 'armory__ptitle', title), h('p', 'field__hint', hint), qLab, q, modes,
       items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', none));
 
@@ -9734,10 +9747,10 @@ const FIREBASE_CONFIG = {
     }
 
     armDlg.replaceChildren(
-      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', 'Armeiro'), ch && ch.name ? h('small', 'armory__who', ' · ' + ch.name + (arm.m && currentCamp ? ' · ' + fmtCronos(num((s.money || {})[currentCamp.id])) + ' Cronos' : '')) : null), close),
+      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', arm.assim ? 'Armeiro do simbionte' : 'Armeiro'), ch && ch.name ? h('small', 'armory__who', ' · ' + ch.name + (arm.m && currentCamp ? ' · ' + fmtCronos(num((s.money || {})[currentCamp.id])) + ' Cronos' : '')) : null), close),
       tabs,
       h('div', 'armory__grid',
-        h('div', 'armory__left', stage, slotRow, stats, ammoBox.children.length ? ammoBox : null),
+        h('div', 'armory__left', stage, slotRow, stats, ammoBox.children.length && !arm.assim ? ammoBox : null),
         panel));
     $('h2.dialog__title', armDlg).id = 'armory-title';
     const on = $('.armory__gun.is-on', armDlg);
