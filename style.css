@@ -3283,6 +3283,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 .armory { width: min(68rem, calc(100vw - 1rem)); }
 .armory__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
 .armory__head .dialog__title { margin: 0; }
+.armory__head [data-fid="arm-save-preset"] { margin-left: auto; }
 .armory__guns { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.35rem; margin-bottom: 0.9rem; scrollbar-width: thin; }
 .armory__gun { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; max-width: 14rem; padding: 0.4rem 0.7rem; border: 1px solid var(--linha); border-bottom: 3px solid var(--rar, var(--linha)); border-radius: var(--r-s); background: var(--casco); color: inherit; font: inherit; font-size: 0.85rem; cursor: pointer; }
 .armory__gun.is-on { border-color: var(--rar, var(--ambar)); background: rgba(var(--ambar-rgb), 0.1); }

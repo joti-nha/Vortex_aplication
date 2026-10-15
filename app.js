@@ -9780,8 +9780,24 @@ const FIREBASE_CONFIG = {
       stats.append(stat('Dano', w.values.dano), stat('Empunhadura', w.values.empunhadura), stat('Carga', fmtNum(parseCarga(w.values.carga))));
     }
 
+    // simbionte: salva a arma como está montada num preset (vai para o catálogo e para os presets do Assimilar)
+    let presetBtn = null;
+    if (arm.assim) {
+      presetBtn = h('button', 'btn btn--primary btn--sm', 'Salvar preset');
+      presetBtn.type = 'button';
+      presetBtn.dataset.fid = 'arm-save-preset';
+      presetBtn.addEventListener('click', async () => {
+        const name = await askText('Salvar preset', 'Nome do preset', 'Ex.: ' + w.name + ' de corte');
+        if (!name || !armDlg.open) return;
+        const key = 'preset:' + uid();
+        s.assim.cat.push(Object.assign(deep(w), { uid: uid(), name: name.slice(0, 40), ck: key, slot: '', assim: false }));
+        s.assim.presets.push({ name: name.slice(0, 40), keys: [key] });
+        toast('Preset ' + name.slice(0, 40) + ' salvo: ' + w.name + ' com o que está montado.');
+        touchSheet(); rerender(); drawArmory();
+      });
+    }
     armDlg.replaceChildren(
-      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', arm.assim ? 'Armeiro do simbionte' : 'Armeiro'), ch && ch.name ? h('small', 'armory__who', ' · ' + ch.name + (arm.m && currentCamp ? ' · ' + fmtCronos(num((s.money || {})[currentCamp.id])) + ' Cronos' : '')) : null), close),
+      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', arm.assim ? 'Armeiro do simbionte' : 'Armeiro'), ch && ch.name ? h('small', 'armory__who', ' · ' + ch.name + (arm.m && currentCamp ? ' · ' + fmtCronos(num((s.money || {})[currentCamp.id])) + ' Cronos' : '')) : null), presetBtn, close),
       tabs,
       h('div', 'armory__grid',
         h('div', 'armory__left', stage, slotRow, stats, ammoBox.children.length && !arm.assim ? ammoBox : null),
