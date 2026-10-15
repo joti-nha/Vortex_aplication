@@ -1048,7 +1048,8 @@ window.VORTEX_REGRAS = {
           ['p', 'Criar um item custa uma ação bônus, e você conta como proficiente com todos os itens que o simbionte cria.'],
           ['p', 'Você pode guardar dentro de si itens criados até um número igual ao seu Corpo; para usar um deles, só precisa sacar.'],
           ['p', 'Os simbiontes não criam armas de dano de Fogo.'],
-          ['p', 'O simbionte também é capaz de replicar mods e acessórios que tenha assimilado alguma vez.']
+          ['p', 'O simbionte também é capaz de replicar mods e acessórios que tenha assimilado alguma vez.'],
+          ['p', 'Na ficha, o botão **Assimilar** (aba Inventário) abre os slots de assimilação (um por ponto de Corpo, mínimo 1) e o **catálogo de assimilações**: tudo que já passou pelo inventário do personagem, menos consumíveis e armas de Fogo. No catálogo ficam os presets, o Armeiro do catálogo (monta no item as peças do próprio catálogo, sem gastá-las) e a opção de assimilar um item num slot escolhido.']
         ]]
       ]
     },
