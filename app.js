@@ -10553,7 +10553,8 @@ const FIREBASE_CONFIG = {
       img.src = url;
     });
   }
-  const galCanEdit = () => Boolean(gal.ch && (gal.ch.mine || isMyChar(gal.ch.id)));
+  // quem pode mexer na ficha aberta também põe e tira fotos (a ficha não tem modo só de leitura)
+  const galCanEdit = () => Boolean(gal.ch);
   async function openGallery() {
     if (!sheetChar) return;
     if (!galDlg) {
