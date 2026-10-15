@@ -6467,6 +6467,12 @@ const FIREBASE_CONFIG = {
       return q;
     });
     s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
+    // kits de origem antigos gravavam só o texto (item geral sem dados): com o nome de um item oficial, vira o item de verdade
+    s.inventory = s.inventory.map((i) => {
+      if (i.id || i.kind !== 'item-geral') return i;
+      const e = BUILTINS.find((x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 && nameKey(x.name) === nameKey(i.name));
+      return e ? Object.assign(slotSnap(e), { thumb: e.thumb || '', uid: i.uid, qty: i.qty, slot: i.slot, slots: normSlots(e.slots) }) : i;
+    });
     // fichas da versão anterior marcavam só "equipado": cada item vai para o primeiro espaço livre que o aceite
     s.inventory.forEach((i) => {
       const was = i.equipped === true && !i.slot;
