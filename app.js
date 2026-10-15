@@ -550,7 +550,7 @@ const FIREBASE_CONFIG = {
           .map((m) => Object.assign(toChar(d.characters[m.characterId]), { characterId: m.characterId, ownerUid: m.ownerUid, mine: m.ownerUid === ME }));
       },
 
-      // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
+      // ---------- Banco de itens (público; só quem criou edita; qualquer um exclui o que não é oficial) ----------
       async searchLibrary({ kinds, query }) {
         const all = Object.values(read().library).filter((e) => !kinds || kinds.indexOf(e.kind) >= 0)
           .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).map(toLib);
@@ -573,7 +573,6 @@ const FIREBASE_CONFIG = {
         const d = read();
         const e = d.library[id];
         if (!e) return;
-        if (e.ownerUid !== ME) throw new UserError('Só quem criou pode excluir.');
         delete d.library[id];
         write(d);
       },
@@ -1013,7 +1012,7 @@ const FIREBASE_CONFIG = {
         return rows.filter(Boolean).sort((x, y) => x.at - y.at);
       },
 
-      // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
+      // ---------- Banco de itens (público; só quem criou edita; qualquer um exclui o que não é oficial) ----------
       /* O banco é lido por categoria e guardado por um minuto: cada letra digitada filtra aqui,
          com relevância, plural e tolerância a erro (salvar ou excluir limpa a cópia). */
       async searchLibrary({ kinds, query }) {
@@ -1862,7 +1861,7 @@ const FIREBASE_CONFIG = {
     },
     banco: {
       title: 'Banco de dados',
-      text: 'Tudo o que é salvo na Oficina, mais o catálogo oficial das regras. É aqui que a pesquisa dos slots e do inventário procura. A estrela favorita (fica neste aparelho); só quem criou edita ou exclui.',
+      text: 'Tudo o que é salvo na Oficina, mais o catálogo oficial das regras. É aqui que a pesquisa dos slots e do inventário procura. A estrela favorita (fica neste aparelho); só quem criou edita, e qualquer pessoa exclui o que não é oficial.',
       rule: null
     },
     busca: {
@@ -6260,6 +6259,22 @@ const FIREBASE_CONFIG = {
   /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
   const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'build', 'npc'];
   const ITEM_KINDS = ITEM_DATA.categories.map((c) => c.id).filter((k) => NON_ITEM_KINDS.indexOf(k) < 0);
+  /* Excluir do banco: vale para tudo que não é oficial (o catálogo oficial vem do items.js e não sai) */
+  function libDeleteAction(e, after) {
+    if (e.oficial || !e.id) return null;
+    return {
+      label: 'Excluir', cls: 'btn--danger', onClick: async () => {
+        const ok = await askConfirm({
+          title: 'Excluir ' + e.name + '?',
+          text: (e.mine ? '' : 'Não foi você quem criou. ') + 'Sai do banco para todos. O que já está em fichas e em outros itens continua lá.',
+          ok: 'Excluir'
+        });
+        if (!ok) return;
+        try { await db.deleteLibrary(e.id); toast(e.name + ' foi excluído.'); after(); }
+        catch (err) { toast(errorMessage(err)); }
+      }
+    };
+  }
   let libSeq = 0;
   async function runLib() {
     const seq = ++libSeq;
@@ -6278,17 +6293,9 @@ const FIREBASE_CONFIG = {
     const secret = secretHit(q);
     $('#lib-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => {
       const actions = [{ label: 'Usar de base', onClick: () => openForm(e.kind, e.typeId, Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' })) }];
-      if (e.mine) {
-        actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) });
-        actions.push({
-          label: 'Excluir', cls: 'btn--danger', onClick: async () => {
-            const ok = await askConfirm({ title: 'Excluir ' + e.name + '?', text: 'Sai do banco para todos. O que já está em fichas e em outros itens continua lá.', ok: 'Excluir' });
-            if (!ok) return;
-            try { await db.deleteLibrary(e.id); toast(e.name + ' foi excluído.'); runLib(); }
-            catch (err) { toast(errorMessage(err)); }
-          }
-        });
-      }
+      if (e.mine) actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) });
+      const del = libDeleteAction(e, runLib);
+      if (del) actions.push(del);
       return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
     }));
     $('#lib-empty').hidden = list.length > 0 || Boolean(secret);
@@ -6342,9 +6349,10 @@ const FIREBASE_CONFIG = {
     list = catFacets.apply(list, g.kinds || ITEM_DATA.categories.map((c) => c.id));
     if (!hasQuery(q)) list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
-    $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e,
-      e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [],
-      () => { if ($('#cat-fav').checked) runCatalog(); })));
+    $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, [
+      e.mine ? { label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } } : null,
+      libDeleteAction(e, runCatalog)
+    ].filter(Boolean), () => { if ($('#cat-fav').checked) runCatalog(); })));
     $('#cat-empty').hidden = list.length > 0 || Boolean(secret);
     suggestAfter($('#cat-list'), secret ? '' : suggest, $('#cat-q'), runCatalog);
     $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g.kinds ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
