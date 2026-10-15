@@ -424,6 +424,26 @@ const FIREBASE_CONFIG = {
         return toChar(c);
       },
 
+      // Galeria do personagem: uma foto por registro (imagem reduzida ou link)
+      async listGallery(id) {
+        const box = (read().galleries || {})[id] || {};
+        return Object.keys(box).map((k) => Object.assign({ id: k }, box[k])).sort((a, b) => a.at - b.at);
+      },
+      async addGalleryPhoto(id, photo) {
+        const d = read();
+        d.galleries = d.galleries || {};
+        const box = d.galleries[id] = d.galleries[id] || {};
+        const pid = uid();
+        box[pid] = { image: String(photo.image || ''), url: String(photo.url || ''), at: Date.now() };
+        write(d);
+        return pid;
+      },
+      async removeGalleryPhoto(id, pid) {
+        const d = read();
+        if (d.galleries && d.galleries[id]) delete d.galleries[id][pid];
+        write(d);
+      },
+
       async saveCharacter(id, patch) {
         const d = read();
         const c = d.characters[id];
@@ -815,6 +835,19 @@ const FIREBASE_CONFIG = {
           throw e;
         }
         return { id: ref.id, name, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], mine: true, ownerProfile: ownerProfile || '', sheet: null };
+      },
+
+      // Galeria do personagem: subcoleção, uma foto por documento (cabe muito mais que na ficha)
+      async listGallery(id) {
+        const snap = await chars().doc(id).collection('gallery').orderBy('at').limit(60).get();
+        return snap.docs.map((x) => { const g = x.data(); return { id: x.id, image: g.image || '', url: g.url || '', at: g.at && g.at.toMillis ? g.at.toMillis() : 0 }; });
+      },
+      async addGalleryPhoto(id, photo) {
+        const ref = await chars().doc(id).collection('gallery').add({ image: String(photo.image || ''), url: String(photo.url || ''), by: me, at: FV.serverTimestamp() });
+        return ref.id;
+      },
+      async removeGalleryPhoto(id, pid) {
+        await chars().doc(id).collection('gallery').doc(pid).delete();
       },
 
       // Grava só os campos enviados (assim não apaga o que outra pessoa editou nos outros campos)
@@ -1729,6 +1762,39 @@ const FIREBASE_CONFIG = {
       inp.focus();
     });
   }
+  // pergunta um texto curto (nome de preset, link de imagem). Devolve o texto ou null
+  let textDlg = null;
+  function askText(title, label, placeholder, type) {
+    if (!textDlg) {
+      textDlg = document.createElement('dialog');
+      textDlg.className = 'dialog startdlg';
+      textDlg.setAttribute('aria-labelledby', 'asktext-title');
+      document.body.append(textDlg);
+    }
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (textDlg.open) closeDialog(textDlg); };
+      const inp = h('input', 'input');
+      inp.type = type || 'text';
+      inp.id = 'asktext-input';
+      inp.autocomplete = 'off';
+      inp.maxLength = 500;
+      inp.placeholder = placeholder || '';
+      const ok = h('button', 'btn btn--primary btn--sm', 'OK');
+      ok.type = 'submit';
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      const form = h('form', 'startdlg__body', h('h2', '', title), h('label', 'field__label', label), inp, h('div', 'dialog__actions', cancel, ok));
+      form.querySelector('h2').id = 'asktext-title';
+      form.querySelector('label').htmlFor = 'asktext-input';
+      form.addEventListener('submit', (ev) => { ev.preventDefault(); finish(inp.value.trim() || null); });
+      textDlg.onclose = () => { if (!textDlg.open) finish(null); };
+      textDlg.replaceChildren(form);
+      openDialog(textDlg);
+      inp.focus();
+    });
+  }
   // pede a senha quando a campanha tem uma e esta pessoa ainda não entrou; true = pode seguir
   async function passGate(camp) {
     if (!camp || !camp.passHash || camp.isOwner || isGmOf(camp.id) || unlocked().has(camp.id) || (profile && profile.camps.indexOf(camp.id) >= 0)) return true;
@@ -1846,7 +1912,7 @@ const FIREBASE_CONFIG = {
     },
     progressao: {
       title: 'Progressão',
-      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia. UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
+      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia (uma vez a cada 4 UP, esse ponto pode virar uma proficiência). UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
       rule: 'progressao'
     },
     poderes: {
@@ -2650,6 +2716,16 @@ const FIREBASE_CONFIG = {
   const isWeapon = (k) => k === 'arma-fogo' || k === 'arma-melee';
   const WEAPON_PARA = { 'arma-fogo': 'Arma de fogo', 'arma-melee': 'Arma corpo a corpo' };
   const INVENTORY_KINDS = ITEM_DATA.categories.filter((c) => c.inventory).map((c) => c.id);
+  const isBackpack = (e) => e.kind === 'vestivel' && e.typeId === 'mochila';
+  // filtros dos menus de item (inventário, kit, roteiro, loja): uma categoria por chip
+  const INV_CHIPS = [
+    { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Granadas', kinds: ['granada'] }, { label: 'Munições', kinds: ['municao'] },
+    { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] },
+    { label: 'Vestíveis', kinds: ['vestivel'], test: (e) => !isBackpack(e) }, { label: 'Mochilas', kinds: ['vestivel'], test: isBackpack },
+    { label: 'Núcleos', kinds: ['nucleo'] }, { label: 'Próteses e módulos', kinds: ['protese-modulo'] },
+    { label: 'Mods', kinds: ['mod-arma'] }, { label: 'Propriedades', kinds: ['propriedade'] }, { label: 'Acessórios', kinds: ['acessorio'] },
+    { label: 'Itens gerais', kinds: ['item-geral'] }
+  ];
   const IMPLANT_KINDS = ITEM_DATA.categories.filter((c) => c.implant).map((c) => c.id);
   const rarColor = (r) => (ITEM_DATA.raridadeCor || {})[r] || '';
   const BONUS_KEYS = [['pv', 'PV'], ['escudo', 'Escudo'], ['blindagem', 'Blindagem'], ['pe', 'PE'], ['pa', 'PA'], ['carga', 'Carga'], ['armadura', 'Armadura']];
@@ -3526,7 +3602,8 @@ const FIREBASE_CONFIG = {
     // chips escolhidos pela pessoa: mostra só essas categorias (nenhum escolhido = todas)
     const picked = (o.chips || []).filter((c) => c && c.kinds && pk.on.has(c.label));
     const allowed = picked.length ? picked.reduce((t, c) => t.concat(c.kinds), []) : null;
-    list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)) && (!allowed || allowed.indexOf(e.kind) >= 0));
+    const chipOk = (e) => picked.some((c) => c.kinds.indexOf(e.kind) >= 0 && (!c.test || c.test(e)));
+    list = list.filter((e) => (!o.filter || o.filter(e)) && (!favOnly || favs.has(e.id)) && (!picked.length || chipOk(e)));
     list = pkFacets.apply(list, allowed || o.kinds);
     // com texto, vale a relevância; sem texto, favoritos primeiro e o resto em ordem alfabética
     if (!hasQuery(q)) list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
@@ -3939,9 +4016,7 @@ const FIREBASE_CONFIG = {
       const left = START_CRONOS - total();
       const e = await openPicker(field.bank === 'poder'
         ? { title: 'Poder de nascença', kinds, chips: ['Poder'], filter: (x) => x.kind === 'poder' }
-        : { title: 'Item inicial (sobram ' + fmtCronos(Math.max(0, left)) + ' Cronos)', kinds, chips: [
-          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }],
+        : { title: 'Item inicial (sobram ' + fmtCronos(Math.max(0, left)) + ' Cronos)', kinds, chips: INV_CHIPS,
         filter: (x) => kinds.indexOf(x.kind) >= 0 && (!field.budget || priceOf(x) <= left) });
       if (!e) return;
       if (!lib.some((x) => nameKey(x.name) === nameKey(e.name))) lib = lib.concat([e]);
@@ -6448,6 +6523,12 @@ const FIREBASE_CONFIG = {
     // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
     s.doutor = Array.isArray(r.doutor) ? r.doutor.filter((x) => typeof x === 'string') : [];
     s.upProfs = Array.isArray(r.upProfs) ? r.upProfs.filter((x) => typeof x === 'string') : [];
+    // a cada 4 UP, o +1 de perícia de um UP pode virar uma proficiência
+    s.swapProfs = Array.isArray(r.swapProfs) ? r.swapProfs.filter((x) => typeof x === 'string') : [];
+    // a 3ª racial do Simbionte foi renomeada; fichas antigas guardam a cópia com o nome velho
+    if (s.specimen && s.specimen.values && typeof s.specimen.values.racial === 'string' && s.specimen.values.racial.indexOf('Geração de Matéria Simbiôntica') >= 0) {
+      s.specimen = Object.assign({}, s.specimen, { values: Object.assign({}, s.specimen.values, { racial: s.specimen.values.racial.replace('Geração de Matéria Simbiôntica', 'Assimilação Abiótica') }) });
+    }
     // Doutor e as proficiências compradas são poderes; fichas antigas guardavam em listas à parte
     s.doutor.map((id) => ['of-pod-doutor', id]).concat(s.upProfs.map((id) => [id.indexOf('armadura-') === 0 ? 'of-pod-prof-armadura' : 'of-pod-prof-arma', id])).forEach((x) => {
       if (s.powers.some((p) => p.id === x[0] && p.choice === x[1])) return;
@@ -6469,6 +6550,13 @@ const FIREBASE_CONFIG = {
       return q;
     });
     s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
+    // mochilas antigas (com espaços e raridade) viram uma das três novas, pelo tamanho
+    s.inventory = s.inventory.map((i) => {
+      if (!isBackpack(i) || num((i.values || {}).cargaPor3) || !num((i.values || {}).espacos)) return i;
+      const sp = num(i.values.espacos);
+      const e = BUILTINS.find((x) => x.id === 'of-moc-' + (sp <= 2 ? 'pequena' : sp <= 6 ? 'media' : 'grande'));
+      return e ? Object.assign(slotSnap(e), { thumb: e.thumb || '', uid: i.uid, qty: i.qty, slot: i.slot, slots: normSlots(e.slots) }) : i;
+    });
     // kits de origem antigos gravavam só o texto (item geral sem dados): com o nome de um item oficial, vira o item de verdade
     s.inventory = s.inventory.map((i) => {
       if (i.id || i.kind !== 'item-geral') return i;
@@ -6485,6 +6573,12 @@ const FIREBASE_CONFIG = {
       const free = slotsFor(i).find((id) => MULTI_SLOTS[id] || !s.inventory.some((x) => x.slot === id));
       if (free && !(free === 'mao-e' && s.inventory.some((x) => x.slot === 'mao-d' && twoHanded(x)))) i.slot = twoHanded(i) && free === 'mao-e' ? '' : free;
     });
+    // Simbionte: catálogo de assimilações (tudo que já passou pelo inventário) e presets
+    const as = r.assim && typeof r.assim === 'object' ? r.assim : {};
+    s.assim = {
+      cat: Array.isArray(as.cat) ? as.cat.filter((x) => x && x.name) : [],
+      presets: Array.isArray(as.presets) ? as.presets.filter((p) => p && Array.isArray(p.keys)).map((p) => ({ name: String(p.name || 'Preset'), keys: p.keys.filter((k) => typeof k === 'string') })) : []
+    };
     s.v = 2;
     return s;
   }
@@ -6524,7 +6618,6 @@ const FIREBASE_CONFIG = {
     const add = (b) => { if (b) BONUS_KEYS.forEach((k) => { if (num(b[k[0]])) out[k[0]] = (out[k[0]] || 0) + num(b[k[0]]); }); };
     add(e.bonus);
     if (e.kind === 'escudo-energetico') add({ escudo: (e.values || {}).escudo }); // o campo do escudo energético
-    if (e.kind === 'vestivel' && num((e.values || {}).espacos)) add({ carga: Math.floor(num(e.values.espacos) / 2) }); // mochila: +1 a cada 2 espaços
     if (e.slots) (e.slots.mods || []).concat(e.slots.props || []).forEach((x) => add(x.bonus));
     return out;
   }
@@ -6661,7 +6754,10 @@ const FIREBASE_CONFIG = {
   const upProfsOf = (s) => choicesOf(s, 'of-pod-prof-arma').concat(choicesOf(s, 'of-pod-prof-armadura'));
   const choiceLabel = (pid, id) => (CHOICE_POWERS[pid] === 'pericia' ? SKILL_LABEL[id] || id : profLabel(id));
   const choicePower = (e, choice) => Object.assign(slotSnap(e), { thumb: e.thumb || '', choice, name: e.name + ': ' + choiceLabel(e.id, choice) });
-  const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0;
+  // trocas de perícia por proficiência: uma a cada 4 UP ganhos por XP (as de origem não contam)
+  const swapAllowed = (s) => Math.floor(Math.floor(num(s.xp) / 10) / 4);
+  const swapProfsOf = (s) => (s.swapProfs || []).slice(0, swapAllowed(s));
+  const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0 || swapProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
   const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
@@ -6674,7 +6770,7 @@ const FIREBASE_CONFIG = {
     const sp = s.specimen;
     const spv = specimenVals(s);
     const mech = sheetMech(s);
-    const equipped = s.inventory.filter((i) => i.slot);
+    const equipped = s.inventory.filter((i) => i.slot && i.slot !== 'assim'); // assimilados ficam dentro do simbionte até sacar
     const armor = equipped.find((i) => i.slot === 'armadura');
     const core = equipped.find((i) => i.slot === 'nucleo');
 
@@ -6701,7 +6797,7 @@ const FIREBASE_CONFIG = {
     // (dois itens iguais equipados valem como um).
     const vestMax = vestMaxOf(s);
     const srcKeys = new Set();
-    let vestUsed = 0, vestOn = 0;
+    let vestUsed = 0, vestOn = 0, bag = null;
     equipped.forEach((i) => {
       if (i.slot === 'vestivel') vestUsed += 1;
       if (i.kind === 'protese-modulo' && !(nucleo > 0)) return;
@@ -6709,6 +6805,7 @@ const FIREBASE_CONFIG = {
       if (srcKeys.has(key)) return;
       if (i.slot === 'vestivel') { if (vestOn >= vestMax || !reqMet(s, i)) return; vestOn += 1; }
       srcKeys.add(key);
+      if (isBackpack(i) && (!bag || num(i.values.cargaPor3) > num(bag.values.cargaPor3))) bag = i; // só a maior mochila conta
       sources.push({ name: i.name, b: entryBonus(i) });
     });
     sources.push({ name: 'ajuste manual', b: s.extra });
@@ -6737,6 +6834,11 @@ const FIREBASE_CONFIG = {
     // Carga = 2 + (Corpo × 5) + Precisão + (Essência × 2)
     src.carga.push({ name: 'base', val: 2 }, { name: 'Corpo × 5', val: a.corpo * 5 }, { name: 'Precisão', val: a.precisao }, { name: 'Essência × 2', val: a.essencia * 2 });
     fromSources('carga');
+    // mochila: +X de Carga a cada 3 da Carga que o personagem já tem
+    if (bag && num(bag.values.cargaPor3) > 0) {
+      const extra = Math.floor(Math.max(0, total('carga')) / 3) * num(bag.values.cargaPor3);
+      if (extra > 0) src.carga.push({ name: bag.name + ' (+' + num(bag.values.cargaPor3) + ' a cada 3)', val: extra });
+    }
 
     // armadura: a básica de todos os seres é 6; a vestida vale quando for maior. Proficiência: +1 de defesa
     const armorProf = armor ? isProficient(s, armor) : false;
@@ -6768,7 +6870,7 @@ const FIREBASE_CONFIG = {
       // +1 num atributo a cada 4 UP: vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
       attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over, // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over - swapProfsOf(s).length, // cada troca tira 1 ponto de perícia // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
       skillGrant: skillGrant(s).grant,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
@@ -7150,9 +7252,7 @@ const FIREBASE_CONFIG = {
     add.type = 'button';
     add.dataset.fid = 'rt-item-add';
     add.addEventListener('click', async () => {
-      const picked = await openPickerMany({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: [
-        { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-        { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+      const picked = await openPickerMany({ title: 'Item do roteiro', kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
       if (!picked.length || rt.r !== r) return;
       picked.forEach((e) => r.itens.push({ id: e.id || '', name: e.name, price: priceOf(e) }));
       renderRoteiro();
@@ -7628,6 +7728,7 @@ const FIREBASE_CONFIG = {
     const a = document.activeElement;
     const fid = a && a.dataset ? a.dataset.fid : null;
     const gd = sheetChar.mine || isMyChar(sheetChar.id) ? guideSync(sheetChar.sheet) : [];
+    if ((sheetChar.mine || isMyChar(sheetChar.id)) && assimSync(sheetChar.sheet)) touchSheet();
     if (gd.length) { touchSheet(); toast('Build ' + sheetChar.sheet.guide.name + ' atualizou a ficha: ' + gd.join(' · ') + '.'); }
     const m = compute(sheetChar);
     renderAttrs(m);
@@ -8009,7 +8110,7 @@ const FIREBASE_CONFIG = {
     }
     const track = card('prog__track', title('Trilha de UP'), level,
       h('ol', 'prog__steps', ...steps),
-      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. A cada 4 UP: +1 num atributo, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
+      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias); uma vez a cada 4 UP, esse ponto pode virar uma proficiência, em Perícias → Proficiências. UP par: 2 benefícios. A cada 4 UP: +1 num atributo, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
     // os avisos (escolher benefícios, UP livres, +1 de atributo, compras sem fonte) são desenhados por renderAlerts
     const alerts = h('section', 'prog__card alerts', null);
     alerts.id = 'prog-alerts';
@@ -8137,12 +8238,33 @@ const FIREBASE_CONFIG = {
     return box;
   }
 
+  // a cada 4 UP: trocar o +1 de perícia de um UP por uma proficiência
+  function swapBlock(s) {
+    const allowed = swapAllowed(s);
+    const have = (s.swapProfs || []).length;
+    if (!allowed && !have) return [h('p', 'field__hint', 'A cada 4 UP ganhos, dá para trocar o +1 de perícia de um UP por uma proficiência.')];
+    const taken = s.profs.concat(upProfsOf(s));
+    const box = profPills(s.swapProfs, (id, on) => {
+      s.swapProfs = s.swapProfs.filter((x) => x !== id);
+      if (on && !taken.includes(id)) s.swapProfs.push(id);
+      changed();
+    }, allowed, 'swap-');
+    box.querySelectorAll('input').forEach((inp) => {
+      const id = inp.dataset.fid.slice(5);
+      if (taken.includes(id) && !inp.checked) { inp.disabled = true; inp.parentElement.classList.add('check--off'); }
+    });
+    return [h('h3', 'sub-title', 'Trocas por proficiência ', h('span', 'count', '(' + Math.min(have, allowed) + ' de ' + allowed + ', uma a cada 4 UP)')),
+      h('p', 'field__hint', 'Cada troca vira uma proficiência no lugar de 1 ponto de perícia.' + (have > allowed ? ' ' + plural(have - allowed, 'troca está', 'trocas estão') + ' acima do que os UP dão e não vale.' : '')),
+      box];
+  }
+
   function renderProfs() {
     const s = sheetChar.sheet;
     $('#profs-block').replaceChildren(
       h('h3', 'sub-title', 'Proficiências ', h('span', 'count', '(' + s.profs.length + ' de 4 iniciais' + (upProfsOf(s).length ? ' + ' + upProfsOf(s).length + ' por poder' : '') + ')')),
       profPills(s.profs, (id, on) => { s.profs = s.profs.filter((x) => x !== id); if (on) s.profs.push(id); changed(); }, 0),
       ...(upProfsOf(s).length ? [h('p', 'field__hint', 'Vindas de poderes: ' + upProfsOf(s).map(profLabel).join(', ') + '.')] : []),
+      ...swapBlock(s),
       h('p', 'field__hint', 'Em armas: cadência perita e o aprimoramento do tipo. Em armaduras: a penalidade não dobra e a defesa ganha +1. Usar um item fora da empunhadura ideal conta como sem proficiência.'));
   }
 
@@ -8371,7 +8493,10 @@ const FIREBASE_CONFIG = {
   const MODULE_SLOT = { id: 'modulo', label: 'Módulo', full: 'Módulo', multi: true, accepts: 'um módulo (precisa de núcleo)' };
   const VEST_SLOT = { id: 'vestivel', label: 'Vestível', full: 'Vestível', multi: true, accepts: 'um vestível ou escudo energético' };
   const PROT_SLOT = { id: 'protese', label: 'Prótese', full: 'Prótese', multi: true, accepts: 'uma prótese' };
-  const MULTI_SLOTS = { modulo: MODULE_SLOT, vestivel: VEST_SLOT, protese: PROT_SLOT };
+  const ASSIM_SLOT = { id: 'assim', label: 'Assimilado', full: 'Assimilação', multi: true, accepts: 'um item do catálogo de assimilações' };
+  const MULTI_SLOTS = { modulo: MODULE_SLOT, vestivel: VEST_SLOT, protese: PROT_SLOT, assim: ASSIM_SLOT };
+  // item que o simbionte fez da própria massa: guardar devolve para dentro dele, não para a mochila
+  const stow = (i) => { i.slot = i.assim ? 'assim' : ''; };
   const OLD_BODY_SLOTS = ['cabeca', 'orgaos', 'braco-d', 'tronco', 'braco-e', 'perna-d', 'perna-e']; // espaços do corpo das fichas antigas
   const slotDef = (id) => MULTI_SLOTS[id] || EQUIP.find((e) => e.id === id);
   const vestMaxOf = (s) => Math.max(0, 3 + attrOf(s, 'corpo'));
@@ -8426,11 +8551,11 @@ const FIREBASE_CONFIG = {
     if (hand) {
       s.inventory.forEach((x) => { // arma de duas mãos ocupa as duas; e sai de cena se outra coisa entrar em qualquer mão
         if (x === i || (x.slot !== 'mao-d' && x.slot !== 'mao-e')) return;
-        if (two || twoHanded(x) || x.slot === slotId) x.slot = '';
+        if (two || twoHanded(x) || x.slot === slotId) stow(x);
       });
       i.slot = two ? 'mao-d' : slotId;
     } else {
-      if (occupant) occupant.slot = '';
+      if (occupant) stow(occupant);
       i.slot = slotId;
     }
     return true;
@@ -8449,7 +8574,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', v.cd); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
-    if (i.kind === 'vestivel') add('Espaços', num(v.espacos) ? v.espacos + ' (+' + Math.floor(num(v.espacos) / 2) + ' de Carga)' : '');
+    if (isBackpack(i)) add('Mochila', num(v.cargaPor3) ? '+' + num(v.cargaPor3) + ' de Carga a cada 3 de Carga' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     if (i.kind === 'municao') { add('Serve no', v.pente); add('Por unidade', ammoUnitText(i)); add('Só para', v.para); add('Efeito', v.efeito); }
     add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
@@ -8492,7 +8617,11 @@ const FIREBASE_CONFIG = {
     if (text) card.append(h('p', 'cell__text cell__text--clamp', text));
 
     const actions = h('div', 'cell__actions');
-    if (i.slot) actions.append(act('Guardar', 'btn--primary', () => { i.slot = ''; changed(); }));
+    if (i.slot === 'assim') {
+      const draw = slotsFor(i)[0];
+      if (draw) actions.append(act('Sacar', 'btn--primary', () => { if (equipItem(i, draw)) changed(); }));
+      actions.append(act('Desfazer', 'btn--ghost', () => { s.inventory.splice(s.inventory.indexOf(i), 1); changed(); }));
+    } else if (i.slot) actions.append(act(i.assim ? 'Recolher' : 'Guardar', 'btn--primary', () => { stow(i); changed(); }));
     else {
       const opts = slotsFor(i);
       if (opts[0] === 'modulo' || opts[0] === 'protese') actions.append(act(opts[0] === 'modulo' ? 'Instalar' : 'Implantar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
@@ -8624,6 +8753,25 @@ const FIREBASE_CONFIG = {
     $('#equip-mods').replaceChildren(...mods.map((x) => makeCell(x, m, MODULE_SLOT, false)), ...(modOpen ? [makeCell(null, m, MODULE_SLOT, false)] : []),
       ...(!modOpen && !mods.length ? [Object.assign(h('p', 'field__hint', 'Implante ao menos uma prótese para abrir espaço de módulos.'), { style: 'grid-column: 1 / -1; margin: 0' })] : []));
 
+    // Simbionte: slots exclusivos das assimilações (o + abre o catálogo)
+    const simb = isSimb(s);
+    $('#assim-row').hidden = !simb;
+    $('#inv-assim').hidden = !simb;
+    if (simb) {
+      const as = assimSlots(s);
+      const amax = assimMax(s);
+      $('#assim-count').textContent = as.length + ' / ' + amax + ' (Corpo)';
+      const plus = [];
+      for (let n = as.length; n < amax; n++) {
+        const b = h('button', 'cell cell--slot cell--assim-plus', '+');
+        b.type = 'button';
+        b.dataset.fid = 'assim-plus-' + n;
+        b.setAttribute('aria-label', 'Slot de assimilação ' + (n + 1) + ' vazio: escolher no catálogo');
+        b.addEventListener('click', () => { openAssim('cat'); asUi.pick = n; drawAssim(); });
+        plus.push(b);
+      }
+      $('#equip-assim').replaceChildren(...as.map((x) => makeCell(x, m, ASSIM_SLOT, false)), ...plus);
+    }
     const hands = ['mao-d', 'mao-e'].map((id) => inv.find((x) => x.slot === id));
     const handText = hands[0] && twoHanded(hands[0]) ? hands[0].name + ' (duas mãos)' : [hands[0] ? hands[0].name : 'direita livre', hands[1] ? hands[1].name : 'esquerda livre'].join(' · ');
     const line = (k, v, bad) => h('div', 'equip-line' + (bad ? ' equip-line--bad' : ''), h('span', 'equip-line__k', k), h('span', 'equip-line__v', v));
@@ -8668,6 +8816,7 @@ const FIREBASE_CONFIG = {
     dragUid = null;
     if (!it || !it.slot) return;
     ev.preventDefault();
+    if (it.assim) return; // o que o simbionte criou volta para dentro dele, não para a mochila
     it.slot = '';
     changed();
   });
@@ -8719,19 +8868,20 @@ const FIREBASE_CONFIG = {
     qty.addEventListener('change', () => { i.qty = clamp(Math.round(num(qty.value)) || 1, 1, 999); changed(); });
     const qLab = h('label', 'field__label', i.slot ? 'Quantidade (equipado: 1)' : 'Quantidade');
     qLab.htmlFor = qty.id;
-    const del = h('button', 'btn btn--sm ' + (i.slot ? 'btn--primary' : 'btn--danger'), i.slot ? 'Guardar na mochila' : 'Tirar do inventário');
+    const del = h('button', 'btn btn--sm ' + (i.slot && i.slot !== 'assim' ? 'btn--primary' : 'btn--danger'), i.slot === 'assim' ? 'Desfazer assimilação' : i.slot ? (i.assim ? 'Recolher no simbionte' : 'Guardar na mochila') : 'Tirar do inventário');
     del.type = 'button';
     del.id = 'inv-foot-act';
     del.addEventListener('click', () => {
-      if (i.slot) { i.slot = ''; changed(); return; }
+      if (i.slot === 'assim') { s.inventory.splice(s.inventory.indexOf(i), 1); closeDialog(invDlg); changed(); return; }
+      if (i.slot) { stow(i); changed(); return; }
       s.inventory.splice(s.inventory.indexOf(i), 1); closeDialog(invDlg); changed();
     });
     // vestir/equipar direto do popup (o primeiro espaço que aceita o item)
     const wear = slotsFor(i)[0];
     const WEAR_LABEL = { vestivel: 'Vestir', protese: 'Implantar', modulo: 'Instalar', armadura: 'Vestir armadura', nucleo: 'Implantar', 'mao-d': 'Empunhar' };
     let wearBtn = null;
-    if (!i.slot && wear) {
-      wearBtn = h('button', 'btn btn--primary btn--sm', WEAR_LABEL[wear] || 'Equipar');
+    if ((!i.slot || i.slot === 'assim') && wear) {
+      wearBtn = h('button', 'btn btn--primary btn--sm', i.slot === 'assim' ? 'Sacar' : WEAR_LABEL[wear] || 'Equipar');
       wearBtn.type = 'button';
       wearBtn.id = 'inv-foot-wear';
       wearBtn.addEventListener('click', () => { if (equipItem(i, wear)) changed(); });
@@ -8745,6 +8895,222 @@ const FIREBASE_CONFIG = {
     openDialog(invDlg);
   }
   $('#inv-dialog-close').addEventListener('click', () => closeDialog(invDlg));
+
+  /* ---------- Simbionte: assimilações ----------
+     Tudo que já passou pelo inventário entra no catálogo de assimilações (menos consumíveis e armas de Fogo).
+     O simbionte guarda dentro de si até Corpo itens (mínimo 1): são os slots de assimilação. Assimilar copia
+     um item do catálogo para um slot (trocando o que estava lá); sacar leva o item para a mão ou para o corpo.
+     O catálogo tem um Armeiro próprio: monta no item as peças do próprio catálogo, sem gastá-las (replica). */
+  const SIMB_ID = 'of-esp-simbionte';
+  const isSimb = (s) => Boolean(s && s.specimen && (s.specimen.id === SIMB_ID || nameKey(s.specimen.name) === 'simbionte'));
+  const assimKey = (i) => i.ck || i.id || nameKey(i.name);
+  const assimMax = (s) => Math.max(1, attrOf(s, 'corpo'));
+  const canAssim = (i) => Boolean(i) && i.kind !== 'municao' && i.kind !== 'granada'
+    && !(isWeapon(i.kind) && /fogo/i.test(String((i.values || {}).dano || '')));
+  const assimSlots = (s) => s.inventory.filter((x) => x.slot === 'assim').sort((a, b) => num(a.assimAt) - num(b.assimAt));
+  // o que já esteve no inventário entra no catálogo uma vez; devolve true quando algo entrou
+  function assimSync(s) {
+    if (!isSimb(s)) return false;
+    const have = new Set(s.assim.cat.map(assimKey));
+    let added = false;
+    s.inventory.forEach((i) => {
+      if (i.assim || !canAssim(i)) return;
+      const k = i.id || nameKey(i.name);
+      if (have.has(k)) return;
+      have.add(k);
+      s.assim.cat.push(Object.assign(invEntryFrom(i), { ck: k }));
+      added = true;
+    });
+    return added;
+  }
+  // copia um item do catálogo para o slot n (o que estava lá se desfaz)
+  function assimInto(s, e, n) {
+    const old = assimSlots(s)[n];
+    if (old) s.inventory.splice(s.inventory.indexOf(old), 1);
+    const at = old ? num(old.assimAt) : Date.now();
+    s.inventory.push(Object.assign(invEntryFrom(e), { ck: assimKey(e), assim: true, slot: 'assim', assimAt: at }));
+  }
+
+  let asDlg = null;
+  const asUi = { view: 'slots', key: '', q: '', pick: -1 };
+  function openAssim(view, key) {
+    if (!sheetChar || !isSimb(sheetChar.sheet)) return;
+    if (assimSync(sheetChar.sheet)) touchSheet();
+    if (!asDlg) {
+      asDlg = h('dialog', 'dialog dialog--wide assim');
+      asDlg.setAttribute('aria-labelledby', 'assim-title');
+      document.body.append(asDlg);
+    }
+    asUi.view = view || 'slots';
+    asUi.key = key || '';
+    asUi.q = '';
+    asUi.pick = -1;
+    drawAssim();
+    openDialog(asDlg);
+  }
+  const asSave = () => { touchSheet(); rerender(); drawAssim(); };
+  function drawAssim() {
+    if (!asDlg || !sheetChar) return;
+    const s = sheetChar.sheet;
+    const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; if (fid) b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
+    const go = (view, key) => () => { asUi.view = view; asUi.key = key || ''; drawAssim(); };
+    const slots = assimSlots(s);
+    const max = assimMax(s);
+    const cat = s.assim.cat;
+    const byKey = (k) => cat.find((e) => assimKey(e) === k);
+    const tab = (id, label) => { const b = btn(label, asUi.view === id || (id === 'cat' && asUi.view !== 'slots') ? 'btn--primary' : 'btn--ghost', go(id), 'assim-tab-' + id); b.setAttribute('aria-pressed', String(asUi.view === id)); return b; };
+    const head = h('div', 'picker__head', h('h2', '', 'Assimilar'), btn('Fechar', 'btn--ghost', () => closeDialog(asDlg)));
+    head.querySelector('h2').id = 'assim-title';
+    const tabs = h('div', 'assim__tabs', tab('slots', 'Assimilados ' + slots.length + '/' + max), tab('cat', 'Catálogo (' + cat.length + ')'));
+    const body = h('div', 'assim__body');
+    const card = (e, onOpen, extra) => {
+      const c = h('button', 'assim__card');
+      c.type = 'button';
+      c.dataset.fid = 'assim-card-' + assimKey(e);
+      const color = rarColor((e.values || {}).raridade);
+      if (color) c.style.setProperty('--rar', color);
+      c.append(...[entryIcon(e), h('span', 'assim__name', e.name), h('span', 'assim__meta', [kindTitle(e.kind), e.typeTitle].filter(Boolean).join(' · ')), extra].filter(Boolean));
+      c.addEventListener('click', onOpen);
+      return c;
+    };
+
+    if (asUi.view === 'slots') {
+      body.append(h('p', 'field__hint', 'O simbionte guarda dentro de si até ' + plural(max, 'item', 'itens') + ' (Corpo, mínimo 1). Sacar leva o item para a mão ou para o corpo; recolher devolve para cá.'));
+      const grid = h('div', 'assim__grid');
+      for (let n = 0; n < Math.max(max, slots.length); n++) {
+        const i = slots[n];
+        if (!i) {
+          const plus = h('button', 'assim__card assim__card--empty', h('span', 'assim__plus', '+'), h('span', 'assim__meta', 'Slot ' + (n + 1) + ' vazio'));
+          plus.type = 'button';
+          plus.dataset.fid = 'assim-empty-' + n;
+          plus.addEventListener('click', () => { asUi.pick = n; asUi.view = 'cat'; drawAssim(); });
+          grid.append(plus);
+          continue;
+        }
+        const over = n >= max;
+        const draw = slotsFor(i)[0];
+        const acts = h('span', 'assim__acts');
+        if (draw) acts.append(btn('Sacar', 'btn--primary', (ev) => { ev.stopPropagation(); if (equipItem(i, draw)) asSave(); }));
+        acts.append(btn('Trocar', 'btn--ghost', (ev) => { ev.stopPropagation(); asUi.pick = n; asUi.view = 'cat'; drawAssim(); }),
+          btn('Desfazer', 'btn--ghost', (ev) => { ev.stopPropagation(); s.inventory.splice(s.inventory.indexOf(i), 1); asSave(); }));
+        const c = card(i, () => { closeDialog(asDlg); openInvDialog(i.uid); }, h('span', 'assim__meta', over ? 'Acima do limite do Corpo' : 'Slot ' + (n + 1)));
+        grid.append(h('div', 'assim__slot' + (over ? ' assim__slot--over' : ''), c, acts));
+      }
+      body.append(grid);
+      const drawn = s.inventory.filter((x) => x.assim && x.slot && x.slot !== 'assim');
+      if (drawn.length) body.append(h('p', 'field__hint', 'Sacados agora: ' + drawn.map((x) => x.name).join(', ') + '.'));
+      if (slots.length) {
+        body.append(h('div', 'dialog__actions', btn('Salvar como preset', 'btn--ghost', async () => {
+          const name = await askText('Novo preset', 'Nome do preset', 'Ex.: Combate corpo a corpo');
+          if (!name) return;
+          s.assim.presets.push({ name: name.slice(0, 40), keys: slots.map(assimKey) });
+          asUi.view = 'cat';
+          asSave();
+          toast('Preset ' + name + ' salvo.');
+        }, 'assim-save-preset')));
+      }
+    } else if (asUi.view === 'cat') {
+      if (asUi.pick >= 0) body.append(h('p', 'assim__note', 'Escolha o item para o slot ' + (asUi.pick + 1) + '.', ' ', btn('Cancelar', 'btn--ghost', () => { asUi.pick = -1; drawAssim(); })));
+      // vitrine: presets sempre no topo
+      const pres = h('section', 'assim__presets', h('h3', 'inv-title', 'Presets'));
+      if (!s.assim.presets.length) pres.append(h('p', 'field__hint', 'Nenhum preset. Assimile itens e use "Salvar como preset" em Assimilados.'));
+      s.assim.presets.forEach((p, k) => {
+        const items = p.keys.map(byKey).filter(Boolean);
+        const row = h('div', 'assim__preset');
+        row.append(h('div', 'assim__preset-head', h('strong', '', p.name),
+          btn('Assimilar tudo', 'btn--primary', () => {
+            assimSlots(s).forEach((x) => s.inventory.splice(s.inventory.indexOf(x), 1));
+            items.slice(0, max).forEach((e, n) => assimInto(s, e, n));
+            asUi.view = 'slots';
+            asSave();
+            toast('Preset ' + p.name + ' assimilado' + (items.length > max ? ' (só os ' + max + ' primeiros: limite do Corpo).' : '.'));
+          }, 'assim-preset-use-' + k),
+          btn('Apagar', 'btn--ghost', async () => {
+            if (!(await askConfirm({ title: 'Apagar o preset ' + p.name + '?', text: 'Os itens continuam no catálogo.', ok: 'Apagar' }))) return;
+            s.assim.presets.splice(k, 1);
+            asSave();
+          })));
+        row.append(h('div', 'assim__grid assim__grid--mini', ...items.map((e) => card(e, go('item', assimKey(e))))));
+        pres.append(row);
+      });
+      body.append(pres);
+      // catálogo
+      const q = h('input', 'input');
+      q.type = 'search';
+      q.placeholder = 'Buscar no catálogo';
+      q.value = asUi.q;
+      q.dataset.fid = 'assim-q';
+      q.addEventListener('input', () => { asUi.q = q.value; drawAssim(); });
+      body.append(h('h3', 'inv-title', 'Catálogo de assimilações'),
+        h('p', 'field__hint', 'Tudo que já esteve no inventário deste personagem fica aqui, menos munição, granadas e armas de Fogo. Toque num item para assimilar ou abrir no Armeiro do catálogo.'), q);
+      const list = cat.filter((e) => !hasQuery(asUi.q) || nameKey(e.name).indexOf(nameKey(asUi.q)) >= 0)
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      body.append(list.length ? h('div', 'assim__grid', ...list.map((e) => card(e, go('item', assimKey(e)))))
+        : h('p', 'empty', cat.length ? 'Nada com esse nome.' : 'O catálogo está vazio. Adicione itens ao inventário para o simbionte conhecê-los.'));
+    } else if (asUi.view === 'item') {
+      const e = byKey(asUi.key);
+      if (!e) { asUi.view = 'cat'; drawAssim(); return; }
+      body.append(btn('← Catálogo', 'btn--ghost', go('cat')), h('h3', 'assim__title', e.name));
+      const facts = entryFacts(e, new Set(['nome', 'lore', 'encaixes']), '');
+      if (facts) body.append(facts);
+      const parts = e.slots ? (e.slots.mods || []).concat(e.slots.props || [], e.slots.accs || []).map((x) => x.name) : [];
+      if (parts.length) body.append(h('p', 'field__hint', 'Montado: ' + parts.join(', ') + '.'));
+      body.append(h('h3', 'inv-title', 'Assimilar em qual slot?'));
+      const grid = h('div', 'assim__choose');
+      for (let n = 0; n < max; n++) {
+        const occ = slots[n];
+        grid.append(btn((occ ? 'Trocar ' + occ.name : 'Slot ' + (n + 1) + ' (vazio)'), n === asUi.pick ? 'btn--primary' : 'btn--ghost', () => {
+          assimInto(s, e, n);
+          asUi.pick = -1;
+          asUi.view = 'slots';
+          asSave();
+          toast(e.name + ' assimilado' + (occ ? ' no lugar de ' + occ.name : '') + '.');
+        }, 'assim-into-' + n));
+      }
+      body.append(grid);
+      const foot = h('div', 'dialog__actions');
+      if (canArmory(e)) foot.append(btn('Armeiro do catálogo', 'btn--ghost', go('arm', asUi.key), 'assim-arm'));
+      foot.append(btn('Tirar do catálogo', 'btn--danger', async () => {
+        if (!(await askConfirm({ title: 'Tirar ' + e.name + ' do catálogo?', text: 'Volta para cá se o item passar de novo pelo inventário.', ok: 'Tirar' }))) return;
+        s.assim.cat.splice(s.assim.cat.indexOf(e), 1);
+        asUi.view = 'cat';
+        asSave();
+      }));
+      body.append(foot);
+    } else if (asUi.view === 'arm') {
+      const e = byKey(asUi.key);
+      if (!e || !canArmory(e)) { asUi.view = 'cat'; drawAssim(); return; }
+      e.slots = normSlots(e.slots);
+      body.append(btn('← ' + e.name, 'btn--ghost', go('item', asUi.key)), h('h3', 'assim__title', 'Armeiro do catálogo: ' + e.name),
+        h('p', 'field__hint', 'As peças vêm do próprio catálogo e não se gastam: o simbionte replica. A próxima assimilação deste item já sai com elas.'));
+      const mounted = [['mods', 'Mod'], ['props', 'Propriedade'], ['accs', 'Acessório']].reduce((t, g) => t.concat((e.slots[g[0]] || []).map((x) => ({ x, g }))), []);
+      body.append(h('h3', 'inv-title', 'Montado'), mounted.length ? h('div', 'assim__choose', ...mounted.map((r) => btn('Tirar ' + r.x.name + ' (' + r.g[1] + ')', 'btn--ghost', () => {
+        e.slots[r.g[0]].splice(e.slots[r.g[0]].indexOf(r.x), 1);
+        asSave();
+      }))) : h('p', 'field__hint', 'Nada montado.'));
+      const pieces = cat.filter(isPiece).map((p) => ({ p, plan: planAttach(e, p) })).filter((r) => r.plan);
+      body.append(h('h3', 'inv-title', 'Peças do catálogo'));
+      if (!pieces.length) body.append(h('p', 'field__hint', 'Nenhum mod, propriedade ou acessório do catálogo serve neste item. Peças entram no catálogo quando passam pelo inventário.'));
+      pieces.forEach((r) => {
+        const row = h('div', 'assim__piece', h('span', '', r.p.name + ' · ' + kindTitle(r.p.kind)));
+        if (r.plan.already) row.append(h('span', 'chip', 'Montado'));
+        else if (r.plan.why) row.append(h('span', 'field__hint', r.plan.why));
+        else row.append(btn('Montar' + (r.plan.removed.length ? ' (troca ' + r.plan.removed.join(', ') + ')' : ''), 'btn--primary', () => {
+          const plan = planAttach(e, r.p);
+          if (!plan || !plan.slots) return;
+          e.slots = plan.slots;
+          asSave();
+          toast(r.p.name + ' montado em ' + e.name + ' no catálogo.');
+        }));
+        body.append(row);
+      });
+    }
+    const keep = asDlg.contains(document.activeElement) ? document.activeElement.dataset.fid : '';
+    const sel = keep === 'assim-q' ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
+    asDlg.replaceChildren(h('div', 'picker', head, tabs, body));
+    if (keep) { const el = asDlg.querySelector('[data-fid="' + keep + '"]'); if (el) { el.focus({ preventScroll: true }); if (sel) el.setSelectionRange(sel[0], sel[1]); } }
+  }
+  $('#inv-assim').addEventListener('click', () => openAssim('slots'));
 
   /* ---------- Munição e recarga (capítulo Recarga) ----------
      Cada arma de fogo guarda na ficha: ammo (disparos no pente; vazio = cheio), magFrom (de que munição veio
@@ -9382,9 +9748,7 @@ const FIREBASE_CONFIG = {
   $('#inv-armory').addEventListener('click', () => openArmory(''));
   $('#inv-add').addEventListener('click', async () => {
     const ch = sheetChar;
-    const picked = await openPickerMany({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: [
-      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    const picked = await openPickerMany({ title: 'Adicionar ao inventário', kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!picked.length || sheetChar !== ch) return;
     const wasOver = compute(ch).over;
     picked.forEach((e) => ch.sheet.inventory.push(Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' })));
@@ -10087,6 +10451,158 @@ const FIREBASE_CONFIG = {
     } catch (err) { toast(errorMessage(err)); }
   });
 
+  /* Galeria do personagem: botão discreto embaixo do retrato. Uma vitrine de fotos em que só abre
+     uma vaga nova (o "+") depois que a anterior foi ocupada; o "+" pergunta de onde vem a foto. */
+  const GAL_MAX = 30;
+  const gal = { ch: null, list: [], view: 'grid', sel: null, busy: false };
+  let galDlg = null;
+  // reduz a foto mantendo a proporção até caber no banco (cerca de 400 mil caracteres)
+  function fitPhoto(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let side = 1100;
+          let q = 0.82;
+          let out = '';
+          for (let k = 0; k < 8; k++) {
+            const sc = Math.min(1, side / Math.max(img.naturalWidth, img.naturalHeight));
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(img.naturalWidth * sc));
+            c.height = Math.max(1, Math.round(img.naturalHeight * sc));
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#162836';
+            ctx.fillRect(0, 0, c.width, c.height);
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+            out = c.toDataURL('image/jpeg', q);
+            if (out.length <= 380000) break;
+            side = Math.round(side * 0.8);
+            q = Math.max(0.5, q - 0.06);
+          }
+          resolve(out);
+        } catch (e) { reject(e); } finally { URL.revokeObjectURL(url); }
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new UserError('Não consegui ler essa imagem. Tente um arquivo JPG ou PNG.')); };
+      img.src = url;
+    });
+  }
+  const galCanEdit = () => Boolean(gal.ch && (gal.ch.mine || isMyChar(gal.ch.id)));
+  async function openGallery() {
+    if (!sheetChar) return;
+    if (!galDlg) {
+      galDlg = h('dialog', 'dialog dialog--wide gallery');
+      galDlg.setAttribute('aria-labelledby', 'gallery-title');
+      document.body.append(galDlg);
+    }
+    gal.ch = sheetChar;
+    gal.list = [];
+    gal.view = 'grid';
+    gal.sel = null;
+    gal.busy = true;
+    drawGallery();
+    openDialog(galDlg);
+    try { gal.list = await db.listGallery(gal.ch.id); }
+    catch (err) { toast(errorMessage(err)); }
+    gal.busy = false;
+    drawGallery();
+  }
+  async function addPhoto(photo) {
+    const ch = gal.ch;
+    gal.busy = true;
+    drawGallery();
+    try {
+      const id = await db.addGalleryPhoto(ch.id, photo);
+      if (gal.ch === ch) gal.list.push(Object.assign({ id, at: Date.now() }, photo));
+      toast('Foto adicionada à galeria.');
+    } catch (err) { toast(errorMessage(err)); }
+    gal.busy = false;
+    gal.view = 'grid';
+    drawGallery();
+  }
+  function pickPhotoFile(capture) {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    if (capture) inp.setAttribute('capture', 'environment');
+    inp.addEventListener('change', async () => {
+      const file = inp.files[0];
+      if (!file) return;
+      if (file.size > 25 * 1024 * 1024) { toast('Imagem grande demais. Use uma de até 25 MB.'); return; }
+      try { await addPhoto({ image: await fitPhoto(file), url: '' }); }
+      catch (err) { toast(errorMessage(err)); }
+    });
+    inp.click();
+  }
+  function drawGallery() {
+    if (!galDlg || !gal.ch) return;
+    const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; if (fid) b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
+    const head = h('div', 'picker__head', h('h2', '', 'Galeria de ' + gal.ch.name), btn('Fechar', 'btn--ghost', () => closeDialog(galDlg)));
+    head.querySelector('h2').id = 'gallery-title';
+    const body = h('div', 'gallery__body');
+    const src = (p) => p.image || p.url;
+    if (gal.view === 'photo' && gal.sel) {
+      const p = gal.sel;
+      const img = h('img', 'gallery__big');
+      img.src = src(p);
+      img.alt = 'Foto da galeria de ' + gal.ch.name;
+      body.append(img);
+      const acts = h('div', 'dialog__actions', btn('Voltar', 'btn--ghost', () => { gal.view = 'grid'; drawGallery(); }, 'gallery-back'));
+      if (galCanEdit()) acts.prepend(btn('Remover foto', 'btn--danger', async () => {
+        if (!(await askConfirm({ title: 'Remover esta foto?', text: 'Ela sai da galeria de ' + gal.ch.name + '.', ok: 'Remover' }))) return;
+        try {
+          await db.removeGalleryPhoto(gal.ch.id, p.id);
+          gal.list = gal.list.filter((x) => x.id !== p.id);
+          gal.view = 'grid';
+          drawGallery();
+        } catch (err) { toast(errorMessage(err)); }
+      }));
+      body.append(acts);
+    } else if (gal.view === 'add') {
+      body.append(h('p', 'field__hint', 'De onde vem a nova foto?'),
+        h('div', 'gallery__ways',
+          btn('Do aparelho', 'btn--primary', () => pickPhotoFile(false), 'gallery-way-file'),
+          btn('Tirar foto', 'btn--ghost', () => pickPhotoFile(true), 'gallery-way-cam'),
+          btn('Link da imagem', 'btn--ghost', async () => {
+            const url = await askText('Foto por link', 'Endereço da imagem (https://...)', 'https://', 'url');
+            if (!url) return;
+            if (!/^https:\/\/\S+$/i.test(url) || url.length > 600) { toast('Use um link https:// de até 600 caracteres.'); return; }
+            addPhoto({ image: '', url });
+          }, 'gallery-way-link'),
+          btn('Cancelar', 'btn--ghost', () => { gal.view = 'grid'; drawGallery(); })));
+    } else {
+      const grid = h('div', 'gallery__grid');
+      gal.list.forEach((p, k) => {
+        const b = h('button', 'gallery__slot');
+        b.type = 'button';
+        b.dataset.fid = 'gallery-photo-' + k;
+        const img = h('img');
+        img.src = src(p);
+        img.alt = 'Foto ' + (k + 1);
+        img.loading = 'lazy';
+        b.append(img);
+        b.addEventListener('click', () => { gal.sel = p; gal.view = 'photo'; drawGallery(); });
+        grid.append(b);
+      });
+      if (gal.busy) grid.append(h('div', 'gallery__slot gallery__slot--busy', 'Carregando...'));
+      else if (galCanEdit() && gal.list.length < GAL_MAX) {
+        const plus = h('button', 'gallery__slot gallery__slot--plus', '+');
+        plus.type = 'button';
+        plus.dataset.fid = 'gallery-plus';
+        plus.setAttribute('aria-label', 'Adicionar foto');
+        plus.addEventListener('click', () => { gal.view = 'add'; drawGallery(); });
+        grid.append(plus);
+      }
+      body.append(grid);
+      if (!gal.busy && !gal.list.length && !galCanEdit()) body.append(h('p', 'empty', 'A galeria está vazia.'));
+      body.append(h('p', 'field__hint', plural(gal.list.length, 'foto', 'fotos') + ' de ' + GAL_MAX + '. Cada vaga nova abre quando a anterior é ocupada.'));
+    }
+    const keep = galDlg.contains(document.activeElement) ? document.activeElement.dataset.fid : '';
+    galDlg.replaceChildren(h('div', 'picker', head, body));
+    if (keep) { const el = galDlg.querySelector('[data-fid="' + keep + '"]'); if (el) el.focus({ preventScroll: true }); }
+  }
+  $('#gallery-open').addEventListener('click', openGallery);
+
   // Vincular a uma campanha
   inAttach.addEventListener('input', () => setError(errAttach, inAttach, ''));
   formAttach.addEventListener('submit', async (ev) => {
@@ -10421,9 +10937,7 @@ const FIREBASE_CONFIG = {
       const more = h('button', 'btn btn--ghost btn--sm', 'Adicionar item do banco');
       more.type = 'button';
       more.addEventListener('click', async () => { // qualquer item do banco, buscado como os espécimes
-        const picked = await openPickerMany({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: [
-          { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-          { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+        const picked = await openPickerMany({ title: 'Adicionar ao kit', kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
         if (!picked.length || !wz) return;
         picked.forEach((e) => g.lines.push({ text: e.name, opts: [e.name], detail: '', kinds: INVENTORY_KINDS, comum: false, free: true, take: true, opt: 0, bank: e }));
         renderSetup();
@@ -14320,9 +14834,7 @@ const FIREBASE_CONFIG = {
   }
 
   async function addBankItem(sh) {
-    const picked = await openPickerMany({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: [
-      { label: 'Armas', kinds: ['arma-melee', 'arma-fogo', 'granada'] }, { label: 'Munições', kinds: ['municao'] }, { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] }, { label: 'Vestíveis', kinds: ['vestivel'] },
-      { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] }, { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] }, { label: 'Itens gerais', kinds: ['item-geral'] }], filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+    const picked = await openPickerMany({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!picked.length) return;
     const fresh = shops.find((x) => x.id === sh.id) || sh;
     await saveShop(fresh, { items: fresh.items.concat(picked.map((e) => ({ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }))) });

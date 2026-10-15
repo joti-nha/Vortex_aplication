@@ -258,6 +258,7 @@ window.VORTEX_REGRAS = {
         ['p', 'Sempre que o personagem alcançar um número par de UP Points (desconsiderando aqueles provenientes da Origem), poderá escolher dois dos seguintes benefícios:'],
         ['ul', ['+5 PV;', '+5 PE;', '+1 PA.']],
         ['p', 'Sempre que alcançar um número ímpar de UP Points (também desconsiderando os provenientes da Origem), recebe +1 ponto em uma perícia à sua escolha.'],
+        ['p', 'Uma vez a cada 4 UP Points (também desconsiderando os da Origem), em vez de receber esse +1 ponto em uma perícia, pode trocá-lo por uma **proficiência** à sua escolha. Na ficha, a troca fica em Perícias → Proficiências.'],
         ['p', 'Além disso, a cada 4 UP Points (também desconsiderando os da Origem), recebe +1 em um atributo à sua escolha. Na ficha, ele é escolhido na aba Progressão.']
       ]
     },
@@ -330,7 +331,7 @@ window.VORTEX_REGRAS = {
         ['p', 'Os únicos espaços fixos são a **armadura**, o **núcleo** e as **duas mãos** (empunhadura). Não há espaço por parte do corpo: dá para vestir três camisas uma por cima da outra, ou três mochilas.'],
         ['ul', [
           '**Vestíveis** (roupas, mochilas, escudos energéticos...): você se beneficia de até **3 + Corpo** deles.',
-          '**Mochilas**: cada uma tem espaços e aumenta sua Carga em **+1 a cada 2 espaços**. Muitas têm requisito de atributo bruto (Corpo, Precisão ou Essência); sem cumprir, ela não dá benefício.',
+          '**Mochilas**: há três, sem raridade, e nenhuma ocupa carga. Cada uma soma Carga a cada 3 da sua Carga (contada antes da mochila): **Pequena** +1, **Média** +2 (requer Corpo 2) e **Grande** +3 (requer Corpo 3). Só a maior mochila vestida conta; sem o Corpo pedido, ela não dá benefício.',
           '**Próteses**: limitadas pela sua Carga Cibernética (CC).',
           '**Módulos**: só abrem espaço com ao menos uma prótese implantada; limitados pela CC, com a reserva da Essência.'
         ]],
@@ -1043,12 +1044,13 @@ window.VORTEX_REGRAS = {
           ['p', 'Ressuscita o alvo se sobrar algo dele que não esteja sendo afetado por algum efeito.'],
           ['p', 'No início de cada turno, faça um teste de regeneração: 2d6 + Fortitude + Tecnologia. A regeneração segue a regra normal de Cura: o teste é contra a CD do recurso (6, ou 10 se estiver abaixo da metade, +2 por condição negativa) e o simbionte recupera a diferença entre o resultado e a CD. Cura PV e também Blindagem.'],
           ['p', 'A regeneração é engajada por cena e custa 1 PE por cena.'],
-          ['h4', 'Geração de Matéria Simbiôntica'],
+          ['h4', 'Assimilação Abiótica'],
           ['p', 'O simbionte estica a própria massa amorfa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões, martelos sólidos, armaduras e outros itens que não sejam consumíveis. O simbionte escolhe o item e o tipo de dano.'],
           ['p', 'Criar um item custa uma ação bônus, e você conta como proficiente com todos os itens que o simbionte cria.'],
           ['p', 'Você pode guardar dentro de si itens criados até um número igual ao seu Corpo; para usar um deles, só precisa sacar.'],
           ['p', 'Os simbiontes não criam armas de dano de Fogo.'],
-          ['p', 'O simbionte também é capaz de replicar mods e acessórios que tenha assimilado alguma vez.']
+          ['p', 'O simbionte também é capaz de replicar mods e acessórios que tenha assimilado alguma vez.'],
+          ['p', 'Na ficha, o botão **Assimilar** (aba Inventário) abre os slots de assimilação (um por ponto de Corpo, mínimo 1) e o **catálogo de assimilações**: tudo que já passou pelo inventário do personagem, menos consumíveis e armas de Fogo. No catálogo ficam os presets, o Armeiro do catálogo (monta no item as peças do próprio catálogo, sem gastá-las) e a opção de assimilar um item num slot escolhido.']
         ]]
       ]
     },

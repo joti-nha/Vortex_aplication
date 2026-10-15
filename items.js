@@ -318,7 +318,7 @@ window.VORTEX_ITEMS = {
         { id: 'membros-superiores', title: 'Membros superiores', sub: 'um braço' },
         { id: 'membros-inferiores', title: 'Membros inferiores', sub: 'uma perna' },
         { id: 'orgaos-internos', title: 'Órgãos internos' },
-        { id: 'mochila', title: 'Mochila', sub: '+1 de Carga a cada 2 espaços' }
+        { id: 'mochila', title: 'Mochila', sub: '+X de Carga a cada 3 da sua Carga; não ocupa carga' }
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
@@ -326,7 +326,7 @@ window.VORTEX_ITEMS = {
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
-        { key: 'espacos', label: 'Espaços (mochila: +1 de Carga a cada 2)', kind: 'number', min: 0, step: 1 },
+        { key: 'cargaPor3', label: 'Mochila: + de Carga a cada 3 da sua Carga', kind: 'number', min: 0, step: 1 },
         { key: 'reqAtributo', label: 'Requisito: atributo', kind: 'select', options: 'atributosReq', blank: 'Nenhum' },
         { key: 'reqValor', label: 'Requisito: valor mínimo (bruto)', kind: 'number', min: 0, step: 1 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
@@ -600,7 +600,7 @@ window.VORTEX_ITEMS = {
     {
       id: 'of-esp-simbionte', kind: 'especime', name: 'Simbionte',
       values: { descricao: 'Massa amorfa, viva e independente, que molda o próprio corpo: tira da própria matéria força, cura e armas.',
-        racial: 'Força e Agilidade Ampliadas | Leva a própria força física a níveis devastadores: ergue toneladas e enfrenta inimigos do alto escalão. Ganha +6 m de deslocamento (15 m). Uma vez por turno, ao custo de 1 PA ou 7 PE, tem um ganho (um dado a mais) num teste de Corpo. | 1 | deslocamento: 6\nCura Regenerativa | Cura ferimentos mortais em segundos, regenera membros decepados e pode neutralizar doenças terminais. Ressuscita o alvo se sobrar algo dele que não esteja sendo afetado por algum efeito. No início de cada turno, faz um teste de regeneração: 2d6 + Fortitude + Tecnologia, seguindo a regra de Cura (contra a CD do recurso, recupera a diferença). Cura PV e também Blindagem. A regeneração é engajada por cena e custa 1 PE por cena. | 1\nGeração de Matéria Simbiôntica | Estica a própria massa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões, martelos sólidos, armaduras e outros itens que não sejam consumíveis. Criar um item custa uma ação bônus, e o simbionte escolhe o item e o tipo de dano. Conta como proficiente com todos os itens que cria. Não cria armas de dano Fogo. Guarda dentro de si itens criados até um número igual ao seu Corpo; para usar, só precisa sacar. Também replica qualquer mod ou acessório que já tenha assimilado alguma vez. | 1' }
+        racial: 'Força e Agilidade Ampliadas | Leva a própria força física a níveis devastadores: ergue toneladas e enfrenta inimigos do alto escalão. Ganha +6 m de deslocamento (15 m). Uma vez por turno, ao custo de 1 PA ou 7 PE, tem um ganho (um dado a mais) num teste de Corpo. | 1 | deslocamento: 6\nCura Regenerativa | Cura ferimentos mortais em segundos, regenera membros decepados e pode neutralizar doenças terminais. Ressuscita o alvo se sobrar algo dele que não esteja sendo afetado por algum efeito. No início de cada turno, faz um teste de regeneração: 2d6 + Fortitude + Tecnologia, seguindo a regra de Cura (contra a CD do recurso, recupera a diferença). Cura PV e também Blindagem. A regeneração é engajada por cena e custa 1 PE por cena. | 1\nAssimilação Abiótica | Estica a própria massa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões, martelos sólidos, armaduras e outros itens que não sejam consumíveis. Criar um item custa uma ação bônus, e o simbionte escolhe o item e o tipo de dano. Conta como proficiente com todos os itens que cria. Não cria armas de dano Fogo. Guarda dentro de si itens criados até um número igual ao seu Corpo; para usar, só precisa sacar. Também replica qualquer mod ou acessório que já tenha assimilado alguma vez. | 1' }
     },
     // espécime secreto: só aparece quando alguém pesquisa "neko" (secreto: true esconde nas listas)
     {
@@ -938,26 +938,19 @@ window.VORTEX_ITEMS = {
   });
 })();
 
-/* Mochilas (vestíveis): +1 de Carga a cada 2 espaços, só com o requisito de atributo bruto cumprido.
-   [nome, raridade, espaços, requisito (atributo), valor, carga, preço, efeito] */
+/* Mochilas (vestíveis): só três tamanhos, sem raridade e sem ocupar carga. Cada uma soma X de Carga
+   a cada 3 da Carga do personagem (antes da mochila); acima da pequena pede Corpo bruto.
+   Só a maior mochila vestida conta. [nome, X, Corpo mínimo, preço, efeito] */
 (function () {
   var cat = window.VORTEX_ITEMS.catalogo;
-  var slug = function (t) { return String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
   [
-    ['Mochila escolar', 'Comum', 2, '', 0, 0.5, '80', ''],
-    ['Pochete tática', 'Comum', 2, 'Precisão', 1, 0.25, '120', 'Fica na cintura: sacar um item dela conta como Saque.'],
-    ['Mochila de trilha', 'Comum', 4, 'Corpo', 1, 1, '150', ''],
-    ['Mochila cargueira', 'Incomum', 6, 'Corpo', 2, 1, '400', ''],
-    ['Mochila modular', 'Incomum', 6, 'Precisão', 2, 1, '450', 'Bolsos modulares: uma vez por cena, pegar um item dela custa uma ação a menos (Movimento vira Bônus).'],
-    ['Mochila de expedição', 'Rara', 8, 'Corpo', 3, 1.5, '900', 'Armação reforçada: ganho em testes de Atletismo para não cair ou ser derrubado enquanto estiver sobrecarregado.'],
-    ['Mochila de compressão', 'Rara', 8, 'Essência', 2, 1, '1.000', 'Um campo leve comprime o conteúdo; não faz barulho nem chacoalha (não atrapalha a furtividade).'],
-    ['Mochila de operações', 'Epica', 10, 'Precisão', 3, 1, '2.000', 'Organização perfeita: recarregar com munição desta mochila custa uma categoria de ação a menos, uma vez por rodada.'],
-    ['Exomochila servoassistida', 'Epica', 10, 'Essência', 3, 2, '2.200', 'Braços servo seguram a carga: enquanto vestida, estar sobrecarregado não reduz seu deslocamento.'],
-    ['Mochila dimensional', 'Lendária', 14, 'Essência', 4, 0.5, '5.000', 'Especial: Bolso de Bolso\nO interior é maior que o exterior. Uma vez por rodada, tirar um item guardado nela é ação livre.']
-  ].forEach(function (a) {
+    ['Mochila pequena', 1, 0, '100', 'A cada 3 de Carga, +1 de Carga. Não ocupa carga.'],
+    ['Mochila média', 2, 2, '400', 'A cada 3 de Carga, +2 de Carga. Não ocupa carga. Requer Corpo 2.'],
+    ['Mochila grande', 3, 3, '1.000', 'A cada 3 de Carga, +3 de Carga. Não ocupa carga. Requer Corpo 3.']
+  ].forEach(function (a, i) {
     cat.push({
-      id: 'of-moc-' + slug(a[0]), kind: 'vestivel', typeId: 'mochila', name: a[0],
-      values: { raridade: a[1], espacos: String(a[2]), reqAtributo: a[3], reqValor: a[3] ? String(a[4]) : '', carga: String(a[5]), preco: a[6], efeito: a[7] }
+      id: 'of-moc-' + ['pequena', 'media', 'grande'][i], kind: 'vestivel', typeId: 'mochila', name: a[0],
+      values: { cargaPor3: String(a[1]), reqAtributo: a[2] ? 'Corpo' : '', reqValor: a[2] ? String(a[2]) : '', carga: '0', preco: a[3], efeito: a[4] }
     });
   });
 })();

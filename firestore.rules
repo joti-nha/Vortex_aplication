@@ -120,6 +120,19 @@ service cloud.firestore {
                         || inOwnerProfile(resource.data));
 
       allow delete: if signedIn() && (resource.data.ownerUid == request.auth.uid || inOwnerProfile(resource.data));
+
+      // Galeria: uma foto por documento (imagem reduzida ou link), pública como a ficha
+      match /gallery/{photoId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+                      && request.resource.data.keys().hasOnly(['image', 'url', 'by', 'at'])
+                      && request.resource.data.image is string && request.resource.data.image.size() <= 400000
+                      && request.resource.data.url is string && request.resource.data.url.size() <= 600
+                      && (request.resource.data.image.size() > 0 || request.resource.data.url.size() > 0)
+                      && request.resource.data.by == request.auth.uid;
+        allow update: if false;
+        allow delete: if signedIn();
+      }
     }
 
     // ---------- Campanhas ----------
