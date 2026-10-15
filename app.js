@@ -6525,6 +6525,10 @@ const FIREBASE_CONFIG = {
     s.upProfs = Array.isArray(r.upProfs) ? r.upProfs.filter((x) => typeof x === 'string') : [];
     // a cada 4 UP, o +1 de perícia de um UP pode virar uma proficiência
     s.swapProfs = Array.isArray(r.swapProfs) ? r.swapProfs.filter((x) => typeof x === 'string') : [];
+    // a 3ª racial do Simbionte foi renomeada; fichas antigas guardam a cópia com o nome velho
+    if (s.specimen && s.specimen.values && typeof s.specimen.values.racial === 'string' && s.specimen.values.racial.indexOf('Geração de Matéria Simbiôntica') >= 0) {
+      s.specimen = Object.assign({}, s.specimen, { values: Object.assign({}, s.specimen.values, { racial: s.specimen.values.racial.replace('Geração de Matéria Simbiôntica', 'Assimilação Abiótica') }) });
+    }
     // Doutor e as proficiências compradas são poderes; fichas antigas guardavam em listas à parte
     s.doutor.map((id) => ['of-pod-doutor', id]).concat(s.upProfs.map((id) => [id.indexOf('armadura-') === 0 ? 'of-pod-prof-armadura' : 'of-pod-prof-arma', id])).forEach((x) => {
       if (s.powers.some((p) => p.id === x[0] && p.choice === x[1])) return;

@@ -1044,7 +1044,7 @@ window.VORTEX_REGRAS = {
           ['p', 'Ressuscita o alvo se sobrar algo dele que não esteja sendo afetado por algum efeito.'],
           ['p', 'No início de cada turno, faça um teste de regeneração: 2d6 + Fortitude + Tecnologia. A regeneração segue a regra normal de Cura: o teste é contra a CD do recurso (6, ou 10 se estiver abaixo da metade, +2 por condição negativa) e o simbionte recupera a diferença entre o resultado e a CD. Cura PV e também Blindagem.'],
           ['p', 'A regeneração é engajada por cena e custa 1 PE por cena.'],
-          ['h4', 'Geração de Matéria Simbiôntica'],
+          ['h4', 'Assimilação Abiótica'],
           ['p', 'O simbionte estica a própria massa amorfa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões, martelos sólidos, armaduras e outros itens que não sejam consumíveis. O simbionte escolhe o item e o tipo de dano.'],
           ['p', 'Criar um item custa uma ação bônus, e você conta como proficiente com todos os itens que o simbionte cria.'],
           ['p', 'Você pode guardar dentro de si itens criados até um número igual ao seu Corpo; para usar um deles, só precisa sacar.'],
