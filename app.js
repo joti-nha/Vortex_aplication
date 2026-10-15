@@ -4457,6 +4457,7 @@ const FIREBASE_CONFIG = {
     nyanFlockTimer = null;
     const old = document.querySelector('.nyan-flock');
     nyanSceneId = null;
+    nyanVaporLast = -Infinity;
     document.documentElement.classList.remove('nyan-scene-on');
     if (!on) { if (old) old.remove(); try { localStorage.removeItem(NYAN_FLOCK_KEY); } catch (e) { /* nada */ } return; }
     if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -4469,7 +4470,8 @@ const FIREBASE_CONFIG = {
     const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const order = NYAN_VARIANTS.slice(1);
     for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-    order.unshift(NYAN_VARIANTS[0]); // o original chega primeiro
+    order.splice(order.indexOf('vapor'), 1);
+    order.unshift(NYAN_VARIANTS[0], 'vapor'); // o original chega primeiro e o Vaporwave (com o Sol Synthwave) logo depois
     let first = true;
     const grow = () => {
       if (!box.isConnected) { clearInterval(nyanFlockTimer); return; }
@@ -4515,12 +4517,16 @@ const FIREBASE_CONFIG = {
      Sol Synthwave, o Natal traz neve, a Abóbora a noite de Halloween...). Cada cenário é pixel art (img/nyan/cenas/) com um detalhe animado no CSS
      e ficam na revoada, atrás dos gatos. Um cenário por vez: quem chega com outro aceso (ou logo depois de um) passa sem trocar o fundo, menos o Vaporwave. */
   const NYAN_SCENES = new Set(['vapor', 'nyandoge', 'cowboy', 'tacnayn', 'xmas', 'pumpkin', 'pirate', 'paddy', 'vday', 'mexinyan', 'zombie', 'surfing', 'newyear', 'easter', 'star', 'cherry', 'liberty', 'angel', 'demonic', 'biker']);
-  let nyanSceneId = null, nyanSceneCalm = 0;
+  let nyanSceneId = null, nyanSceneCalm = 0, nyanVaporLast = -Infinity;
+  const NYAN_VAPOR_GAP = 3 * 60 * 1000; // o Sol Synthwave tem a vez garantida, no máximo a cada 3 minutos
   function nyanScene(cat, id, on) {
     const box = cat.parentNode;
     if (on) {
-      // um cenário por vez, com uns 40 s de fundo normal entre um e outro (o Vaporwave entra no mesmo rodízio)
-      if (nyanSceneId || performance.now() < nyanSceneCalm) return;
+      // um cenário por vez, com uns 40 s de fundo normal entre um e outro. No rodízio puro o Vaporwave quase nunca
+      // pegava a vez (são 20 cenários disputando), então ele fura a fila quando o último Sol foi há mais de 3 minutos
+      const vapor = id === 'vapor' && performance.now() - nyanVaporLast > NYAN_VAPOR_GAP;
+      if (!vapor && (nyanSceneId || performance.now() < nyanSceneCalm)) return;
+      if (id === 'vapor') nyanVaporLast = performance.now();
       nyanSceneId = id;
     } else {
       if (nyanSceneId !== id) return;

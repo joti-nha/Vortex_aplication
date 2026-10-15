@@ -133,35 +133,53 @@ def sparkle(d, x, y, c='#ffffff'):
 
 
 def sky(d, cols, y0=0, y1=H, step=8, jag=2, seed=0):
-    """Céu em faixas; a borda entre duas faixas sobe e desce em degraus, como nas artes oficiais,
-    com um pontilhado fino de 4 linhas na emenda para a passagem de uma cor à outra ficar suave."""
+    """Céu em faixas; a borda entre duas faixas é uma onda arredondada (calombos macios em vez de degraus),
+    desenhada na grade fina, com um pontilhado fino de 4 linhas na emenda para a passagem de uma cor à outra ficar suave."""
     r = random.Random(seed)
     n = len(cols)
-    d.rectangle([0, y0, W, y1], fill=cols[-1])
-    edges = []
-    for i in range(n - 1, -1, -1):
-        bottom = y0 + (y1 - y0) * (i + 1) // n
-        for x in range(0, W, step):
-            off = r.choice((-jag, 0, 0, jag)) if i < n - 1 else 0
-            d.rectangle([x, y0, x + step - 1, bottom + off], fill=cols[i])
-            if i < n - 1:
-                edges.append((x, bottom + off, cols[i], cols[i + 1]))
-    for x, b, up, down in edges:  # as faixas de cima pintam por cima das de baixo; o pontilhado vem por último
-        nb, xa, xb = (b + 1) * 2, x * 2, (x + step) * 2 - 1
-        for y in range(nb - 2, nb + 2):
-            for xx in range(xa, xb + 1):
-                k = y - (nb - 2)
-                if (k == 0 and xx % 4 == (y // 2 % 2) * 2) or (k == 1 and (xx + y) % 2 == 0):
-                    fpx(d, xx, y, down)
-                elif (k == 2 and (xx + y) % 2 == 1) or (k == 3 and xx % 4 == (y // 2 % 2) * 2 + 1):
-                    fpx(d, xx, y, up)
+    top, bot = y0 * 2, min(NH, y1 * 2 + 2)
+    waves = []
+    for i in range(n - 1):
+        base = (y0 + (y1 - y0) * (i + 1) / n) * 2
+        amp = min(jag * 2.2, (y1 - y0) / n * 0.7)
+        p1, p2 = step * r.uniform(3.2, 4.4), step * r.uniform(1.6, 2.2)
+        f1, f2 = r.uniform(0, 6.3), r.uniform(0, 6.3)
+        waves.append(lambda x, b=base, a=amp, p1=p1, p2=p2, f1=f1, f2=f2:
+                     b + a * (0.65 * math.sin(x / p1 + f1) + 0.35 * abs(math.sin(x / p2 + f2)) * 2 - 0.35))
+    for x in range(NW):
+        bs = [int(round(w(x))) for w in waves]
+        prev = top
+        for i in range(n):
+            nxt = bot if i == n - 1 else max(prev, min(bot, bs[i]))
+            if nxt > prev:
+                d.raw.line([(x, prev), (x, nxt - 1)], fill=cols[i])
+            prev = nxt
+        for i, b in enumerate(bs):
+            up, down = cols[i], cols[i + 1]
+            for k, y in enumerate(range(b - 2, b + 2)):
+                if not top <= y < bot:
+                    continue
+                if (k == 0 and x % 4 == (y // 2 % 2) * 2) or (k == 1 and (x + y) % 2 == 0):
+                    fpx(d, x, y, down)
+                elif (k == 2 and (x + y) % 2 == 1) or (k == 3 and x % 4 == (y // 2 % 2) * 2 + 1):
+                    fpx(d, x, y, up)
 
 
 def disc(d, cx, cy, r, c):
-    for y in range(-r, r + 1):
-        for x in range(-r, r + 1):
-            if x * x + y * y <= r * r + r * 0.6:
-                d.point((cx + x, cy + y), fill=c)
+    """Círculo cheio desenhado na grade fina, para a borda sair redonda."""
+    fdisc(d, cx * 2 + 1, cy * 2 + 1, r * 2 + 0.5, c)
+
+
+def fdisc(d, cx, cy, r, c):
+    """Círculo cheio na grade fina (centro e raio em pixels de 640x360)."""
+    for y in range(int(cy - r) - 1, int(cy + r) + 2):
+        dy = y + 0.5 - cy
+        if abs(dy) > r:
+            continue
+        hw = math.sqrt(r * r - dy * dy)
+        x0, x1 = int(round(cx - hw)), int(round(cx + hw)) - 1
+        if x1 >= x0 and 0 <= y < NH:
+            d.raw.line([(x0, y), (x1, y)], fill=c)
 
 
 def moon(d, cx, cy, r, base='#e8eef0', spots=('#9fd8f4', '#6ac0ea'), outline='#000000', seed=1):
@@ -172,7 +190,7 @@ def moon(d, cx, cy, r, base='#e8eef0', spots=('#9fd8f4', '#6ac0ea'), outline='#0
         a, t = rr.random() * 6.283, rr.random() * (r - 3)
         x, y = int(cx + math.cos(a) * t), int(cy + math.sin(a) * t)
         c = rr.choice(spots)
-        d.rectangle([x, y, x + rr.randint(1, 3), y + rr.randint(0, 2)], fill=c)
+        fdisc(d, x * 2 + 2, y * 2 + 2, rr.uniform(1.5, 3.5), c)
     # na grade fina: crateras com borda clara embaixo e sombra em cima, e a beira iluminada do lado esquerdo
     ncx, ncy, nr = cx * 2 + 1, cy * 2 + 1, r * 2
     for _ in range(max(3, r // 3)):
@@ -231,13 +249,14 @@ def cloud(d, x, y, w, h=None, cols=('#ffffff', '#eef0ec', '#d8dcd6')):
     def inside(px, py, dy=0):
         if py > base:
             return False
-        if py >= base - h * 0.35 and x + 3 <= px <= x + w - 3:
+        if py >= base - h * 0.35 and x + h * 0.35 <= px <= x + w - h * 0.35:
             return True
         return any((px - cx) ** 2 + (py - cy - dy) ** 2 <= rad * rad for cx, cy, rad in bumps)
 
-    for py in range(int(y - h), base + 1):
-        for px in range(int(x), int(x + w) + 1):
-            if not (0 <= px < W and 0 <= py < H) or not inside(px, py):
+    for fy in range(int(y - h) * 2, base * 2 + 2):  # na grade fina, para os calombos saírem redondos
+        for fx in range(int(x) * 2, int(x + w) * 2 + 2):
+            px, py = fx / 2 + 0.25, fy / 2 + 0.25
+            if not (0 <= fx < NW and 0 <= fy < NH) or not inside(px, py):
                 continue
             if py >= base - 1:
                 c = dark
@@ -245,26 +264,25 @@ def cloud(d, x, y, w, h=None, cols=('#ffffff', '#eef0ec', '#d8dcd6')):
                 c = mid  # a metade de baixo de cada calombo fica no meio-tom
             else:
                 c = light
-            d.point((px, py), fill=c)
-    for px in range(int(x), int(x + w) + 1):  # beira de cima de cada calombo com um fio branco fino
-        for py in range(int(y - h), base + 1):
-            if 0 <= px < W and 0 <= py < H and inside(px, py):
-                fpx(d, px * 2, py * 2, '#ffffff')
-                fpx(d, px * 2 + 1, py * 2, '#ffffff')
+            fpx(d, fx, fy, c)
+    for fx in range(int(x) * 2, int(x + w) * 2 + 2):  # beira de cima de cada calombo com um fio branco fino
+        for fy in range(int(y - h) * 2, base * 2 + 2):
+            if 0 <= fx < NW and 0 <= fy < NH and inside(fx / 2 + 0.25, fy / 2 + 0.25):
+                fpx(d, fx, fy, '#ffffff')
                 break
 
 
 def hills(d, base, amp, period, phase, c, top=None):
-    for x in range(W):
-        t = int(base - amp * (0.5 + 0.5 * math.sin((x + phase) / period)))
-        d.rectangle([x, t, x, H], fill=c)
+    for xx in range(NW):  # na grade fina, para o morro sair redondo
+        x = xx / 2
+        t = int(round((base - amp * (0.5 + 0.5 * math.sin((x + phase) / period))) * 2))
+        d.raw.line([(xx, t), (xx, NH)], fill=c)
         if top:
-            d.point((x, t), fill=top)
-            for xx in (x * 2, x * 2 + 1):  # o claro do topo desce pontilhado mais 2 pixels finos
-                if (xx + t) % 2 == 0:
-                    fpx(d, xx, t * 2 + 2, top)
-                if xx % 4 == 0:
-                    fpx(d, xx, t * 2 + 3, top)
+            d.raw.line([(xx, t), (xx, t + 1)], fill=top)
+            if (xx + t) % 2 == 0:  # o claro do topo desce pontilhado mais 2 pixels finos
+                fpx(d, xx, t + 2, top)
+            if xx % 4 == 0:
+                fpx(d, xx, t + 3, top)
 
 
 def bricks(d, y0, c='#e52312', mortar='#541808', hi='#f04a2a', lo='#c77f0f'):
@@ -321,10 +339,14 @@ def pine(d, x, y, h, c='#1f5a2a', hi='#2f7a3a', lights=None, r=None, snow=False)
 
 
 def tomb(d, x, y, c='#7a8a8a', dark='#4a5a5a', hi='#9aaaaa'):
-    d.rectangle([x, y - 16, x + 12, y], fill=c)
-    d.rectangle([x + 2, y - 18, x + 10, y - 16], fill=c)
-    d.line([(x + 12, y - 16), (x + 12, y)], fill=dark)
-    d.line([(x, y - 16), (x, y)], fill=hi)
+    """Lápide de topo arredondado, com sombra à direita e luz à esquerda."""
+    fx0, fx1, fy = x * 2, x * 2 + 25, y * 2 + 1
+    fdisc(d, fx0 + 13, fy - 26, 13, c)
+    d.raw.rectangle([fx0, fy - 26, fx1, fy], fill=c)
+    d.raw.line([(fx1, fy - 26), (fx1, fy)], fill=dark); d.raw.line([(fx1 - 1, fy - 26), (fx1 - 1, fy)], fill=dark)
+    d.raw.arc([fx0, fy - 39, fx1 + 1, fy - 13], 300, 360, fill=dark, width=2)
+    d.raw.line([(fx0, fy - 26), (fx0, fy)], fill=hi); d.raw.line([(fx0 + 1, fy - 26), (fx0 + 1, fy)], fill=hi)
+    d.raw.arc([fx0, fy - 39, fx1 + 1, fy - 13], 180, 260, fill=hi, width=2)
     d.line([(x + 4, y - 11), (x + 8, y - 11)], fill=dark)
     d.line([(x + 6, y - 14), (x + 6, y - 6)], fill=dark)
     d.rectangle([x - 2, y, x + 14, y + 1], fill='#2a3a2a')
@@ -335,13 +357,96 @@ def tomb(d, x, y, c='#7a8a8a', dark='#4a5a5a', hi='#9aaaaa'):
 
 
 def pumpkin(d, x, y):
-    d.ellipse([x, y - 10, x + 16, y], fill='#ff7a00')
-    d.ellipse([x + 4, y - 10, x + 12, y], fill='#ff9a2a')
-    d.line([(x + 8, y - 10), (x + 8, y)], fill='#c85a00')
-    d.rectangle([x + 7, y - 13, x + 9, y - 10], fill='#2a6a1a')
-    d.polygon([(x + 3, y - 6), (x + 6, y - 6), (x + 4, y - 8)], fill='#ffe23a')
-    d.polygon([(x + 10, y - 6), (x + 13, y - 6), (x + 12, y - 8)], fill='#ffe23a')
-    d.line([(x + 4, y - 3), (x + 12, y - 3)], fill='#ffe23a')
+    """Abóbora de gomos redondos, com cabo curvo e rosto aceso (desenhada na grade fina)."""
+    X, Y = x * 2, y * 2 + 1
+    d.raw.ellipse([X - 1, Y - 21, X + 33, Y + 1], fill='#3a1400')  # contorno
+    for x0, x1, c in ((0, 20, '#e86a00'), (12, 32, '#e86a00'), (6, 26, '#ff8a1a')):
+        d.raw.ellipse([X + x0, Y - 20, X + x1, Y], fill=c)
+    d.raw.ellipse([X + 11, Y - 19, X + 21, Y - 1], fill='#ffa23a')
+    for x0, x1 in ((6, 26), (12, 20)):  # vincos entre os gomos
+        d.raw.arc([X + x0, Y - 20, X + x1, Y], 100, 260, fill='#c24e00')
+        d.raw.arc([X + x0, Y - 20, X + x1, Y], 280, 80, fill='#c24e00')
+    d.raw.arc([X + 15, Y - 28, X + 25, Y - 16], 180, 260, fill='#2a6a1a', width=3)  # cabo
+    fdisc(d, X + 24, Y - 25, 1.6, '#3a8a2a')
+    for ex in (8, 21):  # olhos e boca acesos
+        d.raw.polygon([(X + ex, Y - 9), (X + ex + 4, Y - 9), (X + ex + 2, Y - 13)], fill='#ffe23a')
+    d.raw.chord([X + 9, Y - 9, X + 24, Y - 3], 0, 180, fill='#ffe23a')
+    d.raw.rectangle([X + 16, Y - 6, X + 17, Y - 5], fill='#ff8a1a')  # um dente
+
+
+def gnarl(d, x, y, c):
+    """Árvore seca de galhos curvos que afinam até a ponta (grade fina)."""
+    X, Y = x * 2, y * 2
+    def branch(x0, y0, ang, ln, wd, depth):
+        pts = [(x0, y0)]
+        for k in range(1, 9):
+            a = ang + math.sin(k * 0.8 + depth) * 0.12
+            x1, y1 = pts[-1][0] + math.cos(a) * ln / 8, pts[-1][1] - math.sin(a) * ln / 8
+            pts.append((x1, y1))
+        for k in range(8):
+            w = max(1, wd * (1 - k / 9))
+            fdisc(d, pts[k][0], pts[k][1], w / 2, c)
+            d.raw.line([pts[k], pts[k + 1]], fill=c, width=int(round(w)))
+        if depth < 3:
+            ex, ey = pts[-1]
+            branch(ex, ey, ang + 0.55, ln * 0.62, wd * 0.6, depth + 1)
+            branch(ex, ey, ang - 0.5, ln * 0.55, wd * 0.55, depth + 1)
+    d.raw.polygon([(X - 12, Y), (X + 12, Y), (X + 6, Y - 24), (X - 6, Y - 24)], fill=c)  # pé largo do tronco
+    branch(X, Y - 20, math.pi / 2 + 0.05, 74, 13, 0)
+
+
+def flame(d, x, y, w, h, c, lean=0.0):
+    """Chama em forma de gota: base redonda e ponta curva que afina (grade fina)."""
+    X, Y, R = x * 2, y * 2, w
+    fdisc(d, X, Y - R * 0.6, R, c)
+    pts = []
+    for k in range(13):
+        s = k / 12
+        hw = R * (1 - s) ** 1.4
+        cx = X + lean * h * 2 * s * s
+        pts.append((cx, Y - R * 0.6 - s * (h * 2 - R)))
+        pts[-1] = (cx - hw, pts[-1][1])
+    for k in range(12, -1, -1):
+        s = k / 12
+        hw = R * (1 - s) ** 1.4
+        cx = X + lean * h * 2 * s * s
+        pts.append((cx + hw, Y - R * 0.6 - s * (h * 2 - R)))
+    d.raw.polygon(pts, fill=c)
+
+
+def wave(d):
+    """Onda grande que enrola: corpo em curva suave, tubo escuro por dentro e espuma redonda na crista."""
+    body, deep, tube = '#2a8ae8', '#1a6ac8', '#0e4a98'
+    pts = [(300, 304)]
+    for k in range(41):
+        s = k / 40
+        pts.append((300 + s * 270, 300 - 150 * (s * s * (3 - 2 * s))))
+    pts += [(600, 170), (618, 200), (NW, 236), (NW, 304)]
+    d.raw.polygon(pts, fill=body)
+    d.raw.ellipse([520, 140, 620, 240], fill=body)
+    d.raw.ellipse([536, 168, 600, 236], fill=deep)
+    d.raw.ellipse([548, 186, 594, 236], fill=tube)
+    d.raw.rectangle([536, 236, NW, 304], fill=body)
+    for k in range(10):  # faixas mais claras ao longo do corpo
+        s = k / 10
+        x = 340 + s * 200
+        d.raw.line([(x, 300 - 140 * (s * s * (3 - 2 * s)) + 22), (x + 30, 300 - 140 * (((s + 0.1) ** 2) * (3 - 2 * (s + 0.1))) + 24)], fill='#5aa8ff', width=2)
+    d.raw.arc([520, 140, 620, 240], 170, 330, fill='#ffffff', width=5)
+    for a in range(170, 340, 22):  # espuma em bolinhas na crista
+        fdisc(d, 570 + math.cos(math.radians(a)) * 52, 190 + math.sin(math.radians(a)) * 52, 5, '#ffffff')
+
+
+def gate(d, x0, x1, y, c):
+    """Cerca de ferro do cemitério, com pontas redondas e curvinhas entre as barras (atrás das lápides)."""
+    X0, X1, Y = x0 * 2, x1 * 2, y * 2
+    for k, fx in enumerate(range(X0, X1 + 1, 10)):
+        h = 26 + (6 if k % 4 == 0 else 0)
+        d.raw.rectangle([fx, Y - h, fx + 1, Y], fill=c)
+        fdisc(d, fx + 1, Y - h - 1, 2.2, c)
+        if fx + 10 <= X1:
+            d.raw.arc([fx + 1, Y - 24, fx + 11, Y - 14], 180, 360, fill=c)
+    for yy in (Y - 18, Y - 6):
+        d.raw.rectangle([X0, yy, X1 + 1, yy + 1], fill=c)
 
 
 def bat(d, x, y, c='#0a0010'):
@@ -454,17 +559,10 @@ def scene_pumpkin():  # Halloween: lua cheia, morcegos, árvore seca, lápides e
     sky(d, ['#12002b', '#2a0a4a', '#4a1a6a', '#7a2a6a', '#c8501a', '#ff7a1a'], 0, 152, step=10, jag=3, seed=5)
     stars(d, 30, 70, 5, '#ffd8a0')
     moon(d, 236, 46, 24, '#ffd27a', ('#f0b860', '#e8a850'), '#3a0a4a', 5)
-    for x, y in ((80, 28), (104, 40), (128, 24), (180, 60), (60, 56)):
-        bat(d, x, y)
-    hills(d, 148, 16, 36, 4, '#140020')
-    d.rectangle([0, 152, W, H], fill='#0a0010')
-    d.line([(44, 152), (44, 96)], fill='#0a0010', width=4)
-    for a, b in (((44, 116), (24, 100)), ((44, 108), (64, 88)), ((44, 100), (32, 84)), ((54, 96), (60, 80))):
-        d.line([a, b], fill='#0a0010', width=2)
-    for x in (80, 140, 200, 276):
-        tomb(d, x, 164, '#3a2a4a', '#1a0a2a', '#4a3a5a')
-    for x in (108, 168, 240):
-        pumpkin(d, x, 172)
+    hills(d, 150, 18, 34, 4, '#2a0a3e', '#3e1656')  # morros de trás, mais claros
+    hills(d, 160, 10, 22, 40, '#0a0010')  # o chão é o próprio morro da frente: sem emenda reta no meio da cena
+    gate(d, 0, W - 1, 158, '#0a0010')  # a cerca atravessa o cenário todo, atrás das lápides
+    gnarl(d, 46, 162, '#0a0010')
     return im
 
 
@@ -560,16 +658,8 @@ def scene_zombie():  # cemitério com lua verde, árvore seca e mão saindo da t
     sky(d, ['#020a04', '#04120a', '#081a0e', '#0e2414'], 0, 140, seed=11)
     moon(d, 248, 36, 20, '#b8f0a0', ('#98d880', '#88c870'), '#020a04', 11)
     stars(d, 26, 100, 11, '#9ad09a')
-    hills(d, 136, 12, 30, 0, '#0a1a0a', '#142a14')
-    d.rectangle([0, 140, W, H], fill='#142a14')
-    d.line([(72, 140), (72, 88)], fill='#050a05', width=4)
-    for a, b in (((72, 112), (52, 96)), ((72, 104), (92, 84)), ((72, 96), (62, 80))):
-        d.line([a, b], fill='#050a05', width=2)
-    for x in (24, 104, 156, 208, 280):
-        tomb(d, x, 160)
-    d.rectangle([120, 164, 128, 172], fill='#6a9a5a')
-    for dx in (0, 3, 6, 8):
-        d.rectangle([120 + dx, 158 + (dx % 4), 121 + dx, 164], fill='#6a9a5a')
+    hills(d, 140, 10, 30, 0, '#142a14', '#1e3a1e')  # o chão é o próprio morro: sem emenda reta
+    gnarl(d, 72, 142, '#050a05')
     return im
 
 
@@ -580,8 +670,7 @@ def scene_surfing():  # praia: sol, coqueiro e uma onda grande
     for x0, w in ((24, 60), (136, 48)):
         cloud(d, x0, 20, w, 14)
     sea(d, 104, ('#1a6ac8', '#1a7ad8', '#5aa8ff', '#4a98f0'))
-    d.pieslice([180, 80, 300, 200], 180, 270, fill='#2a8ae8')
-    d.arc([180, 80, 300, 200], 180, 270, fill='#ffffff', width=4)
+    wave(d)
     d.rectangle([0, 152, W, H], fill='#f4d9a0')
     for x in range(0, W, 10):
         d.rectangle([x, 152, x + 6, 153], fill='#ffffff')
@@ -680,21 +769,19 @@ def scene_cherry():  # cerejeira rosa, nuvens rosadas e chão de pétalas (exemp
     for _ in range(14):
         cross(d, r.randrange(W), r.randrange(140, H), '#ffe8f6', 1)
     # tronco e galhos
-    d.polygon([(220, 160), (236, 160), (232, 90), (226, 90)], fill='#a8507a')
-    d.line([(229, 110), (196, 60)], fill='#a8507a', width=4)
-    d.line([(231, 100), (270, 50)], fill='#a8507a', width=4)
-    d.line([(229, 90), (236, 30)], fill='#a8507a', width=3)
+    d.polygon([(218, 160), (238, 160), (232, 96), (226, 96)], fill='#a8507a')
+    gnarl(d, 229, 104, '#a8507a')
     # copa em manchas de rosa
     for _ in range(260):
         a, t = r.random() * 6.283, r.random() ** 0.6 * 70
         x, y = int(232 + math.cos(a) * t * 1.2), int(52 + math.sin(a) * t * 0.7)
         c = r.choice(['#ff9ad8', '#ffb0e0', '#f080c8', '#ffc8ea', '#e870b8'])
-        d.rectangle([x, y, x + r.randint(3, 7), y + r.randint(2, 5)], fill=c)
+        fdisc(d, x * 2 + 4, y * 2 + 3, r.uniform(3, 7), c)
     for _ in range(18):
         cross(d, int(232 + (r.random() - 0.5) * 150), int(52 + (r.random() - 0.5) * 90), '#ffffff', 1)
     for _ in range(12):  # pétalas caindo
         x, y = r.randrange(W), r.randrange(130)
-        d.rectangle([x, y, x + 3, y + 2], fill='#ffa0d8')
+        d.raw.ellipse([x * 2, y * 2, x * 2 + 6, y * 2 + 4], fill='#ffa0d8')
     return im
 
 
@@ -737,10 +824,9 @@ def scene_demonic():  # vermelho do inferno com chamas no chão e brilhos (exemp
     for x, y in ((120, 60), (290, 110)):
         cross(d, x, y)
     r = random.Random(21)
-    for x in range(0, W, 6):  # chamas
-        h = r.randint(10, 30)
-        d.rectangle([x, 160 - h, x + 5, 160], fill=r.choice(['#ff4a0a', '#ff7a1a']))
-        d.rectangle([x + 1, 160 - h // 2, x + 4, 160], fill='#ffb02a')
+    for layer, (cols, hmin, hmax, wd) in enumerate(((('#c81a00', '#e02a00'), 22, 40, 14), (('#ff4a0a', '#ff7a1a'), 14, 30, 11), (('#ffb02a', '#ffc84a'), 6, 16, 8))):
+        for x in range(-8 + layer * 5, W + 8, wd):  # chamas redondas em gota, em três camadas
+            flame(d, x + r.randint(-2, 2), 160, wd * 0.9, r.randint(hmin, hmax), r.choice(cols), r.uniform(-0.6, 0.6))
     d.rectangle([0, 160, W, H], fill='#2a0000')
     return im
 
@@ -808,13 +894,14 @@ def fine_xmas(d):
 def fine_pumpkin(d):
     glow(d, 236, 46, 27, 40, '#ffb04a')
     fine_stars(d, 60, 70, 5, ('#ffd8a0', '#ffffff'))
-    for x, y in ((300, 70), (330, 96), (420, 40)):  # morcegos de longe, finos
-        d.raw.line([(x - 4, y - 2), (x, y)], fill='#0a0010'); d.raw.line([(x, y), (x + 4, y - 2)], fill='#0a0010')
-    for x in range(0, NW, 10):  # cerca torta do cemitério
-        h = 18 + (x * 7) % 6
-        d.raw.rectangle([x + 2, 300 - h, x + 4, 304], fill='#1a0a2a'); fpx(d, x + 3, 299 - h, '#1a0a2a')
-    d.raw.line([(0, 290), (NW, 290)], fill='#1a0a2a', width=2)
-    blades(d, 150, 180, 260, ['#1a0a2a', '#2a1a3a'], 33)
+    blades(d, 162, 180, 220, ['#1a0a2a', '#2a1a3a'], 33)
+    pumps = [(4 + k * 36 + (k % 2) * 4, 176 + (k * 5) % 3) for k in range(9)]  # abóboras de ponta a ponta
+    for x, y in pumps:  # brilho alaranjado no chão perto de cada abóbora
+        dither(d, x * 2 + 2, y * 2 - 2, x * 2 + 30, y * 2 + 1, '#3a1a10', 1)
+    for x, y in ((24, 168), (96, 164), (166, 170), (238, 166)):  # lápides e abóboras por último, na frente da grama
+        tomb(d, x, y, '#4a3a5e', '#22123a', '#6a5a80')
+    for x, y in pumps:
+        pumpkin(d, x, y)
 
 
 def fine_pirate(d):
@@ -885,6 +972,11 @@ def fine_zombie(d):
     glow(d, 248, 36, 23, 34, '#1a3a1a')
     fine_stars(d, 50, 100, 11, ('#9ad09a', '#ffffff'))
     blades(d, 140, 180, 420, ['#1e3a1e', '#2a4a2a', '#0e1e0e'], 39)
+    for x in (24, 104, 156, 208, 280):  # lápides e mão na frente da grama
+        tomb(d, x, 160)
+    d.rectangle([120, 164, 128, 172], fill='#6a9a5a')
+    for dx in (0, 3, 6, 8):
+        d.rectangle([120 + dx, 158 + (dx % 4), 121 + dx, 164], fill='#6a9a5a')
     for y in range(256, 300, 6):  # névoa rasteira pontilhada
         dither(d, 0, y, NW, y, '#2a4a34', 1)
     for dx in (0, 6, 12, 16):  # unhas da mão
@@ -893,10 +985,9 @@ def fine_zombie(d):
 
 def fine_surfing(d):
     glow(d, 256, 28, 17, 26, '#8ad0ff')
-    for k in range(10):  # espuma e gotas na onda
-        a = math.radians(185 + k * 8)
-        x, y = 481 + int(math.cos(a) * 124), 281 + int(math.sin(a) * 124)
-        fpx(d, x - 3, y + 2, '#ffffff'); fpx(d, x + 2, y + 5, '#ffffff')
+    for k in range(8):  # gotas soltas da crista
+        a = math.radians(200 + k * 14)
+        fdisc(d, 570 + math.cos(a) * 66, 186 + math.sin(a) * 66, 1.6, '#ffffff')
     grains(d, 153, 180, 500, ['#e8c888', '#ffffff', '#d8b878'], 40)
     for x, y in ((180, 330), (420, 340), (560, 320)):  # conchinhas
         d.raw.ellipse([x, y, x + 6, y + 5], fill='#ffb8a0'); d.raw.line([(x + 3, y), (x + 3, y + 5)], fill='#e08a7a')
@@ -1002,9 +1093,8 @@ def fine_angel(d):
 
 def fine_demonic(d):
     r = random.Random(49)
-    for x in range(0, NW, 12):  # língua de fogo clara dentro de cada chama
-        h = r.randint(8, 22)
-        d.raw.polygon([(x + 3, 320), (x + 9, 320), (x + 6, 320 - h)], fill='#ffe08a')
+    for x in range(4, W, 16):  # língua de fogo clara dentro das chamas
+        flame(d, x + r.randint(-3, 3), 161, 4, r.randint(4, 9), '#ffe08a', r.uniform(-0.4, 0.4))
     for _ in range(80):  # brasas soltas
         x, y = r.randrange(NW), r.randrange(120, 300)
         fpx(d, x, y, r.choice(('#ffb02a', '#ff7a1a', '#ffe08a')))
