@@ -1912,7 +1912,7 @@ const FIREBASE_CONFIG = {
     },
     progressao: {
       title: 'Progressão',
-      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia. UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
+      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia (uma vez a cada 4 UP, esse ponto pode virar uma proficiência). UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
       rule: 'progressao'
     },
     poderes: {
@@ -6523,6 +6523,8 @@ const FIREBASE_CONFIG = {
     // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
     s.doutor = Array.isArray(r.doutor) ? r.doutor.filter((x) => typeof x === 'string') : [];
     s.upProfs = Array.isArray(r.upProfs) ? r.upProfs.filter((x) => typeof x === 'string') : [];
+    // a cada 4 UP, o +1 de perícia de um UP pode virar uma proficiência
+    s.swapProfs = Array.isArray(r.swapProfs) ? r.swapProfs.filter((x) => typeof x === 'string') : [];
     // Doutor e as proficiências compradas são poderes; fichas antigas guardavam em listas à parte
     s.doutor.map((id) => ['of-pod-doutor', id]).concat(s.upProfs.map((id) => [id.indexOf('armadura-') === 0 ? 'of-pod-prof-armadura' : 'of-pod-prof-arma', id])).forEach((x) => {
       if (s.powers.some((p) => p.id === x[0] && p.choice === x[1])) return;
@@ -6748,7 +6750,10 @@ const FIREBASE_CONFIG = {
   const upProfsOf = (s) => choicesOf(s, 'of-pod-prof-arma').concat(choicesOf(s, 'of-pod-prof-armadura'));
   const choiceLabel = (pid, id) => (CHOICE_POWERS[pid] === 'pericia' ? SKILL_LABEL[id] || id : profLabel(id));
   const choicePower = (e, choice) => Object.assign(slotSnap(e), { thumb: e.thumb || '', choice, name: e.name + ': ' + choiceLabel(e.id, choice) });
-  const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0;
+  // trocas de perícia por proficiência: uma a cada 4 UP ganhos por XP (as de origem não contam)
+  const swapAllowed = (s) => Math.floor(Math.floor(num(s.xp) / 10) / 4);
+  const swapProfsOf = (s) => (s.swapProfs || []).slice(0, swapAllowed(s));
+  const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0 || swapProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
   const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
@@ -6861,7 +6866,7 @@ const FIREBASE_CONFIG = {
       // +1 num atributo a cada 4 UP: vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
       attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over, // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over - swapProfsOf(s).length, // cada troca tira 1 ponto de perícia // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
       skillGrant: skillGrant(s).grant,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
@@ -8101,7 +8106,7 @@ const FIREBASE_CONFIG = {
     }
     const track = card('prog__track', title('Trilha de UP'), level,
       h('ol', 'prog__steps', ...steps),
-      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias). UP par: 2 benefícios. A cada 4 UP: +1 num atributo, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
+      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias); uma vez a cada 4 UP, esse ponto pode virar uma proficiência, em Perícias → Proficiências. UP par: 2 benefícios. A cada 4 UP: +1 num atributo, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
     // os avisos (escolher benefícios, UP livres, +1 de atributo, compras sem fonte) são desenhados por renderAlerts
     const alerts = h('section', 'prog__card alerts', null);
     alerts.id = 'prog-alerts';
@@ -8229,12 +8234,33 @@ const FIREBASE_CONFIG = {
     return box;
   }
 
+  // a cada 4 UP: trocar o +1 de perícia de um UP por uma proficiência
+  function swapBlock(s) {
+    const allowed = swapAllowed(s);
+    const have = (s.swapProfs || []).length;
+    if (!allowed && !have) return [h('p', 'field__hint', 'A cada 4 UP ganhos, dá para trocar o +1 de perícia de um UP por uma proficiência.')];
+    const taken = s.profs.concat(upProfsOf(s));
+    const box = profPills(s.swapProfs, (id, on) => {
+      s.swapProfs = s.swapProfs.filter((x) => x !== id);
+      if (on && !taken.includes(id)) s.swapProfs.push(id);
+      changed();
+    }, allowed, 'swap-');
+    box.querySelectorAll('input').forEach((inp) => {
+      const id = inp.dataset.fid.slice(5);
+      if (taken.includes(id) && !inp.checked) { inp.disabled = true; inp.parentElement.classList.add('check--off'); }
+    });
+    return [h('h3', 'sub-title', 'Trocas por proficiência ', h('span', 'count', '(' + Math.min(have, allowed) + ' de ' + allowed + ', uma a cada 4 UP)')),
+      h('p', 'field__hint', 'Cada troca vira uma proficiência no lugar de 1 ponto de perícia.' + (have > allowed ? ' ' + plural(have - allowed, 'troca está', 'trocas estão') + ' acima do que os UP dão e não vale.' : '')),
+      box];
+  }
+
   function renderProfs() {
     const s = sheetChar.sheet;
     $('#profs-block').replaceChildren(
       h('h3', 'sub-title', 'Proficiências ', h('span', 'count', '(' + s.profs.length + ' de 4 iniciais' + (upProfsOf(s).length ? ' + ' + upProfsOf(s).length + ' por poder' : '') + ')')),
       profPills(s.profs, (id, on) => { s.profs = s.profs.filter((x) => x !== id); if (on) s.profs.push(id); changed(); }, 0),
       ...(upProfsOf(s).length ? [h('p', 'field__hint', 'Vindas de poderes: ' + upProfsOf(s).map(profLabel).join(', ') + '.')] : []),
+      ...swapBlock(s),
       h('p', 'field__hint', 'Em armas: cadência perita e o aprimoramento do tipo. Em armaduras: a penalidade não dobra e a defesa ganha +1. Usar um item fora da empunhadura ideal conta como sem proficiência.'));
   }
 
