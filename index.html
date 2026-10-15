@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=162">
+  <link rel="stylesheet" href="style.css?v=176">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -406,6 +406,7 @@
           <p class="save-status" id="sheet-status" aria-live="polite"></p>
         </div>
         <div class="sheet-actions">
+          <button class="btn btn--ghost btn--sm" type="button" id="rename-open" hidden>Trocar nome</button>
           <button class="btn btn--ghost btn--sm" type="button" id="setup-open">Distribuição inicial</button>
           <button class="btn btn--ghost btn--sm" type="button" id="export-open">Exportar ficha</button>
           <button class="btn btn--ghost btn--sm" type="button" id="pin-toggle">Fixar no acesso rápido</button>
@@ -519,6 +520,7 @@
             <div class="field field--wide">
               <label class="field__label" for="f-name">Nome</label>
               <input class="input" id="f-name" type="text" maxlength="40" autocomplete="off" aria-describedby="f-name-error">
+              <p class="field__hint" id="f-name-lock" hidden>Só quem criou a ficha troca o nome.</p>
               <p class="field__error" id="f-name-error" role="alert"></p>
             </div>
             <div class="field field--wide">
@@ -1065,9 +1067,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=162"></script>
-  <script src="items.js?v=162"></script>
-  <script src="pixelart.js?v=162"></script>
-  <script src="app.js?v=162"></script>
+  <script src="regras.js?v=176"></script>
+  <script src="items.js?v=176"></script>
+  <script src="pixelart.js?v=176"></script>
+  <script src="app.js?v=176"></script>
 </body>
 </html>

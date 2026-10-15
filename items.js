@@ -592,6 +592,11 @@ window.VORTEX_ITEMS = {
       values: { descricao: 'Cria do Éter.',
         racial: 'Cria do Éter | Quando é afetado por energia Ether pura, recupera recursos iguais ao tamanho do Ether (10 de Resistência e PE para pequena, 25 para média, 50 para grande); o excesso conta como recurso bônus até o próximo descanso. Pode tornar um Éter instável e forçar sua absorção. | 1\nDom do Éter | 2 Up points extras iniciais, que também podem comprar características raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais). Só o Etheriano faz isso. | 1 | up: 2' }
     },
+    {
+      id: 'of-esp-simbionte', kind: 'especime', name: 'Simbionte',
+      values: { descricao: 'Massa amorfa, viva e independente, que molda o próprio corpo: tira da própria matéria força, cura e armas.',
+        racial: 'Força e Agilidade Ampliadas | Leva a própria força física a níveis devastadores: ergue toneladas e enfrenta inimigos do alto escalão. Ganha +6 m de deslocamento (15 m). Uma vez por turno, ao custo de 1 PA ou 7 PE, tem um ganho (um dado a mais) num teste de Corpo. | 1 | deslocamento: 6\nCura Regenerativa | Cura ferimentos mortais em segundos, regenera membros decepados e pode neutralizar doenças terminais ou até se ressuscitar em casos extremos. No início de cada turno, faz um teste de regeneração: 2d6 + Fortitude + Tecnologia, seguindo a regra de Cura (contra a CD do recurso, recupera a diferença). Cura PV e também Blindagem. A regeneração é engajada por cena e custa 1 PE por cena. | 1\nGeração de Matéria Simbiôntica | Estica a própria massa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões, martelos sólidos, armaduras e outros itens que não sejam consumíveis. Criar um item custa uma ação bônus, e o simbionte escolhe o item e o tipo de dano. Conta como proficiente com todos os itens que cria. Não cria armas de dano Fogo. Guarda dentro de si itens criados até um número igual ao seu Corpo; para usar, só precisa sacar. Também replica qualquer mod ou acessório que já tenha assimilado alguma vez. | 1' }
+    },
     // espécime secreto: só aparece quando alguém pesquisa "neko" (secreto: true esconde nas listas)
     {
       id: 'of-esp-neko', kind: 'especime', name: 'Neko', secreto: true,

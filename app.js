@@ -30,6 +30,8 @@ const FIREBASE_CONFIG = {
 
   const TYPE_LABEL = { personagem: 'Personagem', criatura: 'Criatura' };
   const DUP_CHARACTER = 'Já existe um personagem ou criatura com esse nome. Escolha outro.';
+  const RENAME_OWNER_ONLY = 'Só quem criou a ficha troca o nome.';
+  const OWNER_ONLY = 'Só o dono desta ficha pode excluí-la: o aparelho que a criou ou o perfil dono dela.';
   const DUP_CAMPAIGN = 'Já existe uma campanha com esse nome. Escolha outro.';
   const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem O, 0, I, 1
 
@@ -341,7 +343,7 @@ const FIREBASE_CONFIG = {
     const toChar = (c) => ({
       id: c.id, name: c.name, type: c.type, image: c.image || '', thumb: c.thumb || '',
       species: c.species || '', age: c.age || '', origin: c.origin || '',
-      campaignIds: (c.campaignIds || []).slice(), mine: c.ownerUid === ME,
+      campaignIds: (c.campaignIds || []).slice(), mine: c.ownerUid === ME, ownerProfile: c.ownerProfile || '',
       sheet: c.sheet ? clone(c.sheet) : null
     });
     const toLib = (e) => Object.assign(clone(e), { mine: e.ownerUid === ME });
@@ -400,11 +402,11 @@ const FIREBASE_CONFIG = {
         return rankSearch(all, query, charFields).slice(0, 60).map(toChar);
       },
 
-      async createCharacter({ name, type }) {
+      async createCharacter({ name, type, ownerProfile }) {
         const d = read();
         const key = nameKey(name);
         if (Object.values(d.characters).some((c) => c.nameKey === key)) throw new UserError(DUP_CHARACTER);
-        const c = { id: uid(), ownerUid: ME, name, nameKey: key, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], updatedAt: Date.now() };
+        const c = { id: uid(), ownerUid: ME, ownerProfile: ownerProfile || '', name, nameKey: key, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], updatedAt: Date.now() };
         d.characters[c.id] = c;
         write(d);
         return toChar(c);
@@ -432,11 +434,18 @@ const FIREBASE_CONFIG = {
         write(d);
       },
 
-      async deleteCharacter(id) {
+      async setCharOwnerProfile(id, code) {
+        const d = read();
+        if (!d.characters[id] || d.characters[id].ownerUid !== ME) return;
+        d.characters[id].ownerProfile = code;
+        write(d);
+      },
+
+      async deleteCharacter(id, profileCode) {
         const d = read();
         const c = d.characters[id];
         if (!c) return;
-        if (c.ownerUid !== ME) throw new UserError('Só quem criou esta ficha pode excluí-la.');
+        if (c.ownerUid !== ME && !(profileCode && c.ownerProfile === profileCode)) throw new UserError(OWNER_ONLY);
         c.campaignIds.slice().forEach((cid) => removeFromCampaign(d, cid, id));
         delete d.characters[id];
         write(d);
@@ -584,6 +593,8 @@ const FIREBASE_CONFIG = {
         write(d);
       },
 
+      async joinProfile() { /* no modo local só existe este aparelho */ },
+
       async touchCampaign() { /* no modo local tudo já está neste aparelho */ },
 
       // ---------- Combate: inimigos que o mestre coloca na campanha ----------
@@ -716,7 +727,7 @@ const FIREBASE_CONFIG = {
       return {
         id: snap.id, name: d.name, type: d.type, image: d.image || '', thumb: d.thumb || '',
         species: d.species || '', age: d.age || '', origin: d.origin || '',
-        campaignIds: d.campaignIds || [], mine: d.ownerUid === me,
+        campaignIds: d.campaignIds || [], mine: d.ownerUid === me, ownerProfile: d.ownerProfile || '',
         sheet: d.sheet ? deep(d.sheet) : null
       };
     };
@@ -776,7 +787,7 @@ const FIREBASE_CONFIG = {
         return found.slice(0, 60);
       },
 
-      async createCharacter({ name, type }) {
+      async createCharacter({ name, type, ownerProfile }) {
         const nRef = nameDoc('character', name);
         if ((await nRef.get()).exists) throw new UserError(DUP_CHARACTER);
         const ref = chars().doc();
@@ -785,14 +796,14 @@ const FIREBASE_CONFIG = {
         batch.set(ref, {
           ownerUid: me, name, nameKey: nameKey(name), type, image: '', thumb: '',
           species: '', age: '', origin: '', campaignIds: [], searchKeys: buildSearchKeys(name, '', ''),
-          createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp()
+          ownerProfile: ownerProfile || '', createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp()
         });
         try { await batch.commit(); }
         catch (e) {
           if (await db.nameTaken('character', name)) throw new UserError(DUP_CHARACTER);
           throw e;
         }
-        return { id: ref.id, name, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], mine: true, sheet: null };
+        return { id: ref.id, name, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], mine: true, ownerProfile: ownerProfile || '', sheet: null };
       },
 
       // Grava só os campos enviados (assim não apaga o que outra pessoa editou nos outros campos)
@@ -832,12 +843,17 @@ const FIREBASE_CONFIG = {
         }
       },
 
-      async deleteCharacter(id) {
+      // o perfil dono passa a valer em qualquer aparelho que entrou nele (só o aparelho que criou a ficha marca)
+      async setCharOwnerProfile(id, code) {
+        await chars().doc(id).update({ ownerProfile: code });
+      },
+
+      async deleteCharacter(id, profileCode) {
         const ref = chars().doc(id);
         const s = await ref.get();
         if (!s.exists) return;
         const ch = s.data();
-        if (ch.ownerUid !== me) throw new UserError('Só quem criou esta ficha pode excluí-la.');
+        if (ch.ownerUid !== me && !(profileCode && ch.ownerProfile === profileCode)) throw new UserError(OWNER_ONLY);
         for (const cid of (ch.campaignIds || [])) {
           try { await db.leaveCampaign(cid, id); } catch (e) { console.warn(e); }
         }
@@ -1047,11 +1063,21 @@ const FIREBASE_CONFIG = {
         return s.exists ? Object.assign({}, s.data(), { code }) : null;
       },
 
-      async saveProfile(code, p) {
+      async saveProfile(code, p) { // merge: não apaga a lista de aparelhos (uids)
         await fs.collection('profiles').doc(code).set({
           name: p.name || '', chars: p.chars || [], camps: p.camps || [], gm: p.gm || [], favs: p.favs || [],
           updatedAt: FV.serverTimestamp()
-        });
+        }, { merge: true });
+      },
+
+      // Aparelhos que entraram no perfil: as regras deixam qualquer um deles excluir as fichas do perfil
+      async joinProfile(code) {
+        const ref = fs.collection('profiles').doc(code);
+        const s = await ref.get();
+        if (!s.exists) return;
+        const list = s.data().uids || [];
+        if (list.indexOf(me) >= 0) return;
+        await ref.update({ uids: list.concat(me).slice(-40) });
       },
 
       // Abrir a campanha por outro aparelho: entra em memberUids para ler candidatos e rolar
@@ -1486,7 +1512,7 @@ const FIREBASE_CONFIG = {
     try { localStorage.setItem(quickKey, JSON.stringify(list)); }
     catch (e) { toast('Não foi possível salvar o acesso rápido: o armazenamento está cheio.'); }
   }
-  const quickEntry = (c) => ({ id: c.id, name: c.name, type: c.type, thumb: c.thumb || '', species: c.species || '', mine: Boolean(c.mine) });
+  const quickEntry = (c) => ({ id: c.id, name: c.name, type: c.type, thumb: c.thumb || '', species: c.species || '', mine: Boolean(c.mine), ownerProfile: c.ownerProfile || '' });
   const quickHas = (id) => quickLoad().some((x) => x.id === id);
   function quickAdd(c) { // entra no começo da lista
     quickSave([quickEntry(c)].concat(quickLoad().filter((x) => x.id !== c.id)));
@@ -1543,6 +1569,13 @@ const FIREBASE_CONFIG = {
   const inProfile = (list, id) => Boolean(profile && profile[list].indexOf(id) >= 0);
   const isMyChar = (id) => inProfile('chars', id);
   const isGmOf = (id) => inProfile('gm', id);
+  // Dono da ficha: o aparelho que a criou ou o perfil dono dela (em qualquer aparelho que entrou no perfil)
+  const ownsChar = (c) => Boolean(c && (c.mine || (profile && c.ownerProfile && c.ownerProfile === profile.code)));
+  function claimChar(c) { // ficha criada neste aparelho, ainda sem perfil dono, passa a ser do perfil aberto
+    if (!profile || !c || !c.mine || c.ownerProfile) return;
+    c.ownerProfile = profile.code;
+    db.setCharOwnerProfile(c.id, profile.code).catch((e) => { c.ownerProfile = ''; console.warn(e); });
+  }
   function profileSet(list, id, on) { // devolve true se mudou algo
     if (!profile || !id || inProfile(list, id) === on) return false;
     profile[list] = on ? [id].concat(profile[list]).slice(0, 300) : profile[list].filter((x) => x !== id);
@@ -1596,6 +1629,7 @@ const FIREBASE_CONFIG = {
   function profileUse(p, code) {
     profile = normProfile(p, code);
     try { localStorage.setItem(profileKey, code); } catch (e) { /* segue só nesta visita */ }
+    db.joinProfile(code).catch((e) => console.warn(e));
     renderProfileBtn();
   }
   function profileLogout() {
@@ -1907,12 +1941,13 @@ const FIREBASE_CONFIG = {
       badge(c.type));
     open.type = 'button';
     open.addEventListener('click', () => go('character', c.id));
-    // quem criou pode excluir; ficha de outra pessoa só sai da lista
-    const act = h('button', 'btn btn--sm ' + (c.mine ? 'btn--danger' : 'btn--ghost'), c.mine ? 'Excluir' : 'Remover');
+    // o dono pode excluir; ficha de outra pessoa só sai da lista
+    const own = ownsChar(c);
+    const act = h('button', 'btn btn--sm ' + (own ? 'btn--danger' : 'btn--ghost'), own ? 'Excluir' : 'Remover');
     act.type = 'button';
-    act.setAttribute('aria-label', (c.mine ? 'Excluir ' : 'Tirar do acesso rápido: ') + c.name);
+    act.setAttribute('aria-label', (own ? 'Excluir ' : 'Tirar do acesso rápido: ') + c.name);
     act.addEventListener('click', async () => {
-      if (c.mine) { if (await deleteCharacterFlow(c)) views.personagens(); }
+      if (own) { if (await deleteCharacterFlow(c)) views.personagens(); }
       else { quickRemove(c.id); views.personagens(); }
     });
     return h('li', 'row', open, charStar(c, () => renderFavBlock()), act);
@@ -1927,18 +1962,24 @@ const FIREBASE_CONFIG = {
     return h('li', 'row', a, charStar(c, () => renderFavBlock()));
   }
 
-  // Linha de personagem do perfil: abre, favorita e sai do perfil
+  // Linha de personagem do perfil: abre, favorita, sai do perfil e, se o perfil for o dono, exclui
   function profileCharRow(c, onChange) {
+    const own = ownsChar(c);
     const a = h('a', 'row__open',
       avatar(c.name, c.type, c.thumb),
-      h('span', 'row__main', h('span', 'row__title', c.name), h('span', 'row__meta', [c.species, c.origin].filter(Boolean).join(' · '))),
+      h('span', 'row__main', h('span', 'row__title', c.name), h('span', 'row__meta', [own ? 'Sua ficha' : '', c.species, c.origin].filter(Boolean).join(' · '))),
       badge(c.type));
     a.href = '#/character/' + encodeURIComponent(c.id);
     const out = h('button', 'btn btn--ghost btn--sm', 'Tirar');
     out.type = 'button';
     out.setAttribute('aria-label', 'Tirar do perfil: ' + c.name);
     out.addEventListener('click', () => { profileSet('chars', c.id, false); toast(c.name + ' saiu do perfil.'); onChange(); });
-    return h('li', 'row', a, charStar(c, onChange), out);
+    if (!own) return h('li', 'row', a, charStar(c, onChange), out);
+    const del = h('button', 'btn btn--danger btn--sm', 'Excluir');
+    del.type = 'button';
+    del.setAttribute('aria-label', 'Excluir ' + c.name);
+    del.addEventListener('click', async () => { if (await deleteCharacterFlow(c)) onChange(); });
+    return h('li', 'row row--own', a, charStar(c, onChange), out, del);
   }
 
   // Busca as fichas de uma lista de IDs; tira do perfil as que foram apagadas
@@ -2160,6 +2201,7 @@ const FIREBASE_CONFIG = {
 
   /* Exclusão de personagem (usada no início e na ficha) */
   async function deleteCharacterFlow(c) {
+    if (!ownsChar(c)) { toast(OWNER_ONLY); return false; }
     const ok = await askConfirm({
       title: 'Excluir ' + c.name + '?',
       text: 'A ficha some para todos e o vínculo com as campanhas é apagado. Não dá para desfazer.',
@@ -2167,7 +2209,7 @@ const FIREBASE_CONFIG = {
     });
     if (!ok) return false;
     try {
-      await db.deleteCharacter(c.id);
+      await db.deleteCharacter(c.id, profile ? profile.code : '');
       quickRemove(c.id);
       profileSet('chars', c.id, false);
       toast(c.name + ' foi excluído.');
@@ -2274,7 +2316,7 @@ const FIREBASE_CONFIG = {
     if (bad) { setError(errCreate, inCreate, bad); inCreate.focus(); return; }
     btnCreate.disabled = true;
     try {
-      const c = await db.createCharacter({ name, type: kind });
+      const c = await db.createCharacter({ name, type: kind, ownerProfile: profile ? profile.code : '' });
       quickAdd(c);
       profileSet('chars', c.id, true);
       inCreate.value = '';
@@ -2571,6 +2613,7 @@ const FIREBASE_CONFIG = {
     $('#profile-name').value = profile.name;
     const redraw = () => { if (location.hash.indexOf('#/perfil') === 0) views.perfil(); };
     const [chars, camps] = await Promise.all([loadChars(profile.chars), profileCamps([])]);
+    chars.forEach(claimChar);
     const favs = charFavs();
     const favList = chars.filter((c) => favs.has(c.id));
     const rest = chars.filter((c) => !favs.has(c.id));
@@ -7219,6 +7262,10 @@ const FIREBASE_CONFIG = {
 
   function renderSheetHeader() {
     $('#sheet-title').textContent = sheetChar.name;
+    const own = ownsChar(sheetChar); // só o dono troca o nome da ficha
+    $('#rename-open').hidden = !own;
+    fName.readOnly = !own;
+    $('#f-name-lock').hidden = own;
     setBadge($('#sheet-badge'), sheetChar.type);
     document.title = 'Ficha de ' + sheetChar.name + ' | Vortex';
   }
@@ -9760,6 +9807,7 @@ const FIREBASE_CONFIG = {
   fName.addEventListener('change', async () => {
     const ch = sheetChar;
     const name = cleanName(fName.value);
+    if (!ownsChar(ch)) { fName.value = ch.name; setError(errName, fName, RENAME_OWNER_ONLY); return; }
     const bad = validateName(name);
     if (bad) { setError(errName, fName, bad); return; }
     if (name === ch.name) { fName.value = name; setError(errName, fName, ''); return; }
@@ -9912,6 +9960,11 @@ const FIREBASE_CONFIG = {
   $('#fav-toggle').addEventListener('click', () => {
     toast(charFavToggle(sheetChar.id) ? sheetChar.name + ' está nos favoritos.' : 'Tirado dos favoritos.');
     renderSheetFav();
+  });
+  $('#rename-open').addEventListener('click', () => { // leva ao campo Nome, na aba Descrição
+    showSheetTab($('#spanel-descricao'));
+    fName.focus();
+    fName.select();
   });
   $('#profile-toggle').addEventListener('click', () => {
     const on = !isMyChar(sheetChar.id);
@@ -10703,8 +10756,9 @@ const FIREBASE_CONFIG = {
     renderSheetFav();
     rerender();
     $('#setup-open').textContent = c.sheet.setup ? 'Refazer distribuição inicial' : 'Distribuição inicial';
-    $('#danger-zone').hidden = !c.mine;
-    if (profile && c.mine && !isMyChar(c.id)) profileSet('chars', c.id, true); // ficha criada neste aparelho fica no perfil
+    claimChar(c);
+    $('#danger-zone').hidden = !ownsChar(c);
+    if (profile && ownsChar(c) && !isMyChar(c.id)) profileSet('chars', c.id, true); // ficha sua fica no perfil
     $('#delete-character').textContent = 'Excluir ' + (c.type === 'criatura' ? 'criatura' : 'personagem');
     await renderSheetCampaigns();
     if (!c.sheet.setup && (c.mine || isMyChar(c.id)) && sheetChar === c) openSetup(); // primeira vez: abre a distribuição inicial
