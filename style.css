@@ -813,6 +813,8 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 .r-table th, .r-table td { padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--linha); text-align: left; vertical-align: top; }
 .r-table thead th { border-bottom: 2px solid var(--linha-forte); font-size: var(--t-s); color: var(--nevoa-2); white-space: nowrap; }
 .r-table tbody th { font-weight: 700; }
+.r-link { color: var(--mare); text-decoration: underline; text-underline-offset: 2px; }
+.r-link:hover { color: var(--nevoa); }
 
 .defs { display: grid; grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr); gap: 0 1.5rem; margin: 0.9rem 0; }
 .defs > dt, .defs > dd { padding: 0.6rem 0; border-top: 1px solid var(--linha); }
@@ -1218,7 +1220,9 @@ html { scroll-padding-top: var(--scroll-off, 0px); }
 .star[aria-pressed="true"] { color: var(--ambar); }
 .star:hover { color: var(--ambar); }
 .lib-block { margin-top: 3rem; }
-.lib-tools { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto auto; align-items: end; gap: 0.75rem 1.25rem; margin-bottom: 0.75rem; }
+.lib-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 1.25rem; margin-bottom: 0.75rem; }
+.lib-tools .field { flex: 1 1 12rem; margin: 0; }
+.lib-tools .field:first-child { flex: 2 1 16rem; }
 
 /* ---------- Oficina: formulário ---------- */
 .item-form__top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1.25rem 1.75rem; }
@@ -1312,9 +1316,10 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 .skill-picks { display: flex; flex-wrap: wrap; gap: 0.45rem; padding: 0.4rem 0 0.2rem; }
 .skill-pick { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 40px; padding: 0 0.85rem; border: 1px solid var(--linha-forte); border-radius: 999px; background: none; font-weight: 600; color: var(--nevoa-2); }
 .skill-pick__v { font-weight: 800; }
-.skill-pick--1, .skill-pick--2 { border-color: var(--c); color: var(--nevoa); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.skill-pick--1, .skill-pick--2, .skill-pick--3 { border-color: var(--c); color: var(--nevoa); background: color-mix(in srgb, var(--c) 14%, transparent); }
 .skill-pick--2 { box-shadow: inset 0 0 0 1px var(--c); }
-.skill-pick--1 .skill-pick__v, .skill-pick--2 .skill-pick__v { color: var(--c); }
+.skill-pick--3 { box-shadow: inset 0 0 0 2px var(--c); font-weight: 800; }
+.skill-pick--1 .skill-pick__v, .skill-pick--2 .skill-pick__v, .skill-pick--3 .skill-pick__v { color: var(--c); }
 
 @media (max-width: 760px) {
   .attr-band { grid-template-columns: 1fr; gap: 0.6rem; }
@@ -1324,8 +1329,7 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
   .res-other, .stats { grid-template-columns: 1fr; }
   .res { grid-template-columns: minmax(0, 1fr) auto; }
   .res__src { grid-column: 1 / -1; }
-  .lib-tools { grid-template-columns: 1fr 1fr; }
-  .lib-tools .field { grid-column: 1 / -1; }
+  .lib-tools .field { flex-basis: 100%; }
   .quick-item { grid-template-columns: minmax(0, 1fr) 6rem; }
   .quick-item .btn { grid-column: 1 / -1; }
   .inv__panel { padding-left: 0.25rem; }
@@ -1475,8 +1479,6 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 
 .chip--toggle { min-height: 32px; color: var(--nevoa-2); cursor: pointer; }
 .chip--toggle:hover { border-color: var(--nevoa); }
-.cat-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
-.cat-chips .chip--toggle { min-height: 40px; padding-inline: 0.9rem; }
 .chip--toggle[aria-pressed="true"] { border-color: var(--ambar); background: rgba(var(--ambar-rgb), 0.16); color: var(--nevoa); }
 
 .member__sub { margin: 1rem 0 0.5rem; font: 700 var(--t-m)/1.2 var(--fonte-titulo); }
@@ -2948,6 +2950,17 @@ dialog[open] { animation: dlg-in 0.22s ease-out; }
 }
 
 /* ---------- Bestiário como revista de monstros ---------- */
+.mag__head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.mag__head .star { margin: -0.4rem -0.4rem -0.4rem 0; }
+.beast-form:empty { display: none; }
+.beast-form { margin-bottom: 1.5rem; padding: 1rem 1.1rem 1.25rem; border: 1px solid color-mix(in srgb, var(--ambar) 40%, var(--linha)); border-radius: 14px; background: color-mix(in srgb, var(--ambar) 5%, var(--casco)); }
+.beast-form .item-panel { padding-top: 0; }
+.beast-form .item-form { margin-top: 1rem; }
+.beast__tools { grid-template-columns: minmax(0, 2fr) auto auto; }
+@media (max-width: 760px) { .beast__tools { grid-template-columns: 1fr 1fr; } .block__tools .beast__q { min-width: 0; flex: 1; } }
+.block__tools .beast__q { width: auto; min-width: 12rem; }
+.screen__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.btn__icon { width: 1.15em; height: 1.15em; margin-right: 0.45em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.2em; }
 .mag__chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.4rem 0 0.2rem; }
 .mag__chips:empty { display: none; }
 .mag__chip { --cat: var(--ambar); position: static; display: inline-flex; align-items: center; min-height: 36px; background: none; font: 600 0.85rem/1 var(--fonte-ui); cursor: pointer; }
@@ -3915,5 +3928,19 @@ html, body { max-width: 100%; overflow-x: clip; }
 @keyframes vx-music-pulse { 50% { box-shadow: 0 0 22px #ff4fd8, inset 0 0 12px #4ff7ff; } }
 @media (min-width: 900px) { .vx-music { bottom: 16px; right: 16px; } }
 @media (prefers-reduced-motion: reduce) { .vx-music { animation: none !important; } }
+
+/* campos com regra no Compêndio (ficha do item, equipamento, Armeiro): tocar abre o resumo */
+.rule-hot { cursor: pointer; position: relative; transition: border-color 0.15s, background 0.15s; }
+.rule-hot:hover, .rule-hot:focus-visible { border-color: var(--mare, #5ef2ff); outline: none; }
+.fact.rule-hot .fact__k::after, .armory__stat.rule-hot span::after, dt.rule-hot::after { content: " ⓘ"; color: var(--mare, #5ef2ff); font-size: 0.85em; }
+dt.rule-hot { text-decoration: underline dotted; text-underline-offset: 3px; }
+dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
+.rulepop { width: min(94vw, 32rem); }
+.rulepop__body { display: grid; gap: 0.6rem; margin: 0.4rem 0 1rem; }
+.rulepop__body > * { margin: 0; }
+.rulepop__body p { color: var(--nevoa); }
+.rulepop__sub { font-weight: 800; color: var(--ambar) !important; }
+.rulepop__more { font-size: 0.82rem; font-style: italic; color: var(--nevoa-2) !important; }
+.rulepop__link { display: inline-flex; }
 .script__tools { margin: 0; }
 .pw-prereq { display: block; margin-top: 0.3rem; font-size: 0.8rem; color: var(--erro); }

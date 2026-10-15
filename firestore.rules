@@ -68,7 +68,8 @@ service cloud.firestore {
     }
 
     // ---------- Banco de itens (itens, mods, propriedades, acessórios, espécimes, poderes) ----------
-    // Público: qualquer pessoa logada vê tudo o que foi registrado; só quem criou edita ou exclui.
+    // Público: qualquer pessoa logada vê tudo o que foi registrado; só quem criou edita.
+    // Excluir vale para qualquer pessoa logada: nada aqui é oficial (o catálogo oficial vem do items.js).
     match /library/{entryId} {
       function validEntry() {
         let d = request.resource.data;
@@ -82,7 +83,7 @@ service cloud.firestore {
       allow update: if signedIn() && validEntry()
                     && resource.data.ownerUid == request.auth.uid
                     && request.resource.data.ownerUid == resource.data.ownerUid;
-      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if signedIn();
     }
 
     // ---------- Personagens e criaturas: públicos e editáveis ----------

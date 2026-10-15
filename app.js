@@ -221,6 +221,18 @@ const FIREBASE_CONFIG = {
     const rest = Object.keys(v).filter((k) => ENTRY_TAGS.indexOf(k) < 0 && typeof v[k] === 'string').map((k) => v[k]);
     return [[e.name, 10], [tags.filter(Boolean).join(' '), 4], [rest.join(' '), 1]];
   }
+  // busca aprofundada: todo texto guardado no registro (listas, slots, peças instaladas, lore), aceitando erro de digitação
+  function deepText(v, out) {
+    if (v == null) return out;
+    if (typeof v === 'string' || typeof v === 'number') { if (typeof v === 'string' && /^(data:|https?:)/.test(v)) return out; out.push(String(v)); return out; }
+    if (Array.isArray(v)) { v.forEach((x) => deepText(x, out)); return out; }
+    if (typeof v === 'object') Object.keys(v).forEach((k) => { if (k !== 'image' && k !== 'thumb' && k !== 'id') deepText(v[k], out); });
+    return out;
+  }
+  function entryFieldsDeep(e) {
+    const f = entryFields(e);
+    return [f[0], f[1], [deepText([e.values, e.slots, e.bonus], []).join(' '), 4]];
+  }
   function matchesText(hay, q) { return searchScore([[hay, 4]], q) > 0; }
   const fileSlug = (name) => nameKey(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'ficha';
 
@@ -538,7 +550,7 @@ const FIREBASE_CONFIG = {
           .map((m) => Object.assign(toChar(d.characters[m.characterId]), { characterId: m.characterId, ownerUid: m.ownerUid, mine: m.ownerUid === ME }));
       },
 
-      // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
+      // ---------- Banco de itens (público; só quem criou edita; qualquer um exclui o que não é oficial) ----------
       async searchLibrary({ kinds, query }) {
         const all = Object.values(read().library).filter((e) => !kinds || kinds.indexOf(e.kind) >= 0)
           .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).map(toLib);
@@ -561,7 +573,6 @@ const FIREBASE_CONFIG = {
         const d = read();
         const e = d.library[id];
         if (!e) return;
-        if (e.ownerUid !== ME) throw new UserError('Só quem criou pode excluir.');
         delete d.library[id];
         write(d);
       },
@@ -1001,7 +1012,7 @@ const FIREBASE_CONFIG = {
         return rows.filter(Boolean).sort((x, y) => x.at - y.at);
       },
 
-      // ---------- Banco de itens (público; só quem criou edita ou exclui) ----------
+      // ---------- Banco de itens (público; só quem criou edita; qualquer um exclui o que não é oficial) ----------
       /* O banco é lido por categoria e guardado por um minuto: cada letra digitada filtra aqui,
          com relevância, plural e tolerância a erro (salvar ou excluir limpa a cópia). */
       async searchLibrary({ kinds, query }) {
@@ -1850,7 +1861,7 @@ const FIREBASE_CONFIG = {
     },
     banco: {
       title: 'Banco de dados',
-      text: 'Tudo o que é salvo na Oficina, mais o catálogo oficial das regras. É aqui que a pesquisa dos slots e do inventário procura. A estrela favorita (fica neste aparelho); só quem criou edita ou exclui.',
+      text: 'Tudo o que é salvo na Oficina, mais o catálogo oficial das regras. É aqui que a pesquisa dos slots e do inventário procura. A estrela favorita (fica neste aparelho); só quem criou edita, e qualquer pessoa exclui o que não é oficial.',
       rule: null
     },
     busca: {
@@ -2219,13 +2230,13 @@ const FIREBASE_CONFIG = {
 
   /* =====================================================================
      7. TELAS: navegação por endereço
-        #/home  #/novo  #/personagens  #/campanhas  #/itens
+        #/home  #/novo  #/personagens  #/bestiario  #/campanhas  #/itens
         #/character/ID  #/campaign/ID  #/rules/TÓPICO
      ===================================================================== */
   const views = {};
   let onLeave = null; // cada tela pode registrar uma limpeza (ex.: parar de ouvir os dados)
   let lastCharacterId = null;
-  const NAV_FOR = { home: 'home', personagens: 'personagens', campanhas: 'campanhas', itens: 'itens', rules: 'rules' };
+  const NAV_FOR = { home: 'home', personagens: 'personagens', bestiario: 'personagens', campanhas: 'campanhas', itens: 'itens', rules: 'rules' };
 
   function go(name, param) {
     const next = '#/' + name + (param ? '/' + encodeURIComponent(param) : '');
@@ -2692,7 +2703,7 @@ const FIREBASE_CONFIG = {
   // Catálogo oficial sempre aparece; se o banco compartilhado falhar, o aviso fica em libSearch.warn
   /* Busca do banco (oficiais + criados), já ordenada por relevância quando há texto.
      Sem resultado, libSearch.suggest traz um "Você quis dizer…?" montado com os nomes da categoria. */
-  async function libSearch(kinds, q) {
+  async function libSearch(kinds, q, opts) {
     const inKinds = (e) => !kinds || kinds.indexOf(e.kind) >= 0;
     libSearch.warn = '';
     libSearch.suggest = '';
@@ -2700,7 +2711,7 @@ const FIREBASE_CONFIG = {
     try { own = (await db.searchLibrary({ kinds, query: '' })).map(decorate); }
     catch (err) { console.warn(err); libSearch.warn = errorMessage(err); }
     const all = BUILTINS.filter(inKinds).filter((e) => secretOk(e, q)).concat(own.filter(inKinds));
-    const found = rankSearch(all, q, entryFields);
+    const found = rankSearch(all, q, opts && opts.deep ? entryFieldsDeep : entryFields);
     if (!found.length && words(q || '').length) libSearch.suggest = suggestQuery(q, all.map((e) => [e.name, e.typeTitle, e.kindTitle].join(' ')));
     return found;
   }
@@ -3078,7 +3089,7 @@ const FIREBASE_CONFIG = {
       const t = h('div', 'fact' + (FACT_HI[f.key] ? ' fact--hi' : ''), h('span', 'fact__k', f.label), h('span', 'fact__v', f.val), f.hint ? h('span', 'fact__hint', f.hint) : null);
       const c = f.key === 'raridade' ? rarColor(f.val) : '';
       if (c) { t.classList.add('fact--rar'); t.style.setProperty('--rar', c); }
-      return t;
+      return typeof f.val === 'string' ? ruleClickable(t, f.key === 'tipo' && e.kind === 'protese-modulo' ? 'cc' : f.key, f.val, e.kind, f.label) : t;
     };
     const stats = facts.filter((f) => f.type === 'stat');
     const used = new Set();
@@ -3094,6 +3105,117 @@ const FIREBASE_CONFIG = {
     facts.filter((f) => f.type === 'text').forEach((f) => out.push(h('section', 'facts__group', h('h3', 'facts__title', f.label), h('div', 'facts__text' + (f.code ? ' entry__code' : ''), f.val))));
     facts.filter((f) => f.type === 'list').forEach((f) => out.push(h('section', 'facts__group', h('h3', 'facts__title', f.label), h('ul', 'facts__chips', ...f.items.map((x) => h('li', 'facts__chip', x))))));
     return h('div', 'facts', ...out);
+  }
+
+  /* Regra de um campo da ficha do item (cadência, pente, alcance...): tocar no campo abre um resumo tirado do
+     próprio Compêndio (regras.js, sem texto duplicado) e um link para a regra completa.
+     Cada campo aponta para [capítulo, título da seção]; sem título, vale o começo do capítulo. */
+  const RULE_FIELDS = {
+    cadencia: () => ['cadencia', ''],
+    pente: (v) => ['recarga', /parcial/i.test(v) ? 'Recarga parcial' : /superaquec/i.test(v) ? 'Superaquecimento' : /^pente (leve|medio|pesado)/.test(nameKey(v)) ? v : ''],
+    municao: () => ['recarga', ''],
+    alcance: () => ['penalidades', 'Alcance'],
+    empunhadura: (v) => ['empunhadura', /saque|uma m|duas m/.test(nameKey(v)) ? v : ''],
+    raridade: (v, kind) => ['raridade', /^arma/.test(kind) ? 'Em Armas' : kind === 'armadura' ? 'Em Armaduras' : /^mod/.test(kind) ? 'Em Mods' : ''],
+    dano: () => ['ataque-e-defesa', 'Tipo de dano'],
+    danoFixo: () => ['ataque-e-defesa', 'Danos'],
+    armadura: () => ['ataque-e-defesa', 'Defesa mínima'],
+    defesa: () => ['ataque-e-defesa', 'Defesa mínima'],
+    penalidade: () => ['armaduras', 'Penalidade de Armadura'],
+    nucleo: () => ['nucleo-proteses-modulos', 'Núcleo'],
+    capacidade: () => ['nucleo-proteses-modulos', 'Núcleo'],
+    classe: () => ['nucleo-proteses-modulos', 'Próteses e Módulos'],
+    cc: () => ['nucleo-proteses-modulos', 'Carga Cibernética (CC)'],
+    carga: () => ['carga', 'Cálculo da Carga'],
+    efetivo: () => ['ataque-e-defesa', 'Tipos de Resistência'],
+    escudo: () => ['ataque-e-defesa', 'Escudo (E)'],
+    bonusRec: () => ['cura', 'Itens de recuperação (Live Service)'],
+    encaixes: () => ['mods-e-acessorios', 'Mods'],
+    corpo: () => ['atributos-e-recursos', 'Atributos'], precisao: () => ['atributos-e-recursos', 'Atributos'], essencia: () => ['atributos-e-recursos', 'Atributos'],
+    luta: () => ['pericias', 'Lista de Perícias'], mira: () => ['pericias', 'Lista de Perícias'], operacoes: () => ['pericias', 'Lista de Perícias'], resistencia: () => ['pericias', 'Lista de Perícias'],
+    pv: () => ['atributos-e-recursos', 'Recursos'], blindagem: () => ['ataque-e-defesa', 'Blindagem (BL)']
+  };
+  // rótulos das listas curtas (ficha do equipamento, Armeiro) para a chave do campo
+  const RULE_LABELS = { 'Dano': 'dano', 'Cadência': 'cadencia', 'Pente': 'pente', 'Munição': 'municao', 'Alcance': 'alcance', 'Empunhadura': 'empunhadura',
+    'Defesa': 'armadura', 'Penalidade': 'penalidade', 'Núcleo': 'nucleo', 'Capacidade': 'capacidade', 'Carga': 'carga', 'Escudo': 'escudo', 'Classe': 'classe',
+    'Tipo': 'cc', 'Serve no': 'pente', 'Bônus de recuperação': 'bonusRec', 'Dano fixo': 'danoFixo', 'Raridade': 'raridade', 'Recarga': 'pente' };
+  // acha a seção no capítulo: devolve { ch, slug, title, blocks } ou null
+  function ruleSection(key, val, kind) {
+    const fn = RULE_FIELDS[key];
+    if (!fn) return null;
+    const ref = fn(String(val == null ? '' : val), kind || '');
+    const ch = ((window.VORTEX_REGRAS && window.VORTEX_REGRAS.chapters) || []).find((c) => c.id === ref[0]);
+    if (!ch) return null;
+    const toc = indexChapter(ch);
+    if (!ref[1]) { // começo do capítulo: o texto antes da primeira seção (ou a primeira seção, se não houver)
+      const i = ch.blocks.findIndex((b) => /^h[234]$|^card$/.test(b[0]));
+      const intro = ch.blocks.slice(0, i < 0 ? ch.blocks.length : i);
+      return { ch, slug: '', title: ch.title, blocks: intro.length ? intro : ch.blocks.slice(i + 1) };
+    }
+    const want = nameKey(ref[1]);
+    const t = toc.find((x) => nameKey(x.title) === want);
+    if (!t) return null;
+    let at = null;
+    let list = null;
+    (function walk(blocks) {
+      blocks.forEach((b, i) => {
+        if (at) return;
+        if (ch._slugs.get(b) === t.slug) { at = b; list = blocks.slice(i + 1); return; }
+        if (b[0] === 'card') walk(b[2]);
+      });
+    })(ch.blocks);
+    if (!at) return null;
+    let blocks;
+    if (at[0] === 'card') blocks = at[2];
+    else {
+      const level = Number(at[0].slice(1));
+      const end = list.findIndex((b) => /^h[234]$/.test(b[0]) && Number(b[0].slice(1)) <= level);
+      blocks = end < 0 ? list : list.slice(0, end);
+    }
+    return { ch, slug: t.slug, title: t.title, blocks };
+  }
+  const ruleDlg = $('#rule-dialog');
+  const RULE_SUMMARY_BLOCKS = 4; // o resumo mostra só o começo da seção
+  function openRuleSummary(label, sec) {
+    $('#rule-title').textContent = label;
+    $('#rule-meta').textContent = sec.ch.title + (sec.slug && nameKey(sec.title) !== nameKey(sec.ch.title) ? ' · ' + sec.title : '');
+    const body = $('#rule-body');
+    body.replaceChildren();
+    let n = 0;
+    const put = (b) => {
+      if (n >= RULE_SUMMARY_BLOCKS) return;
+      if (/^h[234]$/.test(b[0])) { body.append(h('p', 'rulepop__sub', plainText(b[1]))); return; }
+      if (b[0] === 'card') { body.append(h('p', 'rulepop__sub', plainText(b[1]))); b[2].forEach(put); return; }
+      if (b[0] === 'fields') return; // modelo de ficha em branco: não resume nada
+      body.append(renderBlock(sec.ch, b));
+      n += 1;
+    };
+    sec.blocks.forEach(put);
+    const total = (function count(bs) { return bs.reduce((t, b) => t + (b[0] === 'card' ? count(b[2]) : /^h[234]$|^fields$/.test(b[0]) ? 0 : 1), 0); })(sec.blocks);
+    if (total > n) body.append(h('p', 'rulepop__more', 'A regra continua no Compêndio.'));
+    if (!body.children.length) body.append(h('p', '', 'Veja a regra completa no Compêndio.'));
+    $('#rule-link').href = ruleHref(sec.ch.id, sec.slug);
+    openDialog(ruleDlg);
+  }
+  $('#rule-close').addEventListener('click', () => closeDialog(ruleDlg));
+  $('#rule-link').addEventListener('click', () => {
+    rulesBack = location.hash || '#/home';
+    rulesFromHelp = true;
+    $$('dialog[open]').forEach(closeDialog); // a ficha do item fecha junto, para o Compêndio aparecer
+  });
+  // deixa um elemento (tile, rótulo) clicável quando o campo tem regra no Compêndio
+  function ruleClickable(el, key, val, kind, label) {
+    const sec = ruleSection(key, val, kind);
+    if (!sec) return el;
+    el.classList.add('rule-hot');
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-haspopup', 'dialog');
+    el.title = 'Ver a regra: ' + sec.ch.title;
+    const open = (ev) => { ev.stopPropagation(); openRuleSummary(label, sec); };
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(ev); } });
+    return el;
   }
 
   /* Tela de um poder: o tipo (simples, lista, com escolha, com melhorias), como se obtém e
@@ -4027,6 +4149,7 @@ const FIREBASE_CONFIG = {
     ev.preventDefault();
     const d = itemState.draft;
     const cat = d ? findCategory(d.kind) : null;
+    if (itemState.host) { closeHostedForm(); return; }
     if (cat && cat.types && !d.id) setItemStep('tipo'); else setItemStep('categoria');
   });
   $$('.item-steps__step').forEach((b) => b.addEventListener('click', () => {
@@ -4034,7 +4157,28 @@ const FIREBASE_CONFIG = {
     if (b.dataset.itemStep === 'tipo' && itemState.draft && !itemState.draft.id) { openCategory(itemState.draft.kind); return; }
     setItemStep('categoria');
   }));
-  $('#item-reset').addEventListener('click', () => { itemState.draft = null; setItemStep('categoria'); });
+  $('#item-reset').addEventListener('click', () => { if (itemState.host) { closeHostedForm(); return; } itemState.draft = null; setItemStep('categoria'); });
+
+  /* O formulário da Oficina também abre dentro de outra tela (o Bestiário cria e edita criaturas sem sair dele):
+     o mesmo painel muda de lugar e volta para a Oficina ao fechar. */
+  function openHostedForm(slot, kind, from, after) {
+    const panel = $('#item-panel-form');
+    itemState.host = { slot, after: after || null };
+    slot.append(panel);
+    openForm(kind, from ? from.typeId : '', from);
+    if (kind === 'npc') $('#item-form-title').textContent = from && from.id ? 'Editar: ' + from.name : 'Nova criatura';
+    $('#item-back-tipo').textContent = 'Fechar';
+  }
+  function closeHostedForm(saved) {
+    const host = itemState.host;
+    if (!host) return;
+    itemState.host = null;
+    itemState.draft = null;
+    setItemStep('categoria');
+    $('#item-back-tipo').textContent = 'Voltar';
+    $('#item-panel-tipo').after($('#item-panel-form'));
+    if (host.after && saved) host.after(saved); // fechar sem salvar não precisa refazer a lista
+  }
 
   $('#form-item').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -4067,7 +4211,8 @@ const FIREBASE_CONFIG = {
     try {
       await db.saveLibrary(entry);
       const notItem = NON_ITEM_KINDS.indexOf(cat.id) >= 0;
-      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.') + (notItem ? ' Aparece em Personagens, no catálogo.' : ''));
+      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.') + (cat.id === 'npc' ? ' Aparece no Bestiário.' : notItem ? ' Aparece em Personagens, no catálogo.' : ''));
+      if (itemState.host) { closeHostedForm(entry); return; }
       itemState.draft = null;
       setItemStep('categoria');
       await runLib();
@@ -6114,13 +6259,29 @@ const FIREBASE_CONFIG = {
   /* Lista do banco na Oficina: só itens. Espécimes, poderes, origens e builds ficam no catálogo da tela Personagens */
   const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'build', 'npc'];
   const ITEM_KINDS = ITEM_DATA.categories.map((c) => c.id).filter((k) => NON_ITEM_KINDS.indexOf(k) < 0);
+  /* Excluir do banco: vale para tudo que não é oficial (o catálogo oficial vem do items.js e não sai) */
+  function libDeleteAction(e, after) {
+    if (e.oficial || !e.id) return null;
+    return {
+      label: 'Excluir', cls: 'btn--danger', onClick: async () => {
+        const ok = await askConfirm({
+          title: 'Excluir ' + e.name + '?',
+          text: (e.mine ? '' : 'Não foi você quem criou. ') + 'Sai do banco para todos. O que já está em fichas e em outros itens continua lá.',
+          ok: 'Excluir'
+        });
+        if (!ok) return;
+        try { await db.deleteLibrary(e.id); toast(e.name + ' foi excluído.'); after(); }
+        catch (err) { toast(errorMessage(err)); }
+      }
+    };
+  }
   let libSeq = 0;
   async function runLib() {
     const seq = ++libSeq;
     const q = $('#lib-q').value;
     const kind = $('#lib-kind').value;
     let list;
-    try { list = await libSearch(kind ? [kind] : ITEM_KINDS, q); }
+    try { list = await libSearch(kind ? [kind] : ITEM_KINDS, q, { deep: $('#lib-deep').checked }); }
     catch (err) { if (seq === libSeq) $('#lib-hint').textContent = errorMessage(err); return; }
     if (seq !== libSeq) return;
     const favs = favLoad();
@@ -6132,17 +6293,9 @@ const FIREBASE_CONFIG = {
     const secret = secretHit(q);
     $('#lib-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => {
       const actions = [{ label: 'Usar de base', onClick: () => openForm(e.kind, e.typeId, Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' })) }];
-      if (e.mine) {
-        actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) });
-        actions.push({
-          label: 'Excluir', cls: 'btn--danger', onClick: async () => {
-            const ok = await askConfirm({ title: 'Excluir ' + e.name + '?', text: 'Sai do banco para todos. O que já está em fichas e em outros itens continua lá.', ok: 'Excluir' });
-            if (!ok) return;
-            try { await db.deleteLibrary(e.id); toast(e.name + ' foi excluído.'); runLib(); }
-            catch (err) { toast(errorMessage(err)); }
-          }
-        });
-      }
+      if (e.mine) actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) });
+      const del = libDeleteAction(e, runLib);
+      if (del) actions.push(del);
       return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
     }));
     $('#lib-empty').hidden = list.length > 0 || Boolean(secret);
@@ -6155,7 +6308,7 @@ const FIREBASE_CONFIG = {
   const libFacets = facetBox(() => runLib());
   $('#lib-hint').before(libFacets.box);
   $('#lib-kind').addEventListener('change', () => { libFacets.reset(); runLib(); });
-  ['#lib-fav', '#lib-mine'].forEach((sel) => $(sel).addEventListener('change', runLib));
+  ['#lib-fav', '#lib-mine', '#lib-deep'].forEach((sel) => $(sel).addEventListener('change', runLib));
   (function fillLibKinds() {
     const sel = $('#lib-kind');
     const all = h('option', '', 'Todas');
@@ -6164,8 +6317,10 @@ const FIREBASE_CONFIG = {
     ITEM_DATA.categories.filter((c) => ITEM_KINDS.indexOf(c.id) >= 0).forEach((c) => { const o = h('option', '', c.title); o.value = c.id; sel.append(o); });
   })();
 
-  /* Catálogo na tela Personagens: ver todas as origens, espécimes, poderes e itens, só leitura */
+  /* Catálogo na tela Personagens: igual ao banco de dados da Oficina, mas com origens, espécimes, poderes,
+     builds, itens e NPCs. Já abre com tudo em ordem alfabética; a busca, a categoria e os filtros só estreitam */
   const CAT_GROUPS = [
+    { label: 'Tudo', kinds: null },
     { label: 'Origens', kinds: ['origem'] },
     { label: 'Espécimes', kinds: ['especime'] },
     { label: 'Builds', kinds: ['build'] },
@@ -6176,52 +6331,41 @@ const FIREBASE_CONFIG = {
     { label: 'Implantes', kinds: ['nucleo', 'protese-modulo'] },
     { label: 'Peças de slot', kinds: ['mod-arma', 'propriedade', 'acessorio'] },
     { label: 'Itens gerais', kinds: ['item-geral'] },
-    { label: 'NPCs e inimigos', kinds: ['npc'] },
-    { label: 'Tudo', kinds: null }
+    { label: 'NPCs e inimigos', kinds: ['npc'] }
   ];
-  const catState = { group: null, seq: 0 };
+  const catState = { seq: 0 };
   async function runCatalog() {
     const seq = ++catState.seq;
     const q = $('#cat-q').value.trim();
-    const g = catState.group;
-    if (!g && !q) {
-      $('#cat-list').replaceChildren();
-      $('#cat-empty').hidden = true;
-      $('#cat-hint').textContent = '';
-      catFacets.box.hidden = true;
-      return;
-    }
-    $('#cat-hint').textContent = 'Buscando...';
-    let list = await libSearch(g ? g.kinds : null, q);
+    const g = CAT_GROUPS[Number($('#cat-kind').value)] || CAT_GROUPS[0];
+    let list;
+    try { list = await libSearch(g.kinds, q, { deep: $('#cat-deep').checked }); }
+    catch (err) { if (seq === catState.seq) $('#cat-hint').textContent = errorMessage(err); return; }
     if (seq !== catState.seq) return;
+    const favs = favLoad();
+    if ($('#cat-fav').checked) list = list.filter((e) => favs.has(e.id));
+    if ($('#cat-mine').checked) list = list.filter((e) => e.mine);
     const suggest = list.length ? '' : libSearch.suggest;
-    list = catFacets.apply(list, g && g.kinds ? g.kinds : ITEM_DATA.categories.map((c) => c.id));
-    if (!hasQuery(q)) list.sort((a, b) => (a.kindTitle || '').localeCompare(b.kindTitle || '', 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+    list = catFacets.apply(list, g.kinds || ITEM_DATA.categories.map((c) => c.id));
+    if (!hasQuery(q)) list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
-    $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, e.mine ? [{ label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } }] : [])));
+    $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, [
+      e.mine ? { label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } } : null,
+      libDeleteAction(e, runCatalog)
+    ].filter(Boolean), () => { if ($('#cat-fav').checked) runCatalog(); })));
     $('#cat-empty').hidden = list.length > 0 || Boolean(secret);
     suggestAfter($('#cat-list'), secret ? '' : suggest, $('#cat-q'), runCatalog);
-    $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
+    $('#cat-hint').textContent = plural(list.length, 'registro', 'registros') + (g.kinds ? ' em ' + g.label : '') + (q ? ' para "' + q + '"' : '') + '.'
       + (libSearch.warn ? ' O banco compartilhado não abriu: ' + libSearch.warn : '');
   }
-  (function fillCatChips() {
-    $('#cat-chips').replaceChildren(...CAT_GROUPS.map((g) => {
-      const b = h('button', 'chip chip--toggle', g.label);
-      b.type = 'button';
-      b.setAttribute('aria-pressed', 'false');
-      b.addEventListener('click', () => {
-        catState.group = catState.group === g ? null : g;
-        catFacets.reset();
-        $$('#cat-chips .chip--toggle').forEach((x) => x.setAttribute('aria-pressed', String(x === b && catState.group === g)));
-        runCatalog();
-      });
-      return b;
-    }));
+  (function fillCatKinds() {
+    $('#cat-kind').replaceChildren(...CAT_GROUPS.map((g, i) => { const o = h('option', '', g.label); o.value = String(i); return o; }));
   })();
   const catFacets = facetBox(() => runCatalog());
-  catFacets.box.hidden = true;
   $('#cat-hint').before(catFacets.box);
   $('#cat-q').addEventListener('input', debounce(runCatalog, 300));
+  $('#cat-kind').addEventListener('change', () => { catFacets.reset(); runCatalog(); });
+  ['#cat-fav', '#cat-mine', '#cat-deep'].forEach((sel) => $(sel).addEventListener('change', runCatalog));
 
   // Itens da versão anterior (salvos só neste aparelho): entram no banco uma única vez
   async function migrateOldItems() {
@@ -6248,6 +6392,7 @@ const FIREBASE_CONFIG = {
   }
 
   views.itens = async function showItens() {
+    if (itemState.host) { itemState.host = null; $('#item-back-tipo').textContent = 'Voltar'; $('#item-panel-tipo').after($('#item-panel-form')); } // o rascunho continua aqui
     renderCategoryGrid();
     setItemStep(itemState.draft && itemState.step === 'form' ? 'form' : 'categoria');
     await runLib();
@@ -6280,6 +6425,9 @@ const FIREBASE_CONFIG = {
   // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
   // atributo efetivo: o da ficha + o +1 dos UP (a cada 4) + o ajuste manual
   const attrOf = (s, id) => num(s.attrs[id]) + num((s.upAttr || {})[id]) + num((s.attrMod || {})[id]);
+  // requisito de atributo bruto (mochilas e outros vestíveis): sem ele, o item vestido não dá benefício
+  const REQ_ATTR = { 'Corpo': 'corpo', 'Precisão': 'precisao', 'Essência': 'essencia' };
+  const reqMet = (s, i) => { const v = i.values || {}; return !REQ_ATTR[v.reqAtributo] || attrOf(s, REQ_ATTR[v.reqAtributo]) >= num(v.reqValor); };
   /* perícias dadas pela espécime (script "pericia:"): somam por fora dos pontos da ficha, até o limite da perícia;
      o que passar do limite vira ponto livre para investir em outra perícia */
   function skillGrant(s) {
@@ -6382,6 +6530,7 @@ const FIREBASE_CONFIG = {
     const add = (b) => { if (b) BONUS_KEYS.forEach((k) => { if (num(b[k[0]])) out[k[0]] = (out[k[0]] || 0) + num(b[k[0]]); }); };
     add(e.bonus);
     if (e.kind === 'escudo-energetico') add({ escudo: (e.values || {}).escudo }); // o campo do escudo energético
+    if (e.kind === 'vestivel' && num((e.values || {}).espacos)) add({ carga: Math.floor(num(e.values.espacos) / 2) }); // mochila: +1 a cada 2 espaços
     if (e.slots) (e.slots.mods || []).concat(e.slots.props || []).forEach((x) => add(x.bonus));
     return out;
   }
@@ -6564,7 +6713,7 @@ const FIREBASE_CONFIG = {
       if (i.kind === 'protese-modulo' && !(nucleo > 0)) return;
       const key = i.id || nameKey(i.name);
       if (srcKeys.has(key)) return;
-      if (i.slot === 'vestivel') { if (vestOn >= vestMax) return; vestOn += 1; }
+      if (i.slot === 'vestivel') { if (vestOn >= vestMax || !reqMet(s, i)) return; vestOn += 1; }
       srcKeys.add(key);
       sources.push({ name: i.name, b: entryBonus(i) });
     });
@@ -8306,6 +8455,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', v.cd); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
+    if (i.kind === 'vestivel') add('Espaços', num(v.espacos) ? v.espacos + ' (+' + Math.floor(num(v.espacos) / 2) + ' de Carga)' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     if (i.kind === 'municao') { add('Serve no', v.pente); add('Por unidade', ammoUnitText(i)); add('Só para', v.para); add('Efeito', v.efeito); }
     add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
@@ -8330,11 +8480,15 @@ const FIREBASE_CONFIG = {
       h('p', 'cell__meta', [kindTitle(i.kind), i.typeTitle, i.values.raridade].filter(Boolean).join(' · ')));
     if (ghost) { card.append(h('p', 'cell__text', 'Arma de duas mãos: ocupa também esta mão.')); return card; }
     const dl = h('dl', 'cell__facts');
-    itemFacts(i).forEach((f) => dl.append(h('dt', '', f[0]), h('dd', '', f[1])));
+    itemFacts(i).forEach((f) => {
+      const dt = h('dt', '', f[0]);
+      dl.append(RULE_LABELS[f[0]] ? ruleClickable(dt, RULE_LABELS[f[0]], f[1], i.kind, f[0]) : dt, h('dd', '', f[1]));
+    });
     card.append(dl);
     const pid = profIdOf(i);
     if (pid) card.append(h('p', 'cell__tag' + (isProficient(s, i) ? ' cell__tag--on' : ''), isProficient(s, i) ? 'Proficiente' : 'Sem proficiência'));
     if (i.kind === 'protese-modulo' && i.slot && !m.nucleo) card.append(h('p', 'cell__tag', 'Sem núcleo: só substitui o órgão natural'));
+    if (REQ_ATTR[i.values.reqAtributo]) card.append(h('p', 'cell__tag' + (reqMet(s, i) ? ' cell__tag--on' : ''), 'Requisito: ' + i.values.reqAtributo + ' ' + num(i.values.reqValor) + (reqMet(s, i) ? '' : ' (não cumprido: sem benefício)')));
     const parts = (i.slots.mods || []).concat(i.slots.props || [], i.slots.accs || []).map((x) => x.name);
     if (parts.length) card.append(h('p', 'cell__text', 'Encaixes: ' + parts.join(', ')));
     if (isGun(i)) card.append(h('p', 'cell__text', 'Munição: ' + ammoLine(i, s)));
@@ -9178,7 +9332,10 @@ const FIREBASE_CONFIG = {
       items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', none));
 
     // números da arma e munição
-    const stat = (k, v, changed) => h('div', 'armory__stat' + (changed ? ' is-changed' : ''), h('span', '', k), h('strong', '', v || '—'));
+    const stat = (k, v, changed) => {
+      const el = h('div', 'armory__stat' + (changed ? ' is-changed' : ''), h('span', '', k), h('strong', '', v || '—'));
+      return RULE_LABELS[k] ? ruleClickable(el, RULE_LABELS[k], k === 'Recarga' ? w.values.pente : v, w.kind, k) : el;
+    };
     const stats = h('div', 'armory__stats');
     const ammoBox = h('div', 'armory__ammo');
     if (isGun(w)) {
@@ -9991,7 +10148,7 @@ const FIREBASE_CONFIG = {
     { id: 'especime', tab: 'Espécime', title: 'Espécime', lead: 'A espécie traz descrição e 3 habilidades raciais; são elas que definem a vida base, os UP iniciais e o núcleo.', search: true },
     { id: 'origem', tab: 'Origem', title: 'Origem e apresentação', lead: 'A origem traz o kit de itens iniciais. Idade, altura e sexo podem ser mudados depois na ficha.', search: true },
     { id: 'atributos', tab: 'Atributos', title: 'Atributos', lead: '3 pontos para distribuir. Você pode baixar um atributo para –1 e ganhar +1 ponto. Máximo inicial: +3.' },
-    { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 com +1, ou, se preferir, espalhe os mesmos 5 pontos como quiser, até +2 em cada. Toque para alternar entre nada, +1 e +2.', search: true },
+    { id: 'pericias', tab: 'Perícias', title: 'Perícias', lead: 'Escolha 2 perícias com +2 e 1 com +1, ou use a distribuição livre: os mesmos 5 pontos vão onde você quiser, até o limite de +3 por perícia. Toque numa perícia para subir o bônus.', search: true },
     { id: 'profs', tab: 'Proficiências', title: 'Proficiências', lead: 'Escolha 4 tipos de arma ou armadura em que o personagem é proficiente desde o início.', search: true },
     { id: 'equip', tab: 'Itens iniciais', title: 'Itens iniciais', lead: 'Leve o kit da origem (trocando o que quiser por itens do banco) ou compre do banco com o dinheiro inicial, igual para todos.', search: true },
     { id: 'resumo', tab: 'Resumo', title: 'Tudo pronto?', lead: 'Confira a ficha. Os recursos já saem calculados dos atributos.' }
@@ -10038,8 +10195,9 @@ const FIREBASE_CONFIG = {
     const vals = Object.keys(sk).map((k) => sk[k]);
     return { two: vals.filter((v) => v === 2).length, one: vals.filter((v) => v === 1).length, sum: vals.reduce((t, v) => t + v, 0) };
   };
-  // perícias: o padrão é 2 com +2 e 1 com +1; no modo livre, os mesmos 5 pontos vão onde quiser, até +2 em cada
+  // perícias: o padrão é 2 com +2 e 1 com +1; na distribuição livre, os mesmos 5 pontos vão onde quiser, até o limite da perícia (+3)
   const SKILL_POINTS = 5;
+  const SKILL_FREE_MAX = 3;
   const skillsOk = (sk, mode) => { const c = skillCount(sk); return mode === 'livre' ? c.sum === SKILL_POINTS : c.two === 2 && c.one === 1; };
   function stepProblem(step) {
     if (step === STEP.atributos) {
@@ -10528,7 +10686,7 @@ const FIREBASE_CONFIG = {
     if (wz.step === STEP.pericias) {
       const c = skillCount(wz.skills);
       const livre = wz.skillMode === 'livre';
-      body.append(h('div', 'segmented skill-modes', ...[['padrao', '2 com +2 e 1 com +1'], ['livre', '5 pontos livres (até +2)']].map((m) => {
+      body.append(h('div', 'segmented skill-modes', ...[['padrao', '2 com +2 e 1 com +1'], ['livre', 'Distribuição livre']].map((m) => {
         const inp = h('input');
         inp.type = 'radio';
         inp.name = 'skill-mode';
@@ -10539,7 +10697,7 @@ const FIREBASE_CONFIG = {
         return h('label', 'segmented__opt', inp, h('span', '', m[1]));
       })));
       body.append(livre
-        ? h('p', 'setup__pool' + (c.sum > SKILL_POINTS ? ' setup__pool--over' : ''), 'Pontos para distribuir: ', h('strong', '', String(SKILL_POINTS - c.sum)), ' de ' + SKILL_POINTS + ' (no máximo +2 em cada perícia)')
+        ? h('p', 'setup__pool' + (c.sum > SKILL_POINTS ? ' setup__pool--over' : ''), 'Pontos para distribuir: ', h('strong', '', String(SKILL_POINTS - c.sum)), ' de ' + SKILL_POINTS + ' (no máximo +' + SKILL_FREE_MAX + ' em cada perícia)')
         : h('p', 'setup__pool', 'Com +2: ', h('strong', '', c.two + ' de 2'), ' · Com +1: ', h('strong', '', c.one + ' de 1')));
       ATTRS.forEach((at) => {
         const group = h('div', 'skills skills--' + at.id, h('h3', 'skills__title', at.label + ' ', h('span', 'skills__attr', signed(wz.attrs[at.id]))));
@@ -10552,10 +10710,14 @@ const FIREBASE_CONFIG = {
           b.type = 'button';
           b.dataset.fid = 'wzs-' + sk[0];
           b.setAttribute('aria-label', sk[1] + ': ' + (v ? '+' + v : 'sem bônus') + '. Toque para alternar.');
+          const top = livre ? SKILL_FREE_MAX : 2; // livre: sobe até +3; no padrão, só +1 e +2
           if (info.summary) b.title = info.summary + ' ' + (info.uses || '');
           b.addEventListener('click', () => {
-            const next = (v + 1) % 3;
-            if (livre && next > v && c.sum >= SKILL_POINTS) { toast('Os ' + SKILL_POINTS + ' pontos já foram usados. Tire de outra perícia primeiro.'); return; }
+            let next = (v + 1) % (top + 1);
+            if (livre && next > v && c.sum >= SKILL_POINTS) { // sem pontos sobrando: zera esta perícia e devolve os pontos dela
+              if (!v) { toast('Os ' + SKILL_POINTS + ' pontos já foram usados. Tire de outra perícia primeiro.'); return; }
+              next = 0;
+            }
             if (next) wz.skills[sk[0]] = next; else delete wz.skills[sk[0]];
             renderSetup('wzs-' + sk[0]);
           });
@@ -13176,55 +13338,83 @@ const FIREBASE_CONFIG = {
     if (seq !== gmlibSeq) return;
     let list = r.list;
     suggestAfter($('#gmlib-mag'), r.suggest, $('#beast-q'), runBeast);
-    const cats = Array.from(new Set(list.map((e) => (e.values && e.values.categoria) || 'Comum')));
-    if (gmlibCat && cats.indexOf(gmlibCat) < 0) gmlibCat = '';
-    $('#gmlib-cats').replaceChildren(...(cats.length > 1 ? [''].concat(cats) : []).map((c) => {
-      const b = h('button', 'check--pill mag__chip' + (gmlibCat === c ? ' is-on' : ''), c || 'Todas');
-      b.type = 'button';
-      b.setAttribute('aria-pressed', String(gmlibCat === c));
-      if (c) b.style.setProperty('--cat', NPC_CAT_COLOR[c] || 'var(--ambar)');
-      b.addEventListener('click', () => { gmlibCat = c; runBeast(); });
-      return b;
-    }));
-    if (gmlibCat) list = list.filter((e) => ((e.values && e.values.categoria) || 'Comum') === gmlibCat);
+    gmlibCat = beastCats($('#gmlib-cats'), list, gmlibCat, (c) => { gmlibCat = c; runBeast(); });
+    if (gmlibCat) list = list.filter((e) => npcCat(e) === gmlibCat);
     list = beastFacets.apply(list, kinds);
-    $('#gmlib-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map(magPage));
+    $('#gmlib-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => magPage(e, 'camp')));
     $('#beast-hint').textContent = r.warn || (!list.length ? 'Nenhuma criatura encontrada.' : plural(list.length, 'criatura', 'criaturas') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.');
   }
-  // uma página da revista: capa, categoria, camadas, atributos, ataque, saque e quantas vezes já caiu
-  function magPage(e) {
+  // categoria da criatura (Comum, Maior, Chefão) e os chips coloridos que filtram por ela
+  const npcCat = (e) => (e.values && e.values.categoria) || 'Comum';
+  function beastCats(box, list, cur, pick) {
+    const known = Object.keys(NPC_CAT_COLOR);
+    const rank = (c) => (known.indexOf(c) < 0 ? 99 : known.indexOf(c));
+    const cats = Array.from(new Set(list.map(npcCat))).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, 'pt-BR'));
+    const on = cur && cats.indexOf(cur) >= 0 ? cur : '';
+    box.replaceChildren(...(cats.length > 1 ? [''].concat(cats) : []).map((c) => {
+      const b = h('button', 'check--pill mag__chip' + (on === c ? ' is-on' : ''), c || 'Todas');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(on === c));
+      if (c) b.style.setProperty('--cat', NPC_CAT_COLOR[c] || 'var(--ambar)');
+      b.addEventListener('click', () => pick(c));
+      return b;
+    }));
+    return on;
+  }
+  // uma página da revista: capa, categoria, camadas, atributos, ataque, saque e quantas vezes já caiu.
+  // where: 'camp' (aba do mestre: pôr na arena) ou 'lib' (tela Bestiário: favoritar, editar, usar de base)
+  function magPage(e, where) {
     const v = e.values || {};
-    const cat = v.categoria || 'Comum';
+    const cat = npcCat(e);
+    const camp = where === 'camp';
     const cover = h('div', 'mag__cover');
     const pic = e.image || e.thumb;
     if (pic) { const img = h('img'); img.src = pic; img.alt = ''; img.loading = 'lazy'; cover.append(img); }
     else cover.append(h('span', 'mag__mono', (e.name || '?').trim().charAt(0).toUpperCase()));
-    cover.append(h('span', 'mag__cat', cat), num(v.up) ? h('span', 'mag__up', 'UP ' + num(v.up)) : null);
+    cover.append(h('span', 'mag__cat', cat), ...(num(v.up) ? [h('span', 'mag__up', 'UP ' + num(v.up))] : [])); // append nativo escreveria "null"
     const pill = (k, n) => h('span', 'mag__pill mag__pill--' + k, h('b', '', String(n)), ' ' + ({ pv: 'PV', escudo: 'Escudo', blindagem: 'Blind.', def: 'Defesa' })[k]);
     const layers = ['escudo', 'blindagem', 'pv'].filter((k) => num(v[k])).map((k) => pill(k, num(v[k])));
     layers.push(pill('def', num(v.armadura || ARMOR_BASE) + num(v.corpo) + num(v.resistencia)));
     const stat = (k, label) => h('span', 'mag__stat', h('small', '', label), h('b', '', signed(num(v[k]))));
     const atk = [v.ataque, v.arma, v.dano, num(v.cadencia) > 1 ? num(v.cadencia) + ' disparos' : '', v.efetivo ? 'efetivo contra ' + v.efetivo : ''].filter(Boolean).join(' · ');
     const drops = parseDrops(v.saque).map((d) => (d.qty > 1 ? d.qty + '× ' : '') + d.name).concat(num(v.cronos) ? [fmtCronos(num(v.cronos)) + ' Cronos'] : []);
-    const kills = fallen.filter((f) => (f.npcId && f.npcId === e.id) || nameKey(f.name) === nameKey(e.name)).length;
-    const arena = h('button', 'btn btn--primary btn--sm', 'Pôr na arena');
-    arena.type = 'button';
-    arena.setAttribute('aria-label', 'Pôr ' + e.name + ' na arena');
-    arena.addEventListener('click', () => placeFoe(deep(e)));
-    const read = h('button', 'btn btn--ghost btn--sm', 'Ficha completa');
-    read.type = 'button';
-    read.addEventListener('click', () => openEntry(e));
+    const kills = camp ? fallen.filter((f) => (f.npcId && f.npcId === e.id) || nameKey(f.name) === nameKey(e.name)).length : 0;
+    const btn = (label, cls, onClick, aria) => {
+      const b = h('button', 'btn btn--sm ' + cls, label);
+      b.type = 'button';
+      if (aria) b.setAttribute('aria-label', aria);
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    const read = btn('Ficha completa', 'btn--ghost', () => openEntry(e));
+    const slot = $(camp ? '#beast-form-slot' : '#bst-form-slot');
+    const rerun = camp ? runBeast : runBestiary;
+    const acts = [read];
+    if (e.mine) acts.push(btn('Editar', 'btn--ghost', () => openHostedForm(slot, 'npc', e, rerun), 'Editar ' + e.name));
+    if (camp) acts.push(btn('Pôr na arena', 'btn--primary', () => placeFoe(deep(e)), 'Pôr ' + e.name + ' na arena'));
+    else {
+      acts.push(btn('Usar de base', 'btn--ghost', () => openHostedForm(slot, 'npc', Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' }), rerun), 'Usar ' + e.name + ' de base'));
+      if (e.mine) {
+        acts.push(btn('Excluir', 'btn--danger', async () => {
+          const ok = await askConfirm({ title: 'Excluir ' + e.name + '?', text: 'Sai do bestiário para todos. Quem já está numa arena continua lá.', ok: 'Excluir' });
+          if (!ok) return;
+          try { await db.deleteLibrary(e.id); toast(e.name + ' foi excluído.'); runBestiary(); }
+          catch (err) { toast(errorMessage(err)); }
+        }, 'Excluir ' + e.name));
+      }
+    }
     const page = h('article', 'mag__page', cover,
       h('div', 'mag__body',
-        h('p', 'mag__kicker', 'Ameaça' + (e.oficial ? ' · oficial' : '') + (kills ? ' · derrotado ' + (kills === 1 ? '1 vez' : kills + ' vezes') : '')),
+        h('div', 'mag__head', h('p', 'mag__kicker', 'Ameaça' + (e.oficial ? ' · oficial' : e.mine ? ' · sua' : '') + (kills ? ' · derrotado ' + (kills === 1 ? '1 vez' : kills + ' vezes') : '')),
+          camp ? null : starButton(e, () => { if ($('#bst-fav').checked) runBestiary(); })),
         h('h3', 'mag__title', e.name),
         h('div', 'mag__pills', ...layers),
         h('div', 'mag__stats', stat('corpo', 'Corpo'), stat('precisao', 'Precisão'), stat('essencia', 'Essência'), stat('luta', 'Luta'), stat('mira', 'Mira'), stat('resistencia', 'Resist.')),
         atk ? h('p', 'mag__atk', h('b', '', 'Ataque '), atk) : null,
         v.descricao ? h('p', 'mag__desc', v.descricao) : null,
         v.lore ? h('blockquote', 'mag__lore', v.lore) : null,
-        h('p', 'mag__drops', h('b', '', 'Deixa ao cair '), drops.length ? drops.join(', ') : 'nada anotado (edite o campo Saque na Oficina)'),
-        h('div', 'mag__foot', read, arena)));
+        h('p', 'mag__drops', h('b', '', 'Deixa ao cair '), drops.length ? drops.join(', ') : 'nada anotado (campo Saque da criatura)'),
+        h('div', 'mag__foot', ...acts)));
     page.style.setProperty('--cat', NPC_CAT_COLOR[cat] || 'var(--ambar)');
     return page;
   }
@@ -13305,6 +13495,43 @@ const FIREBASE_CONFIG = {
   $('#gmlib-kind').addEventListener('change', () => { gmFacets.reset(); runItems(); });
   $('#gmlib-q').addEventListener('input', debounce(runItems, 250));
   $('#beast-q').addEventListener('input', debounce(runBeast, 250));
+  $('#beast-new').addEventListener('click', () => openHostedForm($('#beast-form-slot'), 'npc', null, runBeast));
+
+  /* ---------- Bestiário (tela própria, para todos) ----------
+     A mesma revista do mestre, fora da campanha: busca por relevância com "Você quis dizer", chips de categoria,
+     filtros por especificação, favoritos e "só as minhas", e o formulário de NPC da Oficina para criar e editar. */
+  let bstSeq = 0;
+  let bstCat = '';
+  async function runBestiary() {
+    const kinds = GMLIB_KINDS.bestiario;
+    const seq = ++bstSeq;
+    const q = $('#bst-q').value;
+    const r = await libFind(kinds, q);
+    if (seq !== bstSeq) return;
+    let list = r.list;
+    const favs = favLoad();
+    if ($('#bst-fav').checked) list = list.filter((e) => favs.has(e.id));
+    if ($('#bst-mine').checked) list = list.filter((e) => e.mine);
+    if (!hasQuery(q)) list.sort((a, b) => (Number(b.mine) - Number(a.mine)) || a.name.localeCompare(b.name, 'pt-BR'));
+    bstCat = beastCats($('#bst-cats'), list, bstCat, (c) => { bstCat = c; runBestiary(); });
+    if (bstCat) list = list.filter((e) => npcCat(e) === bstCat);
+    list = bstFacets.apply(list, kinds);
+    suggestAfter($('#bst-mag'), list.length ? '' : r.suggest, $('#bst-q'), runBestiary);
+    $('#bst-mag').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => magPage(e, 'lib')));
+    $('#bst-empty').hidden = list.length > 0;
+    $('#bst-hint').textContent = r.warn ? 'Só o catálogo oficial. O banco compartilhado não abriu: ' + r.warn
+      : plural(list.length, 'criatura', 'criaturas') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '')
+        + (db.mode === 'firebase' ? ' (banco compartilhado + catálogo oficial).' : ' (este aparelho + catálogo oficial).');
+  }
+  const bstFacets = facetBox(() => runBestiary(), { skip: ['categoria'] });
+  $('#bst-cats').after(bstFacets.box);
+  $('#bst-q').addEventListener('input', debounce(runBestiary, 250));
+  ['#bst-fav', '#bst-mine'].forEach((sel) => $(sel).addEventListener('change', runBestiary));
+  $('#bst-new').addEventListener('click', () => openHostedForm($('#bst-form-slot'), 'npc', null, runBestiary));
+  views.bestiario = async function showBestiario() {
+    if (itemState.host) closeHostedForm();
+    await runBestiary();
+  };
 
   /* ---------- Saque, armazéns e monstros derrotados ----------
      loot: listas de saque que o mestre entrega ao grupo (todos ou só alguns personagens pegam).
@@ -14543,7 +14770,7 @@ const FIREBASE_CONFIG = {
   const rulesBackdrop = $('#rules-backdrop');
   const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const slugify = (s) => nameKey(s).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'secao';
-  const plainText = (s) => String(s).replace(/\*/g, '');
+  const plainText = (s) => String(s).replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, '$1').replace(/\*/g, '');
   const ruleHref = (tab, slug) => '#/rules/' + tab + (slug ? '/' + slug : '');
 
   // todo o texto de um bloco (parágrafos, listas, tabelas), para a busca nas regras
@@ -14576,11 +14803,23 @@ const FIREBASE_CONFIG = {
     return toc;
   }
 
-  // **negrito** e *itálico* do texto viram elementos (nunca HTML solto)
+  // **negrito**, *itálico* e [link](capítulo#Título da seção) do texto viram elementos (nunca HTML solto)
   function rich(text) {
     const frag = document.createDocumentFragment();
-    String(text).split(/(\*\*[^*]+\*\*|\*[^*]+\*)/).forEach((part) => {
+    String(text).split(/(\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([a-z0-9-]+(?:#(?:[^()]|\([^()]*\))*)?\))/).forEach((part) => {
       if (!part) return;
+      const link = /^\[([^\]]+)\]\(([a-z0-9-]+)(?:#((?:[^()]|\([^()]*\))*))?\)$/.exec(part);
+      if (link) {
+        const ch = CHAPTERS.find((c) => c.id === link[2]);
+        const t = ch && link[3] ? indexChapter(ch).find((x) => x.title === link[3]) : null;
+        if (!ch) { frag.append(link[1]); return; }
+        const a = h('a', 'r-link', link[1]);
+        a.href = ruleHref(ch.id, t ? t.slug : null);
+        a.dataset.tab = ch.id;
+        if (t) a.dataset.slug = t.slug;
+        frag.append(a);
+        return;
+      }
       if (part.slice(0, 2) === '**' && part.length > 4) frag.append(h('strong', '', part.slice(2, -2)));
       else if (part[0] === '*' && part.length > 2) frag.append(h('em', '', part.slice(1, -1)));
       else frag.append(part);

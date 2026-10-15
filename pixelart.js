@@ -569,6 +569,22 @@
       '....kPPPPPqk....',
       '.....kkkkkk.....'
     ],
+    mochila: [
+      '.....kkkkkk.....',
+      '....kmk..kmk....',
+      '...kkkkkkkkkk...',
+      '..kGGGGGGGGGGk..',
+      '..kGgggggggggk..',
+      '..kGkkkkkkkkgk..',
+      '..kGkaaaaaakgk..',
+      '..kGkaaaaaakgk..',
+      '..kGkkkkkkkkgk..',
+      '..kGggggggggGk..',
+      '..kGgkkkkkkggk..',
+      '..kGgkmmmmkggk..',
+      '..kGgkkkkkkggk..',
+      '...kkkkkkkkkk...'
+    ],
     escudo: [
       '..kkkk....kkkk..',
       '.kPPPPk..kPPPPk.',
@@ -637,6 +653,7 @@
     let pick = ART[e.id];
     if (!pick && String(e.id).indexOf('of-') === 0 && (e.kind === 'arma-fogo' || e.kind === 'armadura') && BY_TYPE[e.typeId]) pick = [BY_TYPE[e.typeId]];
     if (!pick && String(e.id).indexOf('of-') === 0 && e.kind === 'municao' && AMMO[e.typeId]) pick = [AMMO[e.typeId], AMMO_TINT[e.id]];
+    if (!pick && String(e.id).indexOf('of-moc-') === 0) pick = ['mochila'];
     if (!pick && String(e.id).indexOf('of-pin-') === 0) pick = [e.kind === 'granada' ? 'granada' : e.kind === 'escudo-energetico' ? 'escudo' : e.typeId];
     if (!pick || !SPR[pick[0]]) return (cache[e.id] = '');
     const rar = RAR[(e.values && e.values.raridade) || 'Comum'] || RAR.Comum;

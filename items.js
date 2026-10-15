@@ -37,6 +37,7 @@ window.VORTEX_ITEMS = {
   categoriasNpc: ['Comum', 'Maior', 'Chefão'],
   formasAtaque: ['Corpo a corpo', 'À distância', 'Tecnológico'],
   efetivoContra: ['Escudo', 'Blindagem', 'Vida'],
+  atributosReq: ['Corpo', 'Precisão', 'Essência'], // requisito de atributo bruto (vestíveis, mochilas)
   // criadoras/companhias/corporações do mundo (tag opcional dos itens; só se escolhe na criação)
   fabricantes: ['Wathrever', 'Pinger', 'Live Service', 'Tnnaks'],
   // lore de cada criadora: aparece ao tocar no selo dela (escreva aqui o texto do mundo)
@@ -316,7 +317,8 @@ window.VORTEX_ITEMS = {
         { id: 'tronco', title: 'Tronco' },
         { id: 'membros-superiores', title: 'Membros superiores', sub: 'um braço' },
         { id: 'membros-inferiores', title: 'Membros inferiores', sub: 'uma perna' },
-        { id: 'orgaos-internos', title: 'Órgãos internos' }
+        { id: 'orgaos-internos', title: 'Órgãos internos' },
+        { id: 'mochila', title: 'Mochila', sub: '+1 de Carga a cada 2 espaços' }
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
@@ -324,6 +326,9 @@ window.VORTEX_ITEMS = {
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
         { key: 'carga', label: 'Carga (só conta quando transportado)', kind: 'number', min: 0, step: 0.25 },
+        { key: 'espacos', label: 'Espaços (mochila: +1 de Carga a cada 2)', kind: 'number', min: 0, step: 1 },
+        { key: 'reqAtributo', label: 'Requisito: atributo', kind: 'select', options: 'atributosReq', blank: 'Nenhum' },
+        { key: 'reqValor', label: 'Requisito: valor mínimo (bruto)', kind: 'number', min: 0, step: 1 },
         { key: 'efeito', label: 'Efeito / descrição', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]
@@ -595,7 +600,7 @@ window.VORTEX_ITEMS = {
     {
       id: 'of-esp-simbionte', kind: 'especime', name: 'Simbionte',
       values: { descricao: 'Massa amorfa, viva e independente, que molda o próprio corpo: tira da própria matéria força, cura e armas.',
-        racial: 'Força e Agilidade Ampliadas | Leva a própria força física a níveis devastadores: ergue toneladas e enfrenta inimigos do alto escalão. Ganha +6 m de deslocamento (15 m). Uma vez por turno, ao custo de 1 PA ou 7 PE, tem um ganho (um dado a mais) num teste de Corpo. | 1 | deslocamento: 6\nCura Regenerativa | Cura ferimentos mortais em segundos, regenera membros decepados e pode neutralizar doenças terminais ou até se ressuscitar em casos extremos. No início de cada turno, faz um teste de regeneração: 2d6 + Fortitude + Tecnologia, seguindo a regra de Cura (contra a CD do recurso, recupera a diferença). Cura PV e também Blindagem. A regeneração é engajada por cena e custa 1 PE por cena. | 1\nGeração de Matéria Simbiôntica | Estica a própria massa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões, martelos sólidos, armaduras e outros itens que não sejam consumíveis. Criar um item custa uma ação bônus, e o simbionte escolhe o item e o tipo de dano. Conta como proficiente com todos os itens que cria. Não cria armas de dano Fogo. Guarda dentro de si itens criados até um número igual ao seu Corpo; para usar, só precisa sacar. Também replica qualquer mod ou acessório que já tenha assimilado alguma vez. | 1' }
+        racial: 'Força e Agilidade Ampliadas | Leva a própria força física a níveis devastadores: ergue toneladas e enfrenta inimigos do alto escalão. Ganha +6 m de deslocamento (15 m). Uma vez por turno, ao custo de 1 PA ou 7 PE, tem um ganho (um dado a mais) num teste de Corpo. | 1 | deslocamento: 6\nCura Regenerativa | Cura ferimentos mortais em segundos, regenera membros decepados e pode neutralizar doenças terminais. Ressuscita o alvo se sobrar algo dele que não esteja sendo afetado por algum efeito. No início de cada turno, faz um teste de regeneração: 2d6 + Fortitude + Tecnologia, seguindo a regra de Cura (contra a CD do recurso, recupera a diferença). Cura PV e também Blindagem. A regeneração é engajada por cena e custa 1 PE por cena. | 1\nGeração de Matéria Simbiôntica | Estica a própria massa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões, martelos sólidos, armaduras e outros itens que não sejam consumíveis. Criar um item custa uma ação bônus, e o simbionte escolhe o item e o tipo de dano. Conta como proficiente com todos os itens que cria. Não cria armas de dano Fogo. Guarda dentro de si itens criados até um número igual ao seu Corpo; para usar, só precisa sacar. Também replica qualquer mod ou acessório que já tenha assimilado alguma vez. | 1' }
     },
     // espécime secreto: só aparece quando alguém pesquisa "neko" (secreto: true esconde nas listas)
     {
@@ -820,7 +825,7 @@ window.VORTEX_ITEMS = {
     'Heartbreaker': 'customizada no tema coração partido: a lâmina tem a forma de meio coração, com uma rachadura rosa que brilha.',
     'Rose Glaive': 'customizada no tema roseira: a haste tem espinhos de metal e a ponta abre como um botão de rosa.',
     'Black Bubble Hammer': 'customizada no tema chiclete: a cabeça é uma bolha preta translúcida com o núcleo rosa girando dentro.',
-    'Valentina': 'customizada e reativa no tema dança: a lâmina acende mais rosa a cada acúmulo de Ritmo e volta ao preto quando os acúmulos zeram.',
+    'Valentina': 'customizada e reativa no tema dança: a lâmina acende mais rosa a cada acúmulo de Ritmo, volta ao preto quando os acúmulos zeram e abre um olho rosa quando a espada desperta.',
     'Pink Pop': 'pintada de rosa, com faixas pretas.',
     'Static Candy': 'pintada como uma bala de goma, rosa e preta.',
     'Blush Smoke': 'pintada de preto, com a tampa rosa.',
@@ -873,7 +878,7 @@ window.VORTEX_ITEMS = {
     ['Black Bubble Hammer', 'Marreta', 'BB-9', 'Epica', 'Contundente', 3, 'Duas mãos', '2.600',
       'Propriedade: 1\nEspecial (exótica): Núcleo gravitacional.\nUma vez por cena, ao acertar, as criaturas adjacentes ao alvo fazem Reflexos (CD 9) ou ficam Caídas.'],
     ['Valentina', 'Espada', 'VAL-01', 'Lendária', 'Cortante', 2, 'Uma mão', '4.800',
-      'Propriedade: 1 + Especial: Dança Rosa\nUtilize 3 PE. Até o fim da cena, cada acerto com esta espada dá um acúmulo de Ritmo (máximo igual à sua Precisão). Cada acúmulo dá +1 nos ataques com ela e +1 de Defesa. Errar um ataque zera os acúmulos.\nA espada não pode ser desarmada contra a vontade do portador.']
+      'Propriedade: 1 + Especial: Ritmo Crescente\nUtilize 3 PE. Até o fim da cena, cada acerto com esta espada dá um acúmulo de Ritmo, até um máximo igual ao atributo que você usa para atacar com ela (Corpo ou Precisão). Cada acúmulo dá +1 de dano fixo nos acertos com ela. Errar um ataque zera os acúmulos.\nDespertar: quando você acerta um crítico com esta espada, ela acorda e repete no alvo todos os efeitos que os seus golpes anteriores com ela aplicaram nesta cena (como sangramento, atordoamento, empurrão ou manobras).\nA espada não pode ser desarmada contra a vontade do portador.']
   ].forEach(function (a) {
     cat.push({
       id: 'of-pin-' + slug(a[0]), kind: 'arma-melee', typeId: TIPO_MELEE[a[1]], name: a[0],
@@ -930,6 +935,30 @@ window.VORTEX_ITEMS = {
 (function () {
   window.VORTEX_ITEMS.catalogo.forEach(function (e) {
     if (e.kind === 'acessorio' && !(e.values || {}).preco) e.values.preco = '17';
+  });
+})();
+
+/* Mochilas (vestíveis): +1 de Carga a cada 2 espaços, só com o requisito de atributo bruto cumprido.
+   [nome, raridade, espaços, requisito (atributo), valor, carga, preço, efeito] */
+(function () {
+  var cat = window.VORTEX_ITEMS.catalogo;
+  var slug = function (t) { return String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+  [
+    ['Mochila escolar', 'Comum', 2, '', 0, 0.5, '80', ''],
+    ['Pochete tática', 'Comum', 2, 'Precisão', 1, 0.25, '120', 'Fica na cintura: sacar um item dela conta como Saque.'],
+    ['Mochila de trilha', 'Comum', 4, 'Corpo', 1, 1, '150', ''],
+    ['Mochila cargueira', 'Incomum', 6, 'Corpo', 2, 1, '400', ''],
+    ['Mochila modular', 'Incomum', 6, 'Precisão', 2, 1, '450', 'Bolsos modulares: uma vez por cena, pegar um item dela custa uma ação a menos (Movimento vira Bônus).'],
+    ['Mochila de expedição', 'Rara', 8, 'Corpo', 3, 1.5, '900', 'Armação reforçada: ganho em testes de Atletismo para não cair ou ser derrubado enquanto estiver sobrecarregado.'],
+    ['Mochila de compressão', 'Rara', 8, 'Essência', 2, 1, '1.000', 'Um campo leve comprime o conteúdo; não faz barulho nem chacoalha (não atrapalha a furtividade).'],
+    ['Mochila de operações', 'Epica', 10, 'Precisão', 3, 1, '2.000', 'Organização perfeita: recarregar com munição desta mochila custa uma categoria de ação a menos, uma vez por rodada.'],
+    ['Exomochila servoassistida', 'Epica', 10, 'Essência', 3, 2, '2.200', 'Braços servo seguram a carga: enquanto vestida, estar sobrecarregado não reduz seu deslocamento.'],
+    ['Mochila dimensional', 'Lendária', 14, 'Essência', 4, 0.5, '5.000', 'Especial: Bolso de Bolso\nO interior é maior que o exterior. Uma vez por rodada, tirar um item guardado nela é ação livre.']
+  ].forEach(function (a) {
+    cat.push({
+      id: 'of-moc-' + slug(a[0]), kind: 'vestivel', typeId: 'mochila', name: a[0],
+      values: { raridade: a[1], espacos: String(a[2]), reqAtributo: a[3], reqValor: a[3] ? String(a[4]) : '', carga: String(a[5]), preco: a[6], efeito: a[7] }
+    });
   });
 })();
 

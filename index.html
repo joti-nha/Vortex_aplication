@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=176">
+  <link rel="stylesheet" href="style.css?v=180">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -148,7 +148,10 @@
           <h1 id="personagens-title" tabindex="-1">Personagens</h1>
           <p class="screen__sub">Todas as fichas são públicas: qualquer pessoa pode ver e editar.</p>
         </div>
-        <a class="btn btn--primary" href="#/novo">Criar personagem</a>
+        <div class="screen__actions">
+          <a class="btn btn--ghost btn--beast" id="open-bestiary" href="#/bestiario"><svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M13 4h5.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H13z"/><path d="M6.5 9.5l1.5-2 1 2"/><path d="M15 8.5h3M15 11.5h3"/></svg>Bestiário</a>
+          <a class="btn btn--primary" href="#/novo">Criar personagem</a>
+        </div>
       </header>
 
       <section class="block" id="fav-block" aria-labelledby="fav-title" hidden>
@@ -190,15 +193,55 @@
 
       <section class="block" aria-labelledby="cat-title">
         <h2 class="block__title" id="cat-title">Origens, espécimes, poderes e itens</h2>
-        <p class="block__hint">Toque numa categoria para ver tudo dela, ou busque pelo nome. Toque num registro para ver todos os dados. Mostra o catálogo oficial e o que as pessoas salvaram no banco.</p>
-        <div class="cat-chips" id="cat-chips" role="group" aria-label="Categorias"></div>
-        <div class="field">
-          <label class="field__label" for="cat-q">Buscar no catálogo</label>
-          <input class="input" id="cat-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ex.: Android, Mercenário, kit médico">
+        <p class="block__hint">Tudo do catálogo oficial e do banco, em ordem alfabética. Busque pelo nome, escolha a categoria ou filtre pela especificação. Toque num registro para ver todos os dados.</p>
+        <div class="lib-tools">
+          <div class="field">
+            <label class="field__label" for="cat-q">Buscar pelo nome</label>
+            <input class="input" id="cat-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ex.: Android, Mercenário, kit médico">
+          </div>
+          <div class="field">
+            <label class="field__label" for="cat-kind">Categoria</label>
+            <select class="input" id="cat-kind"></select>
+          </div>
+          <label class="check" title="Procura também na descrição, nos efeitos, na lore e em tudo o que o registro guarda, aceitando erros de digitação"><input type="checkbox" id="cat-deep"><span>Busca aprofundada</span></label>
+          <label class="check"><input type="checkbox" id="cat-fav"><span>Só favoritos</span></label>
+          <label class="check"><input type="checkbox" id="cat-mine"><span>Só os meus</span></label>
         </div>
         <p class="block__hint" id="cat-hint" role="status"></p>
         <ul class="rows" id="cat-list"></ul>
-        <p class="empty" id="cat-empty" hidden>Nada encontrado nessa categoria.</p>
+        <p class="empty" id="cat-empty" hidden>Nada encontrado. Mude a busca ou a categoria, ou marque a busca aprofundada.</p>
+      </section>
+    </section>
+
+    <!-- ===================== TELA: BESTIÁRIO =====================
+         A revista de monstros do mestre, aberta para todos: busca, filtros e criação de criaturas (NPCs da Oficina). -->
+    <section class="screen" data-screen="bestiario" data-title="Bestiário" aria-labelledby="bestiario-title" hidden>
+      <a class="back-link" href="#/personagens">Voltar a Personagens</a>
+      <header class="screen__head">
+        <div>
+          <p class="eyebrow">Biblioteca</p>
+          <h1 id="bestiario-title" tabindex="-1">Bestiário</h1>
+          <p class="screen__sub">Monstros, inimigos e NPCs da lista aberta. O que você criar aqui entra no banco compartilhado e qualquer mestre pode pôr na arena da campanha.</p>
+        </div>
+        <button class="btn btn--primary" type="button" id="bst-new">Criar criatura</button>
+      </header>
+
+      <div class="beast-form" id="bst-form-slot"></div>
+
+      <section class="block beast" aria-labelledby="bst-title">
+        <h2 class="block__title" id="bst-title">Criaturas</h2>
+        <div class="lib-tools beast__tools">
+          <div class="field">
+            <label class="field__label" for="bst-q">Buscar</label>
+            <input class="input" id="bst-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Nome, ataque, dano ou habilidade">
+          </div>
+          <label class="check"><input type="checkbox" id="bst-fav"><span>Só favoritos</span></label>
+          <label class="check"><input type="checkbox" id="bst-mine"><span>Só as minhas</span></label>
+        </div>
+        <div class="mag__chips" id="bst-cats" role="group" aria-label="Categoria"></div>
+        <p class="block__hint" id="bst-hint" role="status"></p>
+        <div class="mag" id="bst-mag"></div>
+        <p class="empty" id="bst-empty" hidden>Nenhuma criatura encontrada. Mude a busca ou crie uma em "Criar criatura".</p>
       </section>
     </section>
 
@@ -377,6 +420,7 @@
             <label class="field__label" for="lib-kind">Categoria</label>
             <select class="input" id="lib-kind"></select>
           </div>
+          <label class="check" title="Procura também na descrição, nos efeitos, na lore e em tudo o que o registro guarda, aceitando erros de digitação"><input type="checkbox" id="lib-deep"><span>Busca aprofundada</span></label>
           <label class="check"><input type="checkbox" id="lib-fav"><span>Só favoritos</span></label>
           <label class="check"><input type="checkbox" id="lib-mine"><span>Só os meus</span></label>
         </div>
@@ -765,9 +809,13 @@
         <section class="block beast" aria-labelledby="beast-title">
           <div class="block__head">
             <h2 class="block__title" id="beast-title">Bestiário</h2>
-            <input class="input beast__q" id="beast-q" type="search" autocomplete="off" placeholder="Buscar criatura" aria-label="Buscar criatura">
+            <div class="block__tools">
+              <input class="input beast__q" id="beast-q" type="search" autocomplete="off" placeholder="Buscar criatura" aria-label="Buscar criatura">
+              <button class="btn btn--primary btn--sm" type="button" id="beast-new">Criar criatura</button>
+            </div>
           </div>
-          <p class="block__hint">Uma página por criatura. "Pôr na arena" pergunta o time e põe no Combate.</p>
+          <p class="block__hint">Uma página por criatura. "Pôr na arena" pergunta o time e põe no Combate. "Criar criatura" salva no banco e ela já aparece aqui.</p>
+          <div class="beast-form" id="beast-form-slot"></div>
           <div class="mag__chips" id="gmlib-cats" role="group" aria-label="Categoria"></div>
           <p class="block__hint" id="beast-hint" role="status"></p>
           <div class="mag" id="gmlib-mag"></div>
@@ -1035,6 +1083,17 @@
     </div>
   </dialog>
 
+  <!-- Regra de um campo do item (cadência, pente...): resumo tirado do Compêndio e link para a regra completa -->
+  <dialog class="dialog rulepop" id="rule-dialog" aria-labelledby="rule-title">
+    <div class="picker__head">
+      <h2 id="rule-title"></h2>
+      <button class="btn btn--ghost btn--sm" type="button" id="rule-close">Fechar</button>
+    </div>
+    <p class="block__hint" id="rule-meta"></p>
+    <div class="rulepop__body" id="rule-body"></div>
+    <a class="btn btn--primary btn--sm rulepop__link" id="rule-link" href="#/rules">Ir para a regra completa no Compêndio</a>
+  </dialog>
+
   <!-- Escolha de um poder: a perícia do Doutor ou o tipo de arma/armadura da proficiência -->
   <dialog class="dialog" id="choice-dialog" aria-labelledby="choice-title">
     <form class="picker" method="dialog">
@@ -1067,9 +1126,10 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="regras.js?v=176"></script>
-  <script src="items.js?v=176"></script>
-  <script src="pixelart.js?v=176"></script>
-  <script src="app.js?v=176"></script>
+  <script src="pericias.js?v=180"></script>
+  <script src="regras.js?v=180"></script>
+  <script src="items.js?v=180"></script>
+  <script src="pixelart.js?v=180"></script>
+  <script src="app.js?v=180"></script>
 </body>
 </html>
