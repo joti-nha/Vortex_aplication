@@ -1912,7 +1912,7 @@ const FIREBASE_CONFIG = {
     },
     progressao: {
       title: 'Progressão',
-      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia (uma vez a cada 4 UP, esse ponto pode virar uma proficiência). UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
+      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia (uma vez por bloco de 4 UP, já no UP 1 ou 3, esse ponto pode virar uma proficiência). UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
       rule: 'progressao'
     },
     poderes: {
@@ -2720,8 +2720,8 @@ const FIREBASE_CONFIG = {
   // filtros dos menus de item (inventário, kit, roteiro, loja): uma categoria por chip
   const INV_CHIPS = [
     { label: 'Armas', kinds: ['arma-melee', 'arma-fogo'] }, { label: 'Granadas', kinds: ['granada'] }, { label: 'Munições', kinds: ['municao'] },
-    { label: 'Armaduras', kinds: ['armadura'] }, { label: 'Escudos', kinds: ['escudo-energetico'] },
-    { label: 'Vestíveis', kinds: ['vestivel'], test: (e) => !isBackpack(e) }, { label: 'Mochilas', kinds: ['vestivel'], test: isBackpack },
+    { label: 'Armaduras', kinds: ['armadura'] },
+    { label: 'Vestíveis', kinds: ['vestivel', 'escudo-energetico'] }, // roupas, mochilas e escudos energéticos (Pinger)
     { label: 'Núcleos', kinds: ['nucleo'] }, { label: 'Próteses e módulos', kinds: ['protese-modulo'] },
     { label: 'Mods', kinds: ['mod-arma'] }, { label: 'Propriedades', kinds: ['propriedade'] }, { label: 'Acessórios', kinds: ['acessorio'] },
     { label: 'Itens gerais', kinds: ['item-geral'] }
@@ -6550,11 +6550,13 @@ const FIREBASE_CONFIG = {
       return q;
     });
     s.inventory = (Array.isArray(r.inventory) ? r.inventory : []).map((i) => Object.assign({ qty: 1, slot: '', values: {}, bonus: {} }, i, { uid: i.uid || uid(), slots: normSlots(i.slots) }));
-    // mochilas antigas (com espaços e raridade) viram uma das três novas, pelo tamanho
+    // mochilas antigas viram uma das três novas: as de espaços pelo tamanho, as de "+X a cada 3" pelo X
     s.inventory = s.inventory.map((i) => {
-      if (!isBackpack(i) || num((i.values || {}).cargaPor3) || !num((i.values || {}).espacos)) return i;
-      const sp = num(i.values.espacos);
-      const e = BUILTINS.find((x) => x.id === 'of-moc-' + (sp <= 2 ? 'pequena' : sp <= 6 ? 'media' : 'grande'));
+      const v = i.values || {};
+      if (!isBackpack(i) || num(v.cargaPct) || !(num(v.espacos) || num(v.cargaPor3))) return i;
+      const sz = num(v.cargaPor3) ? (num(v.cargaPor3) <= 1 ? 'pequena' : num(v.cargaPor3) <= 2 ? 'media' : 'grande')
+        : (num(v.espacos) <= 2 ? 'pequena' : num(v.espacos) <= 6 ? 'media' : 'grande');
+      const e = BUILTINS.find((x) => x.id === 'of-moc-' + sz);
       return e ? Object.assign(slotSnap(e), { thumb: e.thumb || '', uid: i.uid, qty: i.qty, slot: i.slot, slots: normSlots(e.slots) }) : i;
     });
     // kits de origem antigos gravavam só o texto (item geral sem dados): com o nome de um item oficial, vira o item de verdade
@@ -6754,8 +6756,8 @@ const FIREBASE_CONFIG = {
   const upProfsOf = (s) => choicesOf(s, 'of-pod-prof-arma').concat(choicesOf(s, 'of-pod-prof-armadura'));
   const choiceLabel = (pid, id) => (CHOICE_POWERS[pid] === 'pericia' ? SKILL_LABEL[id] || id : profLabel(id));
   const choicePower = (e, choice) => Object.assign(slotSnap(e), { thumb: e.thumb || '', choice, name: e.name + ': ' + choiceLabel(e.id, choice) });
-  // trocas de perícia por proficiência: uma a cada 4 UP ganhos por XP (as de origem não contam)
-  const swapAllowed = (s) => Math.floor(Math.floor(num(s.xp) / 10) / 4);
+  // trocas de perícia por proficiência: uma por bloco de 4 UP ganhos por XP (as de origem não contam)
+  const swapAllowed = (s) => Math.ceil(Math.floor(num(s.xp) / 10) / 4); // uma por bloco de 4 UP (1-4, 5-8...): já vale no UP 1 ou 3
   const swapProfsOf = (s) => (s.swapProfs || []).slice(0, swapAllowed(s));
   const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0 || swapProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
@@ -6805,7 +6807,7 @@ const FIREBASE_CONFIG = {
       if (srcKeys.has(key)) return;
       if (i.slot === 'vestivel') { if (vestOn >= vestMax || !reqMet(s, i)) return; vestOn += 1; }
       srcKeys.add(key);
-      if (isBackpack(i) && (!bag || num(i.values.cargaPor3) > num(bag.values.cargaPor3))) bag = i; // só a maior mochila conta
+      if (isBackpack(i) && (!bag || num(i.values.cargaPct) > num(bag.values.cargaPct))) bag = i; // só a maior mochila conta
       sources.push({ name: i.name, b: entryBonus(i) });
     });
     sources.push({ name: 'ajuste manual', b: s.extra });
@@ -6835,9 +6837,10 @@ const FIREBASE_CONFIG = {
     src.carga.push({ name: 'base', val: 2 }, { name: 'Corpo × 5', val: a.corpo * 5 }, { name: 'Precisão', val: a.precisao }, { name: 'Essência × 2', val: a.essencia * 2 });
     fromSources('carga');
     // mochila: +X de Carga a cada 3 da Carga que o personagem já tem
-    if (bag && num(bag.values.cargaPor3) > 0) {
-      const extra = Math.floor(Math.max(0, total('carga')) / 3) * num(bag.values.cargaPor3);
-      if (extra > 0) src.carga.push({ name: bag.name + ' (+' + num(bag.values.cargaPor3) + ' a cada 3)', val: extra });
+    if (bag && num(bag.values.cargaPct) > 0) {
+      const pct = Math.min(33, num(bag.values.cargaPct)); // nenhuma mochila passa de 33%
+      const extra = Math.floor(Math.max(0, total('carga')) * pct / 100);
+      if (extra > 0) src.carga.push({ name: bag.name + ' (+' + pct + '%)', val: extra });
     }
 
     // armadura: a básica de todos os seres é 6; a vestida vale quando for maior. Proficiência: +1 de defesa
@@ -6867,9 +6870,9 @@ const FIREBASE_CONFIG = {
       upEarned, upTotal: upEarned + mech.up + num(s.upExtra),
       upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
-      // +1 num atributo a cada 4 UP: vale o escolhido na Progressão e também o ponto posto direto na faixa
+      // +1 num atributo por bloco de 4 UP (1-4, 5-8...: o do bloco já vale no 1º UP dele): vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
-      attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
+      attrAllowed: Math.ceil(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
       skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over - swapProfsOf(s).length, // cada troca tira 1 ponto de perícia // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
       skillGrant: skillGrant(s).grant,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
@@ -6901,6 +6904,7 @@ const FIREBASE_CONFIG = {
       if (kind === 'melhoria') return { type: 'melhoria', name: arg, text: t };
       if (kind === 'doutor') return { type: 'doutor', id: skillIdOf(arg), text: t };
       if (kind === 'proficiencia') return { type: 'prof', id: profByLabel(arg), text: t };
+      if (kind === 'troca') return { type: 'troca', id: profByLabel(arg.replace(/^profici[eê]ncia\s*/i, '')), text: t }; // o +1 de perícia do UP vira proficiência
       if (kind === 'atributo') { const at = ATTRS.find((x) => nameKey(x.label) === nameKey(arg.replace(/\s*\+?\s*1\s*$/, ''))); return { type: 'atributo', id: at ? at.id : '', text: t }; }
       if (kind === 'pericias' || kind === 'pericia') {
         const list = arg.split(',').map((x) => /^(.+?)\s*\+?(\d)?$/.exec(x.trim())).filter(Boolean).map((p) => [skillIdOf(p[1]), Number(p[2] || 1)]).filter((x) => x[0]);
@@ -6952,6 +6956,13 @@ const FIREBASE_CONFIG = {
       const e = BUILTINS.find((b) => b.id === pid);
       if (!e) return false;
       s.powers.push(choicePower(e, a.id));
+      return true;
+    }
+    if (a.type === 'troca') { // a cada 4 UP: o ponto de perícia do UP vira proficiência (só com a ficha já tendo direito)
+      if (!a.id) return false;
+      if (s.swapProfs.indexOf(a.id) >= 0) return true;
+      if (s.swapProfs.length >= swapAllowed(s) || hasProf(s, a.id)) return false;
+      s.swapProfs.push(a.id);
       return true;
     }
     if (a.type === 'atributo') { // o +1 a cada 4 UP: só entra se a ficha já tiver direito a ele
@@ -7049,8 +7060,13 @@ const FIREBASE_CONFIG = {
   const RT_BEN = [['pv', '+5 PV'], ['pe', '+5 PE'], ['pa', '+1 PA']];
   const RT_MAX_UP = 30;
   const rtSkills = () => { const out = []; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => out.push([sk[0], sk[1]]))); return out; };
-  const rtPage = () => ({ gasto: null, ben: ['', ''], per: '', attr: '', nota: '' });
-  const rtAttrPage = (n) => n % 4 === 0; // a cada 4 UP: +1 num atributo
+  const rtPage = () => ({ gasto: null, ben: ['', ''], per: '', troca: '', attr: '', nota: '' });
+  // blocos de 4 UP (folhas 1-4, 5-8...): em cada bloco cabe uma troca de perícia por proficiência (numa folha ímpar)
+  // e um +1 de atributo (em qualquer folha do bloco)
+  const rtBlock = (r, n) => { const a = Math.floor((n - 1) / 4) * 4; return r.pages.slice(a, a + 4).map((p, i) => ({ p, n: a + i + 1 })); };
+  const rtSwapOk = (r, n) => n % 2 === 1 && !rtBlock(r, n).some((x) => x.n !== n && x.p.troca);
+  const rtAttrOk = (r, n) => !rtBlock(r, n).some((x) => x.n !== n && x.p.attr);
+  const rtAttrPage = (n) => n % 4 === 0; // última folha do bloco: se o bloco não tiver atributo, ela fica pendente
   const rtNew = (up, money) => ({ v: 1, up, dinheiro: money, itens: [], pages: Array.from({ length: up }, rtPage) });
   function rtRead(values) { // JSON salvo, ou o texto antigo das folhas convertido
     const v = values || {};
@@ -7073,6 +7089,7 @@ const FIREBASE_CONFIG = {
       const notes = [];
       pg.acts.forEach((a) => {
         if (a.type === 'atributo') { if (a.id) p.attr = a.id; return; }
+        if (a.type === 'troca') { if (a.id) p.troca = a.id; return; }
         if (p.gasto) { notes.push(a.text); return; }
         if (a.type === 'poder') { const e = findPower(a.name); if (e) p.gasto = { t: 'poder', id: e.id, name: e.name, opt: a.opt || '' }; else notes.push(a.text); }
         else if (a.type === 'melhoria') { const e = guidePowers().find((x) => powerUps(x).some((u) => nameKey(u.name) === nameKey(a.name))); if (e) p.gasto = { t: 'melhoria', id: e.id, name: a.name }; else notes.push(a.text); }
@@ -7088,7 +7105,7 @@ const FIREBASE_CONFIG = {
     const ben = guideList(v.beneficios).map((x) => (/pv/i.test(x) ? 'pv' : /pe/i.test(x) ? 'pe' : /pa/i.test(x) ? 'pa' : '')).filter(Boolean);
     r.pages.forEach((p, i) => { if ((i + 1) % 2 === 0) p.ben = [ben.shift() || '', ben.shift() || '']; });
     const sk = guideList(v.periciasUp).map(skillIdOf).filter(Boolean);
-    r.pages.forEach((p, i) => { if ((i + 1) % 2 === 1) p.per = sk.shift() || ''; });
+    r.pages.forEach((p, i) => { if ((i + 1) % 2 === 1 && !p.troca) p.per = sk.shift() || ''; });
     r.itens = String(v.itens || '').split('\n').map((x) => x.trim()).filter(Boolean).map((name) => ({ id: '', name, price: 0 }));
     return r;
   }
@@ -7127,18 +7144,18 @@ const FIREBASE_CONFIG = {
     if (rtItemsTotal(r) > r.dinheiro) out.push('Os itens passam do dinheiro em ' + fmtCronos(rtItemsTotal(r) - r.dinheiro) + ' Cronos.');
     return out;
   }
-  const rtFilled = (p, n) => Boolean(rtText(p.gasto)) && (n % 2 ? Boolean(p.per) : p.ben.every(Boolean)) && (!rtAttrPage(n) || Boolean(p.attr));
+  const rtFilled = (p, n, r) => Boolean(rtText(p.gasto)) && (n % 2 ? Boolean(p.per || p.troca) : p.ben.every(Boolean)) && (!(rtAttrPage(n) || n === r.up) || rtBlock(r, n).some((x) => x.p.attr));
   const attrLabel = (id) => { const x = ATTRS.find((at) => at.id === id); return x ? x.label : id; };
   // grava o roteiro nos campos que a ficha e a distribuição inicial já leem
   function rtWrite(values, r) {
     if (!r) { values.roteiro = ''; values.folhas = ''; values.beneficios = ''; values.periciasUp = ''; values.itens = ''; values.dinheiro = ''; values.tipo = 'Entrada'; return; }
     values.roteiro = JSON.stringify(Object.assign({}, r, { setup: undefined }));
     values.folhas = r.pages.map((p, i) => {
-      const parts = [rtText(p.gasto), rtAttrPage(i + 1) && p.attr ? 'Atributo: ' + attrLabel(p.attr) + ' +1' : '', p.nota.trim()].filter(Boolean);
+      const parts = [rtText(p.gasto), (i + 1) % 2 && p.troca ? 'Troca: Proficiência ' + profLabel(p.troca) : '', p.attr ? 'Atributo: ' + attrLabel(p.attr) + ' +1' : '', p.nota.trim()].filter(Boolean);
       return parts.length ? (i + 1) + ' | ' + parts.join('; ') : '';
     }).filter(Boolean).join('\n');
     values.beneficios = r.pages.filter((p, i) => (i + 1) % 2 === 0).map((p) => p.ben).flat().filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', ');
-    values.periciasUp = r.pages.filter((p, i) => (i + 1) % 2 === 1 && p.per).map((p) => skillLabel(p.per)).join(', ');
+    values.periciasUp = r.pages.filter((p, i) => (i + 1) % 2 === 1 && p.per && !p.troca).map((p) => skillLabel(p.per)).join(', ');
     values.itens = r.itens.map((x) => x.name).join('\n');
     values.dinheiro = String(r.dinheiro);
     values.tipo = 'Guiada';
@@ -7151,8 +7168,8 @@ const FIREBASE_CONFIG = {
     if (r.itens.length) rows.push(['Itens', r.itens.map((x) => x.name).join(', ')]);
     const lines = r.pages.map((p, i) => {
       const n = i + 1;
-      const parts = [rtText(p.gasto), n % 2 ? (p.per ? 'ponto em ' + skillLabel(p.per) : '') : p.ben.filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', '),
-        rtAttrPage(n) && p.attr ? attrLabel(p.attr) + ' +1' : '', p.nota].filter(Boolean);
+      const parts = [rtText(p.gasto), n % 2 ? (p.troca ? 'troca o ponto de perícia por ' + profLabel(p.troca) : p.per ? 'ponto em ' + skillLabel(p.per) : '') : p.ben.filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', '),
+        p.attr ? attrLabel(p.attr) + ' +1' : '', p.nota].filter(Boolean);
       return parts.length ? 'UP ' + n + ': ' + parts.join(' · ') : '';
     }).filter(Boolean);
     if (lines.length) rows.push(['Folhas', lines.join('\n')]);
@@ -7169,13 +7186,13 @@ const FIREBASE_CONFIG = {
       open.dataset.fid = 'rt-open';
       open.addEventListener('click', () => openRoteiro(d, () => { paint(); if (onDone) onDone(); }));
       if (!r) { box.replaceChildren(h('p', 'field__hint', 'Sem roteiro, a build é só o nível 0 (de entrada). Com roteiro, ela vira guiada: um livrinho com o que pegar a cada UP, e a ficha de quem segue se atualiza sozinha.'), open); return; }
-      const filled = r.pages.filter((p, i) => rtFilled(p, i + 1)).length;
+      const filled = r.pages.filter((p, i) => rtFilled(p, i + 1, r)).length;
       const probs = rtProblems(r);
       box.replaceChildren(
         h('div', 'rt-field__sum',
           h('span', 'rt-chip', plural(r.up, 'folha', 'folhas')), h('span', 'rt-chip', fmtCronos(r.dinheiro) + ' Cronos'),
           h('span', 'rt-chip', plural(r.itens.length, 'item', 'itens')), h('span', 'rt-chip' + (filled === r.up ? ' rt-chip--ok' : ''), filled + ' de ' + r.up + ' preenchidas')),
-        probs.length ? h('p', 'field__error', probs[0]) : null,
+        ...(probs.length ? [h('p', 'field__error', probs[0])] : []),
         open);
     };
     paint();
@@ -7336,10 +7353,18 @@ const FIREBASE_CONFIG = {
     }
     const res = h('div', 'rt-res',
       h('span', 'rt-chip rt-chip--up', '1 UP' + (led.have > 1 ? ' (+' + (led.have - 1) + ' guardado' + (led.have > 2 ? 's' : '') + ')' : '')),
-      n % 2 ? h('span', 'rt-chip', '+1 ponto de perícia') : h('span', 'rt-chip', '2 benefícios'),
-      rtAttrPage(n) ? h('span', 'rt-chip rt-chip--attr', '+1 atributo') : null);
+      n % 2 ? h('span', 'rt-chip', p.troca ? '+1 proficiência (troca)' : '+1 ponto de perícia') : h('span', 'rt-chip', '2 benefícios'),
+      p.attr ? h('span', 'rt-chip rt-chip--attr', '+1 atributo') : null);
+    // o ponto de perícia do UP ímpar; uma vez a cada 4 UP ele pode virar proficiência
+    const swapOk = n % 2 === 1 && (p.troca || rtSwapOk(r, n));
+    const perMode = (on, label, fid, fn) => { const x = h('button', 'rt-kind' + (on ? ' is-on' : ''), label); x.type = 'button'; x.dataset.fid = fid; x.setAttribute('aria-pressed', String(on)); x.addEventListener('click', fn); return x; };
     const extra = n % 2
-      ? h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Ponto de perícia'), rtSelect(rtSkills(), p.per, (v) => { p.per = v; redo(); }, 'Perícia que ganha +1...', 'rt-ponto'))
+      ? h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Ponto de perícia'),
+        swapOk ? h('div', 'rt-kinds', perMode(!p.troca, '+1 em perícia', 'rt-ponto-per', () => { p.troca = ''; redo(); }),
+          perMode(Boolean(p.troca), 'Trocar por proficiência', 'rt-ponto-troca', () => { if (!p.troca) { p.troca = PROFS[0].id; p.per = ''; } redo(); })) : null,
+        p.troca ? rtSelect(PROFS.map((x) => [x.id, x.label]), p.troca, (v) => { p.troca = v || PROFS[0].id; redo(); }, 'Tipo de arma ou armadura...', 'rt-troca')
+          : rtSelect(rtSkills(), p.per, (v) => { p.per = v; redo(); }, 'Perícia que ganha +1...', 'rt-ponto'),
+        swapOk ? h('p', 'field__hint', 'Uma vez por bloco de 4 UP (folhas 1-4, 5-8...), o ponto de perícia de um UP ímpar pode virar uma proficiência.') : null)
       : h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Benefícios'), h('div', 'rt-bens', ...[0, 1].map((i) => h('div', 'rt-ben', h('span', 'rt-ben__label', (i + 1) + 'º benefício'), ...RT_BEN.map((b) => {
         const x = h('button', 'rt-kind' + (p.ben[i] === b[0] ? ' is-on' : ''), b[1]);
         x.type = 'button';
@@ -7348,8 +7373,8 @@ const FIREBASE_CONFIG = {
         x.addEventListener('click', () => { p.ben[i] = p.ben[i] === b[0] ? '' : b[0]; redo(); });
         return x;
       })))));
-    // a cada 4 UP: +1 num atributo à escolha
-    const attr = rtAttrPage(n) ? h('div', 'rt-sec rt-sec--attr', h('h4', 'rt-sec__title', 'Atributo (+1 a cada 4 UP)'),
+    // um +1 de atributo por bloco de 4 UP, em qualquer folha do bloco
+    const attr = p.attr || rtAttrOk(r, n) ? h('div', 'rt-sec rt-sec--attr', h('h4', 'rt-sec__title', 'Atributo (+1 por bloco de 4 UP: folhas ' + (Math.floor((n - 1) / 4) * 4 + 1) + ' a ' + (Math.floor((n - 1) / 4) * 4 + 4) + ')'),
       h('div', 'rt-kinds', ...ATTRS.map((at) => {
         const on = p.attr === at.id;
         const x = h('button', 'rt-kind' + (on ? ' is-on' : ''), at.label + ' +1');
@@ -7368,7 +7393,7 @@ const FIREBASE_CONFIG = {
     nota.dataset.fid = 'rt-nota';
     nota.addEventListener('input', () => { p.nota = nota.value; });
     // duas colunas no PC: à esquerda o que gastar, à direita o que a folha dá de graça
-    return h('article', 'guide__page rt-page' + (rtFilled(p, n) ? ' is-done' : '') + (led.short ? ' is-bad' : ''),
+    return h('article', 'guide__page rt-page' + (rtFilled(p, n, r) ? ' is-done' : '') + (led.short ? ' is-bad' : ''),
       h('div', 'rt-page__head', h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', String(n))), res),
       h('div', 'rt-cols',
         h('div', 'rt-col', h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Gastar o UP'), kinds, detail,
@@ -7379,27 +7404,29 @@ const FIREBASE_CONFIG = {
   // resumo do livro inteiro: o que a build ganha somando todas as folhas
   function rtSummary(r) {
     const led = rtLedger(r);
-    const ben = { pv: 0, pe: 0, pa: 0 }, attrs = {}, skills = {};
+    const ben = { pv: 0, pe: 0, pa: 0 }, attrs = {}, skills = {}, profs = [];
     const picks = [];
     r.pages.forEach((p, i) => {
       const n = i + 1;
       const t = rtText(p.gasto);
       if (t && p.gasto.t !== 'guardar') picks.push([n, t]);
       if (n % 2 === 0) p.ben.forEach((k) => { if (k) ben[k] += 1; });
+      else if (p.troca) profs.push(profLabel(p.troca));
       else if (p.per) skills[p.per] = (skills[p.per] || 0) + 1;
       if (p.gasto && p.gasto.t === 'pericias') Object.keys(p.gasto.list || {}).forEach((k) => { skills[k] = (skills[k] || 0) + num(p.gasto.list[k]); });
-      if (rtAttrPage(n) && p.attr) attrs[p.attr] = (attrs[p.attr] || 0) + 1;
+      if (p.attr) attrs[p.attr] = (attrs[p.attr] || 0) + 1;
     });
-    const attrSlots = Math.floor(r.up / 4), attrUsed = Object.keys(attrs).reduce((t, k) => t + attrs[k], 0);
+    const attrSlots = Math.ceil(r.up / 4), attrUsed = Object.keys(attrs).reduce((t, k) => t + attrs[k], 0);
     const row = (label, value) => h('div', 'rt-sum__row', h('dt', '', label), h('dd', '', value));
     const benTxt = [ben.pv ? '+' + ben.pv * 5 + ' PV' : '', ben.pe ? '+' + ben.pe * 5 + ' PE' : '', ben.pa ? '+' + ben.pa + ' PA' : ''].filter(Boolean).join(' · ');
     const left = led.length ? led[led.length - 1].left : 0;
     return h('aside', 'rt-sum',
       h('h4', 'rt-sum__title', 'Resumo do roteiro'),
       h('dl', 'rt-sum__list',
-        row('Atributos', attrSlots ? (ATTRS.filter((at) => attrs[at.id]).map((at) => at.label + ' +' + attrs[at.id]).join(' · ') || '—') + ' (' + attrUsed + ' de ' + attrSlots + ')' : 'a 1ª vem na folha 4'),
+        row('Atributos', attrSlots ? (ATTRS.filter((at) => attrs[at.id]).map((at) => at.label + ' +' + attrs[at.id]).join(' · ') || '—') + ' (' + attrUsed + ' de ' + attrSlots + ')' : '—'),
         row('Benefícios', benTxt || '—'),
         row('Perícias', Object.keys(skills).map((k) => skillLabel(k) + ' +' + skills[k]).join(' · ') || '—'),
+        profs.length ? row('Trocas por proficiência', profs.join(' · ')) : null,
         row('UP guardados no fim', String(left))),
       picks.length ? h('ol', 'rt-sum__picks', ...picks.map((x) => {
         const b = h('button', 'rt-sum__pick', h('span', 'rt-sum__n', String(x[0])), h('span', '', x[1]));
@@ -7453,17 +7480,17 @@ const FIREBASE_CONFIG = {
     };
     const led = rtLedger(r);
     const marks = h('div', 'guide__marks rt-marks', ...[0].concat(r.pages.map((p, i) => i + 1)).map((n) => {
-      const ok = n === 0 ? r.itens.length > 0 : rtFilled(r.pages[n - 1], n);
+      const ok = n === 0 ? r.itens.length > 0 : rtFilled(r.pages[n - 1], n, r);
       const bad = n === 0 ? rtItemsTotal(r) > r.dinheiro : led[n - 1].short;
-      const b = h('button', 'guide__mark' + (ok ? ' is-done' : '') + (bad ? ' is-bad' : '') + (n === rt.page ? ' is-on' : '') + (n && rtAttrPage(n) ? ' is-attr' : ''), n === 0 ? 'Itens' : String(n));
+      const b = h('button', 'guide__mark' + (ok ? ' is-done' : '') + (bad ? ' is-bad' : '') + (n === rt.page ? ' is-on' : '') + (n && r.pages[n - 1].attr ? ' is-attr' : ''), n === 0 ? 'Itens' : String(n));
       b.type = 'button';
-      b.setAttribute('aria-label', n === 0 ? 'Folha dos itens' : 'Folha ' + n + (rtAttrPage(n) ? ' (+1 atributo)' : ''));
-      if (n && rtAttrPage(n)) b.title = '+1 atributo nesta folha';
+      b.setAttribute('aria-label', n === 0 ? 'Folha dos itens' : 'Folha ' + n + (r.pages[n - 1].attr ? ' (+1 atributo)' : ''));
+      if (n && r.pages[n - 1].attr) b.title = '+1 atributo nesta folha';
       b.addEventListener('click', () => { rt.page = n; renderRoteiro(); });
       return b;
     }));
     const probs = rtProblems(r);
-    const filled = r.pages.filter((p, i) => rtFilled(p, i + 1)).length;
+    const filled = r.pages.filter((p, i) => rtFilled(p, i + 1, r)).length;
     // embaixo da folha: anterior e próxima (no celular as setas laterais somem)
     const step = (dd, label) => {
       const b = h('button', 'btn btn--ghost btn--sm', label);
@@ -7484,7 +7511,7 @@ const FIREBASE_CONFIG = {
           h('div', 'rt-steps', step(-1, '‹ Anterior'), h('span', 'rt-steps__at', rt.page === 0 ? 'Itens' : 'Folha ' + rt.page + ' de ' + r.up), step(1, 'Próxima ›'))),
         rtSummary(r)),
       ...(probs.length ? [h('ul', 'rt-probs', ...probs.map((x) => h('li', '', x)))] : []),
-      h('p', 'field__hint', 'Quem segue esta build recebe cada folha quando ganha o UP dela, até parar a atualização automática na ficha. O +1 de atributo entra quando a ficha tiver direito a ele (a cada 4 UP ganhos por XP).'));
+      h('p', 'field__hint', 'Quem segue esta build recebe cada folha quando ganha o UP dela, até parar a atualização automática na ficha. O +1 de atributo entra quando a ficha tiver direito a ele (um por bloco de 4 UP ganhos por XP).'));
     const keep = rt.dlg.querySelector('.rt__sheet');
     const top = keep ? keep.scrollTop : 0;
     rt.dlg.replaceChildren(h('div', 'picker rt__sheet', head, body));
@@ -7604,7 +7631,7 @@ const FIREBASE_CONFIG = {
     const bump = (k) => () => { s.up[k] = num(s.up[k]) + 1; changed(); };
     if (!s.setup) out.push({ key: 'setup', n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', acts: [{ label: 'Fazer agora', fid: 'al-setup', on: () => openSetup() }] });
     if (picks > 0) out.push({ key: 'picks', n: picks, text: plural(picks, 'benefício para escolher', 'benefícios para escolher') + ' (a cada 2 UP, 2 benefícios; pode repetir).', acts: BEN.map((b) => ({ label: b[1], fid: 'al-ben-' + b[0], cls: 'btn--primary', on: bump(b[0]) })) });
-    if (attr > 0) out.push({ key: 'attr', n: attr, text: plural(attr, '+1 de atributo para escolher', '+1 de atributo para escolher') + ' (a cada 4 UP). Aumente o atributo no + da faixa de atributos.', acts: [{ label: 'Ir aos atributos', fid: 'al-attr', on: toAttrs }] });
+    if (attr > 0) out.push({ key: 'attr', n: attr, text: plural(attr, '+1 de atributo para escolher', '+1 de atributo para escolher') + ' (um por bloco de 4 UP). Aumente o atributo no + da faixa de atributos.', acts: [{ label: 'Ir aos atributos', fid: 'al-attr', on: toAttrs }] });
     if (up > 0) out.push({ key: 'up', n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias (cada UP em perícias dá +3 pontos).', acts: [{ label: 'Comprar poderes', fid: 'al-powers', on: toPowers }, { label: '+1 UP em perícias', fid: 'al-per', on: bump('per') }] });
     if (skills > 0) out.push({ key: 'skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', acts: [{ label: 'Ver perícias', fid: 'al-skills', on: toSel('#skills-block') }] });
     return out;
@@ -7623,7 +7650,7 @@ const FIREBASE_CONFIG = {
       acts: BEN.filter((b) => num(s.up[b[0]]) > 0).map((b) => ({ label: 'Tirar ' + b[1], fid: 'al-x-ben-' + b[0], on: drop(b[0]) })) });
     if (m.attrUsed > m.attrAllowed) {
       const old = ATTRS.filter((at) => num((s.upAttr || {})[at.id]) > 0); // +1 escolhido na Progressão antiga
-      out.push({ key: 'x-attr', n: m.attrUsed - m.attrAllowed, text: 'Atributos com ' + plural(m.attrUsed - m.attrAllowed, 'ponto', 'pontos') + ' além dos 3 da distribuição inicial e do +1 a cada 4 UP. Baixe no − da faixa de atributos.',
+      out.push({ key: 'x-attr', n: m.attrUsed - m.attrAllowed, text: 'Atributos com ' + plural(m.attrUsed - m.attrAllowed, 'ponto', 'pontos') + ' além dos 3 da distribuição inicial e do +1 por bloco de 4 UP. Baixe no − da faixa de atributos.',
         acts: [{ label: 'Ir aos atributos', fid: 'al-x-attr', on: toAttrs }].concat(old.map((at) => ({ label: 'Tirar +1 de ' + at.label, fid: 'al-x-attr-' + at.id, on: () => { s.upAttr[at.id] = Math.max(0, num(s.upAttr[at.id]) - 1); changed(); } })), [{ label: 'Refazer distribuição', fid: 'al-x-setup', on: () => openSetup() }]) });
     }
     if (skills > 0) out.push({ key: 'x-skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', acts: [{ label: 'Ver perícias', fid: 'al-x-skills', on: toSel('#skills-block') }] });
@@ -8105,12 +8132,12 @@ const FIREBASE_CONFIG = {
       const xpLeft = n * 10 - xp;
       steps.push(h('li', 'prog__step' + (got ? ' is-got' : next ? ' is-next' : ''),
         h('span', 'prog__step-n', String(n)),
-        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'), n % 4 === 0 ? h('span', 'prog__step-gain prog__step-attr', '+1 atributo') : null,
+        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'), n % 4 === 1 ? h('span', 'prog__step-gain prog__step-attr', '+1 atributo (bloco ' + n + '-' + (n + 3) + ')') : null,
         h('span', 'prog__step-state', got ? '✓ ganho' : 'faltam ' + xpLeft + ' XP')));
     }
     const track = card('prog__track', title('Trilha de UP'), level,
       h('ol', 'prog__steps', ...steps),
-      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias); uma vez a cada 4 UP, esse ponto pode virar uma proficiência, em Perícias → Proficiências. UP par: 2 benefícios. A cada 4 UP: +1 num atributo, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
+      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias); uma vez por bloco de 4 UP (1 a 4, 5 a 8...), esse ponto pode virar uma proficiência, em Perícias → Proficiências. UP par: 2 benefícios. Um +1 num atributo por bloco de 4 UP, já a partir do UP 1, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
     // os avisos (escolher benefícios, UP livres, +1 de atributo, compras sem fonte) são desenhados por renderAlerts
     const alerts = h('section', 'prog__card alerts', null);
     alerts.id = 'prog-alerts';
@@ -8242,7 +8269,7 @@ const FIREBASE_CONFIG = {
   function swapBlock(s) {
     const allowed = swapAllowed(s);
     const have = (s.swapProfs || []).length;
-    if (!allowed && !have) return [h('p', 'field__hint', 'A cada 4 UP ganhos, dá para trocar o +1 de perícia de um UP por uma proficiência.')];
+    if (!allowed && !have) return [h('p', 'field__hint', 'Uma vez por bloco de 4 UP (1 a 4, 5 a 8...), dá para trocar o +1 de perícia de um UP ímpar por uma proficiência.')];
     const taken = s.profs.concat(upProfsOf(s));
     const box = profPills(s.swapProfs, (id, on) => {
       s.swapProfs = s.swapProfs.filter((x) => x !== id);
@@ -8253,8 +8280,8 @@ const FIREBASE_CONFIG = {
       const id = inp.dataset.fid.slice(5);
       if (taken.includes(id) && !inp.checked) { inp.disabled = true; inp.parentElement.classList.add('check--off'); }
     });
-    return [h('h3', 'sub-title', 'Trocas por proficiência ', h('span', 'count', '(' + Math.min(have, allowed) + ' de ' + allowed + ', uma a cada 4 UP)')),
-      h('p', 'field__hint', 'Cada troca vira uma proficiência no lugar de 1 ponto de perícia.' + (have > allowed ? ' ' + plural(have - allowed, 'troca está', 'trocas estão') + ' acima do que os UP dão e não vale.' : '')),
+    return [h('h3', 'sub-title', 'Trocas por proficiência ', h('span', 'count', '(' + Math.min(have, allowed) + ' de ' + allowed + ', uma por bloco de 4 UP)')),
+      h('p', 'field__hint', 'Cada troca gasta o +1 de perícia que um UP ganho dá, nunca os pontos iniciais, os de UP investido em perícias ou os de poderes.' + (have > allowed ? ' ' + plural(have - allowed, 'troca está', 'trocas estão') + ' acima do que os UP dão e não vale.' : '')),
       box];
   }
 
@@ -8574,7 +8601,7 @@ const FIREBASE_CONFIG = {
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
     if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', v.cd); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
-    if (isBackpack(i)) add('Mochila', num(v.cargaPor3) ? '+' + num(v.cargaPor3) + ' de Carga a cada 3 de Carga' : '');
+    if (isBackpack(i)) add('Mochila', num(v.cargaPct) ? '+' + Math.min(33, num(v.cargaPct)) + '% da Carga' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
     if (i.kind === 'municao') { add('Serve no', v.pente); add('Por unidade', ammoUnitText(i)); add('Só para', v.para); add('Efeito', v.efeito); }
     add('Tipo de uso', v.tipoUso); add('Usos', num(v.usos) ? v.usos : ''); add('Bônus de recuperação', v.bonusRec);
@@ -8961,7 +8988,8 @@ const FIREBASE_CONFIG = {
     const tab = (id, label) => { const b = btn(label, asUi.view === id || (id === 'cat' && asUi.view !== 'slots') ? 'btn--primary' : 'btn--ghost', go(id), 'assim-tab-' + id); b.setAttribute('aria-pressed', String(asUi.view === id)); return b; };
     const head = h('div', 'picker__head', h('h2', '', 'Assimilar'), btn('Fechar', 'btn--ghost', () => closeDialog(asDlg)));
     head.querySelector('h2').id = 'assim-title';
-    const tabs = h('div', 'assim__tabs', tab('slots', 'Assimilados ' + slots.length + '/' + max), tab('cat', 'Catálogo (' + cat.length + ')'));
+    const tabs = h('div', 'assim__tabs', tab('slots', 'Assimilados ' + slots.length + '/' + max), tab('cat', 'Catálogo (' + cat.length + ')'),
+      cat.some(canArmory) ? btn('Armeiro', 'btn--ghost', () => openAssimArmory(''), 'assim-armory') : null);
     const body = h('div', 'assim__body');
     const card = (e, onOpen, extra) => {
       const c = h('button', 'assim__card');
@@ -9069,7 +9097,7 @@ const FIREBASE_CONFIG = {
       }
       body.append(grid);
       const foot = h('div', 'dialog__actions');
-      if (canArmory(e)) foot.append(btn('Armeiro do catálogo', 'btn--ghost', go('arm', asUi.key), 'assim-arm'));
+      if (canArmory(e)) foot.append(btn('Abrir no Armeiro', 'btn--primary', () => openAssimArmory(asUi.key), 'assim-arm'));
       foot.append(btn('Tirar do catálogo', 'btn--danger', async () => {
         if (!(await askConfirm({ title: 'Tirar ' + e.name + ' do catálogo?', text: 'Volta para cá se o item passar de novo pelo inventário.', ok: 'Tirar' }))) return;
         s.assim.cat.splice(s.assim.cat.indexOf(e), 1);
@@ -9077,33 +9105,6 @@ const FIREBASE_CONFIG = {
         asSave();
       }));
       body.append(foot);
-    } else if (asUi.view === 'arm') {
-      const e = byKey(asUi.key);
-      if (!e || !canArmory(e)) { asUi.view = 'cat'; drawAssim(); return; }
-      e.slots = normSlots(e.slots);
-      body.append(btn('← ' + e.name, 'btn--ghost', go('item', asUi.key)), h('h3', 'assim__title', 'Armeiro do catálogo: ' + e.name),
-        h('p', 'field__hint', 'As peças vêm do próprio catálogo e não se gastam: o simbionte replica. A próxima assimilação deste item já sai com elas.'));
-      const mounted = [['mods', 'Mod'], ['props', 'Propriedade'], ['accs', 'Acessório']].reduce((t, g) => t.concat((e.slots[g[0]] || []).map((x) => ({ x, g }))), []);
-      body.append(h('h3', 'inv-title', 'Montado'), mounted.length ? h('div', 'assim__choose', ...mounted.map((r) => btn('Tirar ' + r.x.name + ' (' + r.g[1] + ')', 'btn--ghost', () => {
-        e.slots[r.g[0]].splice(e.slots[r.g[0]].indexOf(r.x), 1);
-        asSave();
-      }))) : h('p', 'field__hint', 'Nada montado.'));
-      const pieces = cat.filter(isPiece).map((p) => ({ p, plan: planAttach(e, p) })).filter((r) => r.plan);
-      body.append(h('h3', 'inv-title', 'Peças do catálogo'));
-      if (!pieces.length) body.append(h('p', 'field__hint', 'Nenhum mod, propriedade ou acessório do catálogo serve neste item. Peças entram no catálogo quando passam pelo inventário.'));
-      pieces.forEach((r) => {
-        const row = h('div', 'assim__piece', h('span', '', r.p.name + ' · ' + kindTitle(r.p.kind)));
-        if (r.plan.already) row.append(h('span', 'chip', 'Montado'));
-        else if (r.plan.why) row.append(h('span', 'field__hint', r.plan.why));
-        else row.append(btn('Montar' + (r.plan.removed.length ? ' (troca ' + r.plan.removed.join(', ') + ')' : ''), 'btn--primary', () => {
-          const plan = planAttach(e, r.p);
-          if (!plan || !plan.slots) return;
-          e.slots = plan.slots;
-          asSave();
-          toast(r.p.name + ' montado em ' + e.name + ' no catálogo.');
-        }));
-        body.append(row);
-      });
     }
     const keep = asDlg.contains(document.activeElement) ? document.activeElement.dataset.fid : '';
     const sel = keep === 'assim-q' ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
@@ -9436,7 +9437,10 @@ const FIREBASE_CONFIG = {
      mudam na hora (pente, recarga, alcance), e a munição fica no mesmo lugar. */
   let armDlg = null;
   // m: membro da campanha (Armeiro da campanha: mochila, armazéns e lojas); sem m, a ficha aberta (só a mochila)
-  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false, cat: false };
+  const arm = { uid: '', sel: '', q: '', lib: null, m: null, busy: false, cat: false, assim: false };
+  // assim: Armeiro do simbionte (as armas e as peças são as do catálogo de assimilações, e montar não gasta nada)
+  const armGuns = (s) => (arm.assim ? s.assim.cat.filter(canArmory) : armoryItems(s));
+  const armId = (g) => (arm.assim ? assimKey(g) : g.uid);
   const armSheet = () => (arm.m ? arm.m.sheet : sheetChar && sheetChar.sheet);
   const ARM_SPOTS = {
     'arma-fogo': { Mira: 'top', Bocal: 'right', Carregador: 'bottom', Empunhadura: 'left' },
@@ -9446,17 +9450,30 @@ const FIREBASE_CONFIG = {
   const canArmory = (i) => Boolean(i) && (isWeapon(i.kind) || i.kind === 'armadura');
   const armoryItems = (s) => s.inventory.filter(canArmory)
     .sort((a, b) => (Number(isWeapon(b.kind)) - Number(isWeapon(a.kind))) || (Number(Boolean(b.slot)) - Number(Boolean(a.slot))));
+  // Armeiro do simbionte: o mesmo Armeiro, por cima do Assimilar, com as armas e peças do catálogo
+  function openAssimArmory(key) {
+    if (!sheetChar || !isSimb(sheetChar.sheet)) return;
+    const s = sheetChar.sheet;
+    arm.assim = true;
+    const guns = armGuns(s);
+    if (!guns.length) { arm.assim = false; toast('Nenhuma arma ou armadura no catálogo do simbionte.'); return; }
+    if (!armDlg) openArmory.init();
+    arm.uid = key && guns.some((g) => assimKey(g) === key) ? key : assimKey(guns[0]);
+    arm.sel = '';
+    arm.q = '';
+    arm.cat = false;
+    arm.lib = null;
+    arm.m = null;
+    drawArmory();
+    openDialog(armDlg);
+  }
   function openArmory(u, m) {
     const ch = m || sheetChar;
     if (!ch || !ch.sheet) return;
     const guns = armoryItems(ch.sheet);
     if (!guns.length) { toast('Nenhuma arma ou armadura no inventário. Adicione uma do banco para usar o Armeiro.'); return; }
-    if (!armDlg) {
-      armDlg = h('dialog', 'dialog armory');
-      armDlg.setAttribute('aria-labelledby', 'armory-title');
-      armDlg.addEventListener('close', () => { arm.lib = null; });
-      document.body.append(armDlg);
-    }
+    if (!armDlg) openArmory.init();
+    arm.assim = false;
     arm.uid = u && guns.some((w) => w.uid === u) ? u : guns[0].uid;
     arm.sel = '';
     arm.q = '';
@@ -9466,8 +9483,15 @@ const FIREBASE_CONFIG = {
     drawArmory();
     openDialog(armDlg);
   }
+  openArmory.init = () => {
+    armDlg = h('dialog', 'dialog armory');
+    armDlg.setAttribute('aria-labelledby', 'armory-title');
+    armDlg.addEventListener('close', () => { arm.lib = null; if (arm.assim) { arm.assim = false; if (asDlg && asDlg.open) drawAssim(); } });
+    document.body.append(armDlg);
+  };
   // salva: na ficha aberta, como qualquer edição; na campanha, grava a mochila (e o dinheiro) do personagem
   async function armSave() {
+    if (arm.assim) { touchSheet(); rerender(); drawArmory(); return; }
     if (!arm.m) { touchSheet(); rerender(); drawArmory(); return; }
     const local = arm.m.sheet;
     const camp = currentCamp && currentCamp.id;
@@ -9487,6 +9511,8 @@ const FIREBASE_CONFIG = {
      lojas (comprando). Cada fonte sabe tirar uma unidade e devolve true quando deu certo. */
   function armSources(s) {
     const out = [];
+    // simbionte: toda peça do catálogo serve, sem gastar (ele replica)
+    if (arm.assim) return s.assim.cat.filter(isPiece).map((x) => ({ e: x, where: 'No catálogo do simbionte', act: 'Montar', take: async () => true }));
     s.inventory.filter((x) => !x.slot && isPiece(x)).forEach((x) => out.push({
       e: x, where: 'Na mochila' + ((x.qty || 1) > 1 ? ' ×' + x.qty : ''), act: 'Montar',
       take: async () => { if (s.inventory.indexOf(x) < 0) return false; takeFromBag(s, x); return true; }
@@ -9529,10 +9555,10 @@ const FIREBASE_CONFIG = {
     const s = armSheet();
     if (!s || !armDlg) return;
     const ch = arm.m || sheetChar;
-    const guns = armoryItems(s);
-    const w = guns.find((x) => x.uid === arm.uid) || guns[0];
+    const guns = armGuns(s);
+    const w = guns.find((x) => armId(x) === arm.uid) || guns[0];
     if (!w) { closeDialog(armDlg); return; }
-    arm.uid = w.uid;
+    arm.uid = armId(w);
     w.slots = w.slots && w.slots.mods ? w.slots : normSlots(w.slots);
     const info = slotInfo(w);
     const use = slotUse(w);
@@ -9547,13 +9573,13 @@ const FIREBASE_CONFIG = {
     close.type = 'button';
     close.addEventListener('click', () => closeDialog(armDlg));
     const tabs = h('div', 'armory__guns', ...guns.map((g) => {
-      const b = h('button', 'armory__gun' + (g.uid === w.uid ? ' is-on' : ''), entryIcon(g), h('span', 'armory__gun-name', g.name));
+      const b = h('button', 'armory__gun' + (g === w ? ' is-on' : ''), entryIcon(g), h('span', 'armory__gun-name', g.name));
       b.type = 'button';
-      b.dataset.fid = 'arm-gun-' + g.uid;
-      b.setAttribute('aria-pressed', String(g.uid === w.uid));
+      b.dataset.fid = 'arm-gun-' + armId(g);
+      b.setAttribute('aria-pressed', String(g === w));
       const c = rarColor(g.values.raridade);
       if (c) b.style.setProperty('--rar', c);
-      b.addEventListener('click', () => { arm.uid = g.uid; arm.sel = ''; drawArmory(); });
+      b.addEventListener('click', () => { arm.uid = armId(g); arm.sel = ''; drawArmory(); });
       return b;
     }));
 
@@ -9601,7 +9627,7 @@ const FIREBASE_CONFIG = {
         h('span', 'armory__part-meta', [on ? 'Montado' : opt.where, e.values.raridade, e.values.para, e.kind === 'mod-arma' ? modCost(e) + (modCost(e) === 1 ? ' slot' : ' slots') : ''].filter(Boolean).join(' · ')),
         entryText(e) ? h('span', 'armory__part-text', entryText(e)) : null,
         e.slots && e.slots.accs && e.slots.accs.length ? h('span', 'armory__part-meta', 'Traz: ' + e.slots.accs.map((x) => x.name + ' (' + x.values.posicao + ')').join(', ')) : null,
-        opt.swap ? h('span', 'armory__why armory__why--swap', 'Troca: ' + opt.swap + ' (volta para a mochila)') : null,
+        opt.swap ? h('span', 'armory__why armory__why--swap', 'Troca: ' + opt.swap + (arm.assim ? '' : ' (volta para a mochila)')) : null,
         opt.why ? h('span', 'armory__why', opt.why) : null), btn);
       const c = rarColor(e.values.raridade);
       if (c) li.style.setProperty('--rar', c);
@@ -9609,7 +9635,12 @@ const FIREBASE_CONFIG = {
     };
     const match = (e) => !arm.q || searchScore(entryFields(e), arm.q) > 0;
     // tirar: a peça sai da arma e vai para a mochila
-    const unmount = (list, piece) => () => { list.splice(list.indexOf(piece), 1); returnToBag(s, [piece]); toast(piece.name + ' voltou para a mochila.'); armSave(); };
+    const unmount = (list, piece) => () => {
+      list.splice(list.indexOf(piece), 1);
+      if (arm.assim) toast('Tirou ' + piece.name + ' de ' + w.name + '.');
+      else { returnToBag(s, [piece]); toast(piece.name + ' voltou para a mochila.'); }
+      armSave();
+    };
     // montar: tira uma unidade da fonte e põe na arma (o que estava no lugar volta para a mochila)
     const mountFrom = (src, plan) => async () => {
       if (arm.busy) return;
@@ -9617,6 +9648,15 @@ const FIREBASE_CONFIG = {
       const ok = await src.take();
       arm.busy = false;
       if (!ok) { drawArmory(); return; }
+      if (arm.assim) {
+        // o simbionte replica: a peça não sai do catálogo e a que estava no lugar some
+        const p = planAttach(w, slotSnap(src.e));
+        if (!p || !p.slots) { toast('Não coube: ' + src.e.name + '.'); drawArmory(); return; }
+        w.slots = p.slots;
+        toast('Montou ' + src.e.name + ' em ' + w.name + '.' + (p.removed.length ? ' Saiu ' + p.removed.join(', ') + '.' : ''));
+        armSave();
+        return;
+      }
       const done = mountPiece(s, w, slotSnap(src.e));
       if (!done) { returnToBag(s, [slotSnap(src.e)]); toast('Não coube: ' + src.e.name + ' foi para a mochila.'); }
       else toast('Montou ' + src.e.name + ' em ' + w.name + '.' + (done.removed.length ? ' ' + done.removed.join(', ') + ' voltou para a mochila.' : ''));
@@ -9642,7 +9682,7 @@ const FIREBASE_CONFIG = {
       }).filter(Boolean);
       if (!arm.cat) return own.map((x) => x.li);
       const rest = libOf(kind).filter((e) => test(e) && match(e) && !sources.some((src) => samePiece(src.e, e))).filter((e) => { const plan = planAttach(w, e); return plan && !plan.already; })
-        .map((e) => row(e, false, { act: 'Sem a peça', where: 'Você não tem', n: 0, why: arm.m ? 'Não está na mochila, nos armazéns liberados nem nas lojas.' : 'Não está na mochila. Compre numa loja ou use o Armeiro da campanha.', run: () => {} }));
+        .map((e) => row(e, false, { act: 'Sem a peça', where: arm.assim ? 'Fora do catálogo' : 'Você não tem', n: 0, why: arm.assim ? 'O simbionte ainda não conhece esta peça: ela entra no catálogo quando passa pelo inventário.' : arm.m ? 'Não está na mochila, nos armazéns liberados nem nas lojas.' : 'Não está na mochila. Compre numa loja ou use o Armeiro da campanha.', run: () => {} }));
       return own.map((x) => x.li).concat(rest);
     };
     let items = [];
@@ -9666,7 +9706,7 @@ const FIREBASE_CONFIG = {
       if (w.kind === 'armadura') hint += ' Armadura não recebe mods nem acessórios, só propriedade.';
       items = w.slots.props.map((x) => row(x, true, { run: unmount(w.slots.props, x) })).concat(candRows((e) => e.kind === 'propriedade', 'propriedade'));
     }
-    hint += arm.m ? ' Peças da mochila, dos armazéns liberados e das lojas (comprando).' : ' Só aparecem as peças que estão na mochila; armazéns e lojas ficam no Armeiro da campanha.';
+    hint += arm.assim ? ' As peças vêm do catálogo do simbionte e não se gastam: ele replica. A próxima assimilação do item já sai assim.' : arm.m ? ' Peças da mochila, dos armazéns liberados e das lojas (comprando).' : ' Só aparecem as peças que estão na mochila; armazéns e lojas ficam no Armeiro da campanha.';
     const q = h('input', 'input');
     q.type = 'search';
     q.id = 'arm-q';
@@ -9687,7 +9727,7 @@ const FIREBASE_CONFIG = {
     };
     const modes = h('div', 'armory__modes', h('span', 'picker__filter-label', 'Mostrar:'), mode(false, 'Minhas'), mode(true, 'Compatíveis'));
     const none = arm.q ? 'Nenhuma peça com esse nome.' : arm.cat ? 'Nenhuma peça do catálogo encaixa em ' + title + '.'
-      : (arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.') + ' Toque em "Compatíveis" para ver tudo o que encaixa aqui.';
+      : (arm.assim ? 'Nenhuma peça do catálogo do simbionte serve aqui.' : arm.m ? 'Nenhuma peça para cá na mochila, nos armazéns liberados ou nas lojas.' : 'Nenhuma peça para cá na mochila.') + ' Toque em "Compatíveis" para ver tudo o que encaixa aqui.';
     panel.append(h('h3', 'armory__ptitle', title), h('p', 'field__hint', hint), qLab, q, modes,
       items.length ? h('ul', 'armory__parts', ...items) : h('p', 'empty', none));
 
@@ -9731,10 +9771,10 @@ const FIREBASE_CONFIG = {
     }
 
     armDlg.replaceChildren(
-      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', 'Armeiro'), ch && ch.name ? h('small', 'armory__who', ' · ' + ch.name + (arm.m && currentCamp ? ' · ' + fmtCronos(num((s.money || {})[currentCamp.id])) + ' Cronos' : '')) : null), close),
+      h('div', 'armory__head', h('h2', 'dialog__title', h('span', '', arm.assim ? 'Armeiro do simbionte' : 'Armeiro'), ch && ch.name ? h('small', 'armory__who', ' · ' + ch.name + (arm.m && currentCamp ? ' · ' + fmtCronos(num((s.money || {})[currentCamp.id])) + ' Cronos' : '')) : null), close),
       tabs,
       h('div', 'armory__grid',
-        h('div', 'armory__left', stage, slotRow, stats, ammoBox.children.length ? ammoBox : null),
+        h('div', 'armory__left', stage, slotRow, stats, ammoBox.children.length && !arm.assim ? ammoBox : null),
         panel));
     $('h2.dialog__title', armDlg).id = 'armory-title';
     const on = $('.armory__gun.is-on', armDlg);

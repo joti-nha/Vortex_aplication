@@ -258,8 +258,8 @@ window.VORTEX_REGRAS = {
         ['p', 'Sempre que o personagem alcançar um número par de UP Points (desconsiderando aqueles provenientes da Origem), poderá escolher dois dos seguintes benefícios:'],
         ['ul', ['+5 PV;', '+5 PE;', '+1 PA.']],
         ['p', 'Sempre que alcançar um número ímpar de UP Points (também desconsiderando os provenientes da Origem), recebe +1 ponto em uma perícia à sua escolha.'],
-        ['p', 'Uma vez a cada 4 UP Points (também desconsiderando os da Origem), em vez de receber esse +1 ponto em uma perícia, pode trocá-lo por uma **proficiência** à sua escolha. Na ficha, a troca fica em Perícias → Proficiências.'],
-        ['p', 'Além disso, a cada 4 UP Points (também desconsiderando os da Origem), recebe +1 em um atributo à sua escolha. Na ficha, ele é escolhido na aba Progressão.']
+        ['p', 'Uma vez em cada bloco de 4 UP Points (UP 1 a 4, 5 a 8 e assim por diante, também desconsiderando os da Origem), em vez de receber esse +1 ponto em uma perícia, pode trocá-lo por uma **proficiência** à sua escolha. Só esse ponto ganho pelo UP pode ser trocado: os pontos iniciais, os de UP investido em perícias e os de poderes não. Na ficha, a troca fica em Perícias → Proficiências; no roteiro da build, na folha do UP ímpar.'],
+        ['p', 'Além disso, em cada bloco de 4 UP Points (também desconsiderando os da Origem), recebe +1 em um atributo à sua escolha. Os dois valem desde o começo do bloco: o do primeiro bloco já pode ser usado no UP 1 ou no 3, sem esperar o UP 4. Na ficha, ele é escolhido na aba Progressão.']
       ]
     },
 
@@ -331,7 +331,7 @@ window.VORTEX_REGRAS = {
         ['p', 'Os únicos espaços fixos são a **armadura**, o **núcleo** e as **duas mãos** (empunhadura). Não há espaço por parte do corpo: dá para vestir três camisas uma por cima da outra, ou três mochilas.'],
         ['ul', [
           '**Vestíveis** (roupas, mochilas, escudos energéticos...): você se beneficia de até **3 + Corpo** deles.',
-          '**Mochilas**: há três, sem raridade, e nenhuma ocupa carga. Cada uma soma Carga a cada 3 da sua Carga (contada antes da mochila): **Pequena** +1, **Média** +2 (requer Corpo 2) e **Grande** +3 (requer Corpo 3). Só a maior mochila vestida conta; sem o Corpo pedido, ela não dá benefício.',
+          '**Mochilas**: há três, sem raridade, e nenhuma ocupa carga. Cada uma soma uma porcentagem da sua Carga (contada antes da mochila, arredondada para baixo): **Pequena** +15%, **Média** +25% (requer Corpo 2) e **Grande** +33% (requer Corpo 3). Só a maior mochila vestida conta; sem o Corpo pedido, ela não dá benefício.',
           '**Próteses**: limitadas pela sua Carga Cibernética (CC).',
           '**Módulos**: só abrem espaço com ao menos uma prótese implantada; limitados pela CC, com a reserva da Essência.'
         ]],
