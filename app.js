@@ -8989,7 +8989,7 @@ const FIREBASE_CONFIG = {
     const head = h('div', 'picker__head', h('h2', '', 'Assimilar'), btn('Fechar', 'btn--ghost', () => closeDialog(asDlg)));
     head.querySelector('h2').id = 'assim-title';
     const tabs = h('div', 'assim__tabs', tab('slots', 'Assimilados ' + slots.length + '/' + max), tab('cat', 'Catálogo (' + cat.length + ')'),
-      cat.some(canArmory) ? btn('Armeiro', 'btn--ghost', () => openAssimArmory(''), 'assim-armory') : null);
+      cat.some(canArmory) || slots.some(canArmory) ? btn('Armeiro', 'btn--ghost', () => openAssimArmory(''), 'assim-armory') : null);
     const body = h('div', 'assim__body');
     const card = (e, onOpen, extra) => {
       const c = h('button', 'assim__card');
@@ -9019,6 +9019,7 @@ const FIREBASE_CONFIG = {
         const draw = slotsFor(i)[0];
         const acts = h('span', 'assim__acts');
         if (draw) acts.append(btn('Sacar', 'btn--primary', (ev) => { ev.stopPropagation(); if (equipItem(i, draw)) asSave(); }));
+        if (canArmory(i)) acts.append(btn('Armeiro', 'btn--ghost', (ev) => { ev.stopPropagation(); openAssimArmory(assimKey(i)); }, 'assim-slot-arm-' + n));
         acts.append(btn('Trocar', 'btn--ghost', (ev) => { ev.stopPropagation(); asUi.pick = n; asUi.view = 'cat'; drawAssim(); }),
           btn('Desfazer', 'btn--ghost', (ev) => { ev.stopPropagation(); s.inventory.splice(s.inventory.indexOf(i), 1); asSave(); }));
         const c = card(i, () => { closeDialog(asDlg); openInvDialog(i.uid); }, h('span', 'assim__meta', over ? 'Acima do limite do Corpo' : 'Slot ' + (n + 1)));
@@ -9454,6 +9455,8 @@ const FIREBASE_CONFIG = {
   function openAssimArmory(key) {
     if (!sheetChar || !isSimb(sheetChar.sheet)) return;
     const s = sheetChar.sheet;
+    // um item assimilado cujo modelo saiu do catálogo volta para ele (o Armeiro edita o modelo)
+    assimSlots(s).filter(canArmory).forEach((i) => { if (!s.assim.cat.some((e) => assimKey(e) === assimKey(i))) s.assim.cat.push(Object.assign(invEntryFrom(i), { ck: assimKey(i), slots: normSlots(deep(i.slots)) })); });
     arm.assim = true;
     const guns = armGuns(s);
     if (!guns.length) { arm.assim = false; toast('Nenhuma arma ou armadura no catálogo do simbionte.'); return; }
@@ -9491,7 +9494,14 @@ const FIREBASE_CONFIG = {
   };
   // salva: na ficha aberta, como qualquer edição; na campanha, grava a mochila (e o dinheiro) do personagem
   async function armSave() {
-    if (arm.assim) { touchSheet(); rerender(); drawArmory(); return; }
+    if (arm.assim) {
+      // o que se monta no modelo do catálogo vale também para as cópias assimiladas (guardadas ou sacadas)
+      const s = armSheet();
+      const w = armGuns(s).find((x) => armId(x) === arm.uid);
+      if (w) s.inventory.forEach((i) => { if (i.assim && assimKey(i) === assimKey(w)) i.slots = normSlots(deep(w.slots)); });
+      touchSheet(); rerender(); drawArmory();
+      return;
+    }
     if (!arm.m) { touchSheet(); rerender(); drawArmory(); return; }
     const local = arm.m.sheet;
     const camp = currentCamp && currentCamp.id;
