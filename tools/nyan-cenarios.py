@@ -449,34 +449,6 @@ def gate(d, x0, x1, y, c):
         d.raw.rectangle([X0, yy, X1 + 1, yy + 1], fill=c)
 
 
-def witchcat(d, X, Y, s=1.0, cols=('#22123a', '#4a3a5e', '#6a5a80', '#8a7aa0')):
-    """Nyan Cat bruxa em silhueta cinza: chapéu pontudo, vassoura e rastro em faixas (grade fina, olhando para a direita)."""
-    line, dark, mid, light = cols
-    def P(x, y):
-        return (X + x * s, Y + y * s)
-    def box(x0, y0, x1, y1):
-        return [X + x0 * s, Y + y0 * s, X + x1 * s, Y + y1 * s]
-    for k, c in enumerate((light, mid, dark, mid)):  # rastro ondulado atrás do gato
-        for i in range(6):
-            yy = -6 + k * 3 + (2 if i % 2 else 0)
-            d.raw.rectangle(box(-38 + i * 6, yy, -33 + i * 6, yy + 2), fill=c)
-    d.raw.line([P(-14, 10), P(26, 4)], fill=line, width=max(2, int(3 * s)))  # cabo da vassoura
-    d.raw.polygon([P(-14, 10), P(-24, 4), P(-26, 10), P(-24, 16)], fill=dark)  # palha
-    d.raw.rounded_rectangle(box(-8, -8, 12, 8), radius=4 * s, fill=line)  # corpo (o biscoito)
-    d.raw.rounded_rectangle(box(-6, -6, 10, 6), radius=3 * s, fill=mid)
-    for dx, dy in ((-2, -3), (4, -2), (1, 2), (7, 1)):
-        d.raw.rectangle(box(dx, dy, dx + 1, dy + 1), fill=light)
-    for lx in (-5, 0, 6, 10):  # patinhas
-        d.raw.rectangle(box(lx, 8, lx + 2, 10), fill=line)
-    d.raw.ellipse(box(8, -6, 22, 6), fill=line)  # cabeça
-    d.raw.ellipse(box(10, -4, 20, 5), fill=light)
-    d.raw.polygon([P(10, -3), P(11, -9), P(14, -4)], fill=line); d.raw.polygon([P(16, -4), P(19, -9), P(20, -3)], fill=line)
-    d.raw.rectangle(box(13, -1, 14, 0), fill=line); d.raw.rectangle(box(17, -1, 18, 0), fill=line)  # olhos
-    d.raw.ellipse(box(6, -9, 25, -5), fill=line)  # aba do chapéu
-    d.raw.polygon([P(10, -7), P(21, -7), P(17, -18), P(11, -23), P(14, -17)], fill=dark)  # cone com a ponta caída para trás
-    d.raw.polygon([P(10.5, -7.5), P(20.5, -7.5), P(19.5, -10), P(11.5, -10)], fill=light)  # faixa do chapéu
-
-
 def bat(d, x, y, c='#0a0010'):
     d.rectangle([x - 1, y - 1, x + 1, y + 1], fill=c)
     d.line([(x - 6, y - 3), (x - 2, y)], fill=c, width=2)
@@ -589,8 +561,8 @@ def scene_pumpkin():  # Halloween: lua cheia, morcegos, árvore seca, lápides e
     moon(d, 236, 46, 24, '#ffd27a', ('#f0b860', '#e8a850'), '#3a0a4a', 5)
     hills(d, 150, 18, 34, 4, '#2a0a3e', '#3e1656')  # morros de trás, mais claros
     hills(d, 160, 10, 22, 40, '#0a0010')  # o chão é o próprio morro da frente: sem emenda reta no meio da cena
+    gate(d, 0, W - 1, 158, '#0a0010')  # a cerca atravessa o cenário todo, atrás das lápides
     gnarl(d, 46, 162, '#0a0010')
-    gate(d, 150, 280, 158, '#0a0010')
     return im
 
 
@@ -922,14 +894,13 @@ def fine_xmas(d):
 def fine_pumpkin(d):
     glow(d, 236, 46, 27, 40, '#ffb04a')
     fine_stars(d, 60, 70, 5, ('#ffd8a0', '#ffffff'))
-    for x, y, s in ((150, 70, 1.6), (300, 40, 1.2), (340, 140, 1.4), (214, 182, 1.0)):  # bruxinhas voando no lugar dos morcegos
-        witchcat(d, x, y, s)
     blades(d, 162, 180, 220, ['#1a0a2a', '#2a1a3a'], 33)
-    for x, y in ((120, 352), (348, 356), (480, 350), (590, 354)):  # brilho alaranjado no chão perto das abóboras
-        dither(d, x - 14, y - 2, x + 14, y + 1, '#3a1a10', 1)
-    for x, y in ((92, 168), (134, 164), (196, 170), (262, 166)):  # lápides e abóboras por último, na frente da grama
+    pumps = [(4 + k * 36 + (k % 2) * 4, 176 + (k * 5) % 3) for k in range(9)]  # abóboras de ponta a ponta
+    for x, y in pumps:  # brilho alaranjado no chão perto de cada abóbora
+        dither(d, x * 2 + 2, y * 2 - 2, x * 2 + 30, y * 2 + 1, '#3a1a10', 1)
+    for x, y in ((24, 168), (96, 164), (166, 170), (238, 166)):  # lápides e abóboras por último, na frente da grama
         tomb(d, x, y, '#4a3a5e', '#22123a', '#6a5a80')
-    for x, y in ((112, 176), (170, 178), (236, 175), (292, 177)):
+    for x, y in pumps:
         pumpkin(d, x, y)
 
 
