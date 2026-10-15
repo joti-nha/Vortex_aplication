@@ -7569,7 +7569,6 @@ const FIREBASE_CONFIG = {
     img.hidden = !has;
     if (has) img.src = sheetChar.image; else img.removeAttribute('src');
     $('#portrait-empty').hidden = has;
-    $('#portrait-remove').hidden = !has;
   }
 
   /* Peças de interface da ficha */
@@ -10491,30 +10490,171 @@ const FIREBASE_CONFIG = {
     pair[1].addEventListener('input', () => { sheetChar.sheet[pair[0]] = pair[1].value; touchSheet(); if (pair[0] === 'sex') checkSecretThemes(); });
   });
 
-  // Imagem
-  $('#portrait-btn').addEventListener('click', () => $('#portrait-file').click());
-  $('#portrait-file').addEventListener('change', async (ev) => {
+  /* Imagem do retrato: um editor como o das redes sociais. A imagem aparece atrás de um círculo;
+     arrastar escolhe o alinhamento e o zoom (barra, roda do mouse ou pinça) escolhe o tamanho.
+     Salvar recorta o que está dentro do círculo nos dois tamanhos (retrato e miniatura). */
+  const pe = { dlg: null, img: null, ch: null, z: 1, x: 0, y: 0, F: 260 };
+  const peBase = () => pe.F / Math.min(pe.img.naturalWidth, pe.img.naturalHeight); // escala que cobre o círculo
+  function peClamp() { // a imagem sempre cobre o quadro inteiro
+    const s = peBase() * pe.z;
+    const w = pe.img.naturalWidth * s, hh = pe.img.naturalHeight * s;
+    pe.x = Math.min(0, Math.max(pe.F - w, pe.x));
+    pe.y = Math.min(0, Math.max(pe.F - hh, pe.y));
+  }
+  function peZoom(z, cx, cy) { // zoom em volta de um ponto do quadro (o centro, se não vier)
+    const old = pe.z;
+    pe.z = Math.max(1, Math.min(5, z));
+    const px = cx === undefined ? pe.F / 2 : cx, py = cy === undefined ? pe.F / 2 : cy;
+    pe.x = px - (px - pe.x) * pe.z / old;
+    pe.y = py - (py - pe.y) * pe.z / old;
+    peClamp();
+    pePaint();
+  }
+  function pePaint() {
+    if (!pe.dlg || !pe.img) return;
+    const s = peBase() * pe.z;
+    const im = $('.pedit__img', pe.dlg);
+    im.style.width = pe.img.naturalWidth * s + 'px';
+    im.style.height = pe.img.naturalHeight * s + 'px';
+    im.style.transform = 'translate(' + pe.x + 'px,' + pe.y + 'px)';
+    const r = $('.pedit__zoom', pe.dlg);
+    if (r && Number(r.value) !== pe.z) r.value = String(pe.z);
+  }
+  function peLoad(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        pe.img = img;
+        pe.z = 1;
+        const s = peBase();
+        pe.x = (pe.F - img.naturalWidth * s) / 2;
+        pe.y = (pe.F - img.naturalHeight * s) / 2;
+        peDraw();
+        resolve();
+      };
+      img.onerror = () => reject(new UserError('Não consegui ler essa imagem. Tente um arquivo JPG ou PNG.'));
+      img.src = src;
+    });
+  }
+  function peCut(size, quality) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#162836';
+    ctx.fillRect(0, 0, size, size);
+    const k = size / pe.F, s = peBase() * pe.z;
+    ctx.drawImage(pe.img, pe.x * k, pe.y * k, pe.img.naturalWidth * s * k, pe.img.naturalHeight * s * k);
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+  function pePick() { // escolhe um arquivo e abre no editor
+    const inp = $('#portrait-file');
+    inp.value = '';
+    inp.click();
+  }
+  function peDraw() {
+    const btn = (label, cls, fn, fid) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
+    const ch = pe.ch;
+    const head = h('div', 'picker__head', h('h2', '', 'Imagem de ' + ch.name), btn('Cancelar', 'btn--ghost', () => closeDialog(pe.dlg), 'pedit-cancel'));
+    head.querySelector('h2').id = 'pedit-title';
+    if (!pe.img) {
+      pe.dlg.replaceChildren(h('div', 'picker', head, h('p', 'field__hint', 'Nenhuma imagem ainda.'), h('div', 'dialog__actions', btn('Escolher imagem', 'btn--primary', pePick, 'pedit-pick'))));
+      return;
+    }
+    const im = h('img', 'pedit__img');
+    im.src = pe.img.src;
+    im.alt = '';
+    im.draggable = false;
+    const stage = h('div', 'pedit__stage', im, h('div', 'pedit__mask'));
+    stage.style.width = stage.style.height = pe.F + 'px';
+    stage.dataset.fid = 'pedit-stage';
+    // arrastar (um dedo ou mouse) e pinça (dois dedos)
+    const pts = new Map();
+    let last = null, pinch = 0;
+    stage.addEventListener('pointerdown', (ev) => { stage.setPointerCapture(ev.pointerId); pts.set(ev.pointerId, [ev.clientX, ev.clientY]); last = [ev.clientX, ev.clientY]; pinch = 0; });
+    stage.addEventListener('pointermove', (ev) => {
+      if (!pts.has(ev.pointerId)) return;
+      pts.set(ev.pointerId, [ev.clientX, ev.clientY]);
+      if (pts.size >= 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        const box = stage.getBoundingClientRect();
+        if (pinch) peZoom(pe.z * d / pinch, (a[0] + b[0]) / 2 - box.left, (a[1] + b[1]) / 2 - box.top);
+        pinch = d;
+        return;
+      }
+      pe.x += ev.clientX - last[0];
+      pe.y += ev.clientY - last[1];
+      last = [ev.clientX, ev.clientY];
+      peClamp();
+      pePaint();
+    });
+    const up = (ev) => { pts.delete(ev.pointerId); pinch = 0; const r = [...pts.values()][0]; if (r) last = r; };
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    stage.addEventListener('wheel', (ev) => { ev.preventDefault(); const box = stage.getBoundingClientRect(); peZoom(pe.z * (ev.deltaY < 0 ? 1.1 : 1 / 1.1), ev.clientX - box.left, ev.clientY - box.top); }, { passive: false });
+    const zoom = h('input', 'pedit__zoom');
+    zoom.type = 'range';
+    zoom.min = '1';
+    zoom.max = '5';
+    zoom.step = '0.01';
+    zoom.value = String(pe.z);
+    zoom.dataset.fid = 'pedit-zoom';
+    zoom.setAttribute('aria-label', 'Tamanho da imagem');
+    zoom.addEventListener('input', () => peZoom(Number(zoom.value)));
+    const save = btn('Salvar', 'btn--primary', async () => {
+      const imgs = { image: peCut(320, 0.82), thumb: peCut(96, 0.75) };
+      save.disabled = true;
+      try {
+        await db.saveCharacter(ch.id, imgs);
+        Object.assign(ch, imgs);
+        quickUpdate(ch);
+        closeDialog(pe.dlg);
+        if (sheetChar === ch) { renderPortrait(); setStatus('Imagem salva'); }
+      } catch (err) { save.disabled = false; toast(errorMessage(err)); }
+    }, 'pedit-save');
+    const remove = ch.image ? btn('Remover imagem', 'btn--danger', async () => {
+      if (!(await askConfirm({ title: 'Remover a imagem?', text: 'O retrato de ' + ch.name + ' fica vazio.', ok: 'Remover' }))) return;
+      try {
+        await db.saveCharacter(ch.id, { image: '', thumb: '' });
+        ch.image = ch.thumb = '';
+        quickUpdate(ch);
+        closeDialog(pe.dlg);
+        if (sheetChar === ch) { renderPortrait(); setStatus('Imagem removida'); }
+      } catch (err) { toast(errorMessage(err)); }
+    }, 'pedit-remove') : null;
+    pe.dlg.replaceChildren(h('div', 'picker pedit', head,
+      h('p', 'field__hint', 'Arraste para alinhar e use a barra (ou a roda do mouse, ou dois dedos) para o tamanho. Fica o que está dentro do círculo.'),
+      stage,
+      h('label', 'pedit__zoomrow', h('span', '', '−'), zoom, h('span', '', '+')),
+      h('div', 'dialog__actions pedit__acts', remove, btn('Trocar imagem', 'btn--ghost', pePick, 'pedit-pick'), save)));
+    pePaint();
+  }
+  async function openPortraitEditor(file) {
+    if (!sheetChar) return;
+    if (!pe.dlg) {
+      pe.dlg = h('dialog', 'dialog pedit-dlg');
+      pe.dlg.setAttribute('aria-labelledby', 'pedit-title');
+      document.body.append(pe.dlg);
+    }
+    pe.ch = sheetChar;
+    pe.img = null;
+    try {
+      if (file) {
+        const url = URL.createObjectURL(file);
+        await peLoad(url);
+      } else if (sheetChar.image) await peLoad(sheetChar.image);
+      else peDraw();
+    } catch (err) { toast(errorMessage(err)); return; }
+    if (!pe.dlg.open) openDialog(pe.dlg);
+  }
+  // sem imagem, o retrato abre direto a escolha do arquivo; com imagem, abre o editor
+  $('#portrait-btn').addEventListener('click', () => { if (sheetChar && sheetChar.image) openPortraitEditor(); else pePick(); });
+  $('#portrait-file').addEventListener('change', (ev) => {
     const file = ev.target.files[0];
     ev.target.value = '';
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) { toast('Imagem grande demais. Use uma de até 20 MB.'); return; }
-    const ch = sheetChar;
-    try {
-      const imgs = await fileToImages(file);
-      await db.saveCharacter(ch.id, imgs);
-      Object.assign(ch, imgs);
-      quickUpdate(ch);
-      if (sheetChar === ch) { renderPortrait(); setStatus('Imagem salva'); }
-    } catch (err) { toast(errorMessage(err)); }
-  });
-  $('#portrait-remove').addEventListener('click', async () => {
-    const ch = sheetChar;
-    try {
-      await db.saveCharacter(ch.id, { image: '', thumb: '' });
-      ch.image = ch.thumb = '';
-      quickUpdate(ch);
-      if (sheetChar === ch) { renderPortrait(); setStatus('Imagem removida'); }
-    } catch (err) { toast(errorMessage(err)); }
+    openPortraitEditor(file);
   });
 
   /* Galeria do personagem: botão discreto embaixo do retrato. Uma vitrine de fotos em que só abre
