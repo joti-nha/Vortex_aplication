@@ -3283,6 +3283,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 .armory { width: min(68rem, calc(100vw - 1rem)); }
 .armory__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.75rem; }
 .armory__head .dialog__title { margin: 0; }
+.armory__head [data-fid="arm-save-preset"] { margin-left: auto; }
 .armory__guns { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.35rem; margin-bottom: 0.9rem; scrollbar-width: thin; }
 .armory__gun { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; max-width: 14rem; padding: 0.4rem 0.7rem; border: 1px solid var(--linha); border-bottom: 3px solid var(--rar, var(--linha)); border-radius: var(--r-s); background: var(--casco); color: inherit; font: inherit; font-size: 0.85rem; cursor: pointer; }
 .armory__gun.is-on { border-color: var(--rar, var(--ambar)); background: rgba(var(--ambar-rgb), 0.1); }
@@ -3983,3 +3984,16 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .gallery__slot--busy { display: grid; place-items: center; font-size: var(--t-s); cursor: default; }
 .gallery__big { width: 100%; max-height: 65vh; object-fit: contain; border-radius: var(--r-m, 12px); background: var(--casco-2); }
 .gallery__ways { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* Editor do retrato: a imagem atrás de um círculo, arrastar e zoom */
+.pedit-dlg { width: min(24rem, calc(100vw - 2rem)); }
+.pedit { display: grid; gap: 0.8rem; justify-items: center; }
+.pedit .picker__head, .pedit .field__hint, .pedit__acts { justify-self: stretch; }
+.pedit__stage { position: relative; overflow: hidden; border-radius: 0.75rem; background: var(--casco-2); touch-action: none; cursor: grab; user-select: none; }
+.pedit__stage:active { cursor: grabbing; }
+.pedit__img { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; pointer-events: none; }
+.pedit__mask { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgba(6, 12, 20, 0.62), inset 0 0 0 2px var(--ambar); pointer-events: none; }
+.pedit__zoomrow { display: flex; align-items: center; gap: 0.6rem; width: 260px; max-width: 100%; color: var(--nevoa-2); font-weight: 700; }
+.pedit__zoom { flex: 1; accent-color: var(--ambar); }
+.pedit__acts { flex-wrap: wrap; }
+.pedit__acts .btn--danger { margin-right: auto; }
