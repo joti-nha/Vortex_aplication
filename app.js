@@ -1912,7 +1912,7 @@ const FIREBASE_CONFIG = {
     },
     progressao: {
       title: 'Progressão',
-      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia (uma vez a cada 4 UP, esse ponto pode virar uma proficiência). UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
+      text: '10 XP viram 1 UP. A cada UP par alcançado, 2 benefícios entre +5 PV, +5 PE e +1 PA; a cada ímpar, +1 ponto de perícia (uma vez por bloco de 4 UP, já no UP 1 ou 3, esse ponto pode virar uma proficiência). UP de origem não contam para isso. Poderes custam UP; cada UP investido em perícias dá +3 pontos. Por 1 UP cada: Doutor (limite +4 numa perícia) e proficiências extras de arma ou armadura (cada uma dá +1 ponto de perícia).',
       rule: 'progressao'
     },
     poderes: {
@@ -6756,8 +6756,8 @@ const FIREBASE_CONFIG = {
   const upProfsOf = (s) => choicesOf(s, 'of-pod-prof-arma').concat(choicesOf(s, 'of-pod-prof-armadura'));
   const choiceLabel = (pid, id) => (CHOICE_POWERS[pid] === 'pericia' ? SKILL_LABEL[id] || id : profLabel(id));
   const choicePower = (e, choice) => Object.assign(slotSnap(e), { thumb: e.thumb || '', choice, name: e.name + ': ' + choiceLabel(e.id, choice) });
-  // trocas de perícia por proficiência: uma a cada 4 UP ganhos por XP (as de origem não contam)
-  const swapAllowed = (s) => Math.floor(Math.floor(num(s.xp) / 10) / 4);
+  // trocas de perícia por proficiência: uma por bloco de 4 UP ganhos por XP (as de origem não contam)
+  const swapAllowed = (s) => Math.ceil(Math.floor(num(s.xp) / 10) / 4); // uma por bloco de 4 UP (1-4, 5-8...): já vale no UP 1 ou 3
   const swapProfsOf = (s) => (s.swapProfs || []).slice(0, swapAllowed(s));
   const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0 || swapProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
@@ -6870,9 +6870,9 @@ const FIREBASE_CONFIG = {
       upEarned, upTotal: upEarned + mech.up + num(s.upExtra),
       upSpent: s.up.per + powerCost,
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
-      // +1 num atributo a cada 4 UP: vale o escolhido na Progressão e também o ponto posto direto na faixa
+      // +1 num atributo por bloco de 4 UP (1-4, 5-8...: o do bloco já vale no 1º UP dele): vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
-      attrAllowed: Math.floor(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
+      attrAllowed: Math.ceil(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
       skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over - swapProfsOf(s).length, // cada troca tira 1 ponto de perícia // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
       skillGrant: skillGrant(s).grant,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
@@ -7061,9 +7061,12 @@ const FIREBASE_CONFIG = {
   const RT_MAX_UP = 30;
   const rtSkills = () => { const out = []; ATTRS.forEach((at) => SKILLS[at.id].forEach((sk) => out.push([sk[0], sk[1]]))); return out; };
   const rtPage = () => ({ gasto: null, ben: ['', ''], per: '', troca: '', attr: '', nota: '' });
-  // a cada 4 UP, o ponto de perícia de uma folha ímpar pode virar proficiência: na folha n cabem floor(n / 4) trocas
-  const rtSwapOk = (r, n) => n % 2 === 1 && r.pages.slice(0, n - 1).filter((x) => x.troca).length < Math.floor(n / 4);
-  const rtAttrPage = (n) => n % 4 === 0; // a cada 4 UP: +1 num atributo
+  // blocos de 4 UP (folhas 1-4, 5-8...): em cada bloco cabe uma troca de perícia por proficiência (numa folha ímpar)
+  // e um +1 de atributo (em qualquer folha do bloco)
+  const rtBlock = (r, n) => { const a = Math.floor((n - 1) / 4) * 4; return r.pages.slice(a, a + 4).map((p, i) => ({ p, n: a + i + 1 })); };
+  const rtSwapOk = (r, n) => n % 2 === 1 && !rtBlock(r, n).some((x) => x.n !== n && x.p.troca);
+  const rtAttrOk = (r, n) => !rtBlock(r, n).some((x) => x.n !== n && x.p.attr);
+  const rtAttrPage = (n) => n % 4 === 0; // última folha do bloco: se o bloco não tiver atributo, ela fica pendente
   const rtNew = (up, money) => ({ v: 1, up, dinheiro: money, itens: [], pages: Array.from({ length: up }, rtPage) });
   function rtRead(values) { // JSON salvo, ou o texto antigo das folhas convertido
     const v = values || {};
@@ -7141,14 +7144,14 @@ const FIREBASE_CONFIG = {
     if (rtItemsTotal(r) > r.dinheiro) out.push('Os itens passam do dinheiro em ' + fmtCronos(rtItemsTotal(r) - r.dinheiro) + ' Cronos.');
     return out;
   }
-  const rtFilled = (p, n) => Boolean(rtText(p.gasto)) && (n % 2 ? Boolean(p.per || p.troca) : p.ben.every(Boolean)) && (!rtAttrPage(n) || Boolean(p.attr));
+  const rtFilled = (p, n, r) => Boolean(rtText(p.gasto)) && (n % 2 ? Boolean(p.per || p.troca) : p.ben.every(Boolean)) && (!(rtAttrPage(n) || n === r.up) || rtBlock(r, n).some((x) => x.p.attr));
   const attrLabel = (id) => { const x = ATTRS.find((at) => at.id === id); return x ? x.label : id; };
   // grava o roteiro nos campos que a ficha e a distribuição inicial já leem
   function rtWrite(values, r) {
     if (!r) { values.roteiro = ''; values.folhas = ''; values.beneficios = ''; values.periciasUp = ''; values.itens = ''; values.dinheiro = ''; values.tipo = 'Entrada'; return; }
     values.roteiro = JSON.stringify(Object.assign({}, r, { setup: undefined }));
     values.folhas = r.pages.map((p, i) => {
-      const parts = [rtText(p.gasto), (i + 1) % 2 && p.troca ? 'Troca: Proficiência ' + profLabel(p.troca) : '', rtAttrPage(i + 1) && p.attr ? 'Atributo: ' + attrLabel(p.attr) + ' +1' : '', p.nota.trim()].filter(Boolean);
+      const parts = [rtText(p.gasto), (i + 1) % 2 && p.troca ? 'Troca: Proficiência ' + profLabel(p.troca) : '', p.attr ? 'Atributo: ' + attrLabel(p.attr) + ' +1' : '', p.nota.trim()].filter(Boolean);
       return parts.length ? (i + 1) + ' | ' + parts.join('; ') : '';
     }).filter(Boolean).join('\n');
     values.beneficios = r.pages.filter((p, i) => (i + 1) % 2 === 0).map((p) => p.ben).flat().filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', ');
@@ -7166,7 +7169,7 @@ const FIREBASE_CONFIG = {
     const lines = r.pages.map((p, i) => {
       const n = i + 1;
       const parts = [rtText(p.gasto), n % 2 ? (p.troca ? 'troca o ponto de perícia por ' + profLabel(p.troca) : p.per ? 'ponto em ' + skillLabel(p.per) : '') : p.ben.filter(Boolean).map((k) => RT_BEN.find((b) => b[0] === k)[1]).join(', '),
-        rtAttrPage(n) && p.attr ? attrLabel(p.attr) + ' +1' : '', p.nota].filter(Boolean);
+        p.attr ? attrLabel(p.attr) + ' +1' : '', p.nota].filter(Boolean);
       return parts.length ? 'UP ' + n + ': ' + parts.join(' · ') : '';
     }).filter(Boolean);
     if (lines.length) rows.push(['Folhas', lines.join('\n')]);
@@ -7183,7 +7186,7 @@ const FIREBASE_CONFIG = {
       open.dataset.fid = 'rt-open';
       open.addEventListener('click', () => openRoteiro(d, () => { paint(); if (onDone) onDone(); }));
       if (!r) { box.replaceChildren(h('p', 'field__hint', 'Sem roteiro, a build é só o nível 0 (de entrada). Com roteiro, ela vira guiada: um livrinho com o que pegar a cada UP, e a ficha de quem segue se atualiza sozinha.'), open); return; }
-      const filled = r.pages.filter((p, i) => rtFilled(p, i + 1)).length;
+      const filled = r.pages.filter((p, i) => rtFilled(p, i + 1, r)).length;
       const probs = rtProblems(r);
       box.replaceChildren(
         h('div', 'rt-field__sum',
@@ -7351,7 +7354,7 @@ const FIREBASE_CONFIG = {
     const res = h('div', 'rt-res',
       h('span', 'rt-chip rt-chip--up', '1 UP' + (led.have > 1 ? ' (+' + (led.have - 1) + ' guardado' + (led.have > 2 ? 's' : '') + ')' : '')),
       n % 2 ? h('span', 'rt-chip', p.troca ? '+1 proficiência (troca)' : '+1 ponto de perícia') : h('span', 'rt-chip', '2 benefícios'),
-      rtAttrPage(n) ? h('span', 'rt-chip rt-chip--attr', '+1 atributo') : null);
+      p.attr ? h('span', 'rt-chip rt-chip--attr', '+1 atributo') : null);
     // o ponto de perícia do UP ímpar; uma vez a cada 4 UP ele pode virar proficiência
     const swapOk = n % 2 === 1 && (p.troca || rtSwapOk(r, n));
     const perMode = (on, label, fid, fn) => { const x = h('button', 'rt-kind' + (on ? ' is-on' : ''), label); x.type = 'button'; x.dataset.fid = fid; x.setAttribute('aria-pressed', String(on)); x.addEventListener('click', fn); return x; };
@@ -7361,7 +7364,7 @@ const FIREBASE_CONFIG = {
           perMode(Boolean(p.troca), 'Trocar por proficiência', 'rt-ponto-troca', () => { if (!p.troca) { p.troca = PROFS[0].id; p.per = ''; } redo(); })) : null,
         p.troca ? rtSelect(PROFS.map((x) => [x.id, x.label]), p.troca, (v) => { p.troca = v || PROFS[0].id; redo(); }, 'Tipo de arma ou armadura...', 'rt-troca')
           : rtSelect(rtSkills(), p.per, (v) => { p.per = v; redo(); }, 'Perícia que ganha +1...', 'rt-ponto'),
-        swapOk ? h('p', 'field__hint', 'Uma vez a cada 4 UP, o ponto de perícia deste UP pode virar uma proficiência.') : null)
+        swapOk ? h('p', 'field__hint', 'Uma vez por bloco de 4 UP (folhas 1-4, 5-8...), o ponto de perícia de um UP ímpar pode virar uma proficiência.') : null)
       : h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Benefícios'), h('div', 'rt-bens', ...[0, 1].map((i) => h('div', 'rt-ben', h('span', 'rt-ben__label', (i + 1) + 'º benefício'), ...RT_BEN.map((b) => {
         const x = h('button', 'rt-kind' + (p.ben[i] === b[0] ? ' is-on' : ''), b[1]);
         x.type = 'button';
@@ -7370,8 +7373,8 @@ const FIREBASE_CONFIG = {
         x.addEventListener('click', () => { p.ben[i] = p.ben[i] === b[0] ? '' : b[0]; redo(); });
         return x;
       })))));
-    // a cada 4 UP: +1 num atributo à escolha
-    const attr = rtAttrPage(n) ? h('div', 'rt-sec rt-sec--attr', h('h4', 'rt-sec__title', 'Atributo (+1 a cada 4 UP)'),
+    // um +1 de atributo por bloco de 4 UP, em qualquer folha do bloco
+    const attr = p.attr || rtAttrOk(r, n) ? h('div', 'rt-sec rt-sec--attr', h('h4', 'rt-sec__title', 'Atributo (+1 por bloco de 4 UP: folhas ' + (Math.floor((n - 1) / 4) * 4 + 1) + ' a ' + (Math.floor((n - 1) / 4) * 4 + 4) + ')'),
       h('div', 'rt-kinds', ...ATTRS.map((at) => {
         const on = p.attr === at.id;
         const x = h('button', 'rt-kind' + (on ? ' is-on' : ''), at.label + ' +1');
@@ -7390,7 +7393,7 @@ const FIREBASE_CONFIG = {
     nota.dataset.fid = 'rt-nota';
     nota.addEventListener('input', () => { p.nota = nota.value; });
     // duas colunas no PC: à esquerda o que gastar, à direita o que a folha dá de graça
-    return h('article', 'guide__page rt-page' + (rtFilled(p, n) ? ' is-done' : '') + (led.short ? ' is-bad' : ''),
+    return h('article', 'guide__page rt-page' + (rtFilled(p, n, r) ? ' is-done' : '') + (led.short ? ' is-bad' : ''),
       h('div', 'rt-page__head', h('p', 'guide__num', h('span', '', 'Folha'), h('strong', '', String(n))), res),
       h('div', 'rt-cols',
         h('div', 'rt-col', h('div', 'rt-sec', h('h4', 'rt-sec__title', 'Gastar o UP'), kinds, detail,
@@ -7411,16 +7414,16 @@ const FIREBASE_CONFIG = {
       else if (p.troca) profs.push(profLabel(p.troca));
       else if (p.per) skills[p.per] = (skills[p.per] || 0) + 1;
       if (p.gasto && p.gasto.t === 'pericias') Object.keys(p.gasto.list || {}).forEach((k) => { skills[k] = (skills[k] || 0) + num(p.gasto.list[k]); });
-      if (rtAttrPage(n) && p.attr) attrs[p.attr] = (attrs[p.attr] || 0) + 1;
+      if (p.attr) attrs[p.attr] = (attrs[p.attr] || 0) + 1;
     });
-    const attrSlots = Math.floor(r.up / 4), attrUsed = Object.keys(attrs).reduce((t, k) => t + attrs[k], 0);
+    const attrSlots = Math.ceil(r.up / 4), attrUsed = Object.keys(attrs).reduce((t, k) => t + attrs[k], 0);
     const row = (label, value) => h('div', 'rt-sum__row', h('dt', '', label), h('dd', '', value));
     const benTxt = [ben.pv ? '+' + ben.pv * 5 + ' PV' : '', ben.pe ? '+' + ben.pe * 5 + ' PE' : '', ben.pa ? '+' + ben.pa + ' PA' : ''].filter(Boolean).join(' · ');
     const left = led.length ? led[led.length - 1].left : 0;
     return h('aside', 'rt-sum',
       h('h4', 'rt-sum__title', 'Resumo do roteiro'),
       h('dl', 'rt-sum__list',
-        row('Atributos', attrSlots ? (ATTRS.filter((at) => attrs[at.id]).map((at) => at.label + ' +' + attrs[at.id]).join(' · ') || '—') + ' (' + attrUsed + ' de ' + attrSlots + ')' : 'a 1ª vem na folha 4'),
+        row('Atributos', attrSlots ? (ATTRS.filter((at) => attrs[at.id]).map((at) => at.label + ' +' + attrs[at.id]).join(' · ') || '—') + ' (' + attrUsed + ' de ' + attrSlots + ')' : '—'),
         row('Benefícios', benTxt || '—'),
         row('Perícias', Object.keys(skills).map((k) => skillLabel(k) + ' +' + skills[k]).join(' · ') || '—'),
         profs.length ? row('Trocas por proficiência', profs.join(' · ')) : null,
@@ -7477,17 +7480,17 @@ const FIREBASE_CONFIG = {
     };
     const led = rtLedger(r);
     const marks = h('div', 'guide__marks rt-marks', ...[0].concat(r.pages.map((p, i) => i + 1)).map((n) => {
-      const ok = n === 0 ? r.itens.length > 0 : rtFilled(r.pages[n - 1], n);
+      const ok = n === 0 ? r.itens.length > 0 : rtFilled(r.pages[n - 1], n, r);
       const bad = n === 0 ? rtItemsTotal(r) > r.dinheiro : led[n - 1].short;
-      const b = h('button', 'guide__mark' + (ok ? ' is-done' : '') + (bad ? ' is-bad' : '') + (n === rt.page ? ' is-on' : '') + (n && rtAttrPage(n) ? ' is-attr' : ''), n === 0 ? 'Itens' : String(n));
+      const b = h('button', 'guide__mark' + (ok ? ' is-done' : '') + (bad ? ' is-bad' : '') + (n === rt.page ? ' is-on' : '') + (n && r.pages[n - 1].attr ? ' is-attr' : ''), n === 0 ? 'Itens' : String(n));
       b.type = 'button';
-      b.setAttribute('aria-label', n === 0 ? 'Folha dos itens' : 'Folha ' + n + (rtAttrPage(n) ? ' (+1 atributo)' : ''));
-      if (n && rtAttrPage(n)) b.title = '+1 atributo nesta folha';
+      b.setAttribute('aria-label', n === 0 ? 'Folha dos itens' : 'Folha ' + n + (r.pages[n - 1].attr ? ' (+1 atributo)' : ''));
+      if (n && r.pages[n - 1].attr) b.title = '+1 atributo nesta folha';
       b.addEventListener('click', () => { rt.page = n; renderRoteiro(); });
       return b;
     }));
     const probs = rtProblems(r);
-    const filled = r.pages.filter((p, i) => rtFilled(p, i + 1)).length;
+    const filled = r.pages.filter((p, i) => rtFilled(p, i + 1, r)).length;
     // embaixo da folha: anterior e próxima (no celular as setas laterais somem)
     const step = (dd, label) => {
       const b = h('button', 'btn btn--ghost btn--sm', label);
@@ -7508,7 +7511,7 @@ const FIREBASE_CONFIG = {
           h('div', 'rt-steps', step(-1, '‹ Anterior'), h('span', 'rt-steps__at', rt.page === 0 ? 'Itens' : 'Folha ' + rt.page + ' de ' + r.up), step(1, 'Próxima ›'))),
         rtSummary(r)),
       ...(probs.length ? [h('ul', 'rt-probs', ...probs.map((x) => h('li', '', x)))] : []),
-      h('p', 'field__hint', 'Quem segue esta build recebe cada folha quando ganha o UP dela, até parar a atualização automática na ficha. O +1 de atributo entra quando a ficha tiver direito a ele (a cada 4 UP ganhos por XP).'));
+      h('p', 'field__hint', 'Quem segue esta build recebe cada folha quando ganha o UP dela, até parar a atualização automática na ficha. O +1 de atributo entra quando a ficha tiver direito a ele (um por bloco de 4 UP ganhos por XP).'));
     const keep = rt.dlg.querySelector('.rt__sheet');
     const top = keep ? keep.scrollTop : 0;
     rt.dlg.replaceChildren(h('div', 'picker rt__sheet', head, body));
@@ -7628,7 +7631,7 @@ const FIREBASE_CONFIG = {
     const bump = (k) => () => { s.up[k] = num(s.up[k]) + 1; changed(); };
     if (!s.setup) out.push({ key: 'setup', n: 0, text: 'A distribuição inicial (atributos e perícias) ainda não foi feita.', acts: [{ label: 'Fazer agora', fid: 'al-setup', on: () => openSetup() }] });
     if (picks > 0) out.push({ key: 'picks', n: picks, text: plural(picks, 'benefício para escolher', 'benefícios para escolher') + ' (a cada 2 UP, 2 benefícios; pode repetir).', acts: BEN.map((b) => ({ label: b[1], fid: 'al-ben-' + b[0], cls: 'btn--primary', on: bump(b[0]) })) });
-    if (attr > 0) out.push({ key: 'attr', n: attr, text: plural(attr, '+1 de atributo para escolher', '+1 de atributo para escolher') + ' (a cada 4 UP). Aumente o atributo no + da faixa de atributos.', acts: [{ label: 'Ir aos atributos', fid: 'al-attr', on: toAttrs }] });
+    if (attr > 0) out.push({ key: 'attr', n: attr, text: plural(attr, '+1 de atributo para escolher', '+1 de atributo para escolher') + ' (um por bloco de 4 UP). Aumente o atributo no + da faixa de atributos.', acts: [{ label: 'Ir aos atributos', fid: 'al-attr', on: toAttrs }] });
     if (up > 0) out.push({ key: 'up', n: up, text: plural(up, 'UP livre', 'UP livres') + ' para gastar em poderes ou perícias (cada UP em perícias dá +3 pontos).', acts: [{ label: 'Comprar poderes', fid: 'al-powers', on: toPowers }, { label: '+1 UP em perícias', fid: 'al-per', on: bump('per') }] });
     if (skills > 0) out.push({ key: 'skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' para distribuir.', acts: [{ label: 'Ver perícias', fid: 'al-skills', on: toSel('#skills-block') }] });
     return out;
@@ -7647,7 +7650,7 @@ const FIREBASE_CONFIG = {
       acts: BEN.filter((b) => num(s.up[b[0]]) > 0).map((b) => ({ label: 'Tirar ' + b[1], fid: 'al-x-ben-' + b[0], on: drop(b[0]) })) });
     if (m.attrUsed > m.attrAllowed) {
       const old = ATTRS.filter((at) => num((s.upAttr || {})[at.id]) > 0); // +1 escolhido na Progressão antiga
-      out.push({ key: 'x-attr', n: m.attrUsed - m.attrAllowed, text: 'Atributos com ' + plural(m.attrUsed - m.attrAllowed, 'ponto', 'pontos') + ' além dos 3 da distribuição inicial e do +1 a cada 4 UP. Baixe no − da faixa de atributos.',
+      out.push({ key: 'x-attr', n: m.attrUsed - m.attrAllowed, text: 'Atributos com ' + plural(m.attrUsed - m.attrAllowed, 'ponto', 'pontos') + ' além dos 3 da distribuição inicial e do +1 por bloco de 4 UP. Baixe no − da faixa de atributos.',
         acts: [{ label: 'Ir aos atributos', fid: 'al-x-attr', on: toAttrs }].concat(old.map((at) => ({ label: 'Tirar +1 de ' + at.label, fid: 'al-x-attr-' + at.id, on: () => { s.upAttr[at.id] = Math.max(0, num(s.upAttr[at.id]) - 1); changed(); } })), [{ label: 'Refazer distribuição', fid: 'al-x-setup', on: () => openSetup() }]) });
     }
     if (skills > 0) out.push({ key: 'x-skills', n: skills, text: plural(skills, 'ponto de perícia', 'pontos de perícia') + ' além do que a distribuição inicial, os UP e os poderes dão.', acts: [{ label: 'Ver perícias', fid: 'al-x-skills', on: toSel('#skills-block') }] });
@@ -8129,12 +8132,12 @@ const FIREBASE_CONFIG = {
       const xpLeft = n * 10 - xp;
       steps.push(h('li', 'prog__step' + (got ? ' is-got' : next ? ' is-next' : ''),
         h('span', 'prog__step-n', String(n)),
-        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'), n % 4 === 0 ? h('span', 'prog__step-gain prog__step-attr', '+1 atributo') : null,
+        h('span', 'prog__step-gain', n % 2 ? '+1 perícia' : '2 benefícios'), n % 4 === 1 ? h('span', 'prog__step-gain prog__step-attr', '+1 atributo (bloco ' + n + '-' + (n + 3) + ')') : null,
         h('span', 'prog__step-state', got ? '✓ ganho' : 'faltam ' + xpLeft + ' XP')));
     }
     const track = card('prog__track', title('Trilha de UP'), level,
       h('ol', 'prog__steps', ...steps),
-      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias); uma vez a cada 4 UP, esse ponto pode virar uma proficiência, em Perícias → Proficiências. UP par: 2 benefícios. A cada 4 UP: +1 num atributo, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
+      h('p', 'field__hint', 'UP ímpar: +1 ponto de perícia (já somado em Perícias); uma vez por bloco de 4 UP (1 a 4, 5 a 8...), esse ponto pode virar uma proficiência, em Perícias → Proficiências. UP par: 2 benefícios. Um +1 num atributo por bloco de 4 UP, já a partir do UP 1, no + da faixa de atributos. Só os UP ganhos por XP contam; os de origem não.'));
     // os avisos (escolher benefícios, UP livres, +1 de atributo, compras sem fonte) são desenhados por renderAlerts
     const alerts = h('section', 'prog__card alerts', null);
     alerts.id = 'prog-alerts';
@@ -8266,7 +8269,7 @@ const FIREBASE_CONFIG = {
   function swapBlock(s) {
     const allowed = swapAllowed(s);
     const have = (s.swapProfs || []).length;
-    if (!allowed && !have) return [h('p', 'field__hint', 'A cada 4 UP ganhos, dá para trocar o +1 de perícia que aquele UP dá por uma proficiência.')];
+    if (!allowed && !have) return [h('p', 'field__hint', 'Uma vez por bloco de 4 UP (1 a 4, 5 a 8...), dá para trocar o +1 de perícia de um UP ímpar por uma proficiência.')];
     const taken = s.profs.concat(upProfsOf(s));
     const box = profPills(s.swapProfs, (id, on) => {
       s.swapProfs = s.swapProfs.filter((x) => x !== id);
@@ -8277,7 +8280,7 @@ const FIREBASE_CONFIG = {
       const id = inp.dataset.fid.slice(5);
       if (taken.includes(id) && !inp.checked) { inp.disabled = true; inp.parentElement.classList.add('check--off'); }
     });
-    return [h('h3', 'sub-title', 'Trocas por proficiência ', h('span', 'count', '(' + Math.min(have, allowed) + ' de ' + allowed + ', uma a cada 4 UP)')),
+    return [h('h3', 'sub-title', 'Trocas por proficiência ', h('span', 'count', '(' + Math.min(have, allowed) + ' de ' + allowed + ', uma por bloco de 4 UP)')),
       h('p', 'field__hint', 'Cada troca gasta o +1 de perícia que um UP ganho dá, nunca os pontos iniciais, os de UP investido em perícias ou os de poderes.' + (have > allowed ? ' ' + plural(have - allowed, 'troca está', 'trocas estão') + ' acima do que os UP dão e não vale.' : '')),
       box];
   }
