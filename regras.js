@@ -921,6 +921,29 @@ window.VORTEX_REGRAS = {
           ['note', 'Exemplos', ['Braço de combate com força ampliada.', 'Espinha artificial que melhora processamento motor.', 'Sistema muscular artificial de alta potência.', 'Armadura com membros auxiliares automatizados.', 'Núcleo de combate integrado com funções avançadas.']]
         ], 3],
 
+        ['h2', 'Módulos especiais'],
+        ['p', 'Alguns módulos têm regras próprias. São os mesmos que equipam a armadura **Mirage**: radar, I.A., perito e rede.'],
+        ['card', 'Radares', [
+          ['p', 'Radares são como uma percepção bônus que identifica o que o seu método permite detectar.'],
+          ['p', 'Por padrão, um radar permite fazer **testes de Sentidos** para perceber o que ele detecta. Exemplo: um radar de radiodetecção pode revelar a posição de inimigos atrás de uma parede que o radar atravessa.'],
+          ['p', 'Cada radar conta como um módulo.'],
+          ['note', 'Exemplos', ['Radiodetecção: corpos e objetos sólidos, atrás de paredes.', 'Térmico: fontes de calor, mesmo no escuro ou na fumaça.', 'Sonar: movimento e formato do ambiente, sem luz.', 'Eletromagnético: eletrônicos, implantes, núcleos e escudos.', 'Completo: tudo o que os quatro detectam.']]
+        ], 2],
+        ['card', 'I.A.', [
+          ['p', 'O módulo de I.A. acrescenta uma inteligência artificial que faz ações de **busca, pesquisa e análise** por você. Quem faz o teste é o mestre, usando a **Precisão** da I.A., que é o nível de inteligência dela. A Precisão sobe com o preço.'],
+          ['p', 'Diferente dos outros módulos, a I.A. só pode ser instalada em itens **Épicos ou Lendários**, e a versão poderosa precisa de um item **Lendário**.'],
+          ['p', 'Além das regras, a I.A. tem todo o fator de interpretação de uma personagem. Somente a **I.A. Própria**, que só itens Lendários suportam, pode ser colocada em um corpo próprio, e essas I.A. têm alta consciência.'],
+          ['kv', '', [['Assistente', 'Épica · Precisão 1'], ['Tática', 'Épica · Precisão 2'], ['Combate', 'Lendária · Precisão 3'], ['Própria', 'Lendária · Precisão 4']]]
+        ], 2],
+        ['card', 'Perito', [
+          ['p', 'O **módulo perito (perícia)** funciona como o poder Doutor naquela perícia: o limite de modificador nela se torna 4 enquanto o módulo estiver ativo.'],
+          ['p', 'Não acumula com Doutor: se você já tem Doutor na mesma perícia, o módulo não muda nada.']
+        ], 2],
+        ['card', 'Rede', [
+          ['p', 'O **módulo de rede** permite se conectar livremente à internet, sem precisar de um aparelho.'],
+          ['p', 'Versões melhores criptografam a conexão ou funcionam mesmo sob bloqueio de sinal.']
+        ], 2],
+
         ['h2', 'Ficha de Próteses e Módulos'],
         ['fields', ['Modelo (Prótese ou Módulo)', 'Tipo / CC', 'Efeito']]
       ]

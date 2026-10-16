@@ -6788,7 +6788,9 @@ const FIREBASE_CONFIG = {
   const swapProfsOf = (s) => (s.swapProfs || []).slice(0, swapAllowed(s));
   const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0 || swapProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
-  const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 ? 4 : 3);
+  // Módulo perito: limite 4 na perícia dele, como Doutor (não acumula: Doutor + perito na mesma perícia continua 4)
+  const peritoOf = (s) => (s.inventory || []).filter((i) => i.slot === 'modulo' && isModule(i) && (i.values || {}).funcao === 'Perito').map((i) => skillIdOf(i.values.pericia)).filter(Boolean);
+  const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 || peritoOf(s).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
   const isModule = (i) => i.kind === 'protese-modulo' && i.values.classe === 'Módulo';
   const twoHanded = (i) => /duas/i.test(String((i.values && i.values.empunhadura) || ''));
@@ -8076,7 +8078,7 @@ const FIREBASE_CONFIG = {
           total,
           // subir até o limite tira o ponto da espécime desta perícia e devolve como ponto livre
           stepper(v, { min: 0, max: Math.max(v, skillCap(s, sk[0])), label: sk[1], fid: 'sk-' + sk[0], text: '+' + (v + gift), onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
-        if (skillCap(s, sk[0]) > 3) row.querySelector('.skill__name').append(h('span', 'skill__doc', ' Doutor'));
+        if (skillCap(s, sk[0]) > 3) row.querySelector('.skill__name').append(h('span', 'skill__doc', doutorOf(s).indexOf(sk[0]) >= 0 ? ' Doutor' : ' Perito'));
         group.append(row);
         if (sk[0] === 'oficio') {
           const inp = h('input', 'input skill__job');
@@ -8605,6 +8607,13 @@ const FIREBASE_CONFIG = {
       const mod = isModule(i);
       if (mod && !m.nucleo) { toast('Sem um Núcleo ativo os módulos ficam inativos. Implante um núcleo (ou vista uma armadura com núcleo) antes.'); return false; }
       if (mod && !s.inventory.some((x) => x.slot === 'protese')) { toast('Os módulos só abrem espaço com ao menos uma prótese implantada.'); return false; }
+      // I.A.: só funciona instalada numa prótese ou armadura Épica/Lendária (a versão poderosa e a própria, só Lendária)
+      const need = mod && (i.values || {}).funcao === 'I.A.' ? ((i.values.requer || '') === 'Lendário' ? 'lend' : 'epic') : '';
+      if (need) {
+        const rar = (x) => nameKey((x.values || {}).raridade || '');
+        const ok = s.inventory.some((x) => (x.slot === 'protese' || x.slot === 'armadura') && (rar(x).indexOf('lend') === 0 || (need === 'epic' && rar(x).indexOf('epic') === 0)));
+        if (!ok) { toast(i.name + ' só funciona instalada numa prótese ou armadura ' + (need === 'lend' ? 'Lendária' : 'Épica ou Lendária') + '. Equipe uma antes.'); return false; }
+      }
       if (m.nucleo) {
         const freed = occupant && occupant.kind === 'protese-modulo' ? ccOf(occupant) : 0;
         const prot = m.protUsed + (mod ? 0 : ccOf(i)) - (i.slot && !mod ? ccOf(i) : 0) - freed;
@@ -11246,21 +11255,44 @@ const FIREBASE_CONFIG = {
         .then((list) => { if (!wz || wz.gear !== g) return; g.shop = list.filter((e) => priceOf(e) > 0).sort((a, b) => priceOf(a) - priceOf(b)); renderSetup(); });
       return;
     }
-    const shown = rankSearch(g.shop, wz.q, entryFields);
-    body.append(h('ul', 'rows gear__shop', ...shown.slice(0, 80).map((e) => {
-      const add = h('button', 'btn btn--ghost btn--sm', 'Comprar');
-      add.type = 'button';
+    // mesma busca do banco de dados: categoria, favoritos, filtros por especificação e as mesmas linhas (libRow)
+    if (!g.facets) g.facets = facetBox(() => renderSetup());
+    const kinds = Array.from(new Set(g.shop.map((e) => e.kind)));
+    const kindSel = h('select', 'input');
+    kindSel.dataset.fid = 'gear-kind';
+    kindSel.setAttribute('aria-label', 'Categoria');
+    [['', 'Todas']].concat(ITEM_DATA.categories.filter((c) => kinds.indexOf(c.id) >= 0).map((c) => [c.id, c.title])).forEach((x) => {
+      const o = h('option', '', x[1]);
+      o.value = x[0];
+      kindSel.append(o);
+    });
+    kindSel.value = g.kind || '';
+    kindSel.addEventListener('change', () => { g.kind = kindSel.value; g.facets.reset(); renderSetup(); });
+    const favBox = h('input');
+    favBox.type = 'checkbox';
+    favBox.checked = Boolean(g.favOnly);
+    favBox.addEventListener('change', () => { g.favOnly = favBox.checked; renderSetup(); });
+    const fitBox = h('input');
+    fitBox.type = 'checkbox';
+    fitBox.checked = Boolean(g.fitOnly);
+    fitBox.addEventListener('change', () => { g.fitOnly = fitBox.checked; renderSetup(); });
+    body.append(h('div', 'lib-tools gear__filters', h('label', 'field', h('span', 'field__label', 'Categoria'), kindSel),
+      h('label', 'check', favBox, h('span', '', 'Só favoritos')), h('label', 'check', fitBox, h('span', '', 'Só o que cabe na sobra'))));
+    const favs = favLoad();
+    let shown = g.shop.filter((e) => (!g.kind || e.kind === g.kind) && (!g.favOnly || favs.has(e.id)) && (!g.fitOnly || priceOf(e) <= left));
+    shown = rankSearch(shown, wz.q, entryFields);
+    shown = g.facets.apply(shown, g.kind ? [g.kind] : kinds);
+    if (!hasQuery(wz.q)) shown.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
+    body.append(g.facets.box, h('p', 'block__hint', plural(shown.length, 'item', 'itens') + ' na loja' + (g.favOnly ? ' entre os favoritos' : '') + '.'));
+    body.append(h('ul', 'rows gear__shop', ...shown.map((e) => {
+      const row = libRow(e, [{ label: 'Comprar ' + fmtCronos(priceOf(e)), cls: 'btn--primary', onClick: () => { g.cart.push(e); renderSetup(); } }], () => { if (g.favOnly) renderSetup(); });
+      const add = row.lastChild;
       add.disabled = priceOf(e) > left;
       add.setAttribute('aria-label', 'Comprar ' + e.name + ' por ' + priceText(e.values.preco));
-      add.addEventListener('click', () => { g.cart.push(e); renderSetup(); });
-      const text = entryText(e);
-      return h('li', 'row', gearOpen(e, entryIcon(e),
-        h('span', 'row__main', h('span', 'row__title', e.name), h('span', 'row__meta', [e.kindTitle, e.typeTitle, e.values.raridade].filter(Boolean).join(' · ')),
-          text ? h('span', 'row__text', text) : null)),
-        h('strong', 'gear__price', fmtCronos(priceOf(e))), add);
+      return row;
     })));
-    if (!shown.length) body.append(h('p', 'empty', 'Nada com esse termo na loja.'));
-    else if (g.shop.some((e) => priceOf(e) > left)) body.append(h('p', 'field__hint', 'Itens acima da sobra ficam desativados.'));
+    if (!shown.length) body.append(h('p', 'empty', 'Nada encontrado na loja. Mude a busca ou os filtros.'));
+    else if (!g.fitOnly && shown.some((e) => priceOf(e) > left)) body.append(h('p', 'field__hint', 'Itens acima da sobra ficam desativados.'));
   }
 
   /* Criar na hora (fica escondido): espécime, origem ou build nova, sem sair da distribuição inicial.
