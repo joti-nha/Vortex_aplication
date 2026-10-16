@@ -464,6 +464,16 @@ window.VORTEX_ITEMS = {
     },
 
     {
+      id: 'perda', title: 'Perda', group: 'Personagem', image: true,
+      hint: 'Desvantagens: cada Perda dá +1 UP a quem a pega e pode ser compensada depois gastando 1 UP. O script (menos PV, menos deslocamento...) entra sozinho na ficha.',
+      fields: [
+        { key: 'nome', label: 'Nome da perda', kind: 'text', big: true },
+        { key: 'efeito', label: 'Desvantagem', kind: 'textarea', big: true },
+        { key: 'script', label: 'Script', kind: 'script', big: true },
+        { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
+      ]
+    },
+    {
       id: 'origem', title: 'Origem', group: 'Personagem',
       hint: 'De onde o personagem vem. Os itens iniciais (um por linha) aparecem na distribuição inicial, no kit da origem.',
       fields: [
@@ -771,6 +781,11 @@ window.VORTEX_ITEMS = {
     var p = b[2].filter(function (x) { return x[0] === 'p'; })[0];
     var ul = b[2].filter(function (x) { return x[0] === 'ul'; })[0];
     cat.push({ id: 'of-ori-' + slug(b[1]), kind: 'origem', typeId: '', name: b[1], values: { descricao: p ? p[1] : '', itens: (ul ? ul[1] : []).join('\n') } });
+  });
+
+  /* Perdas do livro (window.VORTEX_REGRAS.perdas): desvantagens que dão +1 UP */
+  ((window.VORTEX_REGRAS && window.VORTEX_REGRAS.perdas) || []).forEach(function (x) {
+    cat.push({ id: 'of-per-' + slug(x[0]), kind: 'perda', typeId: '', name: x[0], values: { efeito: x[1], script: x[2] || '' } });
   });
 
   /* Live Service (itens gerais de recuperação): [nome, raridade, tipo, usos, carga, bônus, efeito, preço] */
