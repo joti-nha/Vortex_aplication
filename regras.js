@@ -504,13 +504,7 @@ window.VORTEX_REGRAS = {
           ['Derrubar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, o alvo fica Caído.'],
           ['Desarmar', 'Você faz a manobra contra um objeto empunhado, e quem o empunha faz um teste de Resistência ou Reflexos contra o seu. Se você vencer, escolhe: jogar o item no chão, arremessá-lo (como numa ação de arremesso) ou ficar com ele, se tiver as mãos livres.'],
           ['Finalizar', 'Só contra um alvo inconsciente, paralisado ou com 0 PV ou menos. Você faz um ataque normal, mas o dano é calculado apenas contra a Defesa mínima do alvo, com o valor cheio do seu ataque: os dados contam como o máximo, e você só os rola para ver se houve crítico.'],
-          ['Afetar', 'Você mira uma parte do corpo do alvo (pernas, braços, peito ou cabeça) e causa um dano massivo localizado. Se o teste tiver 2 críticos (6 nos dois dados), você também pode deixar um efeito de **dor ou incapacitação** naquela parte. Dor ou incapacitação é um termo genérico para o ferimento: o efeito dura até o alvo receber qualquer cura, que o remove. A tabela abaixo traz exemplos por parte.']
-        ]],
-        ['table', ['Parte', 'Exemplo de dor ou incapacitação'], [
-          ['Pernas', 'O deslocamento cai à metade.'],
-          ['Braços', 'O alvo solta o que tem na mão desse braço e não pode usá-lo.'],
-          ['Peito', '–2 na Defesa.'],
-          ['Cabeça', 'O alvo fica Zonzo.']
+          ['Afetar', 'Você mira uma parte do corpo do alvo (pernas, braços, peito ou cabeça) e causa um dano massivo localizado. Se o teste tiver 2 críticos (6 nos dois dados), você também pode deixar um efeito de dor ou incapacitação naquela parte, que dura até o alvo receber qualquer cura. Seres abióticos são imunes a esse efeito.']
         ]],
 
         ['h3', 'Equipamento'],
