@@ -1181,8 +1181,8 @@ window.VORTEX_REGRAS = {
           ['p', '**Insano.** Obtém componentes de um jeito diferente. Em breve.']
         ]],
         ['card', 'Akimbo', [
-          ['p', 'Você pode empunhar pistolas ou submetralhadoras, uma em cada mão (ou uma de cada, seja irado!). A recarga sobe uma categoria de ação: livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
-          ['p', 'Em troca, você pode mirar num único alvo com as duas armas ou escolher até dois alvos. Os disparos saem na mesma ação, mas cada arma faz o seu teste de ataque e causa o seu dano separado.']
+          ['p', 'Você pode empunhar itens de uma mão, um em cada mão (ou um de cada tipo, seja irado!). A recarga sobe uma categoria de ação: livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
+          ['p', 'Em troca, você pode mirar num único alvo com os dois itens ou escolher até dois alvos. Os disparos saem na mesma ação, mas cada arma faz o seu teste de ataque e causa o seu dano separado.']
         ]],
         ['card', 'Gatilho do velho mundo', [
           ['p', 'Com um revólver de disparo único, você força a arma a ter cadência igual a 1 + metade da sua Precisão, arredondada para cima. O primeiro disparo não entra na penalidade de cadência.'],
