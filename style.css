@@ -3997,3 +3997,7 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .pedit__zoom { flex: 1; accent-color: var(--ambar); }
 .pedit__acts { flex-wrap: wrap; }
 .pedit__acts .btn--danger { margin-right: auto; }
+
+/* Perdas na ficha: botões lado a lado; a desvantagem compensada fica riscada */
+.row__acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.row__text.is-off { text-decoration: line-through; opacity: 0.6; }

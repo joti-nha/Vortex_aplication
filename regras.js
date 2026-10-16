@@ -19,6 +19,22 @@
    ===================================================================== */
 /* Perícias com descrição de uso (pericias.js, carregado antes deste arquivo). O capítulo Perícias monta a tabela a partir daqui. */
 const PERICIAS = window.VORTEX_PERICIAS || [];
+/* Perdas: desvantagens que dão +1 UP cada. [nome, efeito, script (mecânica automática na ficha, opcional)].
+   O capítulo Perdas e o banco (items.js, kind 'perda') saem desta mesma lista. */
+const PERDAS = [
+  ['Frágil', 'Seu corpo aguenta menos que o normal: você tem –3 PV máximos.', 'pv: -3'],
+  ['Essência fraca', 'Sua Essência se esgota rápido: você tem –3 PE máximos.', 'pe: -3'],
+  ['Lento', 'Você se move devagar: –3 m de deslocamento.', 'deslocamento: -3'],
+  ['Costas ruins', 'Você carrega menos peso: –3 de Carga.', 'carga: -3'],
+  ['Desajeitado', 'Você tem perda nos testes de Reflexos.', ''],
+  ['Míope', 'Você tem perda nos testes de Sentidos que dependem da visão e nos ataques à distância contra alvos a mais de 10 m.', ''],
+  ['Fobia', 'Escolha algo que você teme. Na presença disso, você tem perda em todos os testes até se afastar ou passar num teste de Vontade contra CD 7 (uma tentativa por rodada).', ''],
+  ['Vício', 'Escolha uma substância ou um hábito. Se passar um dia sem ele, você tem perda nos testes de Vontade e de Sentidos até satisfazer o vício.', ''],
+  ['Código de honra', 'Escolha um código (não atacar quem se rende, não mentir, não abandonar um aliado...). Quebrá-lo deixa você em perda em todos os testes até o fim da cena.', ''],
+  ['Implante instável', 'Quando um teste feito com uma prótese ou um módulo tiver duas perdas, a peça desliga até o fim da cena.', ''],
+  ['Procurado', 'Alguém poderoso (uma corporação, uma gangue, a lei) quer você. O mestre decide quando e como isso aparece.', ''],
+  ['Dívida', 'Você deve a alguém perigoso: começa com metade do dinheiro inicial, e o credor vem cobrar.', '']
+];
 /* Efeitos marciais básicos do poder Luta: [efeito, custo em ataques da rodada, o que faz].
    Só as capacidades genéricas; os estilos de luta (abaixo) trazem as técnicas e passivas próprias.
    A ficha (poder Luta, em items.js) e o capítulo Habilidades usam esta mesma tabela. */
@@ -131,6 +147,7 @@ const TECNO_TIPOS = [
   { name: 'Insano', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' }
 ];
 window.VORTEX_REGRAS = {
+  perdas: PERDAS,
   lutaManobras: LUTA_MANOBRAS,
   lutaEstilos: LUTA_ESTILOS,
   tecnoAcoes: TECNO_ACOES,
@@ -1153,6 +1170,20 @@ window.VORTEX_REGRAS = {
     },
 
     /* ------------------------------------------------------------ */
+    {
+      id: 'perdas', title: 'Perdas', group: 'Personagem',
+      blocks: [
+        ['p', 'Uma **Perda** funciona como um poder ao contrário: em vez de custar UP, ela **dá +1 UP** em troca de uma desvantagem que fica com o personagem.'],
+        ['ul', [
+          'Cada Perda dá +1 UP. Esses UP não contam para os benefícios de UP par e ímpar, como os de origem.',
+          'A mecânica de uma Perda (menos PV, menos deslocamento...) entra sozinha na ficha.',
+          'Você pode **compensar** uma Perda gastando 1 UP: ela deixa de valer, e o UP que ela deu fica empatado com o que você gastou.'
+        ]],
+        ['note', 'Na ficha', 'Aba Poderes → Perdas: "Adicionar perda" traz uma Perda do banco, e "Compensar (1 UP)" a desliga. Perdas novas podem ser criadas na Oficina.'],
+        ...PERDAS.map((x) => ['card', x[0], [['kv', '', [['Ganho', '+1 UP']]], ['p', x[1]]]])
+      ]
+    },
+
     {
       id: 'ficha', title: 'Ficha', group: 'Personagem',
       blocks: [

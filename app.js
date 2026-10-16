@@ -1920,6 +1920,11 @@ const FIREBASE_CONFIG = {
       text: 'Poderes e habilidades vêm do banco (os das regras já estão lá; crie os seus na aba Itens). Os bônus de um poder entram sozinhos nos recursos.',
       rule: 'habilidades'
     },
+    perdas: {
+      title: 'Perdas',
+      text: 'Cada Perda é uma desvantagem que dá +1 UP. A mecânica dela (menos PV, menos deslocamento...) entra sozinha na ficha. Compensar uma Perda custa 1 UP e desliga a desvantagem.',
+      rule: 'perdas'
+    },
     inventario: {
       title: 'Inventário',
       text: 'Em cima, o que está equipado: armadura, núcleo e as duas mãos (arma de duas mãos ocupa as duas), mais as fileiras de vestíveis (até 3 + Corpo; bônus de mesma fonte não acumula), próteses (pela CC) e módulos (só com ao menos uma prótese). Cada fileira abre uma vaga nova quando a anterior é ocupada. Embaixo, a mochila. Passe o mouse (ou toque) num bloco para ver os detalhes e equipar; também dá para arrastar. Carga = 2 + Corpo × 5 + Precisão + Essência × 2, e só a mochila conta. Em "Detalhes" ficam os slots de mod, propriedade e acessórios.',
@@ -6346,7 +6351,7 @@ const FIREBASE_CONFIG = {
   }
 
   /* Banco de dados na Oficina: todas as categorias. O catálogo da tela Personagens mostra só origens, espécimes, builds, poderes e NPCs */
-  const NON_ITEM_KINDS = ['especime', 'poder', 'origem', 'build', 'npc'];
+  const NON_ITEM_KINDS = ['especime', 'poder', 'perda', 'origem', 'build', 'npc'];
   const ALL_KINDS = ITEM_DATA.categories.map((c) => c.id);
   /* Excluir do banco: vale para tudo que não é oficial (o catálogo oficial vem do items.js e não sai) */
   function libDeleteAction(e, after) {
@@ -6414,6 +6419,7 @@ const FIREBASE_CONFIG = {
     { label: 'Espécimes', kinds: ['especime'] },
     { label: 'Builds', kinds: ['build'] },
     { label: 'Poderes', kinds: ['poder'] },
+    { label: 'Perdas', kinds: ['perda'] },
     { label: 'NPCs e inimigos', kinds: ['npc'] }
   ];
   const catState = { seq: 0 };
@@ -6502,7 +6508,7 @@ const FIREBASE_CONFIG = {
     return {
       v: 2, setup: false, attrs: { corpo: 0, precisao: 0, essencia: 0 }, skills: {}, profs: [], oficio: '', height: '', weight: '', sex: '',
       xp: 0, upExtra: 0, up: { pv: 0, pe: 0, pa: 0, per: 0 }, extra: { pv: 0, escudo: 0, blindagem: 0, pe: 0, pa: 0, carga: 0, armadura: 0 }, attrMod: { corpo: 0, precisao: 0, essencia: 0 }, upAttr: { corpo: 0, precisao: 0, essencia: 0 },
-      cur: {}, specimen: null, powers: [], inventory: [], originItems: '', doutor: [], upProfs: []
+      cur: {}, specimen: null, powers: [], perdas: [], inventory: [], originItems: '', doutor: [], upProfs: []
     };
   }
   // atributo efetivo: o da ficha + o ajuste manual (bônus ou penalidade temporária)
@@ -6532,6 +6538,7 @@ const FIREBASE_CONFIG = {
     const s = Object.assign({}, b, r);
     ['attrs', 'attrMod', 'upAttr', 'up', 'extra', 'skills', 'cur'].forEach((k) => { s[k] = Object.assign({}, b[k], r[k] && typeof r[k] === 'object' ? r[k] : {}); });
     s.powers = Array.isArray(r.powers) ? r.powers.slice() : [];
+    s.perdas = Array.isArray(r.perdas) ? r.perdas.filter((x) => x && x.name) : [];
     s.hideAlerts = r.hideAlerts && typeof r.hideAlerts === 'object' ? Object.assign({}, r.hideAlerts) : {};
     s.profs = Array.isArray(r.profs) ? r.profs.filter((x) => typeof x === 'string') : [];
     // compras de 1 UP: Doutor (limite 4 numa perícia) e proficiências extras
@@ -6726,6 +6733,11 @@ const FIREBASE_CONFIG = {
     return out;
   }
   // o script de um poder na ficha: o da cópia, ou o do poder oficial (fichas antigas não têm o script)
+  // Perda oficial: vale o texto e o script atuais do banco (a ficha guarda uma cópia)
+  function perdaVals(x) {
+    const off = x && x.id ? BUILTINS.find((e) => e.id === x.id && e.kind === 'perda') : null;
+    return Object.assign({}, (x && x.values) || {}, off ? off.values : {});
+  }
   function powerScript(p) {
     const v = (p && p.values) || {};
     const off = !v.script && p && p.id ? BUILTINS.find((e) => e.id === p.id) : null;
@@ -6882,8 +6894,8 @@ const FIREBASE_CONFIG = {
       defMin: max.armadura + a.corpo + num(s.skills.resistencia),
       ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: mech.humanidade, eletronico: mech.eletronico,
       ccOver: (nucleo > 0 || attachUsed > 0) && (protUsed + attachUsed > ccMax || protUsed + attachUsed + modUsed > ccMax + modExtra),
-      upEarned, upTotal: upEarned + mech.up + num(s.upExtra),
-      upSpent: s.up.per + powerCost,
+      upEarned, upTotal: upEarned + mech.up + num(s.upExtra) + (s.perdas || []).length, // cada Perda dá +1 UP
+      upSpent: s.up.per + powerCost + (s.perdas || []).filter((x) => x.comp).length, // compensar uma Perda custa 1 UP
       picksAllowed: 2 * Math.floor(upEarned / 2), picksUsed: s.up.pv + s.up.pe + s.up.pa,
       // +1 num atributo por bloco de 4 UP (1-4, 5-8...: o do bloco já vale no 1º UP dele): vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
@@ -7780,6 +7792,7 @@ const FIREBASE_CONFIG = {
     renderGuide(m);
     renderSpeciesLink();
     renderPowers(m);
+    renderPerdas();
     renderInventory(m);
     renderAlerts(m);
     renderVitals(m);
@@ -8129,7 +8142,7 @@ const FIREBASE_CONFIG = {
     extraLab.htmlFor = 'f-up-extra';
     const level = h('div', 'prog__level',
       h('div', 'prog__up', h('span', 'prog__up-kicker', 'UP'), h('strong', 'prog__up-n', String(m.upTotal)),
-        h('span', 'prog__up-from', m.upEarned + ' por XP' + (base ? ' + ' + base + ' de origem/extras' : '')),
+        h('span', 'prog__up-from', m.upEarned + ' por XP' + (base ? ' + ' + base + ' de origem/perdas/extras' : '')),
         h('span', 'prog__up-from' + (free < 0 ? ' is-bad' : ''), m.upSpent + ' gastos · ' + (free < 0 ? (-free) + ' a mais' : free + (free === 1 ? ' livre' : ' livres')))),
       h('div', 'prog__xp',
         h('div', 'prog__xp-head', h('span', '', 'XP'), xpIn, h('span', 'prog__xp-next', 'faltam ' + (10 - into) + ' XP para o UP ' + (m.upTotal + 1))),
@@ -8327,6 +8340,27 @@ const FIREBASE_CONFIG = {
 
   function bonusLine(b) {
     return BONUS_KEYS.filter((k) => num(b[k[0]])).map((k) => k[1] + ' ' + signed(num(b[k[0]]))).join(' · ');
+  }
+
+  function renderPerdas() {
+    const s = sheetChar.sheet;
+    const list = s.perdas || [];
+    $('#perda-list').replaceChildren(...list.map((x, i) => {
+      const v = perdaVals(x);
+      const main = h('span', 'row__main', h('span', 'row__title', x.name, ...(entryLore(x) ? [' ', entryLore(x)] : [])),
+        h('span', 'row__meta', x.comp ? 'Compensada: +1 UP ganho e 1 UP gasto, a desvantagem não vale mais' : '+1 UP'));
+      if (v.efeito) main.append(h('span', 'row__text' + (x.comp ? ' is-off' : ''), v.efeito));
+      const comp = h('button', 'btn btn--ghost btn--sm', x.comp ? 'Desfazer compensação' : 'Compensar (1 UP)');
+      comp.type = 'button';
+      comp.dataset.fid = 'perda-comp-' + i;
+      comp.addEventListener('click', () => { x.comp = !x.comp; changed(); });
+      const del = h('button', 'btn btn--ghost btn--sm', 'Remover');
+      del.type = 'button';
+      del.setAttribute('aria-label', 'Remover perda ' + x.name);
+      del.addEventListener('click', () => { list.splice(i, 1); changed(); });
+      return h('li', 'row lib-row', h('span', 'row__open row__open--static', entryIcon(x), main), h('span', 'row__acts', comp, del));
+    }));
+    $('#perda-empty').hidden = list.length > 0;
   }
 
   function renderPowers() {
@@ -9848,6 +9882,16 @@ const FIREBASE_CONFIG = {
     changed();
   });
 
+  $('#perda-add').addEventListener('click', async () => {
+    const ch = sheetChar;
+    const have = (ch.sheet.perdas || []).map((x) => x.id).filter(Boolean);
+    const e = await openPicker({ title: 'Adicionar perda', kinds: ['perda'], chips: ['Perda'], filter: (x) => x.kind === 'perda' && have.indexOf(x.id) < 0 });
+    if (!e || sheetChar !== ch) return;
+    ch.sheet.perdas.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', comp: false }));
+    toast(e.name + ': +1 UP.');
+    changed();
+  });
+
   $('#power-add').addEventListener('click', async () => {
     const ch = sheetChar;
     const have = ch.sheet.powers.map((p) => p.id).filter((id) => id && !CHOICE_POWERS[id]);
@@ -10011,6 +10055,7 @@ const FIREBASE_CONFIG = {
     };
     racialLines(v).forEach((t) => add(t.name, t.script));
     powers.forEach((p) => add(p.name, powerScript(p)));
+    (s.perdas || []).filter((x) => !x.comp).forEach((x) => add(x.name, perdaVals(x).script)); // perda compensada não vale mais
     return Object.assign(mergeMech(parts), { powers, vidaFrom, bonus });
   }
   // comprar características raciais de outros espécimes é exclusivo do Etheriano
@@ -11606,6 +11651,7 @@ const FIREBASE_CONFIG = {
       ['Proficiências', PROFS.filter((p) => s.profs.indexOf(p.id) >= 0).map((p) => p.label).join(' · ')],
       ['XP e UP', 'XP ' + num(s.xp) + ' · UP ' + m.upTotal + ' (' + m.upSpent + ' gastos)'],
       ['Poderes', s.powers.map((p) => p.name).join(' · ')],
+      ['Perdas', (s.perdas || []).map((x) => x.name + (x.comp ? ' (compensada)' : '')).join(' · ')],
       ['Carga', fmtNum(m.cargaUsed) + ' de ' + fmtNum(m.cargaMax) + (m.over ? ' (sobrecarga)' : '')],
       ['Inventário', inv.join(' · ')]
     ];
