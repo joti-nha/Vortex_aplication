@@ -587,7 +587,7 @@ const FIREBASE_CONFIG = {
         const id = old ? old.id : uid();
         const e = clone(entry);
         delete e.mine;
-        d.library[id] = Object.assign(e, { id, ownerUid: ME, nameKey: nameKey(e.name), createdAt: old ? old.createdAt : Date.now(), updatedAt: Date.now() });
+        d.library[id] = Object.assign(e, { id, ownerUid: old ? old.ownerUid : ME, nameKey: nameKey(e.name), createdAt: old ? old.createdAt : Date.now(), updatedAt: Date.now() });
         write(d);
         return toLib(d.library[id]);
       },
