@@ -584,11 +584,10 @@ const FIREBASE_CONFIG = {
       async saveLibrary(entry) {
         const d = read();
         const old = entry.id ? d.library[entry.id] : null;
-        if (old && old.ownerUid !== ME) throw new UserError('Só quem criou pode editar.');
         const id = old ? old.id : uid();
         const e = clone(entry);
         delete e.mine;
-        d.library[id] = Object.assign(e, { id, ownerUid: ME, nameKey: nameKey(e.name), createdAt: old ? old.createdAt : Date.now(), updatedAt: Date.now() });
+        d.library[id] = Object.assign(e, { id, ownerUid: old ? old.ownerUid : ME, nameKey: nameKey(e.name), createdAt: old ? old.createdAt : Date.now(), updatedAt: Date.now() });
         write(d);
         return toLib(d.library[id]);
       },
@@ -1112,7 +1111,7 @@ const FIREBASE_CONFIG = {
         };
         let ref;
         libCache.clear();
-        if (e.id) { ref = lib().doc(e.id); await ref.update(data); }
+        if (e.id) { ref = lib().doc(e.id); await ref.update(data); } // qualquer um edita o que não é oficial; o dono continua o mesmo
         else { ref = lib().doc(); await ref.set(Object.assign({ ownerUid: me, createdAt: FV.serverTimestamp() }, data)); }
         return Object.assign({}, e, { id: ref.id, mine: true, updatedAt: Date.now() });
       },
@@ -6429,7 +6428,7 @@ const FIREBASE_CONFIG = {
     const secret = secretHit(q);
     $('#lib-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => {
       const actions = [{ label: 'Usar de base', onClick: () => openForm(e.kind, e.typeId, Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' })) }];
-      if (e.mine) actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) });
+      if (!e.oficial) actions.unshift({ label: 'Editar', onClick: () => openForm(e.kind, e.typeId, e) }); // tudo que não é oficial pode ser editado
       const del = libDeleteAction(e, runLib);
       if (del) actions.push(del);
       return libRow(e, actions, () => { if ($('#lib-fav').checked) runLib(); });
@@ -6481,7 +6480,7 @@ const FIREBASE_CONFIG = {
     if (!hasQuery(q)) list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     const secret = secretHit(q);
     $('#cat-list').replaceChildren(...(secret ? [secretRow(secret)] : []), ...list.map((e) => libRow(e, [
-      e.mine ? { label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } } : null,
+      !e.oficial ? { label: 'Editar', onClick: () => { openForm(e.kind, e.typeId, e); go('itens'); } } : null,
       libDeleteAction(e, runCatalog)
     ].filter(Boolean), () => { if ($('#cat-fav').checked) runCatalog(); })));
     $('#cat-empty').hidden = list.length > 0 || Boolean(secret);
@@ -14275,7 +14274,7 @@ const FIREBASE_CONFIG = {
     const slot = $(camp ? '#beast-form-slot' : '#bst-form-slot');
     const rerun = camp ? runBeast : runBestiary;
     const acts = [read];
-    if (e.mine) acts.push(btn('Editar', 'btn--ghost', () => openHostedForm(slot, 'npc', e, rerun), 'Editar ' + e.name));
+    if (!e.oficial) acts.push(btn('Editar', 'btn--ghost', () => openHostedForm(slot, 'npc', e, rerun), 'Editar ' + e.name));
     if (camp) acts.push(btn('Pôr na arena', 'btn--primary', () => placeFoe(deep(e)), 'Pôr ' + e.name + ' na arena'));
     else {
       acts.push(btn('Usar de base', 'btn--ghost', () => openHostedForm(slot, 'npc', Object.assign(deep(e), { id: null, name: e.name + ' (cópia)' }), rerun), 'Usar ' + e.name + ' de base'));
