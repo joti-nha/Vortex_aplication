@@ -3223,6 +3223,8 @@ html, body { max-width: 100%; overflow-x: clip; }
 .racial3__head { display: flex; align-items: center; gap: 0.45rem; margin: 0; font-size: 0.8rem; font-weight: 700; color: var(--nevoa-2) !important; }
 .racial3__num { display: grid; place-items: center; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: rgba(183, 155, 255, 0.18); color: var(--essencia); font-weight: 800; }
 .racial3__cost { margin-left: auto; padding: 0.05rem 0.45rem; border-radius: 999px; background: rgba(var(--ambar-rgb), 0.14); color: var(--ambar); font-size: 0.72rem; }
+.tag--link { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; background: rgba(183, 155, 255, 0.12); color: var(--essencia); border-color: var(--essencia); cursor: pointer; }
+.tag--link:hover { background: rgba(183, 155, 255, 0.24); }
 @media (max-width: 760px) { .racial3 { grid-template-columns: 1fr; } }
 .banklines { display: flex; flex-direction: column; gap: 0.5rem; }
 .banklines__list { display: flex; flex-direction: column; gap: 0.3rem; margin: 0; padding: 0; list-style: none; }

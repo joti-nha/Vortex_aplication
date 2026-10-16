@@ -3194,7 +3194,15 @@ const FIREBASE_CONFIG = {
       const label = f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '');
       if (f.kind === 'script') { add(f.key, 'Script', String(val), 'text', { code: true }); return; }
       if (f.kind === 'prereqscript') { const r = parsePrereq(val); if (prereqLine(r)) add(f.key, 'Pré-requisitos conferidos', prereqLine(r), 'text'); return; }
-      if (f.kind === 'racial3') { add(f.key, 'Habilidades raciais', h('div', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : ''))), 'text'); return; }
+      if (f.kind === 'racial3') {
+        // habilidade atrelada a um poder do banco: o nome vira um botão que abre o poder
+        const lines = powerLines(val).map((t) => { const nm = h('strong', '', t.name); return { t, nm, p: h('p', 'entry__racial', nm, t.text ? ': ' + t.text : '') }; });
+        const link = (lib) => lines.forEach((x) => { const pw = bankPower(lib, x.t.name); if (!pw) return; const b = h('button', 'link-btn', x.t.name); b.type = 'button'; b.title = 'Abrir o poder atrelado'; b.addEventListener('click', () => openEntry(pw)); x.nm.replaceChildren(b); });
+        link(BUILTINS);
+        libSearch(['poder'], '').then(link).catch(() => { /* fica o catálogo oficial */ });
+        add(f.key, 'Habilidades raciais', h('div', '', ...lines.map((x) => x.p)), 'text');
+        return;
+      }
       if (f.key === 'fabricante') { add(f.key, label, makerTag(String(val)), 'stat'); return; }
       if (f.key === 'preco') { add(f.key, label, priceText(val), 'stat'); return; }
       if (e.kind === 'granada' && f.key === 'cd') { add(f.key, 'CD de Reflexos', grenadeCd(val), 'stat'); return; }
@@ -3918,13 +3926,27 @@ const FIREBASE_CONFIG = {
   }
   // o script de uma habilidade racial vai na mesma linha do texto: regras separadas por ";"
   const scriptOneLine = (txt) => String(txt || '').split(/[\n;]/).map((x) => x.replace(/\|/g, '/').trim()).filter(Boolean).join('; ');
+  // poder do banco com o mesmo nome de uma habilidade (ou null): é o que fica "atrelado"
+  const bankPower = (lib, name) => (cleanName(name) ? lib.find((e) => e.kind === 'poder' && nameKey(e.name) === nameKey(name)) : null) || null;
   function racial3Field(field, value, onChange) {
     const cur = powerLines(value).slice(0, 3);
     while (cur.length < 3) cur.push({ name: '', text: '', script: '' });
     const box = h('div', 'racial3');
     box.setAttribute('role', 'group');
+    let lib = BUILTINS.filter((e) => e.kind === 'poder');
     const save = () => onChange(cur.filter((t) => cleanName(t.name)).map((t) => cleanName(t.name).replace(/\|/g, '/') + ' | ' + String(t.text || '').replace(/\s*\n\s*/g, ' ').replace(/\|/g, '/').trim() + ' | 1' + (String(t.script || '').trim() ? ' | ' + scriptOneLine(t.script) : '')).join('\n'));
-    cur.forEach((t, i) => {
+    // Atrelar poder: a busca de sempre, só com poderes; o poder escolhido preenche nome, efeito e script
+    const attach = async (t) => {
+      const e = await openPicker({ title: 'Atrelar poder', kinds: ['poder'], chips: ['Poder'], filter: (x) => x.kind === 'poder' });
+      if (!e) return;
+      if (!bankPower(lib, e.name)) lib = lib.concat([e]);
+      t.name = e.name;
+      t.text = (e.values && e.values.efeito) || '';
+      t.script = powerScript(e);
+      save();
+      paint();
+    };
+    const paint = () => box.replaceChildren(...cur.map((t, i) => {
       const nm = h('input', 'input');
       nm.type = 'text';
       nm.maxLength = 60;
@@ -3934,6 +3956,7 @@ const FIREBASE_CONFIG = {
       nm.dataset.fid = 'racial3-' + field.key + '-' + i + '-nome';
       nm.setAttribute('aria-label', 'Nome da habilidade racial ' + (i + 1));
       nm.addEventListener('input', () => { t.name = nm.value; save(); });
+      nm.addEventListener('change', paint);
       const tx = h('textarea', 'input');
       tx.rows = 2;
       tx.maxLength = 400;
@@ -3943,8 +3966,22 @@ const FIREBASE_CONFIG = {
       tx.setAttribute('aria-label', 'Efeito da habilidade racial ' + (i + 1));
       tx.addEventListener('input', () => { t.text = tx.value; save(); });
       const sc = scriptField('racial3-' + field.key + '-' + i + '-script', String(t.script || '').split(/\s*;\s*/).filter(Boolean).join('\n'), (v) => { t.script = v; save(); });
-      box.append(h('div', 'racial3__box', h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', 'Habilidade racial')), nm, tx, sc));
-    });
+      const linked = bankPower(lib, t.name);
+      const pick = h('button', 'btn btn--ghost btn--sm', linked ? 'Trocar poder' : 'Atrelar poder');
+      pick.type = 'button';
+      pick.dataset.fid = 'racial3-' + field.key + '-' + i + '-atrelar';
+      pick.addEventListener('click', () => attach(t));
+      let tag = null;
+      if (linked) {
+        tag = h('button', 'tag tag--link', 'Poder: ' + linked.name);
+        tag.type = 'button';
+        tag.title = 'Abrir o poder atrelado';
+        tag.addEventListener('click', () => openEntry(linked));
+      }
+      return h('div', 'racial3__box', h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', 'Habilidade racial')), tag, nm, tx, sc, h('div', 'banklines__foot', pick));
+    }));
+    libSearch(['poder'], '').then((l) => { lib = l; paint(); }).catch(() => { /* fica o catálogo oficial */ });
+    paint();
     return box;
   }
 
