@@ -3937,6 +3937,7 @@ const FIREBASE_CONFIG = {
     let lib = BUILTINS.filter((e) => e.kind === 'poder');
     const save = () => onChange(cur.filter((t) => cleanName(t.name)).map((t) => cleanName(t.name).replace(/\|/g, '/') + ' | ' + String(t.text || '').replace(/\s*\n\s*/g, ' ').replace(/\|/g, '/').trim() + ' | 1' + (String(t.script || '').trim() ? ' | ' + scriptOneLine(t.script) : '')).join('\n'));
     // Atrelar poder: a busca de sempre, só com poderes; o poder escolhido preenche nome, efeito e script
+    const opened = new Set(); // espaços com o script aberto (sobrevive ao redesenho)
     const attach = async (t) => {
       const e = await openPicker({ title: 'Atrelar poder', kinds: ['poder'], chips: ['Poder'], filter: (x) => x.kind === 'poder' });
       if (!e) return;
@@ -3979,7 +3980,9 @@ const FIREBASE_CONFIG = {
         tag.addEventListener('click', () => openEntry(linked));
       }
       const sc = scriptField('racial3-' + field.key + '-' + i + '-script', String(t.script || '').split(/\s*;\s*/).filter(Boolean).join('\n'), (v) => { t.script = v; save(); }, [pick, tag].filter(Boolean));
-      if (linked) sc.open = true;
+      // o script (e o Atrelar poder dentro dele) só abre quando a pessoa clica em "script"
+      sc.open = opened.has(i);
+      sc.addEventListener('toggle', () => { if (sc.open) opened.add(i); else opened.delete(i); });
       return h('div', 'racial3__box', h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', 'Habilidade racial')), nm, tx, sc);
     }));
     libSearch(['poder'], '').then((l) => { lib = l; paint(); }).catch(() => { /* fica o catálogo oficial */ });
@@ -4246,11 +4249,31 @@ const FIREBASE_CONFIG = {
 
     const grid = $('#item-fields');
     grid.replaceChildren();
+    // categoria com blocos (a criatura): cada campo vai para o bloco dele, como na ficha do jogador
+    const secBox = {};
+    let sheetSum = null;
+    (cat.sections || []).forEach(([id, title, look]) => {
+      const inner = h('div', 'fsec__grid' + (look === 'stats' ? ' fsec__grid--stats' : ''));
+      secBox[id] = inner;
+      const sec = h('section', 'fsec field--wide', h('h3', 'fsec__title', title));
+      if (id === 'vida') { sheetSum = h('p', 'fsec__sum'); sec.append(sheetSum); }
+      sec.append(inner);
+      grid.append(sec);
+    });
+    const place = (f, el) => (secBox[f.sec] || grid).append(el);
+    // resumo da criatura (como as pílulas da revista): camadas de vida e Defesa mínima
+    const paintSum = () => {
+      if (!sheetSum) return;
+      const v = d.values;
+      const pill = (k, n, label) => h('span', 'mag__pill mag__pill--' + k, h('b', '', String(n)), ' ' + label);
+      sheetSum.replaceChildren(...[['escudo', 'Escudo'], ['blindagem', 'Blind.'], ['pv', 'PV']].filter((x) => num(v[x[0]])).map((x) => pill(x[0], num(v[x[0]]), x[1])),
+        pill('def', num(v.armadura || ARMOR_BASE) + num(v.corpo) + num(v.resistencia), 'Defesa mínima'));
+    };
     cat.fields.forEach((f) => {
       if (f.onlyWithOpts && !(type && type.opts && type.opts[f.optKey])) return; // campo que só existe em alguns tipos
       if (f.hidden) return; // escrito por outro campo (o roteiro da build)
-      if (f.kind === 'roteiro') { grid.append(h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
-      if (f.kind === 'script' || f.kind === 'prereqscript') { grid.append(h('div', 'field field--wide', fieldControl(f, type, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
+      if (f.kind === 'roteiro') { place(f, h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
+      if (f.kind === 'script' || f.kind === 'prereqscript') { place(f, h('div', 'field field--wide', fieldControl(f, type, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
         if (isName) d.name = v; else d.values[f.key] = v;
@@ -4263,6 +4286,7 @@ const FIREBASE_CONFIG = {
           if (el) el.value = nv;
         });
         if (f.key === 'raridade' || f.key === 'para') renderItemSlots();
+        paintSum();
       });
       const grouped = f.kind === 'multi' || f.kind === 'rarity' || f.kind === 'cards' || f.kind === 'racial3' || f.kind === 'powerlines';
       const label = h(grouped ? 'span' : 'label', 'field__label', f.label);
@@ -4271,8 +4295,9 @@ const FIREBASE_CONFIG = {
       const wrap = h('div', 'field' + (f.big || f.kind === 'multi' ? ' field--wide' : ''), label, ctrl);
       if (f.kind === 'number' && ctrl.max) wrap.append(h('p', 'field__hint', 'Máximo ' + ctrl.max + ' para este tipo.'));
       if (f.hint) wrap.append(h('p', 'field__hint', f.hint));
-      grid.append(wrap);
+      place(f, wrap);
     });
+    paintSum();
 
     $('#item-image-slot').hidden = !cat.image;
     renderItemImage();
