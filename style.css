@@ -4003,3 +4003,14 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 /* Perdas na ficha: botões lado a lado; a desvantagem compensada fica riscada */
 .row__acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
 .row__text.is-off { text-decoration: line-through; opacity: 0.6; }
+
+/* Criação de criatura em blocos, como a ficha do jogador */
+.fsec { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.9rem 1rem 1rem; border: 1px solid var(--linha); border-radius: var(--r-s); background: var(--casco); }
+.fsec__title { margin: 0; font: 700 0.78rem/1.2 var(--fonte-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ambar); }
+.fsec__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.75rem; }
+.fsec__grid > .field--wide { grid-column: 1 / -1; }
+.fsec__grid--stats { grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); }
+.fsec__grid--stats .field { align-items: center; padding: 0.5rem; border: 1px solid var(--linha); border-radius: var(--r-s); background: rgba(var(--abismo-rgb), 0.45); text-align: center; }
+.fsec__grid--stats .field__label { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.fsec__grid--stats .input { max-width: 6rem; font-size: 1.35rem; font-weight: 700; text-align: center; }
+.fsec__sum { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0; }
