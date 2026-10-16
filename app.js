@@ -29,7 +29,11 @@ const FIREBASE_CONFIG = {
   class UserError extends Error {}
 
   const TYPE_LABEL = { personagem: 'Personagem', criatura: 'Criatura' };
-  const DUP_CHARACTER = 'Já existe um personagem ou criatura com esse nome. Escolha outro.';
+  const DUP_CHARACTER = 'Já existe um personagem com esse nome. Escolha outro.';
+  const DUP_CREATURE = 'Já existe uma criatura com esse nome. Escolha outro.';
+  // personagens e criaturas têm nomes separados: uma criatura com o mesmo nome não bloqueia um personagem (e vice-versa)
+  const isCreature = (type) => type === 'criatura';
+  const dupMsg = (type) => (isCreature(type) ? DUP_CREATURE : DUP_CHARACTER);
   const RENAME_OWNER_ONLY = 'Só quem criou a ficha troca o nome.';
   const OWNER_ONLY = 'Só o dono desta ficha pode excluí-la: o aparelho que a criou ou o perfil dono dela.';
   const DUP_CAMPAIGN = 'Já existe uma campanha com esse nome. Escolha outro.';
@@ -396,10 +400,10 @@ const FIREBASE_CONFIG = {
       mode: 'local',
       uid: ME,
 
-      async nameTaken(kind, name, exceptId) {
+      async nameTaken(kind, name, exceptId, type) {
         const d = read();
         const key = nameKey(name);
-        const pool = kind === 'campaign' ? Object.values(d.campaigns) : Object.values(d.characters);
+        const pool = kind === 'campaign' ? Object.values(d.campaigns) : Object.values(d.characters).filter((x) => isCreature(x.type) === isCreature(type));
         return pool.some((x) => x.nameKey === key && x.id !== exceptId);
       },
 
@@ -417,7 +421,7 @@ const FIREBASE_CONFIG = {
       async createCharacter({ name, type, ownerProfile }) {
         const d = read();
         const key = nameKey(name);
-        if (Object.values(d.characters).some((c) => c.nameKey === key)) throw new UserError(DUP_CHARACTER);
+        if (Object.values(d.characters).some((c) => c.nameKey === key && isCreature(c.type) === isCreature(type))) throw new UserError(dupMsg(type));
         const c = { id: uid(), ownerUid: ME, ownerProfile: ownerProfile || '', name, nameKey: key, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], updatedAt: Date.now() };
         d.characters[c.id] = c;
         write(d);
@@ -459,7 +463,7 @@ const FIREBASE_CONFIG = {
         const c = d.characters[id];
         if (!c) throw new UserError('Personagem não encontrado.');
         const key = nameKey(name);
-        if (Object.values(d.characters).some((x) => x.nameKey === key && x.id !== id)) throw new UserError(DUP_CHARACTER);
+        if (Object.values(d.characters).some((x) => x.nameKey === key && x.id !== id && isCreature(x.type) === isCreature(c.type))) throw new UserError(dupMsg(c.type));
         c.name = name;
         c.nameKey = key;
         c.updatedAt = Date.now();
@@ -751,7 +755,34 @@ const FIREBASE_CONFIG = {
     const names = () => fs.collection('names');
     const lib = () => fs.collection('library');
     const libCache = new Map();
-    const nameDoc = (kind, name) => names().doc((kind === 'campaign' ? 'k_' : 'c_') + nameKey(name));
+    // criaturas reservam o nome em "c_~criatura " + nome; personagens, em "c_" + nome (fichas antigas de criatura ainda podem estar no "c_" + nome)
+    const nameDoc = (kind, name, type) => names().doc((kind === 'campaign' ? 'k_' : 'c_') + (isCreature(type) ? '~criatura ' : '') + nameKey(name));
+    const charType = async (id) => { const s = await chars().doc(id).get(); return s.exists ? s.data().type || 'personagem' : null; };
+    // a reserva "c_" + nome é de uma criatura antiga (ou de ficha que não existe mais)? então não bloqueia personagem
+    const legacyFree = async (snap) => { const t = await charType(snap.data().refId); return t === null || isCreature(t); };
+    // libera o "c_" + nome de uma criatura antiga, passando a reserva dela para o espaço das criaturas
+    async function freeLegacy(name) {
+      const nRef = nameDoc('character', name);
+      const s = await nRef.get();
+      if (!s.exists) return true;
+      const refId = s.data().refId;
+      const t = await charType(refId);
+      if (t !== null && !isCreature(t)) return false;
+      if (t === null) { await nRef.delete(); return true; }
+      const cRef = nameDoc('character', name, 'criatura');
+      const batch = fs.batch();
+      batch.delete(nRef);
+      if (!(await cRef.get()).exists) batch.set(cRef, { kind: 'character', ownerUid: me, refId, createdAt: FV.serverTimestamp() });
+      await batch.commit();
+      return true;
+    }
+    // apaga a reserva do nome de uma ficha (para criatura, também a antiga em "c_" + nome, se for dela)
+    async function dropName(batch, id, name, type) {
+      batch.delete(nameDoc('character', name, type));
+      if (!isCreature(type)) return;
+      const old = await nameDoc('character', name).get();
+      if (old.exists && old.data().refId === id) batch.delete(old.ref);
+    }
 
     const toChar = (snap) => {
       const d = snap.data();
@@ -784,9 +815,16 @@ const FIREBASE_CONFIG = {
       mode: 'firebase',
       uid: me,
 
-      async nameTaken(kind, name, exceptId) {
-        const s = await nameDoc(kind, name).get();
-        return s.exists && s.data().refId !== exceptId;
+      async nameTaken(kind, name, exceptId, type) {
+        const s = await nameDoc(kind, name, kind === 'campaign' ? '' : type).get();
+        if (kind === 'campaign') return s.exists && s.data().refId !== exceptId;
+        if (isCreature(type)) {
+          if (s.exists && s.data().refId !== exceptId) return true;
+          const old = await nameDoc(kind, name).get(); // criatura antiga com esse nome
+          return old.exists && old.data().refId !== exceptId && isCreature(await charType(old.data().refId));
+        }
+        if (!s.exists || s.data().refId === exceptId) return false;
+        return !(await legacyFree(s));
       },
 
       async getCharacter(id) {
@@ -819,8 +857,9 @@ const FIREBASE_CONFIG = {
       },
 
       async createCharacter({ name, type, ownerProfile }) {
-        const nRef = nameDoc('character', name);
-        if ((await nRef.get()).exists) throw new UserError(DUP_CHARACTER);
+        if (await db.nameTaken('character', name, '', type)) throw new UserError(dupMsg(type));
+        if (!isCreature(type) && !(await freeLegacy(name))) throw new UserError(DUP_CHARACTER);
+        const nRef = nameDoc('character', name, type);
         const ref = chars().doc();
         const batch = fs.batch();
         batch.set(nRef, { kind: 'character', ownerUid: me, refId: ref.id, createdAt: FV.serverTimestamp() });
@@ -831,7 +870,7 @@ const FIREBASE_CONFIG = {
         });
         try { await batch.commit(); }
         catch (e) {
-          if (await db.nameTaken('character', name)) throw new UserError(DUP_CHARACTER);
+          if (await db.nameTaken('character', name, '', type)) throw new UserError(dupMsg(type));
           throw e;
         }
         return { id: ref.id, name, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], mine: true, ownerProfile: ownerProfile || '', sheet: null };
@@ -871,10 +910,10 @@ const FIREBASE_CONFIG = {
         const old = s.data();
         const batch = fs.batch();
         if (nameKey(old.name) !== nameKey(name)) {
-          const nRef = nameDoc('character', name);
-          if ((await nRef.get()).exists) throw new UserError(DUP_CHARACTER);
-          batch.set(nRef, { kind: 'character', ownerUid: me, refId: id, createdAt: FV.serverTimestamp() });
-          batch.delete(nameDoc('character', old.name));
+          if (await db.nameTaken('character', name, id, old.type)) throw new UserError(dupMsg(old.type));
+          if (!isCreature(old.type) && !(await freeLegacy(name))) throw new UserError(DUP_CHARACTER);
+          await dropName(batch, id, old.name, old.type);
+          batch.set(nameDoc('character', name, old.type), { kind: 'character', ownerUid: me, refId: id, createdAt: FV.serverTimestamp() });
         }
         batch.update(ref, {
           name, nameKey: nameKey(name), searchKeys: buildSearchKeys(name, old.species, old.origin),
@@ -882,7 +921,7 @@ const FIREBASE_CONFIG = {
         });
         try { await batch.commit(); }
         catch (e) {
-          if (await db.nameTaken('character', name, id)) throw new UserError(DUP_CHARACTER);
+          if (await db.nameTaken('character', name, id, old.type)) throw new UserError(dupMsg(old.type));
           throw e;
         }
       },
@@ -902,7 +941,7 @@ const FIREBASE_CONFIG = {
           try { await db.leaveCampaign(cid, id); } catch (e) { console.warn(e); }
         }
         const batch = fs.batch();
-        batch.delete(nameDoc('character', ch.name));
+        await dropName(batch, id, ch.name, ch.type);
         batch.delete(ref);
         await batch.commit();
       },
@@ -2378,8 +2417,9 @@ const FIREBASE_CONFIG = {
     const name = cleanName(inCreate.value);
     if (validateName(name)) return;
     try {
-      const taken = await db.nameTaken('character', name);
-      if (seq === createSeq && taken) setError(errCreate, inCreate, DUP_CHARACTER);
+      const type = formCreate.elements.kind.value;
+      const taken = await db.nameTaken('character', name, '', type);
+      if (seq === createSeq && taken) setError(errCreate, inCreate, dupMsg(type));
     } catch (e) { /* a checagem final acontece ao criar */ }
   }, 350);
 
@@ -6788,7 +6828,10 @@ const FIREBASE_CONFIG = {
   const swapProfsOf = (s) => (s.swapProfs || []).slice(0, swapAllowed(s));
   const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0 || swapProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
-  const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 ? 4 : 3);
+  // Módulo perito: como Doutor, limite 4 e +1 ponto de perícia; não acumula com Doutor nem com outro perito da mesma perícia
+  const peritoOf = (s) => Array.from(new Set((s.inventory || []).filter((i) => i.slot === 'modulo' && isModule(i) && (i.values || {}).funcao === 'Perito').map((i) => skillIdOf(i.values.pericia)).filter(Boolean)));
+  const peritoExtra = (s) => peritoOf(s).filter((id) => doutorOf(s).indexOf(id) < 0).length;
+  const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 || peritoOf(s).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
   const isModule = (i) => i.kind === 'protese-modulo' && i.values.classe === 'Módulo';
   const twoHanded = (i) => /duas/i.test(String((i.values && i.values.empunhadura) || ''));
@@ -6900,7 +6943,7 @@ const FIREBASE_CONFIG = {
       // +1 num atributo por bloco de 4 UP (1-4, 5-8...: o do bloco já vale no 1º UP dele): vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
       attrAllowed: Math.ceil(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over - swapProfsOf(s).length, // cada troca tira 1 ponto de perícia // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + peritoExtra(s) + skillGrant(s).over - swapProfsOf(s).length, // cada troca tira 1 ponto de perícia // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
       skillGrant: skillGrant(s).grant,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
@@ -8076,7 +8119,7 @@ const FIREBASE_CONFIG = {
           total,
           // subir até o limite tira o ponto da espécime desta perícia e devolve como ponto livre
           stepper(v, { min: 0, max: Math.max(v, skillCap(s, sk[0])), label: sk[1], fid: 'sk-' + sk[0], text: '+' + (v + gift), onChange: (n) => { s.skills[sk[0]] = n; changed(); } }));
-        if (skillCap(s, sk[0]) > 3) row.querySelector('.skill__name').append(h('span', 'skill__doc', ' Doutor'));
+        if (skillCap(s, sk[0]) > 3) row.querySelector('.skill__name').append(h('span', 'skill__doc', doutorOf(s).indexOf(sk[0]) >= 0 ? ' Doutor' : ' Perito'));
         group.append(row);
         if (sk[0] === 'oficio') {
           const inp = h('input', 'input skill__job');
@@ -8605,6 +8648,12 @@ const FIREBASE_CONFIG = {
       const mod = isModule(i);
       if (mod && !m.nucleo) { toast('Sem um Núcleo ativo os módulos ficam inativos. Implante um núcleo (ou vista uma armadura com núcleo) antes.'); return false; }
       if (mod && !s.inventory.some((x) => x.slot === 'protese')) { toast('Os módulos só abrem espaço com ao menos uma prótese implantada.'); return false; }
+      // I.A. (leve): só funciona instalada numa prótese ou armadura Épica ou Lendária
+      if (mod && (i.values || {}).funcao === 'I.A.') {
+        const rar = (x) => nameKey((x.values || {}).raridade || '');
+        const ok = s.inventory.some((x) => (x.slot === 'protese' || x.slot === 'armadura') && (rar(x).indexOf('lend') === 0 || rar(x).indexOf('epic') === 0));
+        if (!ok) { toast(i.name + ' só funciona instalada numa prótese ou armadura Épica ou Lendária. Equipe uma antes.'); return false; }
+      }
       if (m.nucleo) {
         const freed = occupant && occupant.kind === 'protese-modulo' ? ccOf(occupant) : 0;
         const prot = m.protUsed + (mod ? 0 : ccOf(i)) - (i.slot && !mod ? ccOf(i) : 0) - freed;
@@ -10455,8 +10504,8 @@ const FIREBASE_CONFIG = {
     const name = cleanName(fName.value);
     if (!sheetChar || validateName(name) || name === sheetChar.name) return;
     try {
-      const taken = await db.nameTaken('character', name, sheetChar.id);
-      if (seq === nameSeq && taken) setError(errName, fName, DUP_CHARACTER);
+      const taken = await db.nameTaken('character', name, sheetChar.id, sheetChar.type);
+      if (seq === nameSeq && taken) setError(errName, fName, dupMsg(sheetChar.type));
     } catch (e) { /* a checagem final acontece ao salvar */ }
   }, 350);
   fName.addEventListener('input', () => { nameSeq++; setError(errName, fName, ''); liveCheckName(); });
@@ -11246,21 +11295,44 @@ const FIREBASE_CONFIG = {
         .then((list) => { if (!wz || wz.gear !== g) return; g.shop = list.filter((e) => priceOf(e) > 0).sort((a, b) => priceOf(a) - priceOf(b)); renderSetup(); });
       return;
     }
-    const shown = rankSearch(g.shop, wz.q, entryFields);
-    body.append(h('ul', 'rows gear__shop', ...shown.slice(0, 80).map((e) => {
-      const add = h('button', 'btn btn--ghost btn--sm', 'Comprar');
-      add.type = 'button';
+    // mesma busca do banco de dados: categoria, favoritos, filtros por especificação e as mesmas linhas (libRow)
+    if (!g.facets) g.facets = facetBox(() => renderSetup());
+    const kinds = Array.from(new Set(g.shop.map((e) => e.kind)));
+    const kindSel = h('select', 'input');
+    kindSel.dataset.fid = 'gear-kind';
+    kindSel.setAttribute('aria-label', 'Categoria');
+    [['', 'Todas']].concat(ITEM_DATA.categories.filter((c) => kinds.indexOf(c.id) >= 0).map((c) => [c.id, c.title])).forEach((x) => {
+      const o = h('option', '', x[1]);
+      o.value = x[0];
+      kindSel.append(o);
+    });
+    kindSel.value = g.kind || '';
+    kindSel.addEventListener('change', () => { g.kind = kindSel.value; g.facets.reset(); renderSetup(); });
+    const favBox = h('input');
+    favBox.type = 'checkbox';
+    favBox.checked = Boolean(g.favOnly);
+    favBox.addEventListener('change', () => { g.favOnly = favBox.checked; renderSetup(); });
+    const fitBox = h('input');
+    fitBox.type = 'checkbox';
+    fitBox.checked = Boolean(g.fitOnly);
+    fitBox.addEventListener('change', () => { g.fitOnly = fitBox.checked; renderSetup(); });
+    body.append(h('div', 'lib-tools gear__filters', h('label', 'field', h('span', 'field__label', 'Categoria'), kindSel),
+      h('label', 'check', favBox, h('span', '', 'Só favoritos')), h('label', 'check', fitBox, h('span', '', 'Só o que cabe na sobra'))));
+    const favs = favLoad();
+    let shown = g.shop.filter((e) => (!g.kind || e.kind === g.kind) && (!g.favOnly || favs.has(e.id)) && (!g.fitOnly || priceOf(e) <= left));
+    shown = rankSearch(shown, wz.q, entryFields);
+    shown = g.facets.apply(shown, g.kind ? [g.kind] : kinds);
+    if (!hasQuery(wz.q)) shown.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
+    body.append(g.facets.box, h('p', 'block__hint', plural(shown.length, 'item', 'itens') + ' na loja' + (g.favOnly ? ' entre os favoritos' : '') + '.'));
+    body.append(h('ul', 'rows gear__shop', ...shown.map((e) => {
+      const row = libRow(e, [{ label: 'Comprar ' + fmtCronos(priceOf(e)), cls: 'btn--primary', onClick: () => { g.cart.push(e); renderSetup(); } }], () => { if (g.favOnly) renderSetup(); });
+      const add = row.lastChild;
       add.disabled = priceOf(e) > left;
       add.setAttribute('aria-label', 'Comprar ' + e.name + ' por ' + priceText(e.values.preco));
-      add.addEventListener('click', () => { g.cart.push(e); renderSetup(); });
-      const text = entryText(e);
-      return h('li', 'row', gearOpen(e, entryIcon(e),
-        h('span', 'row__main', h('span', 'row__title', e.name), h('span', 'row__meta', [e.kindTitle, e.typeTitle, e.values.raridade].filter(Boolean).join(' · ')),
-          text ? h('span', 'row__text', text) : null)),
-        h('strong', 'gear__price', fmtCronos(priceOf(e))), add);
+      return row;
     })));
-    if (!shown.length) body.append(h('p', 'empty', 'Nada com esse termo na loja.'));
-    else if (g.shop.some((e) => priceOf(e) > left)) body.append(h('p', 'field__hint', 'Itens acima da sobra ficam desativados.'));
+    if (!shown.length) body.append(h('p', 'empty', 'Nada encontrado na loja. Mude a busca ou os filtros.'));
+    else if (!g.fitOnly && shown.some((e) => priceOf(e) > left)) body.append(h('p', 'field__hint', 'Itens acima da sobra ficam desativados.'));
   }
 
   /* Criar na hora (fica escondido): espécime, origem ou build nova, sem sair da distribuição inicial.

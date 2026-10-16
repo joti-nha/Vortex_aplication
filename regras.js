@@ -921,6 +921,30 @@ window.VORTEX_REGRAS = {
           ['note', 'Exemplos', ['Braço de combate com força ampliada.', 'Espinha artificial que melhora processamento motor.', 'Sistema muscular artificial de alta potência.', 'Armadura com membros auxiliares automatizados.', 'Núcleo de combate integrado com funções avançadas.']]
         ], 3],
 
+        ['h2', 'Módulos especiais'],
+        ['p', 'Alguns módulos têm regras próprias. São os mesmos que equipam a armadura **Mirage**: radar, I.A., perito e rede.'],
+        ['card', 'Radares', [
+          ['p', 'Radares são como uma percepção bônus que identifica o que o seu método permite detectar.'],
+          ['p', 'Por padrão, um radar permite fazer **testes de Sentidos** para perceber o que ele detecta. Exemplo: um radar de radiodetecção pode revelar a posição de inimigos atrás de uma parede que o radar atravessa.'],
+          ['p', 'Cada radar conta como um módulo.'],
+          ['note', 'Exemplos', ['Radiodetecção: corpos e objetos sólidos, atrás de paredes.', 'Térmico: fontes de calor, mesmo no escuro ou na fumaça.', 'Sonar: movimento e formato do ambiente, sem luz.', 'Eletromagnético: eletrônicos, implantes, núcleos e escudos.', 'Completo: tudo o que os quatro detectam.']]
+        ], 2],
+        ['card', 'I.A.', [
+          ['p', 'O módulo de I.A. acrescenta uma inteligência artificial que faz ações de **busca, pesquisa e análise** por você. Quem faz o teste é o mestre, usando a **Precisão** da I.A., que é o nível de inteligência dela.'],
+          ['p', 'I.A. não tem raridade. Como módulo só existe a **I.A. leve**, e as variações dela são a especialidade (pesquisa, análise, infiltração, combate...). Diferente dos outros módulos, ela só pode ser instalada em itens **Épicos ou Lendários**.'],
+          ['p', 'A **I.A. própria** não é um módulo: ela é como uma personagem, com alta consciência e todo o fator de interpretação de uma I.A. Só itens **Lendários** a suportam, e só ela pode ser colocada em um corpo próprio.'],
+          ['p', 'O **preço** da I.A. leve é o que define a Precisão dela; a especialidade só muda o que ela faz:'],
+          ['kv', '', [['4.000 Cronos', 'Precisão 1'], ['6.000 Cronos', 'Precisão 2'], ['9.000 Cronos', 'Precisão 3']]]
+        ], 2],
+        ['card', 'Perito', [
+          ['p', 'O **módulo perito (perícia)** funciona como o poder Doutor naquela perícia: o limite de modificador nela se torna 4 e você ganha +1 ponto de perícia enquanto o módulo estiver ativo.'],
+          ['p', 'Não acumula com Doutor: se você já tem Doutor na mesma perícia, o módulo não muda nada.']
+        ], 2],
+        ['card', 'Rede', [
+          ['p', 'O **módulo de rede** permite se conectar livremente à internet, sem precisar de um aparelho.'],
+          ['p', 'Versões melhores criptografam a conexão ou funcionam mesmo sob bloqueio de sinal.']
+        ], 2],
+
         ['h2', 'Ficha de Próteses e Módulos'],
         ['fields', ['Modelo (Prótese ou Módulo)', 'Tipo / CC', 'Efeito']]
       ]
@@ -1158,8 +1182,8 @@ window.VORTEX_REGRAS = {
           ['p', '**Insano.** Obtém componentes de um jeito diferente. Em breve.']
         ]],
         ['card', 'Akimbo', [
-          ['p', 'Você pode empunhar pistolas ou submetralhadoras, uma em cada mão (ou uma de cada, seja irado!). A recarga sobe uma categoria de ação: livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
-          ['p', 'Em troca, você pode mirar num único alvo com as duas armas ou escolher até dois alvos. Os disparos saem na mesma ação, mas cada arma faz o seu teste de ataque e causa o seu dano separado.']
+          ['p', 'Você pode empunhar itens de uma mão, um em cada mão (ou um de cada tipo, seja irado!). A recarga sobe uma categoria de ação: livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
+          ['p', 'Em troca, você pode mirar num único alvo com os dois itens ou escolher até dois alvos. Os disparos saem na mesma ação, mas cada arma faz o seu teste de ataque e causa o seu dano separado.']
         ]],
         ['card', 'Gatilho do velho mundo', [
           ['p', 'Com um revólver de disparo único, você força a arma a ter cadência igual a 1 + metade da sua Precisão, arredondada para cima. O primeiro disparo não entra na penalidade de cadência.'],
