@@ -6788,8 +6788,9 @@ const FIREBASE_CONFIG = {
   const swapProfsOf = (s) => (s.swapProfs || []).slice(0, swapAllowed(s));
   const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0 || swapProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
-  // Módulo perito: limite 4 na perícia dele, como Doutor (não acumula: Doutor + perito na mesma perícia continua 4)
-  const peritoOf = (s) => (s.inventory || []).filter((i) => i.slot === 'modulo' && isModule(i) && (i.values || {}).funcao === 'Perito').map((i) => skillIdOf(i.values.pericia)).filter(Boolean);
+  // Módulo perito: como Doutor, limite 4 e +1 ponto de perícia; não acumula com Doutor nem com outro perito da mesma perícia
+  const peritoOf = (s) => Array.from(new Set((s.inventory || []).filter((i) => i.slot === 'modulo' && isModule(i) && (i.values || {}).funcao === 'Perito').map((i) => skillIdOf(i.values.pericia)).filter(Boolean)));
+  const peritoExtra = (s) => peritoOf(s).filter((id) => doutorOf(s).indexOf(id) < 0).length;
   const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 || peritoOf(s).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
   const isModule = (i) => i.kind === 'protese-modulo' && i.values.classe === 'Módulo';
@@ -6902,7 +6903,7 @@ const FIREBASE_CONFIG = {
       // +1 num atributo por bloco de 4 UP (1-4, 5-8...: o do bloco já vale no 1º UP dele): vale o escolhido na Progressão e também o ponto posto direto na faixa
       // de atributos (o que passa dos 3 da distribuição inicial)
       attrAllowed: Math.ceil(upEarned / 4), attrUsed: attrUpUsed(s) + (s.setup ? Math.max(0, -attrPool(s.attrs).left) : 0),
-      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + skillGrant(s).over - swapProfsOf(s).length, // cada troca tira 1 ponto de perícia // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
+      skillBudget: 5 + Math.ceil(upEarned / 2) + 3 * s.up.per + upProfsOf(s).length + doutorOf(s).length + peritoExtra(s) + skillGrant(s).over - swapProfsOf(s).length, // cada troca tira 1 ponto de perícia // Doutor e proficiências: +1 de perícia cada; perícia da espécime acima do limite vira ponto livre
       skillGrant: skillGrant(s).grant,
       skillUsed: Object.keys(s.skills).reduce((t, k) => t + num(s.skills[k]), 0)
     };
@@ -8607,12 +8608,11 @@ const FIREBASE_CONFIG = {
       const mod = isModule(i);
       if (mod && !m.nucleo) { toast('Sem um Núcleo ativo os módulos ficam inativos. Implante um núcleo (ou vista uma armadura com núcleo) antes.'); return false; }
       if (mod && !s.inventory.some((x) => x.slot === 'protese')) { toast('Os módulos só abrem espaço com ao menos uma prótese implantada.'); return false; }
-      // I.A.: só funciona instalada numa prótese ou armadura Épica/Lendária (a versão poderosa e a própria, só Lendária)
-      const need = mod && (i.values || {}).funcao === 'I.A.' ? ((i.values.requer || '') === 'Lendário' ? 'lend' : 'epic') : '';
-      if (need) {
+      // I.A. (leve): só funciona instalada numa prótese ou armadura Épica ou Lendária
+      if (mod && (i.values || {}).funcao === 'I.A.') {
         const rar = (x) => nameKey((x.values || {}).raridade || '');
-        const ok = s.inventory.some((x) => (x.slot === 'protese' || x.slot === 'armadura') && (rar(x).indexOf('lend') === 0 || (need === 'epic' && rar(x).indexOf('epic') === 0)));
-        if (!ok) { toast(i.name + ' só funciona instalada numa prótese ou armadura ' + (need === 'lend' ? 'Lendária' : 'Épica ou Lendária') + '. Equipe uma antes.'); return false; }
+        const ok = s.inventory.some((x) => (x.slot === 'protese' || x.slot === 'armadura') && (rar(x).indexOf('lend') === 0 || rar(x).indexOf('epic') === 0));
+        if (!ok) { toast(i.name + ' só funciona instalada numa prótese ou armadura Épica ou Lendária. Equipe uma antes.'); return false; }
       }
       if (m.nucleo) {
         const freed = occupant && occupant.kind === 'protese-modulo' ? ccOf(occupant) : 0;

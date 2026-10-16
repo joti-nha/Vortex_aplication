@@ -930,13 +930,13 @@ window.VORTEX_REGRAS = {
           ['note', 'Exemplos', ['Radiodetecção: corpos e objetos sólidos, atrás de paredes.', 'Térmico: fontes de calor, mesmo no escuro ou na fumaça.', 'Sonar: movimento e formato do ambiente, sem luz.', 'Eletromagnético: eletrônicos, implantes, núcleos e escudos.', 'Completo: tudo o que os quatro detectam.']]
         ], 2],
         ['card', 'I.A.', [
-          ['p', 'O módulo de I.A. acrescenta uma inteligência artificial que faz ações de **busca, pesquisa e análise** por você. Quem faz o teste é o mestre, usando a **Precisão** da I.A., que é o nível de inteligência dela. A Precisão sobe com o preço.'],
-          ['p', 'Diferente dos outros módulos, a I.A. só pode ser instalada em itens **Épicos ou Lendários**, e a versão poderosa precisa de um item **Lendário**.'],
-          ['p', 'Além das regras, a I.A. tem todo o fator de interpretação de uma personagem. Somente a **I.A. Própria**, que só itens Lendários suportam, pode ser colocada em um corpo próprio, e essas I.A. têm alta consciência.'],
-          ['kv', '', [['Assistente', 'Épica · Precisão 1'], ['Tática', 'Épica · Precisão 2'], ['Combate', 'Lendária · Precisão 3'], ['Própria', 'Lendária · Precisão 4']]]
+          ['p', 'O módulo de I.A. acrescenta uma inteligência artificial que faz ações de **busca, pesquisa e análise** por você. Quem faz o teste é o mestre, usando a **Precisão** da I.A., que é o nível de inteligência dela.'],
+          ['p', 'I.A. não tem raridade. Como módulo só existe a **I.A. leve**, e as variações dela são a especialidade (pesquisa, análise, infiltração, combate...). A Precisão sobe com o preço. Diferente dos outros módulos, ela só pode ser instalada em itens **Épicos ou Lendários**.'],
+          ['p', 'A **I.A. própria** não é um módulo: ela é como uma personagem, com alta consciência e todo o fator de interpretação de uma I.A. Só itens **Lendários** a suportam, e só ela pode ser colocada em um corpo próprio.'],
+          ['kv', '', [['Pesquisa', 'Precisão 1'], ['Análise', 'Precisão 2'], ['Infiltração', 'Precisão 2'], ['Combate', 'Precisão 3']]]
         ], 2],
         ['card', 'Perito', [
-          ['p', 'O **módulo perito (perícia)** funciona como o poder Doutor naquela perícia: o limite de modificador nela se torna 4 enquanto o módulo estiver ativo.'],
+          ['p', 'O **módulo perito (perícia)** funciona como o poder Doutor naquela perícia: o limite de modificador nela se torna 4 e você ganha +1 ponto de perícia enquanto o módulo estiver ativo.'],
           ['p', 'Não acumula com Doutor: se você já tem Doutor na mesma perícia, o módulo não muda nada.']
         ], 2],
         ['card', 'Rede', [
