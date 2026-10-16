@@ -1048,6 +1048,27 @@ window.VORTEX_REGRAS = {
             'Tnnaks Jackt (armadura leve);',
             '1 sucata de núcleo (pode ser vendida ou usada como peça).'
           ]]
+        ]],
+        ['card', 'Klyntar', [
+          ['p', 'Os simbiontes estão longe de serem apenas parasitas espaciais aleatórios: eles fazem parte de uma mitologia cósmica ancestral baseada no abismo, na escuridão e em uma rebelião contra um deus tirano.'],
+          ['p', 'Como os simbiontes originais foram forjados dentro da cabeça decapitada e incandescente de um Celestial, sob intensas batidas de martelo, toda a espécie herdou duas grandes fraquezas biológicas: o fogo e o som extremo (explosão).'],
+          ['p', 'Itens iniciais:'],
+          ['ul', [
+            'Reforçada;',
+            'Ponta serrilhada;',
+            'Lâmina vibratória;',
+            'Cabo com laço;',
+            'Dorso pesado.'
+          ]]
+        ]],
+        ['card', 'Assassino', [
+          ['p', 'Itens iniciais:'],
+          ['ul', [
+            'Iron Revolver ER-2;',
+            'Ampliação;',
+            'Tnnaks Jackt (armadura leve);',
+            'Blush Smoke.'
+          ]]
         ]]
       ]
     },
