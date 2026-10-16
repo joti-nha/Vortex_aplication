@@ -931,9 +931,10 @@ window.VORTEX_REGRAS = {
         ], 2],
         ['card', 'I.A.', [
           ['p', 'O módulo de I.A. acrescenta uma inteligência artificial que faz ações de **busca, pesquisa e análise** por você. Quem faz o teste é o mestre, usando a **Precisão** da I.A., que é o nível de inteligência dela.'],
-          ['p', 'I.A. não tem raridade. Como módulo só existe a **I.A. leve**, e as variações dela são a especialidade (pesquisa, análise, infiltração, combate...). A Precisão sobe com o preço. Diferente dos outros módulos, ela só pode ser instalada em itens **Épicos ou Lendários**.'],
+          ['p', 'I.A. não tem raridade. Como módulo só existe a **I.A. leve**, e as variações dela são a especialidade (pesquisa, análise, infiltração, combate...). Diferente dos outros módulos, ela só pode ser instalada em itens **Épicos ou Lendários**.'],
           ['p', 'A **I.A. própria** não é um módulo: ela é como uma personagem, com alta consciência e todo o fator de interpretação de uma I.A. Só itens **Lendários** a suportam, e só ela pode ser colocada em um corpo próprio.'],
-          ['kv', '', [['Pesquisa', 'Precisão 1'], ['Análise', 'Precisão 2'], ['Infiltração', 'Precisão 2'], ['Combate', 'Precisão 3']]]
+          ['p', 'O **preço** da I.A. leve é o que define a Precisão dela; a especialidade só muda o que ela faz:'],
+          ['kv', '', [['4.000 Cronos', 'Precisão 1'], ['6.000 Cronos', 'Precisão 2'], ['9.000 Cronos', 'Precisão 3']]]
         ], 2],
         ['card', 'Perito', [
           ['p', 'O **módulo perito (perícia)** funciona como o poder Doutor naquela perícia: o limite de modificador nela se torna 4 e você ganha +1 ponto de perícia enquanto o módulo estiver ativo.'],

@@ -391,7 +391,7 @@ window.VORTEX_ITEMS = {
         { key: 'funcao', label: 'Função do módulo (opcional)', kind: 'select', options: 'funcoesModulo', blank: 'Nenhuma', hint: 'Radar, I.A., Perito ou Rede. Veja as regras em Núcleo, Próteses e Módulos.' },
         { key: 'detecta', label: 'O que o radar detecta (só Radar)', kind: 'text', placeholder: 'Ex.: calor, ondas de rádio, eletrônicos' },
         { key: 'pericia', label: 'Perícia do módulo perito (só Perito)', kind: 'select', options: 'pericias', blank: 'Nenhuma', hint: 'Como o poder Doutor: limite 4 nessa perícia e +1 ponto de perícia (não acumula com Doutor).' },
-        { key: 'precisao', label: 'Precisão da I.A. (só I.A.)', kind: 'number', min: 0, step: 1, hint: 'I.A. não tem raridade; só funciona instalada num item Épico ou Lendário.' },
+        { key: 'precisao', label: 'Precisão da I.A. (só I.A.)', kind: 'number', min: 0, step: 1, hint: 'Vem do preço: 4.000 = 1, 6.000 = 2, 9.000 = 3. I.A. não tem raridade e só funciona num item Épico ou Lendário.' },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
       ]

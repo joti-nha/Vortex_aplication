@@ -29,7 +29,11 @@ const FIREBASE_CONFIG = {
   class UserError extends Error {}
 
   const TYPE_LABEL = { personagem: 'Personagem', criatura: 'Criatura' };
-  const DUP_CHARACTER = 'Já existe um personagem ou criatura com esse nome. Escolha outro.';
+  const DUP_CHARACTER = 'Já existe um personagem com esse nome. Escolha outro.';
+  const DUP_CREATURE = 'Já existe uma criatura com esse nome. Escolha outro.';
+  // personagens e criaturas têm nomes separados: uma criatura com o mesmo nome não bloqueia um personagem (e vice-versa)
+  const isCreature = (type) => type === 'criatura';
+  const dupMsg = (type) => (isCreature(type) ? DUP_CREATURE : DUP_CHARACTER);
   const RENAME_OWNER_ONLY = 'Só quem criou a ficha troca o nome.';
   const OWNER_ONLY = 'Só o dono desta ficha pode excluí-la: o aparelho que a criou ou o perfil dono dela.';
   const DUP_CAMPAIGN = 'Já existe uma campanha com esse nome. Escolha outro.';
@@ -396,10 +400,10 @@ const FIREBASE_CONFIG = {
       mode: 'local',
       uid: ME,
 
-      async nameTaken(kind, name, exceptId) {
+      async nameTaken(kind, name, exceptId, type) {
         const d = read();
         const key = nameKey(name);
-        const pool = kind === 'campaign' ? Object.values(d.campaigns) : Object.values(d.characters);
+        const pool = kind === 'campaign' ? Object.values(d.campaigns) : Object.values(d.characters).filter((x) => isCreature(x.type) === isCreature(type));
         return pool.some((x) => x.nameKey === key && x.id !== exceptId);
       },
 
@@ -417,7 +421,7 @@ const FIREBASE_CONFIG = {
       async createCharacter({ name, type, ownerProfile }) {
         const d = read();
         const key = nameKey(name);
-        if (Object.values(d.characters).some((c) => c.nameKey === key)) throw new UserError(DUP_CHARACTER);
+        if (Object.values(d.characters).some((c) => c.nameKey === key && isCreature(c.type) === isCreature(type))) throw new UserError(dupMsg(type));
         const c = { id: uid(), ownerUid: ME, ownerProfile: ownerProfile || '', name, nameKey: key, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], updatedAt: Date.now() };
         d.characters[c.id] = c;
         write(d);
@@ -459,7 +463,7 @@ const FIREBASE_CONFIG = {
         const c = d.characters[id];
         if (!c) throw new UserError('Personagem não encontrado.');
         const key = nameKey(name);
-        if (Object.values(d.characters).some((x) => x.nameKey === key && x.id !== id)) throw new UserError(DUP_CHARACTER);
+        if (Object.values(d.characters).some((x) => x.nameKey === key && x.id !== id && isCreature(x.type) === isCreature(c.type))) throw new UserError(dupMsg(c.type));
         c.name = name;
         c.nameKey = key;
         c.updatedAt = Date.now();
@@ -751,7 +755,34 @@ const FIREBASE_CONFIG = {
     const names = () => fs.collection('names');
     const lib = () => fs.collection('library');
     const libCache = new Map();
-    const nameDoc = (kind, name) => names().doc((kind === 'campaign' ? 'k_' : 'c_') + nameKey(name));
+    // criaturas reservam o nome em "c_~criatura " + nome; personagens, em "c_" + nome (fichas antigas de criatura ainda podem estar no "c_" + nome)
+    const nameDoc = (kind, name, type) => names().doc((kind === 'campaign' ? 'k_' : 'c_') + (isCreature(type) ? '~criatura ' : '') + nameKey(name));
+    const charType = async (id) => { const s = await chars().doc(id).get(); return s.exists ? s.data().type || 'personagem' : null; };
+    // a reserva "c_" + nome é de uma criatura antiga (ou de ficha que não existe mais)? então não bloqueia personagem
+    const legacyFree = async (snap) => { const t = await charType(snap.data().refId); return t === null || isCreature(t); };
+    // libera o "c_" + nome de uma criatura antiga, passando a reserva dela para o espaço das criaturas
+    async function freeLegacy(name) {
+      const nRef = nameDoc('character', name);
+      const s = await nRef.get();
+      if (!s.exists) return true;
+      const refId = s.data().refId;
+      const t = await charType(refId);
+      if (t !== null && !isCreature(t)) return false;
+      if (t === null) { await nRef.delete(); return true; }
+      const cRef = nameDoc('character', name, 'criatura');
+      const batch = fs.batch();
+      batch.delete(nRef);
+      if (!(await cRef.get()).exists) batch.set(cRef, { kind: 'character', ownerUid: me, refId, createdAt: FV.serverTimestamp() });
+      await batch.commit();
+      return true;
+    }
+    // apaga a reserva do nome de uma ficha (para criatura, também a antiga em "c_" + nome, se for dela)
+    async function dropName(batch, id, name, type) {
+      batch.delete(nameDoc('character', name, type));
+      if (!isCreature(type)) return;
+      const old = await nameDoc('character', name).get();
+      if (old.exists && old.data().refId === id) batch.delete(old.ref);
+    }
 
     const toChar = (snap) => {
       const d = snap.data();
@@ -784,9 +815,16 @@ const FIREBASE_CONFIG = {
       mode: 'firebase',
       uid: me,
 
-      async nameTaken(kind, name, exceptId) {
-        const s = await nameDoc(kind, name).get();
-        return s.exists && s.data().refId !== exceptId;
+      async nameTaken(kind, name, exceptId, type) {
+        const s = await nameDoc(kind, name, kind === 'campaign' ? '' : type).get();
+        if (kind === 'campaign') return s.exists && s.data().refId !== exceptId;
+        if (isCreature(type)) {
+          if (s.exists && s.data().refId !== exceptId) return true;
+          const old = await nameDoc(kind, name).get(); // criatura antiga com esse nome
+          return old.exists && old.data().refId !== exceptId && isCreature(await charType(old.data().refId));
+        }
+        if (!s.exists || s.data().refId === exceptId) return false;
+        return !(await legacyFree(s));
       },
 
       async getCharacter(id) {
@@ -819,8 +857,9 @@ const FIREBASE_CONFIG = {
       },
 
       async createCharacter({ name, type, ownerProfile }) {
-        const nRef = nameDoc('character', name);
-        if ((await nRef.get()).exists) throw new UserError(DUP_CHARACTER);
+        if (await db.nameTaken('character', name, '', type)) throw new UserError(dupMsg(type));
+        if (!isCreature(type) && !(await freeLegacy(name))) throw new UserError(DUP_CHARACTER);
+        const nRef = nameDoc('character', name, type);
         const ref = chars().doc();
         const batch = fs.batch();
         batch.set(nRef, { kind: 'character', ownerUid: me, refId: ref.id, createdAt: FV.serverTimestamp() });
@@ -831,7 +870,7 @@ const FIREBASE_CONFIG = {
         });
         try { await batch.commit(); }
         catch (e) {
-          if (await db.nameTaken('character', name)) throw new UserError(DUP_CHARACTER);
+          if (await db.nameTaken('character', name, '', type)) throw new UserError(dupMsg(type));
           throw e;
         }
         return { id: ref.id, name, type, image: '', thumb: '', species: '', age: '', origin: '', campaignIds: [], mine: true, ownerProfile: ownerProfile || '', sheet: null };
@@ -871,10 +910,10 @@ const FIREBASE_CONFIG = {
         const old = s.data();
         const batch = fs.batch();
         if (nameKey(old.name) !== nameKey(name)) {
-          const nRef = nameDoc('character', name);
-          if ((await nRef.get()).exists) throw new UserError(DUP_CHARACTER);
-          batch.set(nRef, { kind: 'character', ownerUid: me, refId: id, createdAt: FV.serverTimestamp() });
-          batch.delete(nameDoc('character', old.name));
+          if (await db.nameTaken('character', name, id, old.type)) throw new UserError(dupMsg(old.type));
+          if (!isCreature(old.type) && !(await freeLegacy(name))) throw new UserError(DUP_CHARACTER);
+          await dropName(batch, id, old.name, old.type);
+          batch.set(nameDoc('character', name, old.type), { kind: 'character', ownerUid: me, refId: id, createdAt: FV.serverTimestamp() });
         }
         batch.update(ref, {
           name, nameKey: nameKey(name), searchKeys: buildSearchKeys(name, old.species, old.origin),
@@ -882,7 +921,7 @@ const FIREBASE_CONFIG = {
         });
         try { await batch.commit(); }
         catch (e) {
-          if (await db.nameTaken('character', name, id)) throw new UserError(DUP_CHARACTER);
+          if (await db.nameTaken('character', name, id, old.type)) throw new UserError(dupMsg(old.type));
           throw e;
         }
       },
@@ -902,7 +941,7 @@ const FIREBASE_CONFIG = {
           try { await db.leaveCampaign(cid, id); } catch (e) { console.warn(e); }
         }
         const batch = fs.batch();
-        batch.delete(nameDoc('character', ch.name));
+        await dropName(batch, id, ch.name, ch.type);
         batch.delete(ref);
         await batch.commit();
       },
@@ -2378,8 +2417,9 @@ const FIREBASE_CONFIG = {
     const name = cleanName(inCreate.value);
     if (validateName(name)) return;
     try {
-      const taken = await db.nameTaken('character', name);
-      if (seq === createSeq && taken) setError(errCreate, inCreate, DUP_CHARACTER);
+      const type = formCreate.elements.kind.value;
+      const taken = await db.nameTaken('character', name, '', type);
+      if (seq === createSeq && taken) setError(errCreate, inCreate, dupMsg(type));
     } catch (e) { /* a checagem final acontece ao criar */ }
   }, 350);
 
@@ -10464,8 +10504,8 @@ const FIREBASE_CONFIG = {
     const name = cleanName(fName.value);
     if (!sheetChar || validateName(name) || name === sheetChar.name) return;
     try {
-      const taken = await db.nameTaken('character', name, sheetChar.id);
-      if (seq === nameSeq && taken) setError(errName, fName, DUP_CHARACTER);
+      const taken = await db.nameTaken('character', name, sheetChar.id, sheetChar.type);
+      if (seq === nameSeq && taken) setError(errName, fName, dupMsg(sheetChar.type));
     } catch (e) { /* a checagem final acontece ao salvar */ }
   }, 350);
   fName.addEventListener('input', () => { nameSeq++; setError(errName, fName, ''); liveCheckName(); });
