@@ -12626,7 +12626,7 @@ const FIREBASE_CONFIG = {
   const MANEUVERS = [
     { id: 'derrubar', label: 'Derrubar', tag: 'Caído', text: 'Se vencer, o alvo fica Caído (–2 na defesa até se levantar).' },
     { id: 'empurrar', label: 'Empurrar', text: 'Se vencer, o alvo é empurrado para onde você escolher: 1,5 m, mais 1,5 m a cada 3 pontos acima do teste dele (o dobro se ele for Pequeno ou menor).' },
-    { id: 'desarmar', label: 'Desarmar', text: 'Se vencer, o alvo larga o que tem nas mãos.' },
+    { id: 'desarmar', label: 'Desarmar', text: 'Se vencer, o alvo larga o que tem nas mãos (pela regra, você escolhe: no chão, arremessado ou na sua mão livre).' },
     { id: 'agarrar', label: 'Agarrar', tag: 'Agarrado', grab: true, text: 'O alvo resiste com Luta ou Reflexos, o melhor dele. Se vencer, ele fica Agarrado (anda junto com você, os dois com metade do deslocamento, e conta como Imóvel) até se soltar.' },
     { id: 'guarda', label: 'Quebrar guarda', tag: 'Guarda aberta', rounds: 1, text: 'Se vencer, a defesa do alvo cai 2 até a próxima rodada.' }
   ];

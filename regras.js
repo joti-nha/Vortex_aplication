@@ -363,7 +363,7 @@ window.VORTEX_REGRAS = {
         ]],
         ['p', 'A regra geral para os ataques é: atributo + perícia atrelados.'],
         ['h3', 'Manobra'],
-        ['p', 'Funciona como um ataque, mas em vez de causar dano você tenta impor uma condição ou um estado ao alvo: agarrar, empurrar, derrubar, finalizar, desarmar ou afetar. O teste de manobra é **2d6 + Corpo + Luta**. Cada manobra está em [Ações](acoes#Manobras); as condições que elas causam, em [Condições e Estados](condicoes-e-estados).'],
+        ['p', 'Funciona como um ataque, mas em vez de causar dano você tenta impor uma condição ou um estado ao alvo: agarrar, empurrar, derrubar, finalizar, desarmar ou afetar (este último também causa dano, numa parte do corpo). O teste de manobra é **2d6 + Corpo + Luta**. Cada manobra está em [Ações](acoes#Manobras); as condições que elas causam, em [Condições e Estados](condicoes-e-estados).'],
 
         ['h2', 'Defesa'],
         ['p', 'Quando você é alvo de um ataque, sua defesa reduz ou anula esse ataque. Ela é definida no início de cada combate, junto da iniciativa, com um teste de defesa:'],
@@ -502,9 +502,15 @@ window.VORTEX_REGRAS = {
           ['Agarrar', 'Teste de manobra contra o teste que o alvo escolher: Corpo + Luta ou Precisão + Reflexos. Se você vencer, o alvo fica [Agarrado](condicoes-e-estados#Passageiras) por você. O teste de quem é agarrado ganha +2 para cada categoria de tamanho de diferença entre ele e quem agarra.'],
           ['Empurrar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se o alvo perder, é empurrado na direção que você escolher: 1,5 m, mais 1,5 m a cada 3 pontos que o seu teste superar o dele. A distância dobra se o alvo for Pequeno ou menor.'],
           ['Derrubar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, o alvo fica Caído.'],
-          ['Desarmar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, o alvo solta o que tem nas mãos.'],
+          ['Desarmar', 'Você faz a manobra contra um objeto empunhado, e quem o empunha faz um teste de Resistência ou Reflexos contra o seu. Se você vencer, escolhe: jogar o item no chão, arremessá-lo (como numa ação de arremesso) ou ficar com ele, se tiver as mãos livres.'],
           ['Finalizar', 'Só contra um alvo inconsciente, paralisado ou com 0 PV ou menos. Você faz um ataque normal, mas o dano é calculado apenas contra a Defesa mínima do alvo, com o valor cheio do seu ataque: os dados contam como o máximo, e você só os rola para ver se houve crítico.'],
-          ['Afetar', 'Impor outra condição ou estado que a situação, um item ou um poder permita (como prender com uma rede ou cegar com areia). Teste de manobra contra a Resistência ou os Reflexos do alvo, ou o teste que a fonte indicar; se você vencer, o alvo sofre o efeito.']
+          ['Afetar', 'Você mira uma parte do corpo do alvo (pernas, braços, peito ou cabeça) e causa um dano massivo localizado. Se o teste tiver 2 críticos (6 nos dois dados), você também escolhe um efeito de **dor** ou de **incapacitação** daquela parte (tabela abaixo).']
+        ]],
+        ['table', ['Parte', 'Dor (até o fim do próximo turno do alvo)', 'Incapacitação (até o alvo receber cura)'], [
+          ['Pernas', 'O deslocamento cai à metade.', 'O alvo fica Caído e com o deslocamento à metade.'],
+          ['Braços', '–2 nos ataques.', 'O alvo solta o que tem na mão desse braço e não pode usá-lo.'],
+          ['Peito', '–2 na Defesa.', 'O alvo perde a ação bônus e não pode correr nem avançar.'],
+          ['Cabeça', 'O alvo fica Zonzo.', 'O alvo fica Atordoado e tem perda em testes de Sentidos.']
         ]],
 
         ['h3', 'Equipamento'],
@@ -1011,7 +1017,7 @@ window.VORTEX_REGRAS = {
           ['p', 'Gastando +1 UP, a Esquiva passa a valer também na defesa mínima.']
         ]],
         ['card', 'Regeneração', [
-          ['kv', '', [['Custo', '2 UP']]],
+          ['kv', '', [['Custo', '1 UP']]],
           ['p', 'Só funciona se você for uma criatura biológica. Você recupera 3 PV por turno.'],
           ['p', 'Se estiver caído, pode recobrar a consciência quando recuperar todos os PV.'],
           ['p', 'Cada UP investido nesta habilidade além do custo inicial aumenta a recuperação em +1 PV por turno.']
