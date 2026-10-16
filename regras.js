@@ -541,7 +541,8 @@ window.VORTEX_REGRAS = {
           ['Mais longe', 'Para passar desse limite, faça um teste de Atletismo: a cada 2 pontos acima de CD 6, +1 m.']
         ]],
         ['h3', 'Queda'],
-        ['p', 'Quem cai sofre **1d6 de dano de impacto a cada 3 m** de queda (máximo 20d6) e termina caído no chão.'],
+        ['p', 'A queda é um ataque de impacto contra você: role **1d6 a cada 3 m** de queda, sem limite de dados (passa de 4 dados quando a queda é alta). O total vai contra a sua Defesa como qualquer ataque, e você termina caído no chão.'],
+        ['formula', '', 'Dano da queda = rolagem da queda – Defesa'],
         ['h3', 'Fôlego'],
         ['p', 'Você aguenta prender a respiração por **1 + Corpo** minutos (mínimo 30 segundos). Depois disso, começa a sufocar: aguenta mais **Corpo** rodadas (mínimo 1) e então cai com 0 PV, agonizando. Voltar a respirar encerra a sufocação.'],
         ['p', 'Esforço intenso (combate, correr, nadar) enquanto prende a respiração corta o tempo pela metade.']
