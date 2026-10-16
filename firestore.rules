@@ -80,8 +80,8 @@ service cloud.firestore {
       }
       allow read: if signedIn();
       allow create: if signedIn() && validEntry() && request.resource.data.ownerUid == request.auth.uid;
+      // qualquer pessoa edita registros não oficiais (como as fichas); o dono não muda
       allow update: if signedIn() && validEntry()
-                    && resource.data.ownerUid == request.auth.uid
                     && request.resource.data.ownerUid == resource.data.ownerUid;
       allow delete: if signedIn();
     }
