@@ -22,6 +22,8 @@
    e, se o tipo não tiver, usa a lista geral com o nome dado em "options".
    ===================================================================== */
 window.VORTEX_ITEMS = {
+  // registros do banco que viraram oficiais (2026-10-16): somem da busca para não aparecer em dobro
+  oficializados: ['CAAyJdcA0fiUcLIjqOvc', 'z270o7F7R8ePty8BxN99'], // origens Klyntar e Assassino
   raridades: ['Comum', 'Incomum', 'Rara', 'Epica', 'Lendária'],
   raridadesMod: ['Comum', 'Rara', 'Lendária'],
   raridadeCor: { 'Comum': '#9db2c1', 'Incomum': '#7fd68a', 'Rara': '#6aa8ff', 'Epica': '#c08bff', 'Lendária': '#f0b85a' },
@@ -818,9 +820,11 @@ window.VORTEX_ITEMS = {
   var regras = (window.VORTEX_REGRAS && window.VORTEX_REGRAS.chapters) || [];
   var origens = regras.filter(function (c) { return c.id === 'origens'; })[0];
   (origens ? origens.blocks : []).filter(function (b) { return b[0] === 'card'; }).forEach(function (b) {
-    var p = b[2].filter(function (x) { return x[0] === 'p'; })[0];
+    // descrição: os parágrafos antes de "Itens iniciais:"
+    var ps = [];
+    b[2].some(function (x) { if (x[0] !== 'p') return false; if (/^Itens iniciais/.test(x[1])) return true; ps.push(x[1]); return false; });
     var ul = b[2].filter(function (x) { return x[0] === 'ul'; })[0];
-    cat.push({ id: 'of-ori-' + slug(b[1]), kind: 'origem', typeId: '', name: b[1], values: { descricao: p ? p[1] : '', itens: (ul ? ul[1] : []).join('\n') } });
+    cat.push({ id: 'of-ori-' + slug(b[1]), kind: 'origem', typeId: '', name: b[1], values: { descricao: ps.join('\n\n'), itens: (ul ? ul[1] : []).join('\n') } });
   });
 
   /* Perdas do livro (window.VORTEX_REGRAS.perdas): desvantagens que dão +1 UP */

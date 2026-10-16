@@ -2839,7 +2839,8 @@ const FIREBASE_CONFIG = {
     let own = [];
     try { own = (await db.searchLibrary({ kinds, query: '' })).map(decorate); }
     catch (err) { console.warn(err); libSearch.warn = errorMessage(err); }
-    const all = BUILTINS.filter(inKinds).filter((e) => secretOk(e, q)).concat(own.filter(inKinds));
+    const promoted = ITEM_DATA.oficializados || []; // já viraram oficiais: vale só a versão do catálogo
+    const all = BUILTINS.filter(inKinds).filter((e) => secretOk(e, q)).concat(own.filter((e) => inKinds(e) && promoted.indexOf(e.id) < 0));
     const found = rankSearch(all, q, opts && opts.deep ? entryFieldsDeep : entryFields);
     if (!found.length && words(q || '').length) libSearch.suggest = suggestQuery(q, all.map((e) => [e.name, e.typeTitle, e.kindTitle].join(' ')));
     return found;
