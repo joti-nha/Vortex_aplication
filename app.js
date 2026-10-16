@@ -1882,7 +1882,7 @@ const FIREBASE_CONFIG = {
     },
     'dados-basicos': {
       title: 'Dados básicos',
-      text: 'Nome, espécime, idade, altura, sexo e origem. O nome é único. "Buscar no banco" vincula um espécime: as habilidades raciais dele entram sozinhas na ficha, com a mecânica (vida base, UP iniciais, núcleo).',
+      text: 'Nome, espécime, idade, altura, sexo e origem. O nome é único. "Buscar no banco" vincula um espécime: as habilidades raciais dele entram sozinhas na ficha, com a mecânica (vida base, UP iniciais, núcleo). Depois, "Trocar espécime" muda a raça a qualquer momento: sai a mecânica da anterior e entra a da nova.',
       rule: 'ficha/modelo-de-ficha'
     },
     rolagens: {
@@ -8303,11 +8303,12 @@ const FIREBASE_CONFIG = {
   function renderSpeciesLink() {
     const s = sheetChar.sheet;
     const box = $('#species-link');
+    $('#species-pick').textContent = s.specimen ? 'Trocar espécime' : 'Buscar no banco';
     if (!s.specimen) { box.textContent = 'Sem vínculo com o banco: escolha um espécime para aplicar as habilidades raciais dele.'; return; }
     const v = specimenVals(s);
     const un = h('button', 'link-btn', 'Desvincular');
     un.type = 'button';
-    un.addEventListener('click', () => { s.specimen = null; changed(); });
+    un.addEventListener('click', () => { s.specimen = null; grantBirthPowers(s); changed(); });
     const m = sheetMech(s);
     box.replaceChildren(s.specimen.name + ': ' + mechLine(m).replace(/^V/, 'v') + (racialLines(v).length ? ' (' + racialLines(v).map((t) => t.name).join(', ') + ')' : '') + '. ', un);
     const lb = entryLore(s.specimen);
@@ -9937,8 +9938,16 @@ const FIREBASE_CONFIG = {
 
   $('#species-pick').addEventListener('click', async () => {
     const ch = sheetChar;
-    const e = await openPicker({ title: 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime' });
+    const old = ch.sheet.specimen;
+    const e = await openPicker({ title: old ? 'Trocar espécime' : 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime' });
     if (!e || sheetChar !== ch) return;
+    if (old && old.id === e.id && nameKey(old.name) === nameKey(e.name)) return;
+    // trocar de espécime: as habilidades raciais e os poderes de nascença do anterior saem da ficha
+    const lostRacial = isEtheriano(old) && !isEtheriano(e) && ch.sheet.powers.some((p) => /^racial:/.test(p.id || ''));
+    if (old && !(await askConfirm({ title: 'Trocar espécime', ok: 'Trocar',
+      text: 'Trocar ' + old.name + ' por ' + e.name + '? As habilidades raciais e os poderes de nascença de ' + old.name + ' saem da ficha, e entram os de ' + e.name + '.'
+        + (lostRacial ? ' As características raciais compradas como Etheriano também saem, devolvendo os UP.' : '') }))) return;
+    if (sheetChar !== ch) return;
     ch.sheet.specimen = Object.assign(slotSnap(e), { thumb: e.thumb || '' });
     ch.species = e.name;
     fSpecies.value = e.name;
@@ -10003,6 +10012,7 @@ const FIREBASE_CONFIG = {
     const names = birthNames(specimenVals(s));
     // trocar de espécime tira os poderes de nascença do anterior (a mecânica dele vinha deles)
     s.powers = s.powers.filter((p) => !OLD_BIRTH.test(p.id || '') && (!p.birth || names.some((n) => nameKey(n) === nameKey(p.name))));
+    if (!isEtheriano(s.specimen)) s.powers = s.powers.filter((p) => !/^racial:/.test(p.id || '')); // características de outros espécimes são só do Etheriano
     names.forEach((n) => {
       if (s.powers.some((p) => nameKey(p.name) === nameKey(n))) return;
       const e = findBirthPower(n);
