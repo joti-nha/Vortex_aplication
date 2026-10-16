@@ -942,6 +942,71 @@ window.VORTEX_REGRAS = {
             '1 ano Chirlez backup (20 slots digitais de itens);',
             '1 vestimenta de proteção leve (armadura leve +2).'
           ]]
+        ]],
+        ['card', 'Médico de Rua', [
+          ['p', 'Atendeu em clínicas clandestinas, costurando gangues rivais na mesma noite e cobrando em créditos, favores ou silêncio.'],
+          ['p', 'Itens iniciais:'],
+          ['ul', [
+            'Kit Médico LS-1;',
+            'Pulse P-01 (pistola comum);',
+            'Pente leve padrão;',
+            'Tnnaks Jackt (armadura leve);',
+            'Nano Purificador (1 dose).'
+          ]]
+        ]],
+        ['card', 'Caçador de Recompensas', [
+          ['p', 'Vive de contratos: rastreia fugitivos pelas zonas externas e só recebe se trouxer o alvo, vivo ou não.'],
+          ['p', 'Itens iniciais:'],
+          ['ul', [
+            'Iron Revolver ER-2 ou Carbine R-10;',
+            'Pente leve padrão;',
+            'Static Candy (granada elétrica);',
+            'Tnnaks Jackt (armadura leve);',
+            'Mochila pequena.'
+          ]]
+        ]],
+        ['card', 'Ex-Soldado Corporativo', [
+          ['p', 'Serviu numa força de segurança de megacorporação até ser dispensado, ou até desertar. Ainda carrega o treino e parte do equipamento.'],
+          ['p', 'Itens iniciais:'],
+          ['ul', [
+            'Storm SM-5 ou Crusher SG-4;',
+            'Pente médio padrão;',
+            'Tnnak Blazer (armadura média);',
+            'Pink Pop (granada de fragmentação);',
+            'Kit Médico LS-1.'
+          ]]
+        ]],
+        ['card', 'Fantasma da Rede', [
+          ['p', 'Invasor de sistemas que vive mais na rede do que nas ruas. Vende acessos, apaga registros e some antes que alguém descubra quem foi.'],
+          ['p', 'Itens iniciais:'],
+          ['ul', [
+            'Pulse P-01 (pistola comum);',
+            'Stiletto Noir (lâmina de saque);',
+            'Carregador de Campo LS-3;',
+            'Blush Smoke (granada de fumaça);',
+            '1 comunicador portátil criptografado.'
+          ]]
+        ]],
+        ['card', 'Gladiador de Arena', [
+          ['p', 'Lutou em arenas clandestinas pelo entretenimento das elites e saiu de lá com cicatrizes, fama e pouca paciência.'],
+          ['p', 'Itens iniciais:'],
+          ['ul', [
+            'Kiss Hammer ou Bubblegum Hatchet;',
+            'Tnnak Blazer (armadura média);',
+            'Pink Veil (escudo energético);',
+            'Kit Médico LS-1.'
+          ]]
+        ]],
+        ['card', 'Sucateiro', [
+          ['p', 'Cresceu nos ferros-velhos, desmontando drones e robôs abandonados. Sabe o valor de cada peça e conserta quase tudo com o que tem à mão.'],
+          ['p', 'Itens iniciais:'],
+          ['ul', [
+            'Kit Técnico LS-2;',
+            'Bubblegum Hatchet (machadinha);',
+            'Mochila média;',
+            'Tnnaks Jackt (armadura leve);',
+            '1 sucata de núcleo (pode ser vendida ou usada como peça).'
+          ]]
         ]]
       ]
     },
