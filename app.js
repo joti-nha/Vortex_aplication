@@ -3198,6 +3198,7 @@ const FIREBASE_CONFIG = {
       if (f.kind === 'racial3') { add(f.key, 'Habilidades raciais', h('div', '', ...powerLines(val).map((t) => h('p', 'entry__racial', h('strong', '', t.name), t.text ? ': ' + t.text : ''))), 'text'); return; }
       if (f.key === 'fabricante') { add(f.key, label, makerTag(String(val)), 'stat'); return; }
       if (f.key === 'preco') { add(f.key, label, priceText(val), 'stat'); return; }
+      if (e.kind === 'granada' && f.key === 'cd') { add(f.key, 'CD de Reflexos', grenadeCd(val), 'stat'); return; }
       const c = classify(f, val);
       if (c[0] === 'list') add(f.key, label, null, 'list', { items: c[1] });
       else add(f.key, label, c[1], c[0]);
@@ -8688,6 +8689,13 @@ const FIREBASE_CONFIG = {
     return true;
   }
 
+  // CD da granada: CD base + Precisão de quem arremessa (com a ficha, já mostra a conta)
+  function grenadeCd(base, s) {
+    if (String(base === undefined || base === null ? '' : base).trim() === '') return '';
+    if (!s) return num(base) + ' + Precisão';
+    const p = attrOf(s, 'precisao');
+    return num(base) + ' + Precisão (' + signed(p) + ') = ' + (num(base) + p);
+  }
   function itemFacts(i) {
     const v = i.values || {};
     const out = [];
@@ -8699,7 +8707,7 @@ const FIREBASE_CONFIG = {
       if (v.nucleo === 'Sim') add('Núcleo', '+' + num(v.capacidade));
     }
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
-    if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', v.cd); add('Efeito', v.efeito); }
+    if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', grenadeCd(v.cd, sheetChar && sheetChar.sheet)); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
     if (isBackpack(i)) add('Mochila', bagRate(v) ? 'A cada ' + bagRule(v).cada + ' da sua Carga, +' + bagRule(v).ganho + ' de carga' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
@@ -10360,6 +10368,12 @@ const FIREBASE_CONFIG = {
     { id: 'f3', label: '3 faixas fora (–9)', short: 'fora do alcance efetivo', mod: -9 },
     { id: 'adj', label: 'Alvo adjacente: muito perto (–2)', short: 'muito perto', mod: -2 }
   ];
+  const COVERS = [
+    ['', 'Sem cobertura'],
+    ['parcial', 'Cobertura parcial: Acuidade CD +1, absorve 1d2 disparos'],
+    ['meia', 'Meia cobertura: Acuidade CD +2, absorve 1d4 disparos'],
+    ['completa', 'Cobertura completa: absorve todo o dano']
+  ];
   const NO_ADJ_PENALTY = ['pistola', 'revolver', 'espingarda-cano-curto']; // não recebem a penalidade de alvo adjacente
   // Ganho, perda, vantagem e desvantagem (capítulo Testes e Dados)
   const DICE_OPTS = [
@@ -10446,7 +10460,15 @@ const FIREBASE_CONFIG = {
         fields.push(field('dist', 'Distância do alvo', dSel));
       }
       fields.push(field('dice', 'Dados', diceSelect(st, draw)));
-      fields.push(field('mod', 'Outro modificador (cobertura...)', modIn));
+      if (weapon && weapon.kind === 'arma-fogo') {
+        // cobertura do alvo: não muda o ataque; sobe a CD da Acuidade e absorve parte da cadência (Condições e Estados)
+        const cSel = h('select', 'input');
+        COVERS.forEach((x) => { const o = h('option', '', x[1]); o.value = x[0]; cSel.append(o); });
+        cSel.value = st.cover || '';
+        cSel.addEventListener('change', () => { st.cover = cSel.value; draw(); });
+        fields.push(field('cover', 'Cobertura do alvo', cSel));
+      }
+      fields.push(field('mod', 'Outro modificador', modIn));
 
       const t = attackTest(s, m, weapon, st.mode, st.shots);
       if (per) t.label = ('Ataque: ' + (weapon ? weapon.name : 'Desarmado') + ' · ' + st.shots + ' ' + shotWord(weapon, st.shots)).slice(0, 60);

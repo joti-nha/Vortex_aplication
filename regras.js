@@ -816,7 +816,14 @@ window.VORTEX_REGRAS = {
           ['p', 'Uma rajada de energia contínua. Você aplica toda a cadência de uma vez (sem multiplicador nem penalidade), e a cada turno precisa atacar o mesmo alvo do ataque anterior. A cada turno seguido, ganha +1 no ataque, gastando 1 da cadência usada no início. Para manter o bônus, você precisa continuar acertando e não ser interrompido.'],
           ['p', 'Se for atingido por qualquer fonte nesse período, faça um teste de Resistência contra CD 8 em terreno normal, 10 em terreno difícil ou 12 em estado especial ou voando. Se falhar, o bônus recomeça e a cadência gasta é perdida; se for proficiente, a munição não é perdida.'],
           ['kv', 'Média de criação', [['Pente', 'Pente médio, Sobrecarga.'], ['Modo', 'contínuo.'], ['Carga', 'Máximo de 3.'], ['Alcance', 'Médio a longo.']]]
-        ]]
+        ]],
+
+        ['h2', 'Granadas'],
+        ['p', 'A granada é arremessada até o alcance dela e explode na área. Quem está na área faz um teste de **Reflexos**: quem passa sofre metade do dano.'],
+        ['p', 'Cada granada tem uma **CD base**. A CD do teste soma a Precisão de quem arremessa:'],
+        ['formula', 'CD da granada', 'CD base da granada + Precisão de quem arremessa'],
+        ['example', 'Uma Pink Pop (CD base 7) arremessada por alguém com Precisão 2 tem CD 9.'],
+        ['p', 'Uma [cobertura completa](condicoes-e-estados#Benéficos) protege da explosão se o ponto central dela não tiver uma linha reta até você.']
       ]
     },
 
