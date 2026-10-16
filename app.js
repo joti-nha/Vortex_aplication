@@ -6830,7 +6830,8 @@ const FIREBASE_CONFIG = {
   const hasProf = (s, id) => s.profs.indexOf(id) >= 0 || upProfsOf(s).indexOf(id) >= 0 || swapProfsOf(s).indexOf(id) >= 0;
   const isProficient = (s, i) => { const id = profIdOf(i); return Boolean(id) && hasProf(s, id); };
   // Módulo perito: como Doutor, limite 4 e +1 ponto de perícia; não acumula com Doutor nem com outro perito da mesma perícia
-  const peritoOf = (s) => Array.from(new Set((s.inventory || []).filter((i) => i.slot === 'modulo' && isModule(i) && (i.values || {}).funcao === 'Perito').map((i) => skillIdOf(i.values.pericia)).filter(Boolean)));
+  // o próprio módulo diz a perícia no nome: "Módulo perito: Mira"
+  const peritoOf = (s) => Array.from(new Set((s.inventory || []).filter((i) => i.slot === 'modulo' && isModule(i)).map((i) => { const m = /^m[oó]dulo perito\s*:\s*(.+)$/i.exec(cleanName(i.name)); return m ? skillIdOf(m[1]) : ''; }).filter(Boolean)));
   const peritoExtra = (s) => peritoOf(s).filter((id) => doutorOf(s).indexOf(id) < 0).length;
   const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 || peritoOf(s).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
@@ -6873,7 +6874,7 @@ const FIREBASE_CONFIG = {
     let vestUsed = 0, vestOn = 0, bag = null;
     equipped.forEach((i) => {
       if (i.slot === 'vestivel') vestUsed += 1;
-      if (i.kind === 'protese-modulo' && !(nucleo > 0)) return;
+      if (i.kind === 'protese-modulo') return; // próteses e módulos não dão bônus numéricos: o efeito de cada um está no texto
       const key = i.id || nameKey(i.name);
       if (srcKeys.has(key)) return;
       if (i.slot === 'vestivel') { if (vestOn >= vestMax || !reqMet(s, i)) return; vestOn += 1; }
@@ -8649,11 +8650,11 @@ const FIREBASE_CONFIG = {
       const mod = isModule(i);
       if (mod && !m.nucleo) { toast('Sem um Núcleo ativo os módulos ficam inativos. Implante um núcleo (ou vista uma armadura com núcleo) antes.'); return false; }
       if (mod && !s.inventory.some((x) => x.slot === 'protese')) { toast('Os módulos só abrem espaço com ao menos uma prótese implantada.'); return false; }
-      // I.A. (leve): só funciona instalada numa prótese ou armadura Épica ou Lendária
-      if (mod && (i.values || {}).funcao === 'I.A.') {
+      // I.A. (leve): só funciona instalada num item Épico ou Lendário equipado (próteses e módulos não têm raridade)
+      if (mod && /^m[oó]dulo de i\.?a\b/i.test(cleanName(i.name))) {
         const rar = (x) => nameKey((x.values || {}).raridade || '');
-        const ok = s.inventory.some((x) => (x.slot === 'protese' || x.slot === 'armadura') && (rar(x).indexOf('lend') === 0 || rar(x).indexOf('epic') === 0));
-        if (!ok) { toast(i.name + ' só funciona instalada numa prótese ou armadura Épica ou Lendária. Equipe uma antes.'); return false; }
+        const ok = s.inventory.some((x) => x.slot && x.slot !== 'assim' && (rar(x).indexOf('lend') === 0 || rar(x).indexOf('epic') === 0));
+        if (!ok) { toast(i.name + ' só funciona instalada num item Épico ou Lendário (uma armadura, por exemplo). Equipe um antes.'); return false; }
       }
       if (m.nucleo) {
         const freed = occupant && occupant.kind === 'protese-modulo' ? ccOf(occupant) : 0;
