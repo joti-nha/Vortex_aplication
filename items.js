@@ -268,7 +268,7 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'granada', title: 'Granada', group: 'Armas', inventory: true, image: true,
-      hint: 'Arremessada até o alcance, explode na área. O dano é fixo (rola os dados): quem passar no teste de Reflexos contra a CD sofre metade. Cada granada é usada uma vez.',
+      hint: 'Arremessada até o alcance, explode na área. O dano é fixo (rola os dados): quem passar no teste de Reflexos contra a CD sofre metade. CD = CD base da granada + Precisão de quem arremessa. Cada granada é usada uma vez.',
       defaults: { empunhadura: 'Saque', carga: '0.25' },
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
@@ -279,7 +279,7 @@ window.VORTEX_ITEMS = {
         { key: 'danoFixo', label: 'Dano fixo', kind: 'text', placeholder: 'Ex.: 2d6' },
         { key: 'area', label: 'Área', kind: 'text', placeholder: 'Ex.: Raio 3 m' },
         { key: 'alcance', label: 'Alcance do arremesso', kind: 'select', options: 'alcances' },
-        { key: 'cd', label: 'CD de Reflexos', kind: 'number', min: 0, step: 1 },
+        { key: 'cd', label: 'CD base de Reflexos', kind: 'number', min: 0, step: 1, hint: 'A CD do teste é esta base + a Precisão de quem arremessa.' },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true, placeholder: 'O que acontece na área além do dano.' },
@@ -567,7 +567,7 @@ window.VORTEX_ITEMS = {
     // Acessórios de arma de fogo
     { id: 'of-acc-red-dot', kind: 'acessorio', typeId: 'arma-fogo', name: 'Red dot/Holográfica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância quando estiver mirando.' } },
     { id: 'of-acc-ampliacao', kind: 'acessorio', typeId: 'arma-fogo', name: 'Ampliação', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância a longa e cobertura parcial nas mesmas distâncias quando estiver mirando.' } },
-    { id: 'of-acc-telescopica', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telescópica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de longa, a muito longa distância e meia cobertura nas mesmas distâncias quando estiver mirando.' } },
+    { id: 'of-acc-telescopica', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telescópica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de longa a muito longa distância e meia cobertura nas mesmas distâncias quando estiver mirando.' } },
     { id: 'of-acc-silenciador', kind: 'acessorio', typeId: 'arma-fogo', name: 'Silenciador', values: { posicao: 'Bocal', efeito: 'Pode se fazer teste de furtividade para disparos.' } },
     { id: 'of-acc-cano-longo', kind: 'acessorio', typeId: 'arma-fogo', name: 'Cano longo', values: { posicao: 'Bocal', efeito: 'Aumenta em uma categoria o alcance da arma.' } },
     { id: 'of-acc-estendido', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador estendido', values: { posicao: 'Carregador', efeito: 'Chegue ao limite de munições do tiro de munição.' } },
@@ -796,7 +796,7 @@ window.VORTEX_ITEMS = {
     ['Leviathan MG-X', 'Metralhadora', 'MG-X', 'Epica', 'Energia', 8, 120, 'Pesado', 'Longo', 4, 'Duas mãos', '2.700', 'Propriedade: 1'], // [carga/empunhadura]
     ['Hyperion LX', 'Lançador', 'LX', 'Epica', 'Explosivo', 1, 3, 'Parcial', 'Longo', 3, 'Duas mãos', '2.100', 'Propriedade: 1\nDano: Explosão (4x4/3m³)'], // [carga/empunhadura]
     ['ODIN-ONE', 'Híbrida', 'ODIN-01', 'Lendária', 'Balístico', 5, 30, 'Médio', 'Horizonte', 3, 'Duas mãos', '4.700',
-      'Híbrida (Rifle/Fuzil)\nPropriedade: 1 + Especial: Demolidor.\nSeus disparos ignoram cobertura até total (não blindada), é efetivo contra escudos e blindagens.']
+      'Híbrida (Rifle/Fuzil)\nPropriedade: 1 + Especial: Demolidor.\nSeus disparos ignoram qualquer cobertura, até a completa (se não for blindada), é efetivo contra escudos e blindagens.']
   ].forEach(function (a) {
     cat.push({
       id: 'of-wat-' + slug(a[0]), kind: 'arma-fogo', typeId: TIPO_ARMA[a[1]], name: a[0],
