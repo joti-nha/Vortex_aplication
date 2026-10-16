@@ -3824,7 +3824,8 @@ const FIREBASE_CONFIG = {
 
   /* Espécime: 3 caixas, uma para cada habilidade racial (o Etheriano compra as de outros por 1 UP). Grava no formato "Nome | efeito | 1", uma por linha. */
   /* Script: fica escondido num "</>" discreto no fim do poder. É onde mora a mecânica (vida base, UP, núcleo, flags, bônus). */
-  function scriptField(id, value, onChange) {
+  // tools: botões que ficam dentro do script (ex.: Atrelar poder nas habilidades raciais)
+  function scriptField(id, value, onChange, tools) {
     const box = h('details', 'script');
     box.open = Boolean(String(value || '').trim());
     const ta = h('textarea', 'input script__code');
@@ -3846,7 +3847,7 @@ const FIREBASE_CONFIG = {
     const lab = h('label', 'visually-hidden', 'Script do poder');
     lab.htmlFor = id;
     box.append(h('summary', 'script__sum', h('span', 'script__icon', '</>'), ' script'),
-      h('div', 'script__body', lab, ta, state,
+      h('div', 'script__body', lab, ta, state, tools ? h('p', 'script__tools', ...tools) : null,
         h('ul', 'script__help', ...SCRIPT_HELP.map((x) => h('li', '', h('code', '', x[0]), ' ' + x[1])))));
     return box;
   }
@@ -3965,7 +3966,6 @@ const FIREBASE_CONFIG = {
       tx.dataset.fid = 'racial3-' + field.key + '-' + i + '-efeito';
       tx.setAttribute('aria-label', 'Efeito da habilidade racial ' + (i + 1));
       tx.addEventListener('input', () => { t.text = tx.value; save(); });
-      const sc = scriptField('racial3-' + field.key + '-' + i + '-script', String(t.script || '').split(/\s*;\s*/).filter(Boolean).join('\n'), (v) => { t.script = v; save(); });
       const linked = bankPower(lib, t.name);
       const pick = h('button', 'btn btn--ghost btn--sm', linked ? 'Trocar poder' : 'Atrelar poder');
       pick.type = 'button';
@@ -3978,7 +3978,9 @@ const FIREBASE_CONFIG = {
         tag.title = 'Abrir o poder atrelado';
         tag.addEventListener('click', () => openEntry(linked));
       }
-      return h('div', 'racial3__box', h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', 'Habilidade racial')), tag, nm, tx, sc, h('div', 'banklines__foot', pick));
+      const sc = scriptField('racial3-' + field.key + '-' + i + '-script', String(t.script || '').split(/\s*;\s*/).filter(Boolean).join('\n'), (v) => { t.script = v; save(); }, [pick, tag].filter(Boolean));
+      if (linked) sc.open = true;
+      return h('div', 'racial3__box', h('p', 'racial3__head', h('span', 'racial3__num', String(i + 1)), h('span', '', 'Habilidade racial')), nm, tx, sc);
     }));
     libSearch(['poder'], '').then((l) => { lib = l; paint(); }).catch(() => { /* fica o catálogo oficial */ });
     paint();
