@@ -530,7 +530,21 @@ window.VORTEX_REGRAS = {
           ['Vestir / Entrar na direção de veículos', 'Ação completa.'],
           ['Sacar', ['Armas: ação de movimento.', 'Itens utilitários e consumíveis com empunhadura [Saque](empunhadura#Saque): fazem parte da ação principal.']],
           ['Usar', ['Consumíveis e utilitários: ação padrão.', 'Ferramentas: o custo da ação em que são usadas.', 'Estações: toda uma cena (incluindo o interlúdio, sem afetar a sua recuperação).']]
-        ]]
+        ]],
+
+        ['h2', 'Salto, queda e fôlego'],
+        ['h3', 'Salto'],
+        ['p', 'Saltar faz parte do deslocamento: cada metro saltado gasta um metro de deslocamento.'],
+        ['dl', [
+          ['Salto em distância', 'Com ao menos 3 m de corrida antes, você salta até **2 + Corpo** metros (mínimo 1 m). Parado, salta a metade.'],
+          ['Salto em altura', 'Com ao menos 3 m de corrida antes, você salta até **1 + metade do Corpo** metros (mínimo 0,5 m). Parado, salta a metade.'],
+          ['Mais longe', 'Para passar desse limite, faça um teste de Atletismo: a cada 2 pontos acima de CD 6, +1 m.']
+        ]],
+        ['h3', 'Queda'],
+        ['p', 'Quem cai sofre **1d6 de dano de impacto a cada 3 m** de queda (máximo 20d6) e termina caído no chão.'],
+        ['h3', 'Fôlego'],
+        ['p', 'Você aguenta prender a respiração por **1 + Corpo** minutos (mínimo 30 segundos). Depois disso, começa a sufocar: aguenta mais **Corpo** rodadas (mínimo 1) e então cai com 0 PV, agonizando. Voltar a respirar encerra a sufocação.'],
+        ['p', 'Esforço intenso (combate, correr, nadar) enquanto prende a respiração corta o tempo pela metade.']
       ]
     },
 
