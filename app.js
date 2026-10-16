@@ -6679,7 +6679,7 @@ const FIREBASE_CONFIG = {
     ['up: 3', 'UP iniciais'],
     ['nucleo: 2', 'núcleo de nascença (capacidade)'],
     ['acopla', 'Engenharia: armas e armaduras acopladas ocupam a Carga Cibernética'],
-    ['humanidade', 'testes contra efeitos de PE com CD; metade da Blindagem/Escudo regenera como PV'],
+    ['humanidade', 'testes contra efeitos de PEM com CD; metade da Blindagem/Escudo regenera como PV'],
     ['eletronico', 'ser eletrônico: efeitos de PE atordoam'],
     ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)'],
     ['deslocamento: 3', 'metros a mais de deslocamento (o padrão é 9 m)'],
@@ -12078,7 +12078,7 @@ const FIREBASE_CONFIG = {
      contra teste), Defender e Passar a vez. O mestre prepara a cena, põe condições e conduz os turnos.
      Condições ficam na cena (scene.tags: id → [{ n, r }], r = rodadas restantes, 0 = até tirar);
      quem não entra no combate fica em scene.out. */
-  const CONDITIONS = ['Atordoado', 'Caído', 'Sangrando', 'Em chamas', 'Envenenado', 'Cego', 'Imobilizado', 'Agarrado', 'Escondido', 'Assustado', 'Lento', 'Inspirado', 'Protegido', 'Concentrado'];
+  const CONDITIONS = ['Atordoado', 'Caído', 'Sangrando', 'Em chamas', 'Envenenado', 'Cego', 'Imóvel', 'Agarrado', 'Escondido', 'Assustado', 'Lento', 'Inspirado', 'Protegido', 'Concentrado'];
   const battle = { atkPow: new Set(), defPow: new Set(), actor: '', menu: 'acoes', cmd: 'atacar', duel: { mine: '', target: '', theirs: '' }, man: { id: '', target: '' }, heal: { target: '', key: '' }, test: '', advance: '', pin: { id: '', key: '' }, view: 'main', slot: '', aim: null, name: '', xp: '' };
   let lastRolls = [];
   const sceneTags = () => (scene && scene.tags) || {};
@@ -12592,7 +12592,7 @@ const FIREBASE_CONFIG = {
   const costChip = (cost) => (cost ? h('span', 'cost cost--' + cost, COST_LABEL[cost]) : null);
 
   // condições que mexem na defesa (a mesa pode tirar a qualquer hora)
-  const DEF_TAGS = { 'Caído': -2, 'Agarrado': -2, 'Guarda aberta': -2, 'Zonzo': -2, 'Protegido': 2 };
+  const DEF_TAGS = { 'Caído': -2, 'Guarda aberta': -2, 'Zonzo': -2, 'Protegido': 2 };
   const GOOD_TAGS = ['Inspirado', 'Protegido', 'Concentrado', 'Escondido', 'Mirando', 'Apoiado', 'Agarrando'];
   const tagsOf = (id) => sceneTags()[id] || [];
   const hasTag = (id, n) => tagsOf(id).some((t) => nameKey(t.n) === nameKey(n));
@@ -12625,9 +12625,9 @@ const FIREBASE_CONFIG = {
 
   const MANEUVERS = [
     { id: 'derrubar', label: 'Derrubar', tag: 'Caído', text: 'Se vencer, o alvo fica Caído (–2 na defesa até se levantar).' },
-    { id: 'empurrar', label: 'Empurrar', text: 'Se vencer, o alvo é empurrado 1,5 m para onde você escolher.' },
+    { id: 'empurrar', label: 'Empurrar', text: 'Se vencer, o alvo é empurrado para onde você escolher: 1,5 m, mais 1,5 m a cada 3 pontos acima do teste dele (o dobro se ele for Pequeno ou menor).' },
     { id: 'desarmar', label: 'Desarmar', text: 'Se vencer, o alvo larga o que tem nas mãos.' },
-    { id: 'agarrar', label: 'Agarrar', tag: 'Agarrado', text: 'Se vencer, o alvo fica Agarrado (–2 na defesa) até se soltar.' },
+    { id: 'agarrar', label: 'Agarrar', tag: 'Agarrado', grab: true, text: 'O alvo resiste com Luta ou Reflexos, o melhor dele. Se vencer, ele fica Agarrado (anda junto com você, os dois com metade do deslocamento, e conta como Imóvel) até se soltar.' },
     { id: 'guarda', label: 'Quebrar guarda', tag: 'Guarda aberta', rounds: 1, text: 'Se vencer, a defesa do alvo cai 2 até a próxima rodada.' }
   ];
   // testes usados nas manobras, para personagem e inimigo
@@ -12641,11 +12641,14 @@ const FIREBASE_CONFIG = {
     return skillTest(c.sheet, compute(c), sk);
   }
   const fixedOf = (t) => t.attr + t.skill + (t.mods || []).reduce((a, b) => a + b[1], 0);
-  // o alvo resiste com o melhor entre Resistência e Reflexos
-  function resistPick(x) {
-    const a = sideTest(x, 'resistencia'), b = sideTest(x, 'reflexos');
-    return fixedOf(b) > fixedOf(a) ? ['reflexos', b] : ['resistencia', a];
+  // o alvo resiste com o melhor entre Resistência e Reflexos (contra Agarrar: Luta ou Reflexos)
+  function resistPick(x, first) {
+    const k = first || 'resistencia';
+    const a = sideTest(x, k), b = sideTest(x, 'reflexos');
+    return fixedOf(b) > fixedOf(a) ? ['reflexos', b] : [k, a];
   }
+  // Empurrar e Atropelar: 1,5 m, mais 1,5 m a cada 3 pontos acima do teste do alvo
+  const pushDist = (res) => String(1.5 * (1 + Math.floor(Math.max(0, res.r1.total - res.r2.total) / 3))).replace('.', ',') + ' m';
   // disputa de manobra: devolve quem venceu e o texto
   function contest(actor, tA, target, tB) {
     const r1 = rollTest(tA), r2 = rollTest(tB);
@@ -12670,11 +12673,11 @@ const FIREBASE_CONFIG = {
       { id: 'atacar', label: 'Atacar', go: 'cfg' },
       { id: 'manobra', label: 'Manobra', go: 'cfg' },
       { id: 'usar', label: 'Usar item', go: 'itens', char: true },
-      { id: 'esconder', label: 'Esconder-se', go: 'now' },
-      { id: 'soltar', label: 'Soltar-se', go: 'now', when: (x) => hasTag(x.id, 'Agarrado') }
+      { id: 'esconder', label: 'Esconder-se', go: 'now' }
     ],
     movimento: [
       { id: 'mover', label: 'Deslocar-se', go: 'now' },
+      { id: 'soltar', label: 'Soltar-se', go: 'now', when: (x) => hasTag(x.id, 'Agarrado') },
       { id: 'mirar', label: 'Mirar', go: 'now' },
       { id: 'perceber', label: 'Perceber', go: 'now' },
       { id: 'sacar', label: 'Sacar ou guardar arma', go: 'itens', char: true },
@@ -12703,7 +12706,7 @@ const FIREBASE_CONFIG = {
     manobra: 'Teste de Manobra (Corpo + Luta) contra Resistência ou Reflexos do alvo, o melhor dele. Se você vencer, o efeito entra sozinho.',
     usar: 'Consumíveis e utilitários: o saque já está incluído na ação.',
     esconder: 'Precisa de algo que engane os sentidos. Teste de Manha; o resultado vira a dificuldade para te achar.',
-    soltar: 'Disputa de Atletismo contra a Luta de quem agarra.',
+    soltar: 'Repete o teste do Agarrar (Luta ou Reflexos, o melhor) contra a Luta de quem agarra. Se vencer, fica livre.',
     mover: 'Usa o seu deslocamento. Sem a de movimento, a padrão vira movimento.',
     mirar: 'Mira engajada até o seu próximo turno.',
     perceber: 'Analisar, procurar, investigar: teste de Sentidos.',
@@ -12932,7 +12935,7 @@ const FIREBASE_CONFIG = {
     if (id === 'soltar') {
       const grab = list.find((x) => x.id !== actor.id && hasTag(x.id, 'Agarrando'));
       if (!grab) { await dropTag(actor.id, 'Agarrado'); await actLog(actor, 'Soltar-se', c + ': ninguém segura mais; está livre.'); return; }
-      const res = contest(actor, sideTest(actor, 'atletismo'), grab, sideTest(grab, 'luta'));
+      const res = contest(actor, resistPick(actor, 'luta')[1], grab, sideTest(grab, 'luta')); // repete o teste do Agarrar: Luta ou Reflexos
       if (res.win) { await dropTag(actor.id, 'Agarrado'); await dropTag(grab.id, 'Agarrando'); }
       await rollAs(actor, { expr: res.r1.expr, label: 'Soltar-se de ' + grab.name, total: res.r1.total, flag: res.r1.flag, detail: c + ' · ' + res.text + ' → ' + (res.win ? 'livre' : 'continua agarrado') });
     }
@@ -13107,12 +13110,12 @@ const FIREBASE_CONFIG = {
 
   async function runManeuver(actor, tgt, man, cost) {
     const paid = econPay(actor, cost);
-    const pick = resistPick(tgt);
+    const pick = resistPick(tgt, man.grab ? 'luta' : '');
     const res = contest(actor, sideTest(actor, 'luta'), tgt, pick[1]);
     let effect = '';
     if (res.win) {
-      if (man.id === 'atropelar') { await addTag(tgt.id, 'Caído', 0); effect = tgt.name + ' é arremessado 1,5 m e fica Caído'; }
-      else if (man.id === 'empurrar') effect = tgt.name + ' é empurrado 1,5 m';
+      if (man.id === 'atropelar') { await addTag(tgt.id, 'Caído', 0); effect = tgt.name + ' é empurrado ' + pushDist(res) + ' para fora do caminho e fica Caído'; }
+      else if (man.id === 'empurrar') effect = tgt.name + ' é empurrado ' + pushDist(res) + ' (o dobro se for Pequeno ou menor)';
       else if (man.id === 'desarmar') {
         if (tgt.foe) { await addTag(tgt.id, 'Desarmado', 0); effect = tgt.name + ' fica Desarmado'; }
         else {

@@ -361,7 +361,7 @@ window.VORTEX_ITEMS = {
         { key: 'modelo', label: 'Modelo/Fabricante', kind: 'text' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 1.000' },
-        { key: 'capacidade', label: 'Capacidade Cibernética', kind: 'number', min: 0, step: 1 },
+        { key: 'capacidade', label: 'Carga Cibernética', kind: 'number', min: 0, step: 1 },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
         { key: 'especial', label: 'Especial', kind: 'textarea', big: true, placeholder: 'Efeitos, condições ou regras próprias deste item.' },
         { key: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História, origem e o lugar deste item no mundo. Aparece no ícone 📜.' }
@@ -554,7 +554,7 @@ window.VORTEX_ITEMS = {
     // Acessórios de arma de fogo
     { id: 'of-acc-red-dot', kind: 'acessorio', typeId: 'arma-fogo', name: 'Red dot/Holográfica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância quando estiver mirando.' } },
     { id: 'of-acc-ampliacao', kind: 'acessorio', typeId: 'arma-fogo', name: 'Ampliação', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância a longa e cobertura parcial nas mesmas distâncias quando estiver mirando.' } },
-    { id: 'of-acc-telescopica', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telescópica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de longa, a muito longa distância e cobertura leve nas mesmas distâncias quando estiver mirando.' } },
+    { id: 'of-acc-telescopica', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telescópica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de longa, a muito longa distância e meia cobertura nas mesmas distâncias quando estiver mirando.' } },
     { id: 'of-acc-silenciador', kind: 'acessorio', typeId: 'arma-fogo', name: 'Silenciador', values: { posicao: 'Bocal', efeito: 'Pode se fazer teste de furtividade para disparos.' } },
     { id: 'of-acc-cano-longo', kind: 'acessorio', typeId: 'arma-fogo', name: 'Cano longo', values: { posicao: 'Bocal', efeito: 'Aumenta em uma categoria o alcance da arma.' } },
     { id: 'of-acc-estendido', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador estendido', values: { posicao: 'Carregador', efeito: 'Chegue ao limite de munições do tiro de munição.' } },
@@ -574,7 +574,7 @@ window.VORTEX_ITEMS = {
     { id: 'of-mod-nucleo-adaptativo', kind: 'mod-arma', name: 'Núcleo adaptativo', values: { raridade: 'Lendária', para: 'Qualquer arma', tipo: 'Adaptativo', efeito: 'Uma vez por cena, antes de atacar, escolha o tipo de dano do ataque entre os tipos de dano do sistema.' } },
     { id: 'of-prop-reforcada', kind: 'propriedade', name: 'Reforçada', values: { para: 'Qualquer item', efeito: 'Não quebra nem se danifica por desgaste comum, queda ou efeitos de ambiente.' } },
     { id: 'of-prop-ricochete', kind: 'propriedade', name: 'Ricochete', values: { para: 'Arma', efeito: 'Quando um ataque errar o alvo por 1, ele acerta outro alvo adjacente a esse, à sua escolha (com o mesmo resultado).' } },
-    { id: 'of-prop-isolamento', kind: 'propriedade', name: 'Isolamento elétrico', values: { para: 'Armadura', efeito: 'Enquanto vestida, efeitos de PE não desativam seus shields.' } },
+    { id: 'of-prop-isolamento', kind: 'propriedade', name: 'Isolamento elétrico', values: { para: 'Armadura', efeito: 'Enquanto vestida, efeitos de PEM não desativam seus Escudos.' } },
 
     // Espécimes
     {
@@ -585,12 +585,12 @@ window.VORTEX_ITEMS = {
     {
       id: 'of-esp-robo', kind: 'especime', name: 'Robô',
       values: { descricao: 'Meio que é… feito de lata né não?',
-        racial: 'Núcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Shield. Ser eletrônico: efeitos de PE atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nEngenharia | Não equipa itens, acopla armaduras e módulos (ao menos 1 hora); +1 de carga cibernética a cada +2 de carga dada pelo núcleo. | 1\nNão vivo | Não é afetado por coisas biológicas nem precisa descansar; não recupera PV por descanso nem curas, é consertado com Tecnologia e um kit de ferramentas. | 1' }
+        racial: 'Núcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Escudo. Ser eletrônico: efeitos de PEM atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nEngenharia | Não equipa itens, acopla armaduras e módulos (ao menos 1 hora); +1 de carga cibernética a cada +2 de carga dada pelo núcleo. | 1\nNão vivo | Não é afetado por coisas biológicas nem precisa descansar; não recupera PV por descanso nem curas, é consertado com Tecnologia e um kit de ferramentas. | 1' }
     },
     {
       id: 'of-esp-android', kind: 'especime', name: 'Android',
       values: { descricao: 'Você é um robô, só que humanoide...',
-        racial: 'Engenharia | Não equipa, acopla armas e armaduras (ao menos 1 hora); acopladas, ocupam a carga cibernética em vez da carga; +1 de carga cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças e módulos não precisam de prótese. | 1 | acopla\nNúcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Shield. Ser eletrônico: efeitos de PE atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nHumanidade | Você pode fazer testes para resistir a efeitos de PE se tiver CD, e metade da sua blindagem pode ser regenerada como se fossem PVs. | 1 | humanidade' }
+        racial: 'Engenharia | Não equipa, acopla armas e armaduras (ao menos 1 hora); acopladas, ocupam a carga cibernética em vez da carga; +1 de carga cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças e módulos não precisam de prótese. | 1 | acopla\nNúcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Escudo. Ser eletrônico: efeitos de PEM atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nHumanidade | Você pode fazer testes para resistir a efeitos de PEM se tiver CD, e metade da sua blindagem pode ser regenerada como se fossem PV. | 1 | humanidade' }
     },
     {
       id: 'of-esp-etheriano', kind: 'especime', name: 'Etheriano',
@@ -617,13 +617,13 @@ window.VORTEX_ITEMS = {
     { id: 'of-build-infiltrador', kind: 'build', name: 'Infiltrador', values: { papel: 'Tecnologia e furtividade', descricao: 'Hackeia sistemas, abre fechaduras e evita ser visto.', corpo: '0', precisao: '2', essencia: '1', pericia2a: 'Tecnologia', pericia2b: 'Manha', pericia1: 'Reflexos', profs: 'Pistola, Submetralhadora, Espada, Armadura leve' } },
     { id: 'of-build-atirador-elite', kind: 'build', name: 'Atirador de elite', values: { tipo: 'Guiada', papel: 'Dano à distância (guiada)', descricao: 'O Atirador com um caminho pronto: crítico com 5 e 6, Doutor em Mira, esquiva por Precisão e regeneração no fim.', corpo: '0', precisao: '3', essencia: '0', pericia2a: 'Mira', pericia2b: 'Reflexos', pericia1: 'Iniciativa', profs: 'Fuzil, Rifle de precisão, Pistola, Armadura leve',
       itens: 'Carbine R-10\nPulse P-01\nTnnaks Jackt\nKit Médico LS-1',
-      folhas: '1 | Poder: Ataques (Certeiro)\n2 | Doutor: Mira\n3 | Poder: Defensivas (Esquiva)\n4 | Perícias: Mira +1, Reflexos +1, Iniciativa +1\n5 | Proficiência: Submetralhadora\n6 | Poder: Ataques (Avante)\n7 | Poder: Regeneração\n8 | Melhoria: Regeneração maior\n9 | Melhoria: Regeneração maior\n10 | Perícias: Iniciativa +2, Sentidos +1',
+      folhas: '1 | Poder: Ataques (Certeiro)\n2 | Doutor: Mira\n3 | Poder: Defensivas (Esquiva)\n4 | Perícias: Mira +1, Reflexos +1, Iniciativa +1\n5 | Proficiência: Submetralhadora\n6 | Poder: Ataques (Avante)\n7 | Guardar este UP\n8 | Poder: Regeneração\n9 | Melhoria: Regeneração maior\n10 | Perícias: Iniciativa +2, Sentidos +1',
       beneficios: '+5 PV, +5 PE, +5 PV, +1 PA', periciasUp: 'Mira, Reflexos, Iniciativa, Sentidos' } },
     { id: 'of-build-negociador', kind: 'build', name: 'Negociador', values: { papel: 'Social', descricao: 'Convence, engana e impõe respeito; resolve sem tiros quando dá.', corpo: '0', precisao: '1', essencia: '2', pericia2a: 'Diplomacia', pericia2b: 'Enganação', pericia1: 'Intimidação', profs: 'Pistola, Espingarda, Espada, Armadura leve' } },
 
     // NPCs e inimigos de exemplo (lista aberta da campanha)
     { id: 'of-npc-saqueador', kind: 'npc', name: 'Saqueador de Ferro-Velho', values: { categoria: 'Comum', up: '1', corpo: '1', precisao: '1', essencia: '0', luta: '1', mira: '1', operacoes: '0', resistencia: '1', armadura: '6', pv: '10', escudo: '0', blindagem: '0', ataque: 'À distância', arma: 'Pistola improvisada', dano: 'Balístico', cadencia: '2', descricao: 'Ataca em grupo e foge quando metade do bando cai.', saque: 'Pistola improvisada\nSucata x2', cronos: '30' } },
-    { id: 'of-npc-drone', kind: 'npc', name: 'Drone de Segurança', values: { categoria: 'Comum', up: '2', corpo: '0', precisao: '2', essencia: '0', luta: '0', mira: '2', operacoes: '0', resistencia: '1', armadura: '6', pv: '0', escudo: '6', blindagem: '8', ataque: 'À distância', arma: 'Laser de patrulha', dano: 'Fogo', cadencia: '1', descricao: 'Ser eletrônico: efeitos de PE o atordoam.', saque: 'Célula de energia\nSucata eletrônica', cronos: '15' } },
+    { id: 'of-npc-drone', kind: 'npc', name: 'Drone de Segurança', values: { categoria: 'Comum', up: '2', corpo: '0', precisao: '2', essencia: '0', luta: '0', mira: '2', operacoes: '0', resistencia: '1', armadura: '6', pv: '0', escudo: '6', blindagem: '8', ataque: 'À distância', arma: 'Laser de patrulha', dano: 'Fogo', cadencia: '1', descricao: 'Ser eletrônico: efeitos de PEM o atordoam.', saque: 'Célula de energia\nSucata eletrônica', cronos: '15' } },
     { id: 'of-npc-mutante', kind: 'npc', name: 'Mutante Radioativo', values: { categoria: 'Maior', up: '4', corpo: '3', precisao: '0', essencia: '1', luta: '2', mira: '0', operacoes: '0', resistencia: '2', armadura: '7', pv: '25', escudo: '0', blindagem: '0', ataque: 'Corpo a corpo', arma: 'Garras', dano: 'Cortante, Radioativo', cadencia: '1', descricao: 'Avança sobre o alvo mais próximo.', saque: 'Glândula radioativa', cronos: '0' } },
     { id: 'of-npc-mecha', kind: 'npc', name: 'Mecha de Contenção', values: { categoria: 'Chefão', up: '10', corpo: '4', precisao: '2', essencia: '1', luta: '2', mira: '3', operacoes: '1', resistencia: '3', armadura: '9', pv: '20', escudo: '15', blindagem: '30', ataque: 'À distância', arma: 'Metralhadora rotativa', dano: 'Balístico, Explosivo', cadencia: '5', efetivo: 'Blindagem', descricao: 'Camadas de escudo e blindagem antes do piloto.', saque: 'Metralhadora rotativa\nPlaca de blindagem x3\nNúcleo de reator', cronos: '400' } },
 
@@ -632,7 +632,7 @@ window.VORTEX_ITEMS = {
       opcoes: 'Esquiva | Use precisão como atributo básico, e reflexo como perícia para os testes de defesa (incluindo defesa básica). | 1 PE\nExplosiva | Use sua reação: some sua armadura na defesa contra o ataque recebido. | 3 PE' } },
     { id: 'of-pod-ataques', kind: 'poder', name: 'Ataques', values: { custo: '1', momento: 'Ataque', efeito: 'Ao realizar um ataque, você pode ativar essas vantagens ao custo citado.',
       opcoes: 'Avante | Você também se move 3 m na mesma ação (não usa um movimento); o ataque acontece após o movimento. | 1 PE\nCerteiro | Seu ataque causa acerto crítico com 5 e 6. | 1 PE' } },
-    { id: 'of-pod-regeneracao', kind: 'poder', name: 'Regeneração', values: { custo: '1', efeito: 'Se for uma criatura biológica, recupere 3 PVs por turno. Se caído, pode recobrar a consciência quando recuperar todos os PV.',
+    { id: 'of-pod-regeneracao', kind: 'poder', name: 'Regeneração', values: { custo: '2', efeito: 'Se for uma criatura biológica, recupere 3 PV por turno. Se caído, pode recobrar a consciência quando recuperar todos os PV.',
       melhorias: 'Regeneração maior | +1 PV recuperado por turno (cada compra). | 1' } },
     { id: 'of-pod-doutor', kind: 'poder', name: 'Doutor', values: { custo: '1', efeito: 'Seu limite de modificador na perícia escolhida se torna 4. Também concede +1 em uma perícia à sua escolha. Pode ser comprado mais de uma vez, uma perícia por compra.' } },
     { id: 'of-pod-prof-arma', kind: 'poder', name: 'Proficiência em arma', values: { custo: '1', efeito: 'Escolha um tipo de arma o qual é proficiente, para usar a regra de cadência proficiente. Também concede +1 em uma perícia à sua escolha.' } },
@@ -890,7 +890,7 @@ window.VORTEX_ITEMS = {
   [
     ['Pink Pop', 'Comum', 'Explosivo', '2d6', 'Raio 3 m', 'Curto', 7, 0.25, '80', 'Fragmentação. Quem passa no teste de Reflexos sofre metade do dano.'],
     ['Static Candy', 'Comum', 'Elétrico', '1d6', 'Raio 3 m', 'Curto', 7, 0.25, '90', 'Pulso elétrico. Quem passa no teste de Reflexos sofre metade do dano.'],
-    ['Blush Smoke', 'Comum', '', '', 'Raio 6 m', 'Curto', 0, 0.25, '50', 'Fumaça rosa: a área fica obscurecida por 2 rodadas. Quem está dentro dela tem cobertura leve contra ataques à distância.'],
+    ['Blush Smoke', 'Comum', '', '', 'Raio 6 m', 'Curto', 0, 0.25, '50', 'Fumaça rosa: a área fica obscurecida por 2 rodadas. Quem está dentro dela tem meia cobertura contra ataques à distância.'],
     ['Kiss Flash', 'Incomum', '', '', 'Raio 6 m', 'Curto', 8, 0.25, '200', 'Clarão rosa. Quem falhar no teste de Reflexos fica Ofuscado até o fim do próximo turno dele.'],
     ['Thermite Lipstick', 'Incomum', 'Fogo', '2d6', 'Raio 3 m', 'Curto', 8, 0.25, '250', 'Tem formato de batom. A área queima por 2 rodadas: quem começar o turno nela sofre 1d6 de fogo.'],
     ['Acid Bloom', 'Rara', 'Ácido/químico', '3d6', 'Raio 3 m', 'Médio', 9, 0.25, '450', 'Abre como uma flor. Quem falhar no teste de Reflexos fica com –1 de Armadura até o fim da cena (corrosão).'],
