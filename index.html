@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=217">
+  <link rel="stylesheet" href="style.css?v=218">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -32,11 +32,11 @@
     <nav class="app-nav" aria-label="Principal">
       <span class="app-nav__group" aria-hidden="true">Jogar</span>
       <a class="app-nav__link" data-nav="home" href="#/home"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="app-nav__label">Painel</span><span class="app-nav__sub">Visão geral</span></a>
-      <a class="app-nav__link" data-nav="personagens" href="#/personagens"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span class="app-nav__label">Fichas</span><span class="app-nav__sub">Personagens e catálogo</span></a>
+      <a class="app-nav__link" data-nav="personagens" href="#/personagens"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span class="app-nav__label">Personagens</span><span class="app-nav__sub">Fichas e catálogo</span></a>
       <a class="app-nav__link" data-nav="campanhas" href="#/campanhas"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 21V4h11l-1.5 3.5L15 11H4"/><path d="M4 21h4"/></svg><span class="app-nav__label">Campanhas</span><span class="app-nav__sub">Mesa, dados e combate</span></a>
       <span class="app-nav__group" aria-hidden="true">Criar e consultar</span>
       <a class="app-nav__link" data-nav="itens" href="#/itens"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m14.5 6.5 3 3"/><path d="M3 21l8.5-8.5"/><path d="M12.5 4.5a4.2 4.2 0 0 1 5.9 5.9l-2.1 2.1-5.9-5.9z"/></svg><span class="app-nav__label">Oficina</span><span class="app-nav__sub">Itens, poderes e Bestiário</span></a>
-      <a class="app-nav__link" data-nav="rules" href="#/rules"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19"/><path d="M9 7h6"/></svg><span class="app-nav__label">Regras</span><span class="app-nav__sub">Livro de regras</span></a>
+      <a class="app-nav__link" data-nav="rules" href="#/rules"><svg class="app-nav__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19"/><path d="M9 7h6"/></svg><span class="app-nav__label">Compêndio</span><span class="app-nav__sub">Livro de regras</span></a>
     </nav>
     <div class="app-bar__tools">
     <!-- Mostra onde os dados estão sendo salvos: modo local ou Firebase -->
@@ -87,7 +87,7 @@
       <div class="landing-grid">
         <a class="landing-card" href="#/personagens">
           <svg class="landing-card__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
-          <span class="landing-card__title">Fichas</span>
+          <span class="landing-card__title">Personagens</span>
           <span class="landing-card__text">Personagens públicos, favoritos e o catálogo de origens, espécimes e poderes.</span>
         </a>
         <a class="landing-card" href="#/campanhas">
@@ -98,11 +98,11 @@
         <a class="landing-card" href="#/itens">
           <svg class="landing-card__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m14.5 6.5 3 3"/><path d="M3 21l8.5-8.5"/><path d="M12.5 4.5a4.2 4.2 0 0 1 5.9 5.9l-2.1 2.1-5.9-5.9z"/></svg>
           <span class="landing-card__title">Oficina</span>
-          <span class="landing-card__text">Crie armas, armaduras, implantes, NPCs e poderes. O Bestiário também fica aqui.</span>
+          <span class="landing-card__text">Crie armas, armaduras, implantes, NPCs e poderes para o banco compartilhado.</span>
         </a>
         <a class="landing-card" href="#/rules">
           <svg class="landing-card__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19"/><path d="M9 7h6"/></svg>
-          <span class="landing-card__title">Regras</span>
+          <span class="landing-card__title">Compêndio</span>
           <span class="landing-card__text">O livro de regras completo, por capítulos, com índice e busca.</span>
         </a>
       </div>
@@ -110,7 +110,7 @@
 
     <!-- ===================== TELA: CRIAR PERSONAGEM ===================== -->
     <section class="screen" data-screen="novo" data-title="Criar personagem" aria-labelledby="novo-title" hidden>
-      <a class="back-link" href="#/personagens">Voltar às Fichas</a>
+      <a class="back-link" href="#/personagens">Voltar a Personagens</a>
       <div class="hero">
         <div class="hero__spiral" aria-hidden="true"><svg viewBox="-100 -100 200 200" focusable="false"><use href="#vx-hero"/></svg></div>
         <p class="eyebrow">Novo personagem</p>
@@ -141,14 +141,15 @@
     </section>
 
     <!-- ===================== TELA: PERSONAGENS (acesso rápido + busca) ===================== -->
-    <section class="screen" data-screen="personagens" data-title="Fichas" aria-labelledby="personagens-title" hidden>
+    <section class="screen" data-screen="personagens" data-title="Personagens" aria-labelledby="personagens-title" hidden>
       <header class="screen__head">
         <div>
           <p class="eyebrow">Biblioteca</p>
-          <h1 id="personagens-title" tabindex="-1">Fichas</h1>
+          <h1 id="personagens-title" tabindex="-1">Personagens</h1>
           <p class="screen__sub">Todas as fichas são públicas: qualquer pessoa pode ver e editar.</p>
         </div>
         <div class="screen__actions">
+          <a class="btn btn--ghost btn--beast" id="open-bestiary" href="#/bestiario"><svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M13 4h5.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H13z"/><path d="M6.5 9.5l1.5-2 1 2"/><path d="M15 8.5h3M15 11.5h3"/></svg>Bestiário</a>
           <a class="btn btn--primary" href="#/novo">Criar personagem</a>
         </div>
       </header>
@@ -215,10 +216,10 @@
     <!-- ===================== TELA: BESTIÁRIO =====================
          A revista de monstros do mestre, aberta para todos: busca, filtros e criação de criaturas (NPCs da Oficina). -->
     <section class="screen" data-screen="bestiario" data-title="Bestiário" aria-labelledby="bestiario-title" hidden>
-      <a class="back-link" href="#/itens">Voltar à Oficina</a>
+      <a class="back-link" href="#/personagens">Voltar a Personagens</a>
       <header class="screen__head">
         <div>
-          <p class="eyebrow">Oficina</p>
+          <p class="eyebrow">Biblioteca</p>
           <h1 id="bestiario-title" tabindex="-1">Bestiário</h1>
           <p class="screen__sub">Monstros, inimigos e NPCs da lista aberta. O que você criar aqui entra no banco compartilhado e qualquer mestre pode pôr na arena da campanha.</p>
         </div>
@@ -381,7 +382,6 @@
           <p class="screen__sub">Crie armas, armaduras, vestíveis, implantes, mods, propriedades, acessórios, espécimes, poderes, origens e NPCs. Tudo o que for salvo entra no banco compartilhado e aparece na pesquisa das fichas e da campanha.</p>
         </div>
         <div class="screen__actions">
-          <a class="btn btn--ghost btn--beast" id="open-bestiary" href="#/bestiario"><svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M13 4h5.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H13z"/><path d="M6.5 9.5l1.5-2 1 2"/><path d="M15 8.5h3M15 11.5h3"/></svg>Bestiário</a>
         </div>
       </header>
 
@@ -458,7 +458,7 @@
 
     <!-- ===================== TELA: FICHA ===================== -->
     <section class="screen" data-screen="character" data-title="Ficha" aria-labelledby="sheet-title" hidden>
-      <a class="back-link" id="sheet-back" href="#/personagens">Voltar às Fichas</a>
+      <a class="back-link" id="sheet-back" href="#/personagens">Voltar a Personagens</a>
 
       <header class="sheet-head">
         <div class="portrait">
@@ -939,11 +939,11 @@
     </section>
 
     <!-- ===================== TELA: REGRAS (livro em abas) ===================== -->
-    <section class="screen" data-screen="rules" data-title="Regras" aria-labelledby="rules-title" hidden>
+    <section class="screen" data-screen="rules" data-title="Compêndio" aria-labelledby="rules-title" hidden>
       <a class="back-link" id="rules-back" href="#/home" hidden>Voltar</a>
 
       <header class="rules-head">
-        <p class="eyebrow">Livro de regras</p>
+        <p class="eyebrow">Compêndio</p>
         <h1 id="rules-title" tabindex="-1">Regras do Vortex</h1>
         <p>Um capítulo por aba. Use o índice ao lado da rolagem para pular direto para qualquer regra.</p>
       </header>
@@ -1131,7 +1131,7 @@
     </div>
     <p class="block__hint" id="rule-meta"></p>
     <div class="rulepop__body" id="rule-body"></div>
-    <a class="btn btn--primary btn--sm rulepop__link" id="rule-link" href="#/rules">Ir para a regra completa</a>
+    <a class="btn btn--primary btn--sm rulepop__link" id="rule-link" href="#/rules">Ir para a regra completa no Compêndio</a>
   </dialog>
 
   <!-- Escolha de um poder: a perícia do Doutor ou o tipo de arma/armadura da proficiência -->
@@ -1166,10 +1166,10 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="pericias.js?v=217"></script>
-  <script src="regras.js?v=217"></script>
-  <script src="items.js?v=217"></script>
-  <script src="pixelart.js?v=217"></script>
-  <script src="app.js?v=217"></script>
+  <script src="pericias.js?v=218"></script>
+  <script src="regras.js?v=218"></script>
+  <script src="items.js?v=218"></script>
+  <script src="pixelart.js?v=218"></script>
+  <script src="app.js?v=218"></script>
 </body>
 </html>

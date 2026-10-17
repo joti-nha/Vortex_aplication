@@ -2354,7 +2354,7 @@ const FIREBASE_CONFIG = {
   const views = {};
   let onLeave = null; // cada tela pode registrar uma limpeza (ex.: parar de ouvir os dados)
   let lastCharacterId = null;
-  const NAV_FOR = { home: 'home', novo: 'personagens', personagens: 'personagens', character: 'personagens', bestiario: 'itens', campanhas: 'campanhas', campaign: 'campanhas', itens: 'itens', rules: 'rules' };
+  const NAV_FOR = { home: 'home', novo: 'personagens', personagens: 'personagens', character: 'personagens', bestiario: 'personagens', campanhas: 'campanhas', campaign: 'campanhas', itens: 'itens', rules: 'rules' };
   let routeHash = '';
   let fromHash = ''; // rota anterior: a ficha aberta pela campanha volta para a campanha
 
@@ -3110,7 +3110,7 @@ const FIREBASE_CONFIG = {
     return row;
   }
 
-  /* Listas longas (banco da Oficina, catálogo das Fichas): mostram LIST_PAGE linhas e um "Mostrar mais" no fim.
+  /* Listas longas (banco da Oficina, catálogo de Personagens): mostram LIST_PAGE linhas e um "Mostrar mais" no fim.
      A busca, os filtros e a contagem continuam valendo para a lista toda. */
   const LIST_PAGE = 40;
   function pagedRows(ul, head, list, render) {
@@ -3273,6 +3273,7 @@ const FIREBASE_CONFIG = {
       const label = f.key === 'fabricante' ? 'Criadora' : f.label.replace(/\s*\(.*\)$/, '');
       if (f.kind === 'script') { add(f.key, 'Script', String(val), 'text', { code: true }); return; }
       if (f.kind === 'prereqscript') { const r = parsePrereq(val); if (prereqLine(r)) add(f.key, 'Pré-requisitos conferidos', prereqLine(r), 'text'); return; }
+      if (f.kind === 'npcbuild') { const node = npcBuildView(val); if (node) add(f.key, 'Ficha da criatura', node, 'text'); return; }
       if (f.kind === 'racial3') {
         // habilidade atrelada a um poder do banco: o nome vira um botão que abre o poder
         const lines = powerLines(val).map((t) => { const nm = h('strong', '', t.name); return { t, nm, p: h('p', 'entry__racial', nm, t.text ? ': ' + t.text : '') }; });
@@ -3344,7 +3345,7 @@ const FIREBASE_CONFIG = {
     classe: () => ['nucleo-proteses-modulos', 'Próteses e Módulos'],
     cc: () => ['nucleo-proteses-modulos', 'Carga Cibernética (CC)'],
     carga: () => ['carga', 'Cálculo da Carga'],
-    efetivo: () => ['ataque-e-defesa', 'Camadas de vida'],
+    efetivo: () => ['ataque-e-defesa', 'Tipos de Resistência'],
     escudo: () => ['ataque-e-defesa', 'Escudo (E)'],
     bonusRec: () => ['cura', 'Itens de recuperação (Live Service)'],
     encaixes: () => ['mods-e-acessorios', 'Mods'],
@@ -3409,8 +3410,8 @@ const FIREBASE_CONFIG = {
     };
     sec.blocks.forEach(put);
     const total = (function count(bs) { return bs.reduce((t, b) => t + (b[0] === 'card' ? count(b[2]) : /^h[234]$|^fields$/.test(b[0]) ? 0 : 1), 0); })(sec.blocks);
-    if (total > n) body.append(h('p', 'rulepop__more', 'A regra continua no livro de regras.'));
-    if (!body.children.length) body.append(h('p', '', 'Veja a regra completa no livro de regras.'));
+    if (total > n) body.append(h('p', 'rulepop__more', 'A regra continua no Compêndio.'));
+    if (!body.children.length) body.append(h('p', '', 'Veja a regra completa no Compêndio.'));
     $('#rule-link').href = ruleHref(sec.ch.id, sec.slug);
     openDialog(ruleDlg);
   }
@@ -4302,6 +4303,121 @@ const FIREBASE_CONFIG = {
     return inp;
   }
 
+  /* Ficha da criatura (Bestiário): espécime, poderes e inventário como os do jogador. Os poderes gastam os UP da
+     criatura; o Etheriano compra características raciais de outros espécimes e o Simbionte assimila itens do
+     inventário (até Corpo, no mínimo 1). As armas do inventário aparecem no ataque da criatura na arena. */
+  function npcFicha(raw) {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    const list = (x) => (Array.isArray(x) ? x.filter((y) => y && y.name) : []);
+    return { specimen: r.specimen && r.specimen.name ? r.specimen : null, powers: list(r.powers), inventory: list(r.inventory) };
+  }
+  const NPC_SKILLS = ['luta', 'mira', 'operacoes', 'resistencia', 'reflexos', 'fortitude', 'sentidos', 'iniciativa'];
+  const npcUpSpent = (s) => s.powers.reduce((t, p) => t + powerUpCost(p), 0);
+  const npcAssimMax = (v) => Math.max(1, Math.round(num(v.corpo)));
+  function npcBuildEditor(d) {
+    const v = d.values;
+    const f = npcFicha(v.ficha);
+    const s = Object.assign(blankSheet(), f, { assim: { cat: [], presets: [] } });
+    const sync = () => {
+      s.attrs = { corpo: num(v.corpo), precisao: num(v.precisao), essencia: num(v.essencia) };
+      s.skills = {};
+      NPC_SKILLS.forEach((k) => { if (num(v[k])) s.skills[k] = num(v[k]); });
+    };
+    const box = h('div', 'npcb');
+    const save = () => { v.ficha = { specimen: s.specimen, powers: s.powers, inventory: s.inventory }; };
+    let draw = () => {};
+    const ch = { id: '', type: 'criatura', get name() { return cleanName(d.name || '') || 'a criatura'; }, sheet: s,
+      npc: { free: () => Math.round(num(v.up)) - npcUpSpent(s), done: () => { save(); draw(); } } };
+    const btn = (label, cls, fid, fn) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
+    const row = (main, meta, ...acts) => h('li', 'npcb__row', h('span', 'npcb__main', h('strong', '', main), meta ? h('span', 'npcb__meta', meta) : null), h('span', 'npcb__acts', ...acts.filter(Boolean)));
+    const pickSpecimen = async () => {
+      const e = await openPicker({ title: s.specimen ? 'Trocar espécime' : 'Escolher espécime', kinds: ['especime'], chips: ['Espécime'], filter: (x) => x.kind === 'especime' });
+      if (!e) return;
+      s.specimen = Object.assign(slotSnap(e), { thumb: e.thumb || '' });
+      grantBirthPowers(s);
+      if (!isSimb(s)) s.inventory.forEach((i) => { if (i.slot === 'assim') { i.slot = ''; delete i.assim; } });
+      save();
+      draw();
+    };
+    const addItems = async () => {
+      const picked = await openPickerMany({ title: 'Inventário de ' + ch.name, kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+      if (!picked.length) return;
+      picked.forEach((e) => {
+        const same = s.inventory.find((i) => i.id && i.id === e.id && i.slot !== 'assim' && !isWeapon(i.kind));
+        if (same) same.qty = (same.qty || 1) + 1;
+        else s.inventory.push(Object.assign(slotSnap(e), { uid: uid(), slots: normSlots(e.slots), thumb: e.thumb || '', qty: 1, slot: '' }));
+      });
+      save();
+      draw();
+    };
+    // as linhas que dependem do UP e do Corpo (campos lá em cima) mudam no lugar, sem redesenhar os botões
+    const upBox = h('p', 'npcb__up');
+    const simbBox = h('p', 'field__hint');
+    const upLine = () => {
+      const up = Math.round(num(v.up));
+      const spent = npcUpSpent(s);
+      upBox.classList.toggle('is-over', spent > up);
+      upBox.replaceChildren('UP gastos: ', h('strong', '', spent + ' de ' + up), spent > up ? ' (passou do UP da criatura; aumente o UP lá em cima ou devolva um poder)' : '');
+      return upBox;
+    };
+    const simbLine = () => {
+      const amax = npcAssimMax(v);
+      const n = s.inventory.filter((i) => i.slot === 'assim').length;
+      simbBox.textContent = 'Simbionte: assimila até ' + amax + ' ' + (amax === 1 ? 'item' : 'itens') + ' do inventário (Corpo, no mínimo 1). Assimilados: ' + n + ' de ' + amax + '.';
+      return simbBox;
+    };
+    draw = () => {
+      sync();
+      const sp = s.specimen;
+      const racial = sp ? racialLines(sp.values) : [];
+      const simb = isSimb(s);
+      const esp = h('div', 'npcb__block',
+        h('h4', 'npcb__title', 'Espécime'),
+        h('div', 'npcb__line', h('strong', 'npcb__name', sp ? sp.name : 'Nenhum'),
+          btn(sp ? 'Trocar' : 'Escolher espécime', 'btn--ghost', 'npcb-esp', pickSpecimen),
+          sp ? btn('Tirar', 'btn--ghost', 'npcb-esp-off', () => { s.specimen = null; grantBirthPowers(s); s.inventory.forEach((i) => { if (i.slot === 'assim') { i.slot = ''; delete i.assim; } }); save(); draw(); }) : null),
+        racial.length ? h('ul', 'npcb__racial', ...racial.map((t) => h('li', '', h('strong', '', t.name), t.text ? ': ' + t.text : ''))) : null,
+        !sp ? h('p', 'field__hint', 'Opcional. Com espécime, a criatura ganha as habilidades raciais e os poderes de nascença dele, como um personagem.') : null);
+      const pw = h('div', 'npcb__block',
+        h('h4', 'npcb__title', 'Poderes'),
+        upLine(),
+        s.powers.length ? h('ul', 'npcb__list', ...s.powers.map((p, i) => row(p.name,
+          [p.birth ? 'de nascença' : powerUpCost(p) + ' UP', p.values && p.values.custoUso ? 'uso: ' + p.values.custoUso : ''].filter(Boolean).join(' · '),
+          powerOpts(p).length ? btn('Opções', 'btn--ghost', 'npcb-pw-opt-' + i, () => openPowerOpts(ch, p, p)) : null,
+          p.birth ? null : btn('Devolver', 'btn--ghost', 'npcb-pw-off-' + i, () => { s.powers.splice(s.powers.indexOf(p), 1); save(); draw(); })))) : h('p', 'field__hint', 'Nenhum poder. Os poderes custam UP, como na ficha do jogador.'),
+        h('div', 'npcb__btns', btn('Comprar poder', 'btn--primary', 'npcb-pw-add', () => buyPower(ch)),
+          isEtheriano(sp) ? btn('Características raciais (Etheriano)', 'btn--ghost', 'npcb-racial', () => openRacial(ch)) : null));
+      const inv = h('div', 'npcb__block',
+        h('h4', 'npcb__title', 'Inventário'),
+        simb ? simbLine() : null,
+        s.inventory.length ? h('ul', 'npcb__list', ...s.inventory.map((i, k) => row(i.name,
+          [(i.qty || 1) > 1 ? '×' + i.qty : '', i.typeTitle || kindTitle(i.kind), i.slot === 'assim' ? 'assimilado' : ''].filter(Boolean).join(' · '),
+          simb && canAssim(i) ? btn(i.slot === 'assim' ? 'Desfazer assimilação' : 'Assimilar', 'btn--ghost', 'npcb-assim-' + k, () => {
+            if (i.slot === 'assim') { i.slot = ''; delete i.assim; }
+            else if (s.inventory.filter((x) => x.slot === 'assim').length >= npcAssimMax(v)) { toast('O simbionte assimila até ' + npcAssimMax(v) + ' (o Corpo da criatura). Desfaça uma assimilação para trocar.'); return; }
+            else { i.slot = 'assim'; i.assim = true; i.assimAt = Date.now(); }
+            save();
+            draw();
+          }) : null,
+          btn('Tirar', 'btn--ghost', 'npcb-inv-off-' + k, () => { if ((i.qty || 1) > 1) i.qty -= 1; else s.inventory.splice(s.inventory.indexOf(i), 1); save(); draw(); })))) : h('p', 'field__hint', 'Vazio. As armas que entrarem aqui podem ser usadas no ataque da criatura na arena.'),
+        h('div', 'npcb__btns', btn('Adicionar ao inventário', 'btn--primary', 'npcb-inv-add', addItems)));
+      box.replaceChildren(esp, pw, inv);
+    };
+    draw();
+    itemState.npcbDraw = () => { sync(); upLine(); simbLine(); }; // UP e Corpo mudam lá em cima (ouvinte no #form-item)
+    return box;
+  }
+  // a ficha da criatura em leitura (página do banco)
+  function npcBuildView(raw) {
+    const f = npcFicha(raw);
+    if (!f.specimen && !f.powers.length && !f.inventory.length) return null;
+    const line = (label, text) => h('p', 'npcb__read', h('strong', '', label + ': '), text);
+    return h('div', '',
+      f.specimen ? line('Espécime', f.specimen.name) : null,
+      f.powers.length ? line('Poderes', f.powers.map((p) => p.name).join(', ')) : null,
+      f.inventory.length ? line('Inventário', f.inventory.map((i) => ((i.qty || 1) > 1 ? i.qty + '× ' : '') + i.name + (i.slot === 'assim' ? ' (assimilado)' : '')).join(', ')) : null);
+  }
+
   function renderItemImage() {
     const d = itemState.draft;
     const has = Boolean(d.image || d.thumb);
@@ -4343,7 +4459,7 @@ const FIREBASE_CONFIG = {
       grid.append(sec);
     });
     const place = (f, el) => (secBox[f.sec] || grid).append(el);
-    // resumo da criatura (como as pílulas da revista): camadas de vida e Defesa mínima
+    // resumo da criatura (como as pílulas da revista): camadas da Resistência e Defesa mínima
     const paintSum = () => {
       if (!sheetSum) return;
       const v = d.values;
@@ -4355,6 +4471,7 @@ const FIREBASE_CONFIG = {
       if (f.onlyWithOpts && !(type && type.opts && type.opts[f.optKey])) return; // campo que só existe em alguns tipos
       if (f.hidden) return; // escrito por outro campo (o roteiro da build)
       if (f.kind === 'roteiro') { place(f, h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
+      if (f.kind === 'npcbuild') { place(f, h('div', 'field field--wide', npcBuildEditor(d))); return; }
       if (f.kind === 'script' || f.kind === 'prereqscript') { place(f, h('div', 'field field--wide', fieldControl(f, type, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
@@ -4455,6 +4572,9 @@ const FIREBASE_CONFIG = {
     if (host.after && saved) host.after(saved); // fechar sem salvar não precisa refazer a lista
   }
 
+  $('#form-item').addEventListener('change', (ev) => {
+    if (itemState.npcbDraw && ev.target && /^item-f-(up|corpo)$/.test(ev.target.id)) itemState.npcbDraw();
+  });
   $('#form-item').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const d = itemState.draft;
@@ -4470,7 +4590,10 @@ const FIREBASE_CONFIG = {
       return;
     }
     const values = {};
-    cat.fields.forEach((f) => { if (f.key !== 'nome') values[f.key] = String(d.values[f.key] === undefined || d.values[f.key] === null ? '' : d.values[f.key]).trim(); });
+    cat.fields.forEach((f) => {
+      if (f.kind === 'npcbuild') values[f.key] = npcFicha(d.values[f.key]);
+      else if (f.key !== 'nome') values[f.key] = String(d.values[f.key] === undefined || d.values[f.key] === null ? '' : d.values[f.key]).trim();
+    });
     // espécime antigo: os campos de mecânica saíram do formulário, mas continuam valendo até virarem poder
     if (cat.id === 'especime') LEGACY_SPECIES.forEach((k) => { if (d.values[k] !== undefined && d.values[k] !== '') values[k] = String(d.values[k]); });
     const bonus = {};
@@ -4486,7 +4609,7 @@ const FIREBASE_CONFIG = {
     try {
       await db.saveLibrary(entry);
       const notItem = NON_ITEM_KINDS.indexOf(cat.id) >= 0;
-      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.') + (cat.id === 'npc' ? ' Aparece no Bestiário.' : notItem ? ' Aparece na tela Fichas, no catálogo.' : ''));
+      toast(name + (d.id ? ': alterações salvas.' : ' entrou no banco.') + (cat.id === 'npc' ? ' Aparece no Bestiário.' : notItem ? ' Aparece em Personagens, no catálogo.' : ''));
       if (itemState.host) { closeHostedForm(entry); return; }
       itemState.draft = null;
       setItemStep('categoria');
@@ -10139,14 +10262,15 @@ const FIREBASE_CONFIG = {
     changed();
   });
 
-  $('#power-add').addEventListener('click', async () => {
-    const ch = sheetChar;
+  // comprar um poder: na ficha do personagem ou na da criatura (Bestiário)
+  async function buyPower(ch) {
+    const still = () => Boolean(ch.npc) || sheetChar === ch;
     const have = ch.sheet.powers.map((p) => p.id).filter((id) => id && !CHOICE_POWERS[id]);
-    const e = await openPicker({ title: 'Adicionar poder', kinds: ['poder'], chips: ['Poder'], filter: (x) => x.kind === 'poder' && have.indexOf(x.id) < 0 });
-    if (!e || sheetChar !== ch) return;
+    const e = await openPicker({ title: ch.npc ? 'Comprar poder para ' + ch.name : 'Adicionar poder', kinds: ['poder'], chips: ['Poder'], filter: (x) => x.kind === 'poder' && have.indexOf(x.id) < 0 });
+    if (!e || !still()) return;
     const miss = prereqMissing(ch.sheet, e);
     if (miss.length && !(await askConfirm({ title: 'Pré-requisito não cumprido', text: e.name + ' pede: ' + miss.join('; ') + '. Pegar mesmo assim?', ok: 'Pegar mesmo assim' }))) return;
-    if (sheetChar !== ch) return;
+    if (!still()) return;
     const kind = CHOICE_POWERS[e.id];
     if (kind) {
       const s = ch.sheet;
@@ -10154,10 +10278,10 @@ const FIREBASE_CONFIG = {
       const items = kind === 'pericia'
         ? Object.keys(SKILLS).reduce((all, k) => all.concat(SKILLS[k].map((sk) => ({ value: sk[0], name: sk[1], meta: ATTR[k] || k }))), []).filter((x) => doutorOf(s).indexOf(x.value) < 0)
         : PROFS.filter((p) => (p.id.indexOf('armadura-') === 0) === (kind === 'armadura') && !hasProf(s, p.id)).map((p) => ({ value: p.id, name: p.label }));
-      if (!items.length) { toast('Nada disponível para ' + e.name + ': o personagem já tem todas as opções.'); return; }
+      if (!items.length) { toast('Nada disponível para ' + e.name + ': ' + (ch.npc ? 'a criatura' : 'o personagem') + ' já tem todas as opções.'); return; }
       const choice = await askCards({ title: e.name, tag: kind === 'pericia' ? 'Escolha a perícia' : kind === 'arma' ? 'Escolha o tipo de arma' : 'Escolha o tipo de armadura',
         efeito: (e.values && e.values.efeito) || '', hint: 'Custa ' + num(e.values && e.values.custo) + ' UP por compra e dá +1 em uma perícia à sua escolha (o ponto entra em Perícias). Para outra escolha, compre o poder de novo.', items, ok: 'Pegar' });
-      if (!choice || sheetChar !== ch) return;
+      if (!choice || !still()) return;
       s.powers.push(choicePower(e, choice));
     } else if (powerOpts(e).length) {
       openPowerOpts(ch, e, null);
@@ -10165,12 +10289,16 @@ const FIREBASE_CONFIG = {
     } else {
       ch.sheet.powers.push(Object.assign(slotSnap(e), { thumb: e.thumb || '' }));
     }
-    changed();
-  });
+    doneOf(ch);
+  }
+  $('#power-add').addEventListener('click', () => buyPower(sheetChar));
 
   /* Escolha das opções de um poder-lista (Defensivas, Ataques), no modelo das características raciais:
      cada opção é um cartão com o efeito e o botão de pegar ou devolver. O poder entra na ficha com a
      primeira opção pega e sai quando a última é devolvida. */
+  // a ficha que os diálogos de poder editam: a do personagem aberto, ou a de uma criatura do Bestiário (ch.npc: { free, done })
+  const freeUpOf = (ch) => { if (ch.npc) return ch.npc.free(); const m = compute(ch); return m.upTotal - m.upSpent; };
+  const doneOf = (ch) => { if (ch.npc) ch.npc.done(); else changed(); };
   let powOptDlg = null;
   function openPowerOpts(ch, e, cur) {
     if (!powOptDlg) { powOptDlg = h('dialog', 'dialog pickchar racial powopt'); powOptDlg.setAttribute('aria-labelledby', 'powopt-title'); document.body.append(powOptDlg); }
@@ -10188,8 +10316,7 @@ const FIREBASE_CONFIG = {
     const content = h('div', 'racial__content');
     const draw = () => {
       const s = ch.sheet;
-      const m = compute(ch);
-      const free = m.upTotal - m.upSpent;
+      const free = freeUpOf(ch);
       const picks = p ? powerPicks(p) : [];
       const shown = rankSearch(opts, q.value, (o) => [[o.name, 10], [[o.text, o.cost].filter(Boolean).join(' '), 2]]);
       const cards = shown.map((o) => {
@@ -10203,7 +10330,7 @@ const FIREBASE_CONFIG = {
             if (!p.picks.length) { const k = s.powers.indexOf(p); if (k >= 0) s.powers.splice(k, 1); p = null; }
           } else if (p) p.picks = powerPicks(p).concat([o.name]);
           else { p = Object.assign(slotSnap(e), { thumb: e.thumb || '', picks: [o.name] }); s.powers.push(p); }
-          changed();
+          doneOf(ch);
           draw();
           const again = $('[data-fid="' + b.dataset.fid + '"]', content);
           if (again) again.focus();
@@ -10329,8 +10456,8 @@ const FIREBASE_CONFIG = {
   function racialAll(s, esp, id) {
     return !s.powers.some((p) => p.id === id) && racialTaken(s, esp) >= RACIAL_MAX;
   }
-  async function openRacial() {
-    const ch = sheetChar;
+  async function openRacial(target) {
+    const ch = target || sheetChar;
     if (!ch) return;
     if (!isEtheriano(ch.sheet.specimen)) { toast('Características raciais de outros espécimes são exclusivas do Etheriano.'); return; }
     if (!racialDlg) { racialDlg = h('dialog', 'dialog pickchar racial'); racialDlg.setAttribute('aria-labelledby', 'racial-title'); document.body.append(racialDlg); }
@@ -10350,8 +10477,7 @@ const FIREBASE_CONFIG = {
     const content = h('div', 'racial__content');
     const draw = () => {
       const s = ch.sheet;
-      const m = compute(ch);
-      const free = m.upTotal - m.upSpent;
+      const free = freeUpOf(ch);
       const shown = rankSearch(list, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
       if (!shown.some((e) => e.id === racialPick)) racialPick = shown[0] ? shown[0].id : '';
       const esp = shown.find((e) => e.id === racialPick);
@@ -10385,7 +10511,7 @@ const FIREBASE_CONFIG = {
           if (have >= 0) s.powers.splice(have, 1);
           else if (racialAll(s, esp, id)) { toast(/^experi[eê]ncia passada/i.test(t.name) ? 'Se achando muito esperto, não é? Os 3 UP do Humano não vêm juntos.' : 'Do ' + esp.name + ' dá para pegar só uma ou duas das 3 habilidades. Devolva uma para trocar.'); return; }
           else s.powers.push({ id, kind: 'poder', typeId: '', typeTitle: '', name: (esp.name + ' · ' + t.name).slice(0, 60), values: { custo: String(t.cost), efeito: t.text, script: t.script }, bonus: {}, slots: null, thumb: '', racial: esp.name });
-          changed();
+          doneOf(ch);
           draw();
         });
         return h('li', 'pickchar__card racial__trait' + (have >= 0 ? ' is-here' : ''),
@@ -10415,7 +10541,7 @@ const FIREBASE_CONFIG = {
     draw();
     openDialog(dlg);
   }
-  $('#racial-open').addEventListener('click', openRacial);
+  $('#racial-open').addEventListener('click', () => openRacial());
 
   /* ---------- Pré-jogadas ----------
      Testes prontos montados a partir da ficha: atributo, perícia e ataque com a arma escolhida.
@@ -11984,11 +12110,11 @@ const FIREBASE_CONFIG = {
     lastCharacterId = id;
     quickUpdate(c, true);
     onLeave = () => { flushSave(); };
-    // "Voltar" leva para onde a pessoa estava: a campanha, se a ficha foi aberta por ela; senão, as Fichas
+    // "Voltar" leva para onde a pessoa estava: a campanha, se a ficha foi aberta por ela; senão, Personagens
     const backCamp = /^#\/campaign\//.test(fromHash);
     const backName = backCamp && currentCamp && fromHash === '#/campaign/' + encodeURIComponent(currentCamp.id) ? currentCamp.name : '';
     $('#sheet-back').href = backCamp ? fromHash : '#/personagens';
-    $('#sheet-back').textContent = backCamp ? (backName ? 'Voltar a ' + backName : 'Voltar à campanha') : 'Voltar às Fichas';
+    $('#sheet-back').textContent = backCamp ? (backName ? 'Voltar a ' + backName : 'Voltar à campanha') : 'Voltar a Personagens';
     renderSheetHeader();
     fillBasics();
     setError(errName, fName, '');
@@ -13268,6 +13394,7 @@ const FIREBASE_CONFIG = {
     } else if (battle.view === 'slot') body = slotView(actor, list, gm);
     else if (battle.view === 'cfg') body = cfgView(actor, list, gm);
     else if (battle.view === 'itens' && !actor.foe) body = h('div', 'cmd__panel', backBtn(battle.slot ? 'slot' : 'main'), itemsPanel(actor, list));
+    else if (battle.view === 'poderes' && actor.foe) body = h('div', 'cmd__panel', backBtn('main'), foePowers(actor));
     else if (battle.view === 'poderes' && !actor.foe) body = h('div', 'cmd__panel', backBtn('main'), h('div', 'cmd__about', h('strong', '', 'Poderes'), h('span', '', 'Os de ataque e de defesa entram junto com essas ações; os outros se usam daqui, com o custo da ação.')), powersTab(actor));
     else body = mainView(actor, gm);
     // a tela de comandos entra animada só quando muda (não a cada atualização da mesa)
@@ -13351,6 +13478,13 @@ const FIREBASE_CONFIG = {
       return b;
     });
     const extra = [];
+    if (actor.foe && npcFicha(foeVals(actor.foe).ficha).powers.length) {
+      const pw = h('button', 'btn btn--ghost btn--sm', 'Poderes');
+      pw.type = 'button';
+      pw.dataset.fid = 'cmd-poderes-tab';
+      pw.addEventListener('click', () => { battle.slot = ''; battle.view = 'poderes'; renderBattle(); });
+      extra.push(pw);
+    }
     if (!actor.foe) {
       const inv = h('button', 'btn btn--ghost btn--sm', 'Itens');
       inv.type = 'button';
@@ -13377,6 +13511,21 @@ const FIREBASE_CONFIG = {
       h('p', 'cmd__note', live ? 'Toque numa ação do turno para ver o que dá para fazer com ela. As usadas ficam marcadas.' : sceneOn() ? 'Fora da vez: as ações não são contadas (reações e livres valem sempre).' : 'Fora do combate: as ações não são contadas.'),
       h('div', 'tslots', ...slots),
       h('div', 'cmd__row', ...extra));
+  }
+
+  // poderes da criatura (ficha do Bestiário): o mestre lê o efeito e registra o uso no chat
+  function foePowers(actor) {
+    const f = npcFicha(foeVals(actor.foe).ficha);
+    return h('div', 'cmd__stack',
+      h('div', 'cmd__about', h('strong', '', 'Poderes de ' + actor.name), h('span', '', 'O efeito de cada um está aqui; "Usar" registra no chat. O custo da ação e do PE fica com o mestre.')),
+      ...f.powers.map((p, i) => {
+        const pv = p.values || {};
+        const picks = powerPicks(p);
+        const text = [picks.length ? picks.join(', ') : '', pv.efeito || ''].filter(Boolean).join(': ');
+        const b = gmBtn('Usar', 'btn--ghost', async () => { await actLog(actor, p.name, (pv.custoUso ? pv.custoUso + '. ' : '') + (text || 'Usou o poder.')); toast(actor.name + ' usou ' + p.name + '.'); });
+        b.dataset.fid = 'foe-pw-' + i;
+        return h('div', 'cmd__item cmd__item--static', h('span', 'cmd__item-name', p.name + (pv.custoUso ? ' · ' + pv.custoUso : '')), text ? h('span', 'cmd__item-txt', text) : null, b);
+      }));
   }
 
   // tela de ações de um tipo
@@ -13537,11 +13686,10 @@ const FIREBASE_CONFIG = {
     if (actor.foe) {
       const st = combat.st[actor.id] = combat.st[actor.id] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
       if (adv) st.mode = 'Corpo a corpo';
-      const v = foeVals(actor.foe);
-      const cad = st.mode === 'Corpo a corpo' ? 1 : clamp(Math.round(num(v.cadencia)) || 1, 1, 20);
       const peek = () => { let t = null; foeAttackBuilder(actor.foe, st, null, { peek: (x) => { t = x; } }); return t; };
       const fp = foeProf(actor.foe);
       return h('div', 'cmd__stack', note, foeAttackBuilder(actor.foe, st, null, { aim: () => {
+        const cad = st.mode === 'Corpo a corpo' ? 1 : clamp(Math.round(num(foeAtkVals(actor.foe, st).cadencia)) || 1, 1, 20);
         startAim({ label: 'Ataque de ' + actor.name, valid: valid.map((x) => x.id), max: cad,
           penalty: (n) => (n > 1 ? '–' + shotPenalty(n, fp) + ' no ataque (' + (fp ? 'cadência perita' : 'sem proficiência') + ')' : ''),
           pick: (x) => go({ foe: actor.foe }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ foe: actor.foe }, st, shots, peek) });
@@ -14356,11 +14504,23 @@ const FIREBASE_CONFIG = {
 
   const foeProf = (f) => foeVals(f).proficiente !== 'Não'; // NPC sem o campo: proficiente
   const FOE_MODES = { 'Corpo a corpo': ['corpo', 'luta', 'Corpo', 'Luta'], 'À distância': ['precisao', 'mira', 'Precisão', 'Mira'], 'Tecnológico': ['essencia', 'operacoes', 'Essência', 'Operações'] };
+  // armas do inventário da criatura (ficha do Bestiário): o mestre escolhe com qual ela ataca
+  const foeWeapons = (f) => npcFicha(foeVals(f).ficha).inventory.filter((i) => isWeapon(i.kind));
+  const foeWeapon = (f, st) => (st && st.wuid ? foeWeapons(f).find((i) => i.uid === st.wuid) || null : null);
+  function foeAtkVals(f, st) {
+    const v = foeVals(f);
+    const w = foeWeapon(f, st);
+    if (!w) return v;
+    const wv = w.values || {};
+    const gun = w.kind === 'arma-fogo';
+    return Object.assign({}, v, { arma: w.name, ataque: gun ? 'À distância' : 'Corpo a corpo', dano: wv.dano || v.dano, cadencia: gun ? String(Math.max(1, Math.round(num(wv.cadencia)) || 1)) : '1' });
+  }
   function foeAttackBuilder(f, st, before, opts) {
     opts = opts || {};
-    const v = foeVals(f);
+    let v = foeVals(f);
     const box = h('div', 'attack');
     const draw = () => {
+      v = foeAtkVals(f, st);
       if (!FOE_MODES[st.mode]) st.mode = FOE_MODES[v.ataque] ? v.ataque : 'Corpo a corpo';
       const cad = clamp(Math.round(num(v.cadencia)) || 1, 1, 20);
       st.shots = clamp(st.shots || 1, 1, cad);
@@ -14370,6 +14530,14 @@ const FIREBASE_CONFIG = {
       mSel.value = st.mode;
       mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
       const fields = [field('mode', 'Forma de ataque', mSel)];
+      const ws = foeWeapons(f);
+      if (ws.length) {
+        const wSel = h('select', 'input');
+        [['', 'Ataque da ficha' + (foeVals(f).arma ? ' (' + foeVals(f).arma + ')' : '')]].concat(ws.map((w) => [w.uid, w.name])).forEach((x) => { const o = h('option', '', x[1]); o.value = x[0]; wSel.append(o); });
+        wSel.value = foeWeapon(f, st) ? st.wuid : '';
+        wSel.addEventListener('change', () => { st.wuid = wSel.value; st.mode = ''; draw(); });
+        fields.unshift(field('weapon', 'Arma', wSel));
+      }
       const targets = combatants().filter((x) => combat.targets.has(x.id));
       const prof = foeProf(f);
       let per = null;
@@ -14464,9 +14632,16 @@ const FIREBASE_CONFIG = {
     const atkId = who.foe ? 'foe:' + who.foe.id : 'chr:' + who.member.characterId;
     let types, effective = '', shots = Math.max(1, st.shots || 1), ranged = false, beam = null, critFx = null, weapon = null;
     if (who.foe) {
-      const v = foeVals(who.foe);
+      const v = foeAtkVals(who.foe, st);
+      const w = foeWeapon(who.foe, st);
       types = splitTypes(v.dano);
       effective = v.efetivo === 'Vida' ? 'pv' : v.efetivo === 'Escudo' ? 'escudo' : v.efetivo === 'Blindagem' ? 'blindagem' : '';
+      // arma corpo a corpo do inventário: as propriedades do tipo valem com proficiência, como no jogador
+      if (w && w.kind === 'arma-melee' && foeProf(who.foe)) {
+        if (w.typeId === 'marreta') effective = 'blindagem';
+        if (w.typeId === 'machado') effective = 'escudo';
+        critFx = CRIT_FX[w.typeId] || null;
+      }
       ranged = st.mode !== 'Corpo a corpo';
     } else {
       weapon = weaponsOf(who.c.sheet).find((w) => w.uid === st.uid) || null;
@@ -14542,7 +14717,7 @@ const FIREBASE_CONFIG = {
       // crítico com efeito: o alvo testa Fortitude; a Espada e o Machado tiram 1d6 PV, a Marreta atordoa
       let fx = '';
       if (critFx && hits && r.flag === 'crit' && lifeState(res.layers) !== 'morto') {
-        const cd = 6 + attrOf(who.c.sheet, critFx.attr) + skillOf(who.c.sheet, 'luta');
+        const cd = 6 + (who.foe ? num(foeVals(who.foe)[critFx.attr]) + num(foeVals(who.foe).luta) : attrOf(who.c.sheet, critFx.attr) + skillOf(who.c.sheet, 'luta'));
         const sv = rollTest(sideTest(x, 'fortitude'));
         const ok = sv.flag !== 'falha' && sv.total >= cd;
         fx = ' · crítico: Fortitude ' + sv.total + ' contra CD ' + cd + (ok ? ', evitou' : critFx.bleed ? ', sangrou' : ', atordoado');
@@ -14989,6 +15164,9 @@ const FIREBASE_CONFIG = {
     const stat = (k, label) => h('span', 'mag__stat', h('small', '', label), h('b', '', signed(num(v[k]))));
     const atk = [v.ataque, v.arma, v.dano, num(v.cadencia) > 1 ? num(v.cadencia) + ' disparos' : '', v.efetivo ? 'efetivo contra ' + v.efetivo : ''].filter(Boolean).join(' · ');
     const drops = parseDrops(v.saque).map((d) => (d.qty > 1 ? d.qty + '× ' : '') + d.name).concat(num(v.cronos) ? [fmtCronos(num(v.cronos)) + ' Cronos'] : []);
+    const fi = npcFicha(v.ficha);
+    const build = [fi.specimen ? fi.specimen.name : '', fi.powers.length ? fi.powers.map((p) => p.name).join(', ') : ''].filter(Boolean).join(' · ');
+    const gear = fi.inventory.map((i) => ((i.qty || 1) > 1 ? i.qty + '× ' : '') + i.name);
     const kills = camp ? fallen.filter((f) => (f.npcId && f.npcId === e.id) || nameKey(f.name) === nameKey(e.name)).length : 0;
     const btn = (label, cls, onClick, aria) => {
       const b = h('button', 'btn btn--sm ' + cls, label);
@@ -15022,6 +15200,8 @@ const FIREBASE_CONFIG = {
         h('div', 'mag__pills', ...layers),
         h('div', 'mag__stats', stat('corpo', 'Corpo'), stat('precisao', 'Precisão'), stat('essencia', 'Essência'), stat('luta', 'Luta'), stat('mira', 'Mira'), stat('resistencia', 'Resist.')),
         atk ? h('p', 'mag__atk', h('b', '', 'Ataque '), atk) : null,
+        build ? h('p', 'mag__atk', h('b', '', 'Ficha '), build) : null,
+        gear.length ? h('p', 'mag__atk', h('b', '', 'Inventário '), gear.join(', ')) : null,
         v.descricao ? h('p', 'mag__desc', v.descricao) : null,
         v.lore ? h('blockquote', 'mag__lore', v.lore) : null,
         h('p', 'mag__drops', h('b', '', 'Deixa ao cair '), drops.length ? drops.join(', ') : 'nada anotado (campo Saque da criatura)'),
@@ -16220,7 +16400,7 @@ const FIREBASE_CONFIG = {
   $('#member-add-mine').addEventListener('click', async () => {
     if (!profile) { openLogin(['campaign', currentCamp.id]); return; }
     const all = await loadChars(profile.chars);
-    if (!all.length) { toast('Seu perfil ainda não tem personagens. Crie um na tela Fichas.'); return; }
+    if (!all.length) { toast('Seu perfil ainda não tem personagens. Crie um em Personagens.'); return; }
     const inCamp = new Set(members.map((m) => m.characterId));
     if (!addMineDlg) {
       addMineDlg = h('dialog', 'dialog pickchar');

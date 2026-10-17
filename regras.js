@@ -229,7 +229,7 @@ window.VORTEX_REGRAS = {
         ['p', 'Os PA representam um surto de criatividade inteligente (ou não) capaz de mudar a dinâmica das suas interações. Gaste 1 PA para rolar de novo um teste que você acabou de fazer e ficar com o novo resultado (uma vez por teste), ou num efeito que peça PA (como o Simbionte e a Transformação).'],
 
         ['h3', 'Escudo e Blindagem'],
-        ['p', 'Começam em 0 e vêm de equipamentos (escudos energéticos, armaduras), do espécime (no Robô e no Android, a vida é a Blindagem) ou de poderes. O dano passa primeiro pelo Escudo, depois pela Blindagem e só então pelos PV (veja [Ataque e Defesa](ataque-e-defesa#Camadas de vida)).'],
+        ['p', 'Começam em 0 e vêm de equipamentos (escudos energéticos, armaduras), do espécime (no Robô e no Android, a vida é a Blindagem) ou de poderes. O dano passa primeiro pelo Escudo, depois pela Blindagem e só então pelos PV (veja [Ataque e Defesa](ataque-e-defesa#Tipos de Resistência)).'],
 
         ['h2', 'Recuperação'],
         ['p', 'Você recupera seus recursos depois de um descanso adequado, e a qualidade do descanso define quanto volta.'],
@@ -412,7 +412,7 @@ window.VORTEX_REGRAS = {
         ['h2', 'Danos'],
         ['formula', 'Dano', '(Ataque – Defesa do alvo) × disparos'],
         ['p', 'O ataque **acerta** quando o total passa da Defesa do alvo. Se ficar igual ou abaixo, é um **raspão**: o ataque erra, causa só o dano mínimo (1 por disparo) e não aplica efeitos de acerto (os que dizem “se acertar”). Quando uma regra diz que o ataque erra automaticamente (Acuidade, Ofuscado, Cego), ele não causa nem o dano mínimo.'],
-        ['p', 'O dano atinge as suas camadas de vida (Escudo, Blindagem e PV), descritas abaixo.'],
+        ['p', 'O dano atinge a sua Resistência: as camadas de Escudo, Blindagem e PV, descritas abaixo.'],
         ['p', '**Dano fixo e dano de efeito.** Fora do cálculo acima, só o dano fixo e o dano de efeito (como o Sangramento ou o dano adicional de alguns itens) podem rolar um dado de dano ou somar dano que passa pela Defesa do alvo. Eles entram uma vez por alvo, depois do multiplicador da cadência.'],
 
         ['h2', 'Tipo de dano'],
@@ -422,13 +422,14 @@ window.VORTEX_REGRAS = {
           ['Elementos', ['Fogo', 'Ácido/químico', 'Elétrico']],
           ['Especiais', ['Explosivo', 'Radioativo', 'Necrótico', 'Energia', 'Impacto']]
         ]],
-        ['p', 'Energia (lasers, Tecnomancia) e Impacto não têm fraqueza nem resistência nas camadas de vida.'],
+        ['p', 'Energia (lasers, Tecnomancia) e Impacto não têm fraqueza nem resistência em nenhum tipo de Resistência.'],
 
         ['h2', 'Fraquezas e Eficiência de Dano'],
         ['p', 'Um ataque é **eficiente** quando a camada atingida é fraca ao tipo de dano dele: o dano nessa camada é **dobrado** depois do cálculo normal. Algumas armas são eficientes contra uma camada por natureza (a Marreta contra Blindagem, o Machado contra Escudo).'],
         ['p', 'Um ataque é **resistido** quando a camada atingida resiste ao tipo dele: o dano nessa camada cai à **metade** (arredondado para baixo, mínimo 1).'],
 
-        ['h2', 'Camadas de vida'],
+        ['h2', 'Tipos de Resistência'],
+        ['p', '**Resistência** é o nome da barra de vida inteira: a soma das camadas de Escudo, Blindagem e PV que a pessoa tiver.'],
         ['card', 'Pontos de Vida (PV)', [
           ['p', 'Carne, sangue e tecido vivo.'],
           ['kv', '', [['Fraquezas', 'Radioativo, Cortante (dano dobrado).'], ['Resiste a', 'Nada.']]],
@@ -449,7 +450,7 @@ window.VORTEX_REGRAS = {
         ['ul', [
           'Se um ataque causar **mais de um tipo de dano**, os efeitos de fraqueza ou resistência **não se acumulam**.',
           'A redução de dano por dois tipos resistidos também **não acumula**, e a fraqueza vence a resistência: se um dos tipos for eficiente contra a camada, o dano dobra.',
-          'Caso o alvo possua duas ou mais camadas de vida, o dano é aplicado sempre na ordem: **Escudo → Blindagem → PV.**',
+          'Caso o alvo possua duas ou mais camadas de Resistência, o dano é aplicado sempre na ordem: **Escudo → Blindagem → PV.**',
           'Se o dano exceder uma camada, o valor restante passa a ser afetado pelas fraquezas e resistências da próxima camada atingida.',
           'O bônus de **dano dobrado por fraqueza** não conta para o cálculo do dano excedente à camada afetada (a menos que a próxima camada também seja fraca ao dano recebido).'
         ]]
@@ -462,7 +463,7 @@ window.VORTEX_REGRAS = {
       blocks: [
         ['p', 'Se o seu personagem chegar a 0 PV, ele cai **agonizando**: fica inconsciente e Caído, sem ações, e continua sofrendo dano normalmente. Ainda não é o fim: ele só morre quando chega ao valor negativo do seu PV máximo.'],
         ['example', 'Um personagem com PV máximo 20 morre ao chegar a –20.'],
-        ['p', 'Quem não tem PV (o Robô, que vive da Blindagem, ou um ser só de Escudo e Blindagem) não agoniza: quando todas as camadas de vida zeram, ele fica **fora de combate**, sem ações, até ser consertado (veja [Cura](cura#Blindagem (BL))) ou reanimado.'],
+        ['p', 'Quem não tem PV (o Robô, que vive da Blindagem, ou um ser só de Escudo e Blindagem) não agoniza: quando todas as camadas da Resistência zeram, ele fica **fora de combate**, sem ações, até ser consertado (veja [Cura](cura#Blindagem (BL))) ou reanimado.'],
 
         ['h2', 'Teste de Sobrevivência'],
         ['p', 'Enquanto estiver com 0 PV ou menos, o personagem faz, na vez dele, um teste de Fortitude contra CD 6, que aumenta em +1 a cada nova tentativa no mesmo dia.'],
@@ -1190,7 +1191,7 @@ window.VORTEX_REGRAS = {
         ['card', 'Robô', [
           ['p', 'Meio que é… feito de lata né não?'],
           ['h4', 'Núcleo'],
-          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as suas camadas de vida zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
+          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as camadas da sua Resistência zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
           ['h4', 'Engenharia'],
           ['p', 'Como um bom pedaço de lata, você não equipa itens: você os acopla ao corpo. Isso vale para armaduras e módulos. Acoplar leva ao menos 1 hora, e cada +2 de Carga Cibernética dado pelo núcleo acoplado vale +1 de Carga Cibernética a mais.'],
           ['h4', 'Não vivo'],
@@ -1202,7 +1203,7 @@ window.VORTEX_REGRAS = {
           ['p', 'Como um bom pedaço de lata, você não equipa itens: você os acopla ao corpo. Isso vale para armas e armaduras, que, acopladas, ocupam a sua Carga Cibernética em vez da Carga. Acoplar leva ao menos 1 hora, e cada +2 de Carga Cibernética dado pelo núcleo acoplado vale +1 de Carga Cibernética a mais.'],
           ['p', 'Para você, próteses são peças, e você não precisa de uma prótese para instalar módulos.'],
           ['h4', 'Núcleo'],
-          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as suas camadas de vida zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
+          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as camadas da sua Resistência zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
           ['h4', 'Humanidade'],
           ['p', 'Você pode fazer testes para resistir a efeitos de PEM (pulso eletromagnético) quando eles tiverem CD, e metade da sua Blindagem volta com o descanso, como se fosse PV (a outra metade só com conserto).'],
           ['p', 'Efeitos de [PEM](condicoes-e-estados#Específicos) atordoam automaticamente seres elétricos ou eletrônicos e desativam Escudos. Com a Humanidade, o Android faz o teste quando houver CD; se não houver, ele não é afetado pelo PEM.']

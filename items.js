@@ -517,8 +517,9 @@ window.VORTEX_ITEMS = {
         ['id', 'Identidade'],
         ['atrib', 'Atributos', 'stats'],
         ['peric', 'Perícias', 'stats'],
-        ['vida', 'Vida e defesa', 'stats'],
+        ['vida', 'Resistência e defesa', 'stats'],
         ['atk', 'Ataque'],
+        ['build', 'Espécime, poderes e inventário'],
         ['hab', 'Habilidades'],
         ['saque', 'Saque'],
         ['lore', 'Lore']
@@ -548,6 +549,7 @@ window.VORTEX_ITEMS = {
         { key: 'cadencia', sec: 'atk', label: 'Cadência (disparos por ação)', kind: 'number', min: 1, step: 1 },
         { key: 'proficiente', sec: 'atk', label: 'Proficiente com a arma (cadência perita)', kind: 'select', options: 'soNao', blank: 'Sim' },
         { key: 'efetivo', sec: 'atk', label: 'Efetivo contra (como arma de tipo)', kind: 'select', options: 'efetivoContra', blank: 'Nada' },
+        { key: 'ficha', sec: 'build', label: 'Espécime, poderes e inventário', kind: 'npcbuild' },
         { key: 'descricao', sec: 'hab', label: 'Descrição e habilidades', kind: 'textarea', big: true },
         { key: 'saque', sec: 'saque', label: 'Saque (o que deixa ao cair, um por linha)', kind: 'textarea', big: true, placeholder: 'Ex.: Pulse P-01\nKit médico x2\nSucata eletrônica' },
         { key: 'cronos', sec: 'saque', label: 'Cronos que deixa ao cair', kind: 'number', min: 0, step: 1 },
