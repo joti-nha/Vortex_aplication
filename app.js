@@ -13173,6 +13173,8 @@ const FIREBASE_CONFIG = {
     if (arena && arena.scrollIntoView) arena.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   function endAim() { battle.aim = null; combat.targets.clear(); }
+  // opções de ataque ainda não usadas (Afetar, Akimbo, Avançar) não passam para o próximo turno nem para outro lutador
+  function dropPending() { battle.afetar = null; battle.akimbo = null; battle.advance = ''; }
   async function aimPick(x) {
     const a = battle.aim;
     if (!a || a.valid.indexOf(x.id) < 0) return;
@@ -13236,6 +13238,7 @@ const FIREBASE_CONFIG = {
     if (!actor) {
       if (battle.aim) endAim();
       battle.view = 'main';
+      dropPending();
       box.replaceChildren(title, h('p', 'cmd__wait', !on
         ? (gm ? 'Comece o combate e escolha quais jogadores entram. Os comandos abrem na vez de cada um.' : 'Os comandos abrem quando o mestre começar o combate e chegar a sua vez.')
         : !mine.length && !gm ? 'Você não está neste combate. O mestre pode chamar você para entrar.'
@@ -13246,10 +13249,11 @@ const FIREBASE_CONFIG = {
     if (down) {
       if (battle.aim) endAim();
       battle.view = 'main';
+      dropPending();
       box.replaceChildren(h('div', 'cmd__head', title, h('strong', 'cmd__name', actor.name)), downView(actor, down, gm));
       return;
     }
-    if (battle.actor !== actor.id) { battle.view = 'main'; if (battle.aim) endAim(); }
+    if (battle.actor !== actor.id) { battle.view = 'main'; if (battle.aim) endAim(); dropPending(); }
     battle.actor = actor.id;
     const isTurn = econLive(actor);
     const who = h('strong', 'cmd__name', actor.name);
@@ -13327,7 +13331,7 @@ const FIREBASE_CONFIG = {
     const b = h('button', 'cmd__back', '◀ Voltar');
     b.type = 'button';
     b.dataset.fid = 'cmd-back';
-    b.addEventListener('click', () => { battle.view = to; if (to === 'main') battle.slot = ''; renderBattle(); });
+    b.addEventListener('click', () => { battle.view = to; battle.afetar = null; if (to === 'main') battle.slot = ''; renderBattle(); });
     return b;
   }
 
@@ -13507,8 +13511,12 @@ const FIREBASE_CONFIG = {
     const valid = attackable(list, actor);
     const down = valid.filter(finishable);
     const af = battle.afetar && battle.afetar.id === actor.id ? battle.afetar : null;
+    let afPart = af ? af.part : ''; // o Afetar vale para um ataque só (no Akimbo, só a 1ª arma)
     const note = h('p', 'cmd__note', adv ? 'Ataque do avanço: corpo a corpo, já pago, não ativa habilidades.' : ak && ak.step ? 'Akimbo: agora a segunda arma (a ação já foi paga).' : (af ? 'Afetar (' + af.part + '): com 6 nos dois dados, o alvo fica com um efeito nessa parte até receber cura. ' : '') + 'Depois de escolher, toque nos alvos na arena.' + (down.length ? ' Atacar quem está caído é Finalizar: os dados contam no máximo, contra a Defesa mínima.' : ''));
     const go = async (who, st, shots, peekBuild) => {
+      const part = afPart;
+      afPart = '';
+      battle.afetar = null;
       combat.targets = new Set(Object.keys(shots));
       st.per = shots;
       st.shots = Object.values(shots).reduce((t, n) => t + n, 0);
@@ -13521,8 +13529,7 @@ const FIREBASE_CONFIG = {
       st.powNote = powerNote(uses);
       const paid = adv ? 'parte do avanço' : ak && ak.step ? 'parte do Akimbo' : econPay(actor, cost) + (ak ? ' (Akimbo: 1ª arma)' : '');
       if (adv) battle.advance = '';
-      await runAttack(who, t, st, h('button'), paid);
-      battle.afetar = null;
+      await runAttack(who, t, st, h('button'), paid, part);
       // Akimbo: a segunda arma ataca na mesma ação, com o próprio teste
       if (ak && !ak.step && who.member) { ak.step = 1; st.uid = ak.uids[1]; st.mode = ''; st.shots = 1; aimWith(); }
       else if (ak) battle.akimbo = null;
@@ -13803,7 +13810,9 @@ const FIREBASE_CONFIG = {
       await patchMemberSheet(actor.member, (ss) => { left = spendItem(ss, kit.uid); });
       const l = tgt.layers.find((y) => y.key === key);
       if (ok && l) await addToLayers(tgt, { [key]: 1 - l.cur }, true);
-      if (!ok) { const next = sceneBase(); next.revive = Object.assign({}, next.revive, { [tgt.id]: tries + 1 }); await saveScene(next); }
+      const next = sceneBase();
+      next.revive = Object.assign({}, next.revive, { [tgt.id]: tries + 1 });
+      await saveScene(next);
       r.label = ('Reanimar: ' + tgt.name).slice(0, 60);
       r.detail = paid + ' · ' + r.detail + ' contra CD ' + cd + ' → ' + (ok ? 'reanimado com 1 ' + RES_LABEL[key] : 'não reanimou (a próxima tentativa nesta cena é CD ' + (cd + 1) + ')') + ' · ' + kit.name + left;
       await campaignRoll(actor.member, r);
@@ -14449,7 +14458,7 @@ const FIREBASE_CONFIG = {
   }
 
   // Um teste de ataque, comparado com a defesa de cada alvo marcado
-  async function runAttack(who, t, st, btn, paid) {
+  async function runAttack(who, t, st, btn, paid, afPart) {
     const list = combatants().filter((x) => combat.targets.has(x.id));
     if (!list.length) { toast('Marque pelo menos um alvo na lista.'); return; }
     const atkId = who.foe ? 'foe:' + who.foe.id : 'chr:' + who.member.characterId;
@@ -14505,7 +14514,7 @@ const FIREBASE_CONFIG = {
       }
       pre.push(blind + ': 1d4 = ' + d4 + ', não errou');
     }
-    const part = battle.afetar && battle.afetar.id === atkId ? battle.afetar.part : '';
+    const part = afPart || '';
     btn.disabled = true;
     const r = rollTest(t);
     const lines = [];
@@ -14838,6 +14847,7 @@ const FIREBASE_CONFIG = {
     if (!sceneOn()) return;
     if (battle.aim) endAim();
     battle.view = 'main';
+    dropPending();
     const next = deep(scene);
     const n = next.order.length;
     let lost = [];
@@ -15201,16 +15211,23 @@ const FIREBASE_CONFIG = {
   }
 
   /* ---- Monstros derrotados (só o mestre) ---- */
-  const fallenSeen = new Set();
+  const fallenSeen = new Map(); // id do NPC → estado já anotado no histórico
   let fallenReady = false; // só registra depois de ler o histórico (senão regrava quem já estava lá)
   function trackFallen(list) {
     if (!currentCamp || !currentCamp.gm || !fallenReady) return;
     list.forEach((f) => {
       const st = lifeState(foeLayers(f));
-      if (!st || fallenSeen.has(f.id) || fallen.some((x) => x.id === f.id)) return;
-      fallenSeen.add(f.id);
-      db.addDoc(currentCamp.id, 'fallen', { foeId: f.id, npcId: f.npcId || '', name: f.name, values: deep(f.values || {}), thumb: f.thumb || '',
-        scene: (scene && scene.name) || '', state: st, lootId: '' }, f.id).catch((err) => console.warn(err));
+      if (!st) return;
+      const rec = fallen.find((x) => x.id === f.id);
+      const was = fallenSeen.has(f.id) ? fallenSeen.get(f.id) : rec ? rec.state : '';
+      if (was === st) return;
+      fallenSeen.set(f.id, st);
+      // caiu agonizando e depois morreu: o registro muda junto; um registro que o mestre apagou não volta
+      if (rec) db.updateDoc(currentCamp.id, 'fallen', f.id, { state: st }).catch((err) => console.warn(err));
+      else if (!was) {
+        db.addDoc(currentCamp.id, 'fallen', { foeId: f.id, npcId: f.npcId || '', name: f.name, values: deep(f.values || {}), thumb: f.thumb || '',
+          scene: (scene && scene.name) || '', state: st, lootId: '' }, f.id).catch((err) => console.warn(err));
+      }
     });
   }
   function renderFallen() {
