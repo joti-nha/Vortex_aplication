@@ -511,15 +511,15 @@ window.VORTEX_ITEMS = {
     {
       id: 'npc', title: 'NPC / Inimigo', group: 'Ameaças', image: true,
       hint: 'Monstros, inimigos e NPCs da lista aberta: qualquer mestre pode colocar na campanha. Defesa mínima = armadura + Corpo + Resistência.',
-      defaults: { categoria: 'Comum', up: '0', corpo: '1', precisao: '1', essencia: '0', luta: '1', mira: '1', operacoes: '0', resistencia: '1', armadura: '6', pv: '10', escudo: '0', blindagem: '0', cadencia: '1', ataque: 'Corpo a corpo' },
+      defaults: { categoria: 'Comum', up: '0', corpo: '1', precisao: '1', essencia: '0', luta: '1', mira: '1', operacoes: '0', resistencia: '1', armadura: '6', pv: '10', escudo: '0', blindagem: '0' },
       // a criação parece uma ficha: blocos como os da ficha do jogador, só com o que uma criatura usa
       sections: [
         ['id', 'Identidade'],
         ['atrib', 'Atributos', 'stats'],
         ['peric', 'Perícias', 'stats'],
         ['vida', 'Resistência e defesa', 'stats'],
-        ['atk', 'Ataque'],
         ['build', 'Espécime, poderes e inventário'],
+        ['atk', 'Ações'],
         ['hab', 'Habilidades'],
         ['saque', 'Saque'],
         ['lore', 'Lore']
@@ -543,15 +543,13 @@ window.VORTEX_ITEMS = {
         { key: 'pv', sec: 'vida', label: 'PV máximo', kind: 'number', min: 0, step: 1 },
         { key: 'escudo', sec: 'vida', label: 'Escudo', kind: 'number', min: 0, step: 1 },
         { key: 'blindagem', sec: 'vida', label: 'Blindagem', kind: 'number', min: 0, step: 1 },
-        { key: 'ataque', sec: 'atk', label: 'Ataque principal', kind: 'select', options: 'formasAtaque' },
-        { key: 'arma', sec: 'atk', label: 'Arma ou ataque (nome)', kind: 'text', placeholder: 'Ex.: Garras, Fuzil de assalto' },
-        { key: 'dano', sec: 'atk', label: 'Tipos de dano do ataque', kind: 'multi', options: 'tiposDano' },
-        { key: 'cadencia', sec: 'atk', label: 'Cadência (disparos por ação)', kind: 'number', min: 1, step: 1 },
-        { key: 'proficiente', sec: 'atk', label: 'Proficiente com a arma (cadência perita)', kind: 'select', options: 'soNao', blank: 'Sim' },
-        { key: 'efetivo', sec: 'atk', label: 'Efetivo contra (como arma de tipo)', kind: 'select', options: 'efetivoContra', blank: 'Nada' },
         { key: 'ficha', sec: 'build', label: 'Espécime, poderes e inventário', kind: 'npcbuild' },
+        // ações da criatura (ataques, áreas, efeitos); o ataque único antigo (ataque, arma, dano...) vira a primeira ação
+        { key: 'acoes', sec: 'atk', label: 'Ações', kind: 'npcactions' },
+        { key: 'ataque', hidden: true }, { key: 'arma', hidden: true }, { key: 'dano', hidden: true }, { key: 'cadencia', hidden: true }, { key: 'proficiente', hidden: true }, { key: 'efetivo', hidden: true },
         { key: 'descricao', sec: 'hab', label: 'Descrição e habilidades', kind: 'textarea', big: true },
-        { key: 'saque', sec: 'saque', label: 'Saque (o que deixa ao cair, um por linha)', kind: 'textarea', big: true, placeholder: 'Ex.: Pulse P-01\nKit médico x2\nSucata eletrônica' },
+        { key: 'saqueItens', sec: 'saque', label: 'Itens do banco que deixa ao cair', kind: 'npcloot' },
+        { key: 'saque', sec: 'saque', label: 'Outros (o que não está no banco, um por linha)', kind: 'textarea', big: true, placeholder: 'Ex.: Sucata eletrônica\nGlândula x2' },
         { key: 'cronos', sec: 'saque', label: 'Cronos que deixa ao cair', kind: 'number', min: 0, step: 1 },
         { key: 'lore', sec: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História e lugar desta ameaça no mundo. Aparece no ícone 📜.' }
       ]

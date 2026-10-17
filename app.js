@@ -3033,7 +3033,7 @@ const FIREBASE_CONFIG = {
     const v = e.values || {};
     if (e.kind === 'build') return [e.kindTitle || kindTitle(e.kind), v.papel, ['corpo', 'precisao', 'essencia'].map((k) => k.charAt(0).toUpperCase() + ' ' + (num(v[k]) > 0 ? '+' : '') + num(v[k])).join(' '), [v.pericia2a, v.pericia2b].filter(Boolean).map((x) => x + ' +2').concat(v.pericia1 ? [v.pericia1 + ' +1'] : []).join(', ')].filter(Boolean).join(' · ');
     if (e.kind === 'municao') return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, ammoUnitText(e), v.dano, v.para ? 'Para ' + v.para : '', priceText(v.preco)].filter(Boolean).join(' · ');
-    if (e.kind === 'npc') return [e.kindTitle || kindTitle(e.kind), v.categoria, num(v.up) ? 'UP ' + v.up : '', layersSummary(v), 'Defesa mín. ' + (num(v.armadura || 6) + num(v.corpo) + num(v.resistencia)), v.dano].filter(Boolean).join(' · ');
+    if (e.kind === 'npc') return [e.kindTitle || kindTitle(e.kind), v.categoria, num(v.up) ? 'UP ' + v.up : '', layersSummary(v), 'Defesa mín. ' + (num(v.armadura || 6) + num(v.corpo) + num(v.resistencia)), npcActions(v).slice(0, 3).map((a) => a.nome).join(', ')].filter(Boolean).join(' · ');
     return [e.kindTitle || kindTitle(e.kind), e.typeTitle, v.raridade, v.posicao, v.para, v.classe, v.tipoUso, num(v.usos) ? v.usos + ' usos' : '', v.bonusRec ? 'Bônus ' + v.bonusRec : '', priceText(v.preco)].filter(Boolean).join(' · ');
   }
   /* Lore: texto do mundo escondido atrás do ícone 📜 (itens, criadoras, espécimes, origens, personagens) */
@@ -3267,6 +3267,8 @@ const FIREBASE_CONFIG = {
       const val = v[f.key];
       if (f.kind === 'roteiro') { rtEntryRows(v).forEach((r, i) => add('roteiro' + i, r[0], r[1], 'text')); return; }
       if (seen.has(f.key)) return;
+      if (f.kind === 'npcactions') { seen.add(f.key); const node = npcActsView(npcActions(v), v); if (node) add(f.key, 'Ações', node, 'text'); return; }
+      if (f.kind === 'npcloot') { seen.add(f.key); const its = npcLootSave(val); if (its.length) add(f.key, 'Saque do banco', null, 'list', { items: its.map((i) => (i.qty > 1 ? i.qty + '× ' : '') + i.name) }); return; }
       seen.add(f.key);
       if (f.hidden || f.key === 'nome' || f.key === 'lore' || val === undefined || val === null || String(val).trim() === '') return;
       if (e.kind === 'escudo-energetico' && f.key === 'escudo') return; // aparece no Bônus (quando equipado)
@@ -4324,7 +4326,7 @@ const FIREBASE_CONFIG = {
       NPC_SKILLS.forEach((k) => { if (num(v[k])) s.skills[k] = num(v[k]); });
     };
     const box = h('div', 'npcb');
-    const save = () => { v.ficha = { specimen: s.specimen, powers: s.powers, inventory: s.inventory }; };
+    const save = () => { v.ficha = { specimen: s.specimen, powers: s.powers, inventory: s.inventory }; if (itemState.npcaDraw) itemState.npcaDraw(); };
     let draw = () => {};
     const ch = { id: '', type: 'criatura', get name() { return cleanName(d.name || '') || 'a criatura'; }, sheet: s,
       npc: { free: () => Math.round(num(v.up)) - npcUpSpent(s), done: () => { save(); draw(); } } };
@@ -4418,6 +4420,208 @@ const FIREBASE_CONFIG = {
       f.inventory.length ? line('Inventário', f.inventory.map((i) => ((i.qty || 1) > 1 ? i.qty + '× ' : '') + i.name + (i.slot === 'assim' ? ' (assimilado)' : '')).join(', ')) : null);
   }
 
+  /* Ações da criatura (Bestiário): cada ação diz o custo, o alvo (único, área ou pessoal), o teste (ataque contra a
+     Defesa, teste de resistência do alvo contra uma CD ou sem teste), o dano, a arma ou o poder que usa e o efeito
+     que entra sozinho na arena (uma condição com duração e, se quiser, dano por turno, como Sangrando 1d6).
+     A criatura antiga, com um ataque só (campos ataque, arma, dano...), vira uma ação. */
+  const NPC_ACT_COST = [['padrao', 'Ação padrão'], ['bonus', 'Ação bônus'], ['movimento', 'Ação de movimento'], ['completa', 'Ação completa'], ['reacao', 'Reação'], ['livre', 'Ação livre']];
+  const NPC_ACT_TARGET = [['unico', 'Alvo único'], ['area', 'Área'], ['pessoal', 'Pessoal (em si)']];
+  const NPC_ACT_AREA = [['raio', 'Raio'], ['cone', 'Cone'], ['linha', 'Linha']];
+  const NPC_ACT_TEST = [['ataque', 'Ataque contra a Defesa'], ['resist', 'Teste de resistência do alvo'], ['nenhum', 'Sem teste (acerta sozinho)']];
+  const NPC_ACT_SAVE = ['reflexos', 'fortitude', 'resistencia', 'sentidos', 'luta'];
+  const NPC_ACT_OK = [['metade', 'Metade do dano, sem o efeito'], ['nada', 'Nada'], ['semefeito', 'Dano inteiro, sem o efeito']];
+  const NPC_ACT_WHEN = [['acerto', 'Ao acertar'], ['crit', 'Só no crítico']];
+  const NPC_ACT_DOT = { sangrando: 'pv', 'em chamas': 'Fogo', envenenado: 'Ácido/químico', necrose: 'Necrótico' }; // condições com dano por turno
+  const NPC_ACT_KEYS = ['id', 'nome', 'custo', 'alvo', 'area', 'tam', 'max', 'alcance', 'teste', 'forma', 'bonus', 'cadencia', 'prof', 'pericia', 'cd', 'sucesso',
+    'dados', 'tipos', 'efetivo', 'arma', 'poder', 'cond', 'dur', 'dot', 'quando', 'usos', 'desc'];
+  const NPC_ACT_MAX = 12;
+  const NPC_LEGACY_ATK = ['ataque', 'arma', 'dano', 'cadencia', 'proficiente', 'efetivo'];
+  function npcActClean(a) {
+    const o = {};
+    NPC_ACT_KEYS.forEach((k) => { o[k] = String(a && a[k] !== undefined && a[k] !== null ? a[k] : '').slice(0, k === 'desc' ? 400 : 80); });
+    o.id = o.id || uid().slice(0, 8);
+    if (!NPC_ACT_COST.some((x) => x[0] === o.custo)) o.custo = 'padrao';
+    if (!NPC_ACT_TARGET.some((x) => x[0] === o.alvo)) o.alvo = 'unico';
+    if (!NPC_ACT_TEST.some((x) => x[0] === o.teste)) o.teste = 'ataque';
+    if (o.alvo === 'pessoal') o.teste = 'nenhum';
+    if (!o.forma) o.forma = 'Corpo a corpo';
+    return o;
+  }
+  const npcActBlank = () => npcActClean({ custo: 'padrao', alvo: 'unico', teste: 'ataque', forma: 'Corpo a corpo', prof: 'Sim', pericia: 'reflexos', sucesso: 'metade', quando: 'acerto', area: 'raio' });
+  function npcActions(v) {
+    if (Array.isArray(v.acoes)) return v.acoes.filter((a) => a && String(a.nome || '').trim()).map(npcActClean);
+    if (!v.ataque && !v.arma) return [];
+    return [npcActClean({ id: 'principal', nome: v.arma || 'Ataque', teste: 'ataque', forma: v.ataque || 'Corpo a corpo', cadencia: v.cadencia || '1', prof: v.proficiente === 'Não' ? 'Não' : 'Sim', tipos: v.dano || '', efetivo: v.efetivo || '' })];
+  }
+  const npcActSave = (list) => (Array.isArray(list) ? list : []).filter((a) => a && String(a.nome || '').trim()).slice(0, NPC_ACT_MAX).map(npcActClean);
+  const npcActCost = (a) => (NPC_ACT_COST.find((x) => x[0] === a.custo) || NPC_ACT_COST[0])[1];
+  // CD do teste de resistência: a escrita, ou 6 + atributo + perícia da forma da ação
+  const npcActCd = (a, v) => { const md = NPC_FORMS[a.forma] || NPC_FORMS['Tecnológico']; return Math.round(num(a.cd)) || 6 + num(v[md[0]]) + num(v[md[1]]); };
+  const NPC_FORMS = { 'Corpo a corpo': ['corpo', 'luta', 'Corpo', 'Luta'], 'À distância': ['precisao', 'mira', 'Precisão', 'Mira'], 'Tecnológico': ['essencia', 'operacoes', 'Essência', 'Operações'] };
+  // uma linha que resume a ação (revista, ficha, arena)
+  function npcActLine(a, v) {
+    const md = NPC_FORMS[a.forma] || NPC_FORMS['Corpo a corpo'];
+    const area = a.alvo === 'area' ? 'área' + (num(a.tam) ? ' (' + (NPC_ACT_AREA.find((x) => x[0] === a.area) || NPC_ACT_AREA[0])[1].toLowerCase() + ' ' + num(a.tam) + ' m)' : '') + (num(a.max) ? ', até ' + plural(num(a.max), 'alvo', 'alvos') : '') : a.alvo === 'pessoal' ? 'pessoal' : '';
+    const test = a.teste === 'ataque' ? 'ataque ' + md[2] + ' + ' + md[3] + (num(a.bonus) ? ' ' + signed(num(a.bonus)) : '') + (num(a.cadencia) > 1 ? ', cadência ' + num(a.cadencia) : '')
+      : a.teste === 'resist' ? (SKILL_LABEL[a.pericia] || 'Reflexos') + ' contra CD ' + npcActCd(a, v) : '';
+    const dmg = a.alvo === 'pessoal' ? (a.dados ? 'cura ' + a.dados : '') : [a.dados ? (a.teste === 'ataque' ? '+' : '') + a.dados : '', a.tipos].filter(Boolean).join(' ');
+    const fx = a.cond ? a.cond + (a.dot ? ' ' + a.dot + '/turno' : '') + (num(a.dur) ? ' por ' + plural(num(a.dur), 'rodada', 'rodadas') : '') + (a.quando === 'crit' && a.teste === 'ataque' ? ' (no crítico)' : '') : '';
+    return [npcActCost(a), area, a.alcance, test, dmg, a.efetivo ? 'efetivo contra ' + a.efetivo.toLowerCase() : '', fx, a.poder ? 'poder ' + a.poder : '', num(a.usos) ? plural(num(a.usos), 'uso', 'usos') + ' por combate' : ''].filter(Boolean).join(' · ');
+  }
+  function npcActsView(list, v) {
+    if (!list.length) return null;
+    return h('div', '', ...list.map((a) => h('p', 'npcb__read', h('strong', '', a.nome + ': '), npcActLine(a, v), a.desc ? h('span', 'npca__desc', ' ' + a.desc) : null)));
+  }
+  function npcActionsEditor(d) {
+    const v = d.values;
+    if (!Array.isArray(v.acoes)) { v.acoes = npcActions(v); NPC_LEGACY_ATK.forEach((k) => { v[k] = ''; }); } // o ataque antigo vira a primeira ação
+    if (!v.acoes.length) v.acoes.push(npcActBlank());
+    const box = h('div', 'npca');
+    const list = h('div', 'npca__list');
+    const add = h('button', 'btn btn--ghost npca__add', '+ Nova ação');
+    add.type = 'button';
+    add.dataset.fid = 'npca-add';
+    // o "+" só aparece quando a última ação já tem nome
+    const syncAdd = () => { const last = v.acoes[v.acoes.length - 1]; add.hidden = Boolean(v.acoes.length >= NPC_ACT_MAX || (last && !String(last.nome || '').trim())); };
+    add.addEventListener('click', () => { v.acoes.push(npcActBlank()); draw(); const ins = list.querySelectorAll('.npca__name'); if (ins.length) ins[ins.length - 1].focus(); });
+    const fld = (id, label, ctrl, wide) => { ctrl.id = id; ctrl.dataset.fid = id; const l = h('label', 'field__label', label); l.htmlFor = id; return h('div', 'field' + (wide ? ' field--wide' : ''), l, ctrl); };
+    const sel = (opts, val, fn) => { const s = h('select', 'input'); opts.forEach((o) => { const op = h('option', '', o[1]); op.value = o[0]; s.append(op); }); s.value = val || (opts[0] && opts[0][0]) || ''; s.addEventListener('change', () => fn(s.value)); return s; };
+    const txt = (val, fn, o) => { const i = h('input', 'input'); i.type = o && o.num ? 'number' : 'text'; if (o && o.num) { i.min = '0'; i.step = '1'; i.inputMode = 'numeric'; } i.maxLength = 80; if (o && o.ph) i.placeholder = o.ph; i.value = val || ''; i.addEventListener('input', () => fn(i.value)); return i; };
+    const card = (a, i) => {
+      const f = npcFicha(v.ficha);
+      const p = 'npca-' + i + '-';
+      const set = (k, redraw) => (x) => { a[k] = x; if (redraw) paint(); };
+      const el = h('div', 'npca__card');
+      const paint = () => {
+        const name = txt(a.nome, (x) => { a.nome = x; syncAdd(); }, { ph: 'Ex.: Garras, Rajada de fogo, Grito' });
+        name.classList.add('npca__name');
+        name.id = p + 'nome';
+        name.dataset.fid = p + 'nome';
+        name.setAttribute('aria-label', 'Nome da ação ' + (i + 1));
+        const del = h('button', 'btn btn--ghost btn--sm', 'Tirar');
+        del.type = 'button';
+        del.dataset.fid = p + 'del';
+        del.setAttribute('aria-label', 'Tirar a ação ' + (i + 1));
+        del.addEventListener('click', () => { v.acoes.splice(v.acoes.indexOf(a), 1); if (!v.acoes.length) v.acoes.push(npcActBlank()); draw(); });
+        const self = a.alvo === 'pessoal';
+        if (self) a.teste = 'nenhum';
+        const weapons = f.inventory.filter((x) => isWeapon(x.kind));
+        const g = [];
+        g.push(fld(p + 'custo', 'Custo', sel(NPC_ACT_COST, a.custo, set('custo'))));
+        g.push(fld(p + 'alvo', 'Alvo', sel(NPC_ACT_TARGET, a.alvo, set('alvo', true))));
+        if (a.alvo === 'area') {
+          g.push(fld(p + 'area', 'Forma da área', sel(NPC_ACT_AREA, a.area, set('area'))));
+          g.push(fld(p + 'tam', 'Tamanho (m)', txt(a.tam, set('tam'), { num: true, ph: 'Ex.: 6' })));
+          g.push(fld(p + 'max', 'Até quantos alvos (vazio: todos)', txt(a.max, set('max'), { num: true })));
+        }
+        if (!self) g.push(fld(p + 'alcance', 'Alcance', sel([['', '—']].concat(['Corpo a corpo'].concat(ITEM_DATA.alcances || []).map((x) => [x, x])), a.alcance, set('alcance'))));
+        if (!self) g.push(fld(p + 'teste', 'Teste', sel(NPC_ACT_TEST, a.teste, set('teste', true))));
+        if (a.teste === 'ataque' || a.teste === 'resist') {
+          g.push(fld(p + 'forma', a.teste === 'ataque' ? 'Forma do ataque' : 'Atributo da CD', sel(Object.keys(NPC_FORMS).map((k) => [k, k + ' (' + NPC_FORMS[k][2] + ' + ' + NPC_FORMS[k][3] + ')']), a.forma, set('forma'))));
+        }
+        if (a.teste === 'ataque') {
+          g.push(fld(p + 'bonus', 'Bônus no ataque', txt(a.bonus, set('bonus'), { num: true, ph: '0' })));
+          if (a.alvo !== 'area') g.push(fld(p + 'cadencia', 'Cadência (disparos ou golpes)', txt(a.cadencia, set('cadencia'), { num: true, ph: weapons.length ? 'da arma' : '1' })));
+          g.push(fld(p + 'prof', 'Proficiente (cadência perita)', sel([['Sim', 'Sim'], ['Não', 'Não']], a.prof || 'Sim', set('prof'))));
+        }
+        if (a.teste === 'resist') {
+          g.push(fld(p + 'pericia', 'O alvo testa', sel(NPC_ACT_SAVE.map((k) => [k, SKILL_LABEL[k]]), a.pericia, set('pericia'))));
+          g.push(fld(p + 'cd', 'CD (vazio: 6 + atributo + perícia)', txt(a.cd, set('cd'), { num: true, ph: String(npcActCd(Object.assign({}, a, { cd: '' }), v)) })));
+          g.push(fld(p + 'sucesso', 'Se o alvo passar', sel(NPC_ACT_OK, a.sucesso, set('sucesso'))));
+        }
+        g.push(fld(p + 'dados', self ? 'Cura (dados de PV, opcional)' : a.teste === 'ataque' ? 'Dano extra ao acertar (dados, opcional)' : 'Dano (dados)', txt(a.dados, set('dados'), { ph: self ? 'Ex.: 2d6' : a.teste === 'ataque' ? 'Ex.: 1d6' : 'Ex.: 3d6+2' })));
+        if (a.teste === 'ataque') g.push(h('p', 'field__hint field--wide', 'O dano do ataque é o de sempre: o quanto passou da Defesa (×cadência); os dados entram por cima.'));
+        if (!self) {
+          const types = h('div', 'checks');
+          const on = String(a.tipos || '').split(',').map((x) => x.trim()).filter(Boolean);
+          (ITEM_DATA.tiposDano || []).forEach((t) => {
+            const c = h('input');
+            c.type = 'checkbox';
+            c.value = t;
+            c.checked = on.indexOf(t) >= 0;
+            c.addEventListener('change', () => { a.tipos = $$('input:checked', types).map((x) => x.value).join(', '); });
+            types.append(h('label', 'check check--pill', c, h('span', '', t)));
+          });
+          g.push(h('div', 'field field--wide', h('span', 'field__label', 'Tipos de dano' + (weapons.length ? ' (vazio: os da arma)' : '')), types));
+          g.push(fld(p + 'efetivo', 'Efetivo contra', sel([['', 'Nada']].concat((ITEM_DATA.efetivoContra || []).map((x) => [x, x])), a.efetivo, set('efetivo'))));
+        }
+        if (weapons.length && a.teste === 'ataque') {
+          g.push(fld(p + 'arma', 'Arma do inventário', sel([['', 'Nenhuma (ataque natural)']].concat(weapons.map((w) => [w.uid, w.name])), a.arma, (x) => {
+            a.arma = x;
+            const w = weapons.find((y) => y.uid === x);
+            if (w) { if (!String(a.nome || '').trim()) a.nome = w.name; a.forma = w.kind === 'arma-fogo' ? 'À distância' : 'Corpo a corpo'; }
+            paint();
+            syncAdd();
+          })));
+        }
+        if (f.powers.length) {
+          g.push(fld(p + 'poder', 'Poder que usa', sel([['', 'Nenhum']].concat(f.powers.map((x) => [x.name, x.name + (x.values && x.values.custoUso ? ' (' + x.values.custoUso + ')' : '')])), a.poder, (x) => {
+            a.poder = x;
+            if (x && !String(a.nome || '').trim()) { a.nome = x; paint(); syncAdd(); }
+          })));
+        }
+        // o "script" da ação: a condição que entra no alvo, a duração e o dano por turno
+        g.push(fld(p + 'cond', self ? 'Efeito em si (condição)' : 'Efeito no alvo (condição)', sel([['', 'Nenhum']].concat(CONDITIONS.filter((c) => !/cobertura|escondido|flanqueado/i.test(c)).map((c) => [c, c])), a.cond, set('cond', true))));
+        if (a.cond) {
+          g.push(fld(p + 'dur', 'Duração (rodadas; vazio: até tirar)', txt(a.dur, set('dur'), { num: true })));
+          if (NPC_ACT_DOT[nameKey(a.cond)] !== undefined) g.push(fld(p + 'dot', 'Dano por turno (dados)', txt(a.dot, set('dot'), { ph: '1d6' })));
+          if (a.teste === 'ataque') g.push(fld(p + 'quando', 'Quando entra', sel(NPC_ACT_WHEN, a.quando, set('quando'))));
+        }
+        g.push(fld(p + 'usos', 'Usos por combate (vazio: sem limite)', txt(a.usos, set('usos'), { num: true })));
+        const desc = h('textarea', 'input');
+        desc.rows = 2;
+        desc.maxLength = 400;
+        desc.placeholder = 'O que a mesa precisa saber (aparece no registro da arena).';
+        desc.value = a.desc || '';
+        desc.addEventListener('input', () => { a.desc = desc.value; });
+        g.push(fld(p + 'desc', 'Descrição', desc, true));
+        el.replaceChildren(h('div', 'npca__head', h('span', 'npca__n', String(i + 1)), name, del), h('div', 'fsec__grid npca__grid', ...g));
+      };
+      paint();
+      return el;
+    };
+    const draw = () => { list.replaceChildren(...v.acoes.map(card)); syncAdd(); };
+    draw();
+    itemState.npcaDraw = draw; // a arma e o poder vêm da ficha: mudou o inventário ou os poderes, as listas mudam
+    box.append(h('p', 'field__hint', 'Cada ação aparece na arena no custo dela (padrão, bônus, reação...). O efeito entra sozinho no alvo; o dano por turno é rolado no começo do turno dele.'), list, add);
+    return box;
+  }
+
+  /* Saque da criatura: itens escolhidos do banco (com quantidade) e, à parte, o que não está no banco, em texto. */
+  const npcLootSave = (list) => (Array.isArray(list) ? list : []).filter((i) => i && i.name).slice(0, 30)
+    .map((i) => Object.assign(slotSnap(i), { thumb: i.thumb || '', qty: clamp(Math.round(num(i.qty)) || 1, 1, 99) }));
+  const npcLoot = (v) => npcLootSave(v.saqueItens).concat(parseDrops(v.saque));
+  const npcHasLoot = (v) => npcLoot(v).length > 0 || num(v.cronos) > 0;
+  const npcLootText = (v) => npcLoot(v).map((d) => (d.qty > 1 ? d.qty + '× ' : '') + d.name).concat(num(v.cronos) ? [fmtCronos(num(v.cronos)) + ' Cronos'] : []);
+  function npcLootEditor(d) {
+    const v = d.values;
+    v.saqueItens = npcLootSave(v.saqueItens);
+    const box = h('div', 'npcb__block');
+    const btn = (label, cls, fid, fn) => { const b = h('button', 'btn btn--sm ' + cls, label); b.type = 'button'; b.dataset.fid = fid; b.addEventListener('click', fn); return b; };
+    const draw = () => {
+      const rows = v.saqueItens.map((i, k) => h('li', 'npcb__row',
+        h('span', 'npcb__main', h('strong', '', i.name), h('span', 'npcb__meta', [i.typeTitle || kindTitle(i.kind), (i.values && i.values.raridade) || ''].filter(Boolean).join(' · '))),
+        h('span', 'npcb__acts',
+          btn('−', 'btn--ghost', 'npcl-less-' + k, () => { if (i.qty > 1) i.qty -= 1; else v.saqueItens.splice(k, 1); draw(); }),
+          h('span', 'npcl__qty', '×' + i.qty),
+          btn('+', 'btn--ghost', 'npcl-more-' + k, () => { i.qty = Math.min(99, i.qty + 1); draw(); }),
+          btn('Tirar', 'btn--ghost', 'npcl-off-' + k, () => { v.saqueItens.splice(k, 1); draw(); }))));
+      box.replaceChildren(
+        rows.length ? h('ul', 'npcb__list', ...rows) : h('p', 'field__hint', 'Nenhum item do banco. Quando a criatura cair, o mestre deixa estes itens nos drops do grupo, com a ficha completa de cada um.'),
+        h('div', 'npcb__btns', btn('Adicionar do banco', 'btn--primary', 'npcl-add', async () => {
+          const picked = await openPickerMany({ title: 'Saque de ' + (cleanName(d.name || '') || 'a criatura'), kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
+          picked.forEach((e) => {
+            const same = v.saqueItens.find((i) => i.id && i.id === e.id);
+            if (same) same.qty = Math.min(99, same.qty + 1);
+            else if (v.saqueItens.length < 30) v.saqueItens.push(Object.assign(slotSnap(e), { thumb: e.thumb || '', qty: 1 }));
+          });
+          draw();
+        })));
+    };
+    draw();
+    return box;
+  }
+
   function renderItemImage() {
     const d = itemState.draft;
     const has = Boolean(d.image || d.thumb);
@@ -4472,6 +4676,8 @@ const FIREBASE_CONFIG = {
       if (f.hidden) return; // escrito por outro campo (o roteiro da build)
       if (f.kind === 'roteiro') { place(f, h('div', 'field field--wide', h('span', 'field__label', f.label), roteiroField(d))); return; }
       if (f.kind === 'npcbuild') { place(f, h('div', 'field field--wide', npcBuildEditor(d))); return; }
+      if (f.kind === 'npcactions') { place(f, h('div', 'field field--wide', npcActionsEditor(d))); return; }
+      if (f.kind === 'npcloot') { place(f, h('div', 'field field--wide', h('span', 'field__label', f.label), npcLootEditor(d))); return; }
       if (f.kind === 'script' || f.kind === 'prereqscript') { place(f, h('div', 'field field--wide', fieldControl(f, type, d.values[f.key], (v) => { d.values[f.key] = v; }))); return; }
       const isName = f.key === 'nome';
       const ctrl = fieldControl(f, type, isName ? d.name : d.values[f.key], (v) => {
@@ -4592,6 +4798,8 @@ const FIREBASE_CONFIG = {
     const values = {};
     cat.fields.forEach((f) => {
       if (f.kind === 'npcbuild') values[f.key] = npcFicha(d.values[f.key]);
+      else if (f.kind === 'npcactions') values[f.key] = npcActSave(d.values[f.key]);
+      else if (f.kind === 'npcloot') values[f.key] = npcLootSave(d.values[f.key]);
       else if (f.key !== 'nome') values[f.key] = String(d.values[f.key] === undefined || d.values[f.key] === null ? '' : d.values[f.key]).trim();
     });
     // espécime antigo: os campos de mecânica saíram do formulário, mas continuam valendo até virarem poder
@@ -12841,7 +13049,7 @@ const FIREBASE_CONFIG = {
       const keep = [];
       (tags[id] || []).forEach((t) => {
         if (!t.r) { keep.push(t); return; }
-        if (t.r > 1) keep.push({ n: t.n, r: t.r - 1 });
+        if (t.r > 1) keep.push(Object.assign({}, t, { r: t.r - 1 }));
         else { const o = next.order.find((y) => y.id === id); lost.push((o ? o.name : 'Alguém') + ' sem ' + t.n); }
       });
       if (keep.length) tags[id] = keep; else delete tags[id];
@@ -13166,8 +13374,10 @@ const FIREBASE_CONFIG = {
     return again ? { list: rest.concat([{ n: 'Atordoado', r: 2 }]), n: 'Atordoado: perde o próximo turno' }
       : { list: rest.concat([{ n: STUN_STEP, r: 2 }]), n: 'atordoado, perde a ação de movimento (' + STUN_STEP + ')' };
   }
-  async function addTag(id, n, r) {
-    await saveTags(id, withTag(tagsOf(id), n, r).list.slice(-8));
+  async function addTag(id, n, r, extra) {
+    const list = withTag(tagsOf(id), n, r).list.slice(-8);
+    if (extra) list.forEach((t, i) => { if (nameKey(t.n) === nameKey(n)) list[i] = Object.assign({}, t, extra); }); // ex.: { d: '1d6' } dano por turno
+    await saveTags(id, list);
   }
   async function dropTag(id, n) { if (hasTag(id, n)) await saveTags(id, tagsOf(id).filter((t) => nameKey(t.n) !== nameKey(n))); }
   // registro de uma ação que não rola dado
@@ -13312,7 +13522,9 @@ const FIREBASE_CONFIG = {
       return;
     }
     if (a.oneTarget && Object.keys(a.shots).some((k) => k !== x.id)) a.shots = {}; // um alvo por arma
+    if (a.each && a.shots[x.id]) { delete a.shots[x.id]; renderBattle(); return; } // área: tocar de novo tira o alvo
     const total = Object.values(a.shots).reduce((t, n) => t + n, 0);
+    if (a.each && total >= a.max) { toast('A área alcança até ' + plural(a.max, 'alvo', 'alvos') + '. Toque num marcado para tirar.'); return; }
     if (total >= a.max) { toast('A cadência é ' + a.max + ': todos os disparos já têm alvo. Confirme ou limpe.'); return; }
     a.shots[x.id] = (a.shots[x.id] || 0) + 1;
     renderBattle();
@@ -13326,14 +13538,14 @@ const FIREBASE_CONFIG = {
     cancel.type = 'button';
     cancel.addEventListener('click', () => { endAim(); renderBattle(); });
     const kids = [h('strong', 'aimbar__title', a.label), h('span', 'aimbar__txt', a.max > 1
-      ? 'Toque nos alvos destacados: cada toque é um ' + (a.word || 'disparo') + ' (' + total + ' de ' + a.max + ').' + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '') + (a.penalty && a.penalty(total) ? ' ' + a.penalty(total) + '.' : '')
+      ? (a.each ? 'Toque nos alvos dentro da área (' + total + ' de ' + a.max + ').' : 'Toque nos alvos destacados: cada toque é um ' + (a.word || 'disparo') + ' (' + total + ' de ' + a.max + ').') + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '') + (a.penalty && a.penalty(total) ? ' ' + a.penalty(total) + '.' : '')
       : 'Toque num dos alvos destacados.')];
     if (a.max > 1) {
       const clear = h('button', 'btn btn--ghost btn--sm', 'Limpar');
       clear.type = 'button';
       clear.disabled = !total;
       clear.addEventListener('click', () => { a.shots = {}; renderBattle(); });
-      const ok = h('button', 'btn btn--primary btn--sm', (a.word === 'golpe' ? 'Golpear ' : 'Disparar ') + plural(total, 'vez', 'vezes'));
+      const ok = h('button', 'btn btn--primary btn--sm', a.each ? 'Confirmar ' + plural(total, 'alvo', 'alvos') : (a.word === 'golpe' ? 'Golpear ' : 'Disparar ') + plural(total, 'vez', 'vezes'));
       ok.type = 'button';
       ok.disabled = !total;
       ok.addEventListener('click', async () => {
@@ -13395,6 +13607,7 @@ const FIREBASE_CONFIG = {
     else if (battle.view === 'cfg') body = cfgView(actor, list, gm);
     else if (battle.view === 'itens' && !actor.foe) body = h('div', 'cmd__panel', backBtn(battle.slot ? 'slot' : 'main'), itemsPanel(actor, list));
     else if (battle.view === 'poderes' && actor.foe) body = h('div', 'cmd__panel', backBtn('main'), foePowers(actor));
+    else if (battle.view === 'acoes' && actor.foe) body = h('div', 'cmd__panel', backBtn('main'), foeActsView(actor));
     else if (battle.view === 'poderes' && !actor.foe) body = h('div', 'cmd__panel', backBtn('main'), h('div', 'cmd__about', h('strong', '', 'Poderes'), h('span', '', 'Os de ataque e de defesa entram junto com essas ações; os outros se usam daqui, com o custo da ação.')), powersTab(actor));
     else body = mainView(actor, gm);
     // a tela de comandos entra animada só quando muda (não a cada atualização da mesa)
@@ -13478,6 +13691,13 @@ const FIREBASE_CONFIG = {
       return b;
     });
     const extra = [];
+    if (actor.foe && foeActs(actor.foe).length) {
+      const ac = h('button', 'btn btn--ghost btn--sm', 'Ações');
+      ac.type = 'button';
+      ac.dataset.fid = 'cmd-acoes-tab';
+      ac.addEventListener('click', () => { battle.slot = ''; battle.view = 'acoes'; renderBattle(); });
+      extra.push(ac);
+    }
     if (actor.foe && npcFicha(foeVals(actor.foe).ficha).powers.length) {
       const pw = h('button', 'btn btn--ghost btn--sm', 'Poderes');
       pw.type = 'button';
@@ -13549,8 +13769,12 @@ const FIREBASE_CONFIG = {
       });
       return b;
     });
+    // as ações da ficha da criatura que gastam este tipo de ação
+    const own = actor.foe ? foeActs(actor.foe).filter((a) => npcActSlot(a) === sl.id).map((a) => npcActButton(actor, a, 'slot')) : [];
     return h('div', 'cmd__panel', h('div', 'cmd__row', backBtn('main'), h('strong', 'cmd__slot-title', SLOT_LONG[sl.id])),
       why ? h('p', 'cmd__warn', why) : null,
+      own.length ? h('p', 'cmd__sub', 'Ações de ' + actor.name) : null,
+      own.length ? h('div', 'cmd__menu', ...own) : null,
       h('div', 'cmd__menu', ...items));
   }
 
@@ -13597,7 +13821,11 @@ const FIREBASE_CONFIG = {
   // tela de opções de uma ação antes do alvo (ou sem alvo)
   function cfgView(actor, list, gm) {
     const id = battle.cmd;
-    const back = backBtn('slot');
+    const back = backBtn(id === 'npcact' && battle.actFrom === 'acoes' ? 'acoes' : 'slot');
+    if (id === 'npcact' && actor.foe) {
+      const a = foeActs(actor.foe).find((x) => x.id === battle.act);
+      return h('div', 'cmd__panel', back, h('div', 'cmd__about', h('strong', '', a ? a.nome : 'Ação'), h('span', '', a ? npcActCost(a) : '')), npcActCfg(actor, list));
+    }
     const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', reanimar: 'Reanimar', teste: 'Teste da ficha', disputa: 'Disputa', poderes: 'Poderes', defesa: 'Rolar defesa', abrigar: 'Abrigar-se' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
     let body;
     if (id === 'atacar') body = attackCfg(actor, list);
@@ -13656,7 +13884,8 @@ const FIREBASE_CONFIG = {
   function attackCfg(actor, list) {
     const adv = battle.advance === actor.id;
     const ak = battle.akimbo && battle.akimbo.id === actor.id ? battle.akimbo : null; // segunda arma do Akimbo: já paga
-    const cost = adv || (ak && ak.step) ? '' : 'padrao';
+    const npcAct = actor.foe && battle.cmd === 'npcact' ? foeActs(actor.foe).find((a) => a.id === battle.act) || null : null; // ação da criatura com custo próprio
+    const cost = adv || (ak && ak.step) ? '' : npcAct ? npcAct.custo : 'padrao';
     const valid = attackable(list, actor);
     const down = valid.filter(finishable);
     const af = battle.afetar && battle.afetar.id === actor.id ? battle.afetar : null;
@@ -13676,7 +13905,8 @@ const FIREBASE_CONFIG = {
       battle.atkPow.clear();
       if (uses.some((u) => nameKey(u.name) === 'certeiro')) t.critFive = true;
       st.powNote = powerNote(uses);
-      const paid = adv ? 'parte do avanço' : ak && ak.step ? 'parte do Akimbo' : econPay(actor, cost) + (ak ? ' (Akimbo: 1ª arma)' : '');
+      const fa = who.foe && cost ? foeAct(who.foe, st) : null; // a ação da criatura paga o custo dela
+      const paid = adv ? 'parte do avanço' : ak && ak.step ? 'parte do Akimbo' : econPay(actor, fa ? fa.custo : cost) + (ak ? ' (Akimbo: 1ª arma)' : '');
       if (adv) battle.advance = '';
       await runAttack(who, t, st, h('button'), paid, part);
       // Akimbo: a segunda arma ataca na mesma ação, com o próprio teste
@@ -13686,11 +13916,23 @@ const FIREBASE_CONFIG = {
     if (actor.foe) {
       const st = combat.st[actor.id] = combat.st[actor.id] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' };
       if (adv) st.mode = 'Corpo a corpo';
+      if (npcAct && st.act !== npcAct.id) { st.act = npcAct.id; st.wuid = ''; st.mode = ''; st.per = null; }
       const peek = () => { let t = null; foeAttackBuilder(actor.foe, st, null, { peek: (x) => { t = x; } }); return t; };
-      const fp = foeProf(actor.foe);
       return h('div', 'cmd__stack', note, foeAttackBuilder(actor.foe, st, null, { aim: () => {
-        const cad = st.mode === 'Corpo a corpo' ? 1 : clamp(Math.round(num(foeAtkVals(actor.foe, st).cadencia)) || 1, 1, 20);
-        startAim({ label: 'Ataque de ' + actor.name, valid: valid.map((x) => x.id), max: cad,
+        const fp = foeProf(actor.foe, st);
+        const a = foeAct(actor.foe, st);
+        const left = a ? npcUsesLeft(actor, a) : 1;
+        if (left <= 0) { toast(a.nome + ': sem usos neste combate.'); return; }
+        const why = cost ? econWhy(actor, a ? a.custo : cost) : '';
+        if (why) { toast(why); return; }
+        // área: um ataque, comparado com a Defesa de cada alvo dentro dela (um toque por alvo)
+        if (a && a.alvo === 'area') {
+          startAim({ label: a.nome + ' (área)', valid: valid.map((x) => x.id), max: Math.round(num(a.max)) || valid.length, each: true, word: 'alvo',
+            pick: (x) => go({ foe: actor.foe }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ foe: actor.foe }, st, shots, peek) });
+          return;
+        }
+        const cad = st.mode === 'Corpo a corpo' && !(a && num(a.cadencia) > 1) ? 1 : clamp(Math.round(num(foeAtkVals(actor.foe, st).cadencia)) || 1, 1, 20);
+        startAim({ label: (a ? a.nome : 'Ataque') + ' de ' + actor.name, valid: valid.map((x) => x.id), max: cad,
           penalty: (n) => (n > 1 ? '–' + shotPenalty(n, fp) + ' no ataque (' + (fp ? 'cadência perita' : 'sem proficiência') + ')' : ''),
           pick: (x) => go({ foe: actor.foe }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ foe: actor.foe }, st, shots, peek) });
       } }));
@@ -14502,25 +14744,42 @@ const FIREBASE_CONFIG = {
     catch (err) { toast(errorMessage(err)); }
   }
 
-  const foeProf = (f) => foeVals(f).proficiente !== 'Não'; // NPC sem o campo: proficiente
-  const FOE_MODES = { 'Corpo a corpo': ['corpo', 'luta', 'Corpo', 'Luta'], 'À distância': ['precisao', 'mira', 'Precisão', 'Mira'], 'Tecnológico': ['essencia', 'operacoes', 'Essência', 'Operações'] };
-  // armas do inventário da criatura (ficha do Bestiário): o mestre escolhe com qual ela ataca
+  const FOE_MODES = NPC_FORMS;
+  /* Ataque da criatura: uma das ações de ataque dela (st.act) ou uma arma do inventário sem ação (st.wuid).
+     A ação pode usar uma arma do inventário: o que ficou em branco na ação vem da arma. */
+  const foeActs = (f) => npcActions(foeVals(f));
+  const foeAtkActs = (f) => foeActs(f).filter((a) => a.teste === 'ataque' && a.alvo !== 'pessoal');
+  const foeAct = (f, st) => (st && st.act ? foeAtkActs(f).find((a) => a.id === st.act) || null : null);
   const foeWeapons = (f) => npcFicha(foeVals(f).ficha).inventory.filter((i) => isWeapon(i.kind));
   const foeWeapon = (f, st) => (st && st.wuid ? foeWeapons(f).find((i) => i.uid === st.wuid) || null : null);
+  const foeAtkWeapon = (f, st) => { const a = foeAct(f, st); return a ? (a.arma && foeWeapons(f).find((i) => i.uid === a.arma)) || null : foeWeapon(f, st); };
+  const foeProf = (f, st) => { const a = foeAct(f, st); return a ? a.prof !== 'Não' : foeVals(f).proficiente !== 'Não'; }; // sem o campo: proficiente
   function foeAtkVals(f, st) {
     const v = foeVals(f);
-    const w = foeWeapon(f, st);
+    const a = foeAct(f, st);
+    const w = foeAtkWeapon(f, st);
+    const wv = (w && w.values) || {};
+    const gun = Boolean(w && w.kind === 'arma-fogo');
+    const wCad = gun ? Math.max(1, Math.round(num(wv.cadencia)) || 1) : 1;
+    if (a) {
+      return Object.assign({}, v, { arma: a.nome, ataque: a.forma || (gun ? 'À distância' : 'Corpo a corpo'), dano: a.tipos || wv.dano || '', efetivo: a.efetivo,
+        cadencia: a.alvo === 'area' ? '1' : String(Math.max(1, Math.round(num(a.cadencia)) || wCad)), proficiente: a.prof === 'Não' ? 'Não' : '' });
+    }
     if (!w) return v;
-    const wv = w.values || {};
-    const gun = w.kind === 'arma-fogo';
-    return Object.assign({}, v, { arma: w.name, ataque: gun ? 'À distância' : 'Corpo a corpo', dano: wv.dano || v.dano, cadencia: gun ? String(Math.max(1, Math.round(num(wv.cadencia)) || 1)) : '1' });
+    return Object.assign({}, v, { arma: w.name, ataque: gun ? 'À distância' : 'Corpo a corpo', dano: wv.dano || v.dano, cadencia: String(wCad) });
   }
   function foeAttackBuilder(f, st, before, opts) {
     opts = opts || {};
     let v = foeVals(f);
     const box = h('div', 'attack');
     const draw = () => {
+      const atkActs = foeAtkActs(f);
+      if (st.act && !foeAct(f, st)) st.act = '';
+      if (st.wuid && !foeWeapon(f, st)) st.wuid = '';
+      const ws = foeWeapons(f).filter((w) => !atkActs.some((a) => a.arma === w.uid)); // armas que nenhuma ação usa
+      if (!st.act && !st.wuid) { if (atkActs.length) st.act = atkActs[0].id; else if (ws.length) st.wuid = ws[0].uid; }
       v = foeAtkVals(f, st);
+      const act = foeAct(f, st);
       if (!FOE_MODES[st.mode]) st.mode = FOE_MODES[v.ataque] ? v.ataque : 'Corpo a corpo';
       const cad = clamp(Math.round(num(v.cadencia)) || 1, 1, 20);
       st.shots = clamp(st.shots || 1, 1, cad);
@@ -14530,16 +14789,18 @@ const FIREBASE_CONFIG = {
       mSel.value = st.mode;
       mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
       const fields = [field('mode', 'Forma de ataque', mSel)];
-      const ws = foeWeapons(f);
-      if (ws.length) {
+      // as ações de ataque da criatura e as armas do inventário que nenhuma ação usa
+      const choices = atkActs.map((a) => ['a:' + a.id, a.nome + (a.alvo === 'area' ? ' (área)' : '')]).concat(ws.map((w) => ['w:' + w.uid, 'Arma: ' + w.name]));
+      if (!choices.length) choices.push(['', 'Golpe desarmado']);
+      if (choices[0][0]) {
         const wSel = h('select', 'input');
-        [['', 'Ataque da ficha' + (foeVals(f).arma ? ' (' + foeVals(f).arma + ')' : '')]].concat(ws.map((w) => [w.uid, w.name])).forEach((x) => { const o = h('option', '', x[1]); o.value = x[0]; wSel.append(o); });
-        wSel.value = foeWeapon(f, st) ? st.wuid : '';
-        wSel.addEventListener('change', () => { st.wuid = wSel.value; st.mode = ''; draw(); });
-        fields.unshift(field('weapon', 'Arma', wSel));
+        choices.forEach((x) => { const o = h('option', '', x[1]); o.value = x[0]; wSel.append(o); });
+        wSel.value = act ? 'a:' + act.id : foeWeapon(f, st) ? 'w:' + st.wuid : choices[0][0];
+        wSel.addEventListener('change', () => { const k = wSel.value; st.act = k.indexOf('a:') === 0 ? k.slice(2) : ''; st.wuid = k.indexOf('w:') === 0 ? k.slice(2) : ''; st.mode = ''; st.per = null; draw(); });
+        fields.unshift(field('weapon', 'Ação ou arma', wSel));
       }
       const targets = combatants().filter((x) => combat.targets.has(x.id));
-      const prof = foeProf(f);
+      const prof = foeProf(f, st);
       let per = null;
       if (cad > 1 && targets.length) {
         per = perTargetShots(st, cad, targets, prof, draw, 'cbf-');
@@ -14574,7 +14835,8 @@ const FIREBASE_CONFIG = {
       const dist = DISTANCES.find((d) => d.id === st.dist);
       if (st.mode === 'À distância' && dist && dist.mod) mods.push([dist.short, dist.mod]);
       if (st.mod) mods.push(['modificador', st.mod]);
-      const t = applyDice({ label: ('Ataque: ' + (v.arma || st.mode) + (st.shots > 1 ? (per ? ' · ' + st.shots + ' disparos' : ' · dano ×' + st.shots) : '')).slice(0, 60), attrName: md[2], attr: num(v[md[0]]), skillName: md[3], skill: num(v[md[1]]), mods,
+      if (act && num(act.bonus)) mods.push(['bônus da ação', Math.round(num(act.bonus))]);
+      const t = applyDice({ label: ((act ? '' : 'Ataque: ') + (v.arma || st.mode) + (st.shots > 1 ? (per ? ' · ' + st.shots + ' disparos' : ' · dano ×' + st.shots) : '')).slice(0, 60), attrName: md[2], attr: num(v[md[0]]), skillName: md[3], skill: num(v[md[1]]), mods,
         pen, penName: pen ? 'cadência ' + st.shots + ' disparos' + (prof ? ' (perita)' : '') : '' }, st);
       if (opts.peek) opts.peek(t);
       const fixed = testFixed(t);
@@ -14586,7 +14848,7 @@ const FIREBASE_CONFIG = {
         if (!combatants().some((x) => combat.targets.has(x.id))) { toast('Marque pelo menos um alvo na arena.'); return; }
         runAttack({ foe: f }, t, st, go, before ? before() : '');
       });
-      const info = [v.dano ? 'dano ' + v.dano : '', v.efetivo ? 'efetivo contra ' + v.efetivo.toLowerCase() : ''].filter(Boolean).join(' · ');
+      const info = act ? npcActLine(act, foeVals(f)) : [v.dano ? 'dano ' + v.dano : '', v.efetivo ? 'efetivo contra ' + v.efetivo.toLowerCase() : ''].filter(Boolean).join(' · ');
       box.replaceChildren(h('div', 'attack__fields', ...fields), h('div', 'attack__go', go, info ? h('span', 'attack__info', info) : null));
     };
     draw();
@@ -14630,14 +14892,16 @@ const FIREBASE_CONFIG = {
     const list = combatants().filter((x) => combat.targets.has(x.id));
     if (!list.length) { toast('Marque pelo menos um alvo na lista.'); return; }
     const atkId = who.foe ? 'foe:' + who.foe.id : 'chr:' + who.member.characterId;
-    let types, effective = '', shots = Math.max(1, st.shots || 1), ranged = false, beam = null, critFx = null, weapon = null;
+    let types, effective = '', shots = Math.max(1, st.shots || 1), ranged = false, beam = null, critFx = null, weapon = null, act = null, extra = null;
     if (who.foe) {
       const v = foeAtkVals(who.foe, st);
-      const w = foeWeapon(who.foe, st);
+      const w = foeAtkWeapon(who.foe, st);
+      act = foeAct(who.foe, st);
+      if (act && act.dados) extra = rollExpr(act.dados); // dano extra da ação: rola uma vez e soma em cada alvo atingido
       types = splitTypes(v.dano);
       effective = v.efetivo === 'Vida' ? 'pv' : v.efetivo === 'Escudo' ? 'escudo' : v.efetivo === 'Blindagem' ? 'blindagem' : '';
       // arma corpo a corpo do inventário: as propriedades do tipo valem com proficiência, como no jogador
-      if (w && w.kind === 'arma-melee' && foeProf(who.foe)) {
+      if (w && w.kind === 'arma-melee' && foeProf(who.foe, st)) {
         if (w.typeId === 'marreta') effective = 'blindagem';
         if (w.typeId === 'machado') effective = 'escudo';
         critFx = CRIT_FX[w.typeId] || null;
@@ -14711,7 +14975,7 @@ const FIREBASE_CONFIG = {
       if (!fin && x.member) { const rx = await fireReactions(x); def += rx.boost; if (rx.note) notes.push(rx.note); }
       const hit = fin ? r.full : r.total;
       const hits = fin || hit > def; // acertou: passou da Defesa (igual ou abaixo é um raspão, só o dano mínimo)
-      const base = Math.max(1, hit - def) * k;
+      const base = Math.max(1, hit - def) * k + (extra && hits ? extra.total : 0);
       const res = applyLayeredDamage(base, types, x.layers, effective);
       const parts = res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k));
       // crítico com efeito: o alvo testa Fortitude; a Espada e o Machado tiram 1d6 PV, a Marreta atordoa
@@ -14731,6 +14995,8 @@ const FIREBASE_CONFIG = {
         if (part === 'cabeça') await addTag(x.id, 'Atordoado', 2);
         fx += ' · ' + part + ' afetados: ' + AFETAR_FX[part] + ' (até a próxima cura)';
       }
+      // efeito da ação da criatura (o "script"): entra ao acertar, ou só no crítico
+      if (act && act.cond && hits && (act.quando !== 'crit' || r.flag === 'crit') && lifeState(res.layers) !== 'morto') fx += await npcActEffect(act, x);
       const state = lifeState(res.layers);
       lines.push(x.name + ': ' + base + ' de dano' + (k > 1 ? ' (×' + k + ')' : '') + (fin ? ' (finalizar: ' + hit + ' contra a Defesa mínima ' + def + ')' : ' vs defesa ' + def + (hits ? '' : ' (raspão)')) + (notes.length ? ' · ' + notes.join(' · ') : '') + (parts.length ? ' → ' + parts.join(', ') : '') + fx + (state ? ' · ' + state : ''));
       // quem mantém um laser e é atingido testa Resistência (CD 8 em terreno normal) para não perder o bônus
@@ -14755,6 +15021,11 @@ const FIREBASE_CONFIG = {
     // laser: guarda o feixe para o próximo turno (errar por falha completa apaga o bônus)
     if (beam) await saveBeam(atkId, r.flag === 'falha' ? null : { t: list[0].id, n: beam.n, left: beam.left, r: sceneRound(), prof: atkProf(who.c.sheet, weapon) });
     r.label = t.label;
+    if (act) {
+      await npcUseCount(who.foe, act);
+      const extras = [extra ? 'dano extra ' + act.dados + ' = ' + extra.total + ' (' + extra.text + ')' : '', act.poder ? 'poder: ' + act.poder : '', act.desc].filter(Boolean);
+      if (extras.length) r.detail = extras.join(' · ') + ' · ' + r.detail;
+    }
     if (st.powNote) { r.detail = st.powNote + ' · ' + r.detail; st.powNote = ''; }
     if (pre.length) r.detail = pre.join(' · ') + ' · ' + r.detail;
     if (part) r.detail = 'Afetar (' + part + ') · ' + r.detail;
@@ -14764,6 +15035,184 @@ const FIREBASE_CONFIG = {
     toast(lines.join(' · ').slice(0, 300));
     btn.disabled = false;
     renderCombat();
+  }
+
+  /* ---------- Ações da criatura na arena ----------
+     Cada ação da ficha do Bestiário aparece no custo dela. As de ataque usam o ataque de sempre (contra a Defesa);
+     as de teste de resistência rolam o teste de cada alvo contra a CD; as sem teste acertam sozinhas. O efeito
+     (condição, duração e dano por turno) entra no alvo; os usos por combate ficam na cena (scene.uses). */
+  // dados escritos à mão: "2d6+3", "1d6", "4" (até 20 dados por termo)
+  function rollExpr(text) {
+    const src = String(text || '').replace(/\s+/g, '').toLowerCase();
+    const re = /([+-]?)(\d*)d(\d+)|([+-]?)(\d+)/g;
+    const parts = [];
+    let total = 0, m;
+    while ((m = re.exec(src))) {
+      if (m[3]) {
+        const n = clamp(Math.round(num(m[2] || 1)), 1, 20), faces = clamp(Math.round(num(m[3])), 2, 100), sg = m[1] === '-' ? -1 : 1;
+        const rolls = Array.from({ length: n }, () => randInt(faces));
+        total += sg * rolls.reduce((t, x) => t + x, 0);
+        parts.push((sg < 0 ? '−' : parts.length ? '+' : '') + n + 'd' + faces + ' [' + rolls.join(', ') + ']');
+      } else {
+        const k = Math.round(num(m[5])) * (m[4] === '-' ? -1 : 1);
+        total += k;
+        parts.push(k < 0 ? '−' + Math.abs(k) : (parts.length ? '+' : '') + k);
+      }
+    }
+    return { total: Math.max(0, total), text: parts.join(' ') };
+  }
+  const npcUses = (foeId) => ((scene && scene.uses && scene.uses['foe:' + foeId]) || {});
+  const npcUsesLeft = (x, a) => (!num(a.usos) || !sceneOn() ? Infinity : Math.round(num(a.usos)) - num(npcUses(x.foe ? x.foe.id : '')[a.id]));
+  async function npcUseCount(foe, a) {
+    if (!num(a.usos) || !sceneOn()) return;
+    const next = sceneBase();
+    next.uses = Object.assign({}, next.uses);
+    next.uses['foe:' + foe.id] = Object.assign({}, next.uses['foe:' + foe.id], { [a.id]: num(npcUses(foe.id)[a.id]) + 1 });
+    await saveScene(next);
+  }
+  // a condição da ação entra no alvo (com o dano por turno, se tiver); seres abióticos não sangram nem se envenenam
+  async function npcActEffect(a, x) {
+    if (!a.cond) return '';
+    if (/^(sangrando|envenenado|necrose)$/.test(nameKey(a.cond)) && nonLiving(x)) return ' · imune a ' + a.cond.toLowerCase();
+    const r = Math.max(0, Math.round(num(a.dur)));
+    const dot = NPC_ACT_DOT[nameKey(a.cond)] !== undefined && a.dot ? a.dot : '';
+    await addTag(x.id, a.cond, r, dot ? { d: dot, ty: a.tipos || '' } : null);
+    return ' · ' + a.cond + (dot ? ' (' + dot + ' por turno)' : '') + (r ? ' por ' + plural(r, 'rodada', 'rodadas') : '');
+  }
+  // grava as camadas (Escudo, Blindagem, PV) de um lutador
+  async function saveLayers(x, layers) {
+    if (x.foe) {
+      const cur = {};
+      layers.forEach((l) => { if (l.max > 0) cur[l.key] = l.cur; });
+      await db.updateFoe(currentCamp.id, x.foe.id, { cur });
+      return;
+    }
+    await patchMemberSheet(x.member, (s) => {
+      const m = compute(Object.assign({}, x.member, { sheet: s }));
+      layers.forEach((l) => { if (m.max[l.key]) setCur(s, l.key, l.cur, m.max[l.key]); });
+    });
+  }
+  // ação de teste de resistência, sem teste ou pessoal: um registro com o resultado de cada alvo
+  async function runNpcAct(actor, a, targets) {
+    const why = econWhy(actor, a.custo);
+    if (why) { toast(why); return; }
+    if (npcUsesLeft(actor, a) <= 0) { toast(a.nome + ': sem usos neste combate.'); return; }
+    const v = foeVals(actor.foe);
+    const paid = econPay(actor, a.custo);
+    const self = a.alvo === 'pessoal';
+    const dmg = a.dados ? rollExpr(a.dados) : null;
+    const types = splitTypes(a.tipos);
+    const eff = a.efetivo === 'Vida' ? 'pv' : a.efetivo === 'Escudo' ? 'escudo' : a.efetivo === 'Blindagem' ? 'blindagem' : '';
+    const cd = npcActCd(a, v);
+    const lines = [];
+    for (const x of targets) {
+      const bits = [];
+      let k = 1, fxOn = true;
+      if (a.teste === 'resist' && !self) {
+        const sk = NPC_ACT_SAVE.indexOf(a.pericia) >= 0 ? a.pericia : 'reflexos';
+        const sv = rollTest(sideTest(x, sk));
+        const ok = sv.flag !== 'falha' && sv.total >= cd;
+        bits.push(SKILL_LABEL[sk] + ' ' + sv.total + (sv.flag === 'falha' ? ' (falha completa)' : '') + (ok ? ', passou' : ', falhou'));
+        if (ok) { fxOn = false; k = a.sucesso === 'nada' ? 0 : a.sucesso === 'semefeito' ? 1 : 0.5; }
+      }
+      const cov = self ? null : coverOf(x.id);
+      if (cov && cov.id === 'completa') { lines.push(x.name + ': cobertura completa, nada passa'); continue; }
+      let layers = x.layers;
+      if (dmg && self) { // pessoal: os dados curam PV (até o máximo)
+        layers = x.layers.map((l) => Object.assign({}, l));
+        const pv = layers.find((l) => l.key === 'pv' && l.max > 0);
+        if (pv) { const before = pv.cur; pv.cur = Math.min(pv.max, pv.cur + dmg.total); bits.push('recupera ' + (pv.cur - before) + ' PV'); }
+      } else if (dmg && k > 0) {
+        const base = k === 0.5 ? Math.floor(dmg.total / 2) : dmg.total;
+        if (base > 0) {
+          const res = applyLayeredDamage(base, types, x.layers, eff);
+          layers = res.layers;
+          bits.push(base + ' de dano' + (k === 0.5 ? ' (metade)' : '') + (res.steps.length ? ' → ' + res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k)).join(', ') : ''));
+        } else bits.push('sem dano');
+      } else if (dmg) bits.push('sem dano');
+      if (layers !== x.layers) { try { await saveLayers(x, layers); } catch (err) { toast(errorMessage(err)); } }
+      const state = lifeState(layers);
+      let fx = '';
+      if (a.cond && fxOn && state !== 'morto') fx = await npcActEffect(a, x);
+      lines.push(x.name + ': ' + (bits.join(' · ') || 'afetado') + fx + (state ? ' · ' + state : ''));
+    }
+    await npcUseCount(actor.foe, a);
+    const head = [paid, a.alcance, a.alvo === 'area' ? 'área' + (num(a.tam) ? ' ' + num(a.tam) + ' m' : '') : '', a.teste === 'resist' && !self ? 'CD ' + cd : '', dmg ? a.dados + ' = ' + dmg.total + ' (' + dmg.text + ')' : '',
+      types.length ? types.join(', ') : '', a.poder ? 'poder: ' + a.poder : '', a.desc].filter(Boolean).join(' · ');
+    await postCombatRoll({ foe: actor.foe }, { expr: dmg ? a.dados.slice(0, 40) : 'ação', label: a.nome.slice(0, 60), total: dmg ? dmg.total : 0, flag: '', detail: head + ' · ' + lines.join(' | ') });
+    toast(lines.join(' · ').slice(0, 300));
+    renderCombat();
+  }
+  // tela de uma ação da criatura antes do alvo
+  function npcActCfg(actor, list) {
+    const a = foeActs(actor.foe).find((x) => x.id === battle.act);
+    if (!a) return h('p', 'cmd__note', 'Esta ação não existe mais na ficha da criatura.');
+    if (a.teste === 'ataque' && a.alvo !== 'pessoal') return attackCfg(actor, list);
+    const left = npcUsesLeft(actor, a);
+    const valid = attackable(list, actor);
+    const self = a.alvo === 'pessoal';
+    const go = gmBtn(self ? 'Usar' : a.alvo === 'area' ? 'Escolher os alvos na área' : 'Escolher alvo', 'btn--primary', async () => {
+      const why = econWhy(actor, a.custo);
+      if (why) { toast(why); return; }
+      if (self) { await runNpcAct(actor, a, [actor]); battle.view = 'main'; renderBattle(); return; }
+      if (!valid.length) { toast('Ninguém para alcançar.'); return; }
+      const max = a.alvo === 'area' ? Math.round(num(a.max)) || valid.length : 1;
+      startAim({ label: a.nome + (a.alvo === 'area' ? ' (área)' : ''), valid: valid.map((x) => x.id), max, each: true, word: 'alvo',
+        pick: (x) => runNpcAct(actor, a, [x]), confirm: (shots) => runNpcAct(actor, a, combatants().filter((x) => shots[x.id])) });
+    });
+    go.dataset.fid = 'npcact-go';
+    if (left <= 0) { go.disabled = true; go.title = 'Sem usos neste combate.'; }
+    return h('div', 'cmd__stack',
+      h('p', 'cmd__note', npcActLine(a, foeVals(actor.foe)) + (left !== Infinity ? ' · restam ' + Math.max(0, left) : '')),
+      a.desc ? h('p', 'cmd__note', a.desc) : null,
+      h('div', 'cmd__row', go));
+  }
+  // botão de uma ação da criatura nos menus da arena
+  function npcActButton(actor, a, from) {
+    const left = npcUsesLeft(actor, a);
+    const why = econWhy(actor, a.custo) || (left <= 0 ? 'Sem usos neste combate.' : '');
+    const b = h('button', 'cmd__item', h('span', 'cmd__item-name', a.nome, ' ', costChip(a.custo)), h('span', 'cmd__item-txt', npcActLine(a, foeVals(actor.foe))));
+    b.type = 'button';
+    b.dataset.fid = 'npcact-' + a.id;
+    if (why) { b.disabled = true; b.title = why; }
+    b.addEventListener('click', () => { battle.cmd = 'npcact'; battle.act = a.id; battle.actFrom = from; battle.view = 'cfg'; renderBattle(); });
+    return b;
+  }
+  // em que tela de ação do turno cada custo aparece
+  const npcActSlot = (a) => (a.custo === 'reacao' || a.custo === 'livre' ? 'livre' : a.custo);
+  function foeActsView(actor) {
+    const acts = foeActs(actor.foe);
+    return h('div', 'cmd__stack',
+      h('div', 'cmd__about', h('strong', '', 'Ações de ' + actor.name), h('span', '', 'As ações da ficha do Bestiário. Cada uma gasta o custo dela no turno.')),
+      acts.length ? h('div', 'cmd__menu', ...acts.map((a) => npcActButton(actor, a, 'acoes'))) : h('p', 'cmd__note', 'Esta criatura não tem ações na ficha. Use Atacar.'));
+  }
+  // começo do turno: as condições com dano por turno (Sangrando, Em chamas...) rolam e tiram das camadas
+  async function dotTick(id) {
+    const x = combatants().find((y) => y.id === id);
+    if (!x) return;
+    const ticks = tagsOf(id).filter((t) => t.d);
+    if (!ticks.length) return;
+    let layers = x.layers;
+    const lines = [];
+    ticks.forEach((t) => {
+      const roll = rollExpr(t.d);
+      if (!roll.total) return;
+      const ty = NPC_ACT_DOT[nameKey(t.n)];
+      if (ty === 'pv') { // Sangrando: sai direto do PV
+        layers = layers.map((l) => Object.assign({}, l));
+        const pv = layers.find((l) => l.key === 'pv' && l.max > 0);
+        if (pv) { pv.cur = Math.max(-pv.max, pv.cur - roll.total); lines.push(t.n + ': –' + roll.total + ' PV (' + roll.text + ')'); }
+        return;
+      }
+      const res = applyLayeredDamage(roll.total, ty ? [ty] : splitTypes(t.ty), layers, '');
+      layers = res.layers;
+      lines.push(t.n + ': ' + roll.total + ' (' + roll.text + ') → ' + res.steps.map((p) => p.label + ' –' + p.taken + factorText(p.k)).join(', '));
+    });
+    if (!lines.length) return;
+    try { await saveLayers(x, layers); } catch (err) { toast(errorMessage(err)); return; }
+    const st = lifeState(layers);
+    await sceneLog('Dano por turno: ' + x.name, lines.join(' · ') + (st ? ' · ' + st : ''), 0);
+    toast(x.name + ': ' + lines.join(' · ').slice(0, 200));
   }
 
   /* ---------- Cena e iniciativa ----------
@@ -15049,6 +15498,7 @@ const FIREBASE_CONFIG = {
     }
     saveScene(next);
     const cur = next.order[next.turn];
+    if (cur && d > 0) dotTick(cur.id).catch((err) => console.warn(err));
     if (cur && d > 0) toast((skipped.length ? skipped.join(', ') + ' perde o turno (atordoado). ' : '') + 'Rodada ' + next.round + ' · vez de ' + cur.name + (next.nomove ? ' (sem a ação de movimento: atordoado)' : '') + '.');
     if (lost.length) sceneLog('Condições', 'Rodada ' + next.round + ': ' + lost.join(' · '), lost.length);
     if (skipped.length) sceneLog('Atordoado', skipped.join(', ') + ' perde o turno inteiro.', skipped.length);
@@ -15162,8 +15612,8 @@ const FIREBASE_CONFIG = {
     const layers = ['escudo', 'blindagem', 'pv'].filter((k) => num(v[k])).map((k) => pill(k, num(v[k])));
     layers.push(pill('def', npcDefMin(v)));
     const stat = (k, label) => h('span', 'mag__stat', h('small', '', label), h('b', '', signed(num(v[k]))));
-    const atk = [v.ataque, v.arma, v.dano, num(v.cadencia) > 1 ? num(v.cadencia) + ' disparos' : '', v.efetivo ? 'efetivo contra ' + v.efetivo : ''].filter(Boolean).join(' · ');
-    const drops = parseDrops(v.saque).map((d) => (d.qty > 1 ? d.qty + '× ' : '') + d.name).concat(num(v.cronos) ? [fmtCronos(num(v.cronos)) + ' Cronos'] : []);
+    const moves = npcActions(v);
+    const drops = npcLootText(v);
     const fi = npcFicha(v.ficha);
     const build = [fi.specimen ? fi.specimen.name : '', fi.powers.length ? fi.powers.map((p) => p.name).join(', ') : ''].filter(Boolean).join(' · ');
     const gear = fi.inventory.map((i) => ((i.qty || 1) > 1 ? i.qty + '× ' : '') + i.name);
@@ -15199,7 +15649,7 @@ const FIREBASE_CONFIG = {
         h('h3', 'mag__title', e.name),
         h('div', 'mag__pills', ...layers),
         h('div', 'mag__stats', stat('corpo', 'Corpo'), stat('precisao', 'Precisão'), stat('essencia', 'Essência'), stat('luta', 'Luta'), stat('mira', 'Mira'), stat('resistencia', 'Resist.')),
-        atk ? h('p', 'mag__atk', h('b', '', 'Ataque '), atk) : null,
+        moves.length ? h('div', 'mag__atk', h('b', '', 'Ações '), ...moves.map((a) => h('span', 'mag__act', h('strong', '', a.nome), ' · ' + npcActLine(a, v)))) : null,
         build ? h('p', 'mag__atk', h('b', '', 'Ficha '), build) : null,
         gear.length ? h('p', 'mag__atk', h('b', '', 'Inventário '), gear.join(', ')) : null,
         v.descricao ? h('p', 'mag__desc', v.descricao) : null,
@@ -15378,7 +15828,7 @@ const FIREBASE_CONFIG = {
     const mine = members.filter((m) => m.mine && m.sheet && m.sheet.attrs);
     const lootN = gm ? vaults.filter((v) => !v.approved).length : loot.filter((l) => !lootEmpty(l) && mine.some((m) => lootFor(l, m.characterId))).length;
     set('#ctab-saque-n', lootN, gm ? 'Pedidos de armazém esperando você' : 'Saque para pegar');
-    set('#ctab-bestiario-n', gm ? fallen.filter((f) => !f.lootId && (parseDrops((f.values || {}).saque).length || num((f.values || {}).cronos))).length : 0, 'Derrotados com saque para deixar nos drops');
+    set('#ctab-bestiario-n', gm ? fallen.filter((f) => !f.lootId && npcHasLoot(f.values || {})).length : 0, 'Derrotados com saque para deixar nos drops');
     set('#ctab-grupo-n', members.length, 'Personagens no grupo');
   }
   function renderLootTab() {
@@ -15420,8 +15870,7 @@ const FIREBASE_CONFIG = {
     $('#fallen-clear').hidden = !list.length;
     $('#fallen-list').replaceChildren(...list.map((f) => {
       const v = f.values || {};
-      const drops = parseDrops(v.saque);
-      const has = drops.length || num(v.cronos);
+      const has = npcHasLoot(v);
       const btn = h('button', 'btn btn--sm ' + (f.lootId ? 'btn--ghost' : 'btn--primary'), f.lootId ? 'Tirar dos drops' : 'Deixar nos drops');
       btn.type = 'button';
       btn.dataset.fid = 'fallen-drop-' + f.id;
@@ -15432,14 +15881,16 @@ const FIREBASE_CONFIG = {
       del.setAttribute('aria-label', 'Apagar ' + f.name + ' do histórico');
       del.addEventListener('click', () => db.removeDoc(currentCamp.id, 'fallen', f.id).catch((err) => toast(errorMessage(err))));
       const when = [f.state === 'morto' ? 'morto' : f.state === 'agonizando' ? 'caído (agonizando)' : 'fora de combate', f.scene ? 'em ' + f.scene : '', f.createdAt ? formatTime(f.createdAt) : ''].filter(Boolean).join(' · ');
-      const what = has ? 'Deixa: ' + drops.map((d) => (d.qty > 1 ? d.qty + '× ' : '') + d.name).concat(num(v.cronos) ? [fmtCronos(num(v.cronos)) + ' Cronos'] : []).join(', ') : 'Sem saque anotado no bestiário.';
+      const what = has ? 'Deixa: ' + npcLootText(v).join(', ') : 'Sem saque anotado no bestiário.';
       return h('li', 'row fallen__row' + (f.lootId ? ' is-dropped' : ''), h('span', 'row__open row__open--static', avatar(f.name, 'criatura', f.thumb),
         h('span', 'row__main', h('span', 'row__title', f.name, f.lootId ? h('span', 'tag tag--on', 'nos drops') : null), h('span', 'row__meta', when), h('span', 'row__meta', what))), btn, del);
     }));
   }
   async function dropFallen(f) {
     const v = f.values || {};
-    const items = await Promise.all(parseDrops(v.saque).map((d) => dropEntry(d, f.name)));
+    // do banco: o item com a ficha guardada; em texto: procura pelo nome no banco
+    const items = npcLootSave(v.saqueItens).map((i) => Object.assign(invEntryFrom(i), { qty: i.qty, src: 'saque' }))
+      .concat(await Promise.all(parseDrops(v.saque).map((d) => dropEntry(d, f.name))));
     try {
       const id = await db.addDoc(currentCamp.id, 'loot', { name: 'Corpo de ' + f.name, src: { kind: 'npc', name: f.name, thumb: f.thumb || '' }, items, cronos: num(v.cronos), who: [], fallenId: f.id, log: [] });
       await db.updateDoc(currentCamp.id, 'fallen', f.id, { lootId: id });
@@ -15455,7 +15906,7 @@ const FIREBASE_CONFIG = {
     } catch (err) { toast(errorMessage(err)); }
   }
   $('#fallen-all').addEventListener('click', async () => {
-    const todo = fallen.filter((f) => !f.lootId && (parseDrops((f.values || {}).saque).length || num((f.values || {}).cronos)));
+    const todo = fallen.filter((f) => !f.lootId && npcHasLoot(f.values || {}));
     for (const f of todo) await dropFallen(f); // eslint-disable-line no-await-in-loop
   });
   $('#fallen-clear').addEventListener('click', async () => {
