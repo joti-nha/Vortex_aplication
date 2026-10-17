@@ -36,6 +36,7 @@ window.VORTEX_ITEMS = {
   empunhaduras: ['Saque', 'Uma mão', 'Duas mãos'],
   tiposUso: ['Ferramenta', 'Consumível', 'Estação'],
   simNao: ['Não', 'Sim'],
+  soNao: ['Não'], // campo que vale "Sim" quando fica em branco (ex.: NPC proficiente)
   categoriasNpc: ['Comum', 'Maior', 'Chefão'],
   formasAtaque: ['Corpo a corpo', 'À distância', 'Tecnológico'],
   efetivoContra: ['Escudo', 'Blindagem', 'Vida'],
@@ -248,9 +249,9 @@ window.VORTEX_ITEMS = {
         { id: 'pente-leve', title: 'Pente leve', sub: 'Até 20 disparos · ¼ de carga', rule: 'recarga/pente-leve', defaults: { pente: 'Pente leve', disparos: '20', carga: '0.25' }, opts: { pente: ['Pente leve'] } },
         { id: 'pente-medio', title: 'Pente médio', sub: 'Até 40 disparos · ½ de carga', rule: 'recarga/pente-medio', defaults: { pente: 'Pente médio', disparos: '40', carga: '0.5' }, opts: { pente: ['Pente médio'] } },
         { id: 'pente-pesado', title: 'Pente pesado', sub: 'Até 150 disparos · 1 de carga', rule: 'recarga/pente-pesado', defaults: { pente: 'Pente pesado', disparos: '150', carga: '1' }, opts: { pente: ['Pente pesado'] } },
-        { id: 'sobrecarga', title: 'Sobrecarga', sub: 'Cinta de alimentação contínua · 1 de carga', rule: 'recarga/pente-pesado', defaults: { pente: 'Sobrecarga', disparos: '150', carga: '1' }, opts: { pente: ['Sobrecarga'] } },
+        { id: 'sobrecarga', title: 'Sobrecarga', sub: 'Arma que esquenta: 1 carga funciona por até 2 cenas · 1 de carga', rule: 'recarga/superaquecimento', defaults: { pente: 'Sobrecarga', disparos: '1', carga: '1' }, opts: { pente: ['Sobrecarga'] } },
         { id: 'cartuchos', title: 'Cartuchos', sub: 'Pente parcial: 20 cartuchos = ¼ de carga', rule: 'recarga/recarga-parcial', defaults: { pente: 'Pente parcial', disparos: '20', carga: '0.25' }, opts: { pente: ['Pente parcial'] } },
-        { id: 'carga-energia', title: 'Carga de energia', sub: 'Superaquecimento: 1 carga dura a cena · 1 de carga', rule: 'recarga/superaquecimento', defaults: { pente: 'Superaquecimento', disparos: '1', carga: '1' }, opts: { pente: ['Superaquecimento'] } }
+        { id: 'carga-energia', title: 'Carga de energia', sub: 'Superaquecimento: 1 carga funciona por até 2 cenas · 1 de carga', rule: 'recarga/superaquecimento', defaults: { pente: 'Superaquecimento', disparos: '1', carga: '1' }, opts: { pente: ['Superaquecimento'] } }
       ],
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
@@ -338,7 +339,7 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'escudo-energetico', title: 'Escudo energético', group: 'Proteção', inventory: true, image: true, bonus: true,
-      hint: 'Resistência extra do tipo Escudo. Vestido como roupa (não ocupa as mãos), entra na fileira de vestíveis. Equipado, soma o valor de Escudo dele ao Escudo do personagem.',
+      hint: 'Proteção extra do tipo Escudo. Vestido como roupa (não ocupa as mãos), entra na fileira de vestíveis. Equipado, soma o valor de Escudo dele ao Escudo do personagem.',
       defaults: { carga: '1' },
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
@@ -375,11 +376,11 @@ window.VORTEX_ITEMS = {
       hint: 'Escolha a região do corpo (descritiva). Próteses entram na fileira de próteses do inventário e gastam CC; módulos vão na fileira de módulos.',
       defaults: { classe: 'Prótese', tipo: 'Suporte', cc: '1' },
       types: [
-        { id: 'cabeca', title: 'Cabeça', sub: 'olhos, ouvidos, nariz, boca', rule: 'nucleo-proteses-modulos/regioes-do-corpo' },
-        { id: 'tronco', title: 'Tronco', sub: 'pescoço, espinha, tórax, abdómen, pélvis', rule: 'nucleo-proteses-modulos/regioes-do-corpo' },
-        { id: 'membros-superiores', title: 'Membros superiores', sub: 'ombro, braço, antebraço, pulso, mão', rule: 'nucleo-proteses-modulos/regioes-do-corpo' },
-        { id: 'membros-inferiores', title: 'Membros inferiores', sub: 'glúteos, coxas, panturrilha, joelho, pés', rule: 'nucleo-proteses-modulos/regioes-do-corpo' },
-        { id: 'orgaos-internos', title: 'Órgãos internos', sub: 'esqueleto, sistemas nervoso, pulmonar, cardiovascular, digestivo', rule: 'nucleo-proteses-modulos/regioes-do-corpo' }
+        { id: 'cabeca', title: 'Cabeça', sub: 'olhos, ouvidos, nariz, boca', rule: 'nucleo-proteses-modulos/proteses-e-modulos' },
+        { id: 'tronco', title: 'Tronco', sub: 'pescoço, espinha, tórax, abdómen, pélvis', rule: 'nucleo-proteses-modulos/proteses-e-modulos' },
+        { id: 'membros-superiores', title: 'Membros superiores', sub: 'ombro, braço, antebraço, pulso, mão', rule: 'nucleo-proteses-modulos/proteses-e-modulos' },
+        { id: 'membros-inferiores', title: 'Membros inferiores', sub: 'glúteos, coxas, panturrilha, joelho, pés', rule: 'nucleo-proteses-modulos/proteses-e-modulos' },
+        { id: 'orgaos-internos', title: 'Órgãos internos', sub: 'esqueleto, sistemas nervoso, pulmonar, cardiovascular, digestivo', rule: 'nucleo-proteses-modulos/proteses-e-modulos' }
       ],
       fields: [
         { key: 'nome', label: 'Nome (Prótese ou Módulo)', kind: 'text', big: true },
@@ -533,7 +534,11 @@ window.VORTEX_ITEMS = {
         { key: 'mira', sec: 'peric', label: 'Mira', kind: 'number', min: 0, step: 1 },
         { key: 'operacoes', sec: 'peric', label: 'Operações', kind: 'number', min: 0, step: 1 },
         { key: 'resistencia', sec: 'peric', label: 'Resistência', kind: 'number', min: 0, step: 1 },
-        { key: 'armadura', sec: 'vida', label: 'Armadura', kind: 'number', min: 0, step: 1 },
+        { key: 'reflexos', sec: 'peric', label: 'Reflexos', kind: 'number', min: 0, step: 1 },
+        { key: 'fortitude', sec: 'peric', label: 'Fortitude', kind: 'number', min: 0, step: 1 },
+        { key: 'sentidos', sec: 'peric', label: 'Sentidos', kind: 'number', min: 0, step: 1 },
+        { key: 'iniciativa', sec: 'peric', label: 'Iniciativa', kind: 'number', min: 0, step: 1 },
+        { key: 'armadura', sec: 'vida', label: 'Armadura (abaixo de 6, vale a básica: 6)', kind: 'number', min: 0, step: 1 },
         { key: 'pv', sec: 'vida', label: 'PV máximo', kind: 'number', min: 0, step: 1 },
         { key: 'escudo', sec: 'vida', label: 'Escudo', kind: 'number', min: 0, step: 1 },
         { key: 'blindagem', sec: 'vida', label: 'Blindagem', kind: 'number', min: 0, step: 1 },
@@ -541,6 +546,7 @@ window.VORTEX_ITEMS = {
         { key: 'arma', sec: 'atk', label: 'Arma ou ataque (nome)', kind: 'text', placeholder: 'Ex.: Garras, Fuzil de assalto' },
         { key: 'dano', sec: 'atk', label: 'Tipos de dano do ataque', kind: 'multi', options: 'tiposDano' },
         { key: 'cadencia', sec: 'atk', label: 'Cadência (disparos por ação)', kind: 'number', min: 1, step: 1 },
+        { key: 'proficiente', sec: 'atk', label: 'Proficiente com a arma (cadência perita)', kind: 'select', options: 'soNao', blank: 'Sim' },
         { key: 'efetivo', sec: 'atk', label: 'Efetivo contra (como arma de tipo)', kind: 'select', options: 'efetivoContra', blank: 'Nada' },
         { key: 'descricao', sec: 'hab', label: 'Descrição e habilidades', kind: 'textarea', big: true },
         { key: 'saque', sec: 'saque', label: 'Saque (o que deixa ao cair, um por linha)', kind: 'textarea', big: true, placeholder: 'Ex.: Pulse P-01\nKit médico x2\nSucata eletrônica' },
@@ -576,19 +582,19 @@ window.VORTEX_ITEMS = {
      ----------------------------------------------------------------- */
   catalogo: [
     // Acessórios de arma de fogo
-    { id: 'of-acc-red-dot', kind: 'acessorio', typeId: 'arma-fogo', name: 'Red dot/Holográfica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância quando estiver mirando.' } },
-    { id: 'of-acc-ampliacao', kind: 'acessorio', typeId: 'arma-fogo', name: 'Ampliação', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de média distância a longa e cobertura parcial nas mesmas distâncias quando estiver mirando.' } },
-    { id: 'of-acc-telescopica', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telescópica', values: { posicao: 'Mira', efeito: 'Ignora a dificuldade de percepção de longa a muito longa distância e meia cobertura nas mesmas distâncias quando estiver mirando.' } },
-    { id: 'of-acc-silenciador', kind: 'acessorio', typeId: 'arma-fogo', name: 'Silenciador', values: { posicao: 'Bocal', efeito: 'Pode se fazer teste de furtividade para disparos.' } },
+    { id: 'of-acc-red-dot', kind: 'acessorio', typeId: 'arma-fogo', name: 'Red dot/Holográfica', values: { posicao: 'Mira', efeito: 'Mirando, dispensa o teste de Acuidade a média distância, mesmo contra alvo em cobertura parcial.' } },
+    { id: 'of-acc-ampliacao', kind: 'acessorio', typeId: 'arma-fogo', name: 'Ampliação', values: { posicao: 'Mira', efeito: 'Mirando, dispensa o teste de Acuidade de média a longa distância, mesmo contra alvo em cobertura parcial.' } },
+    { id: 'of-acc-telescopica', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telescópica', values: { posicao: 'Mira', efeito: 'Mirando, dispensa o teste de Acuidade de longa a muito longa distância, mesmo contra alvo em meia cobertura.' } },
+    { id: 'of-acc-silenciador', kind: 'acessorio', typeId: 'arma-fogo', name: 'Silenciador', values: { posicao: 'Bocal', efeito: 'Permite fazer um teste de furtividade (Precisão + Manha) nos disparos, contra os Sentidos de quem poderia ouvir.' } },
     { id: 'of-acc-cano-longo', kind: 'acessorio', typeId: 'arma-fogo', name: 'Cano longo', values: { posicao: 'Bocal', efeito: 'Aumenta em uma categoria o alcance da arma.' } },
-    { id: 'of-acc-estendido', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador estendido', values: { posicao: 'Carregador', efeito: 'Chegue ao limite de munições do tiro de munição.' } },
-    { id: 'of-acc-escalar', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador escalar', values: { posicao: 'Carregador', efeito: 'Aumenta de leve para médio, de médio para pesado, e vice versa.' } },
-    { id: 'of-acc-duplo', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador duplo', values: { posicao: 'Carregador', efeito: 'Se o carregador contiver no máximo 30 munições, se pode carregar usando ação bônus, uma vez sim, outra não.' } },
-    { id: 'of-acc-telemetro', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telêmetro', values: { posicao: 'Empunhadura', efeito: 'Contabiliza a distância que você está mirando em tempo real.' } },
-    { id: 'of-acc-mira-laser', kind: 'acessorio', typeId: 'arma-fogo', name: 'Mira laser', values: { posicao: 'Empunhadura', efeito: 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância. -1 em furtividade a curta a média distância.' } },
-    { id: 'of-acc-lanterna', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna', values: { posicao: 'Empunhadura', efeito: 'Pode ligar quando quiser, te concede uma fonte de luz frontal (cone) da arma de 9 metros à sua frente.' } },
-    { id: 'of-acc-lanterna-uv', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna UV', values: { posicao: 'Empunhadura', efeito: 'Como lanterna, mas é uma luz UV que não serve para enxergar no escuro.' } },
-    { id: 'of-acc-tripe', kind: 'acessorio', typeId: 'arma-fogo', name: 'Tripé', values: { posicao: 'Empunhadura', efeito: 'Use somente uma ação de movimento para apoiar a arma (em vez de ação completa).' } },
+    { id: 'of-acc-estendido', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador estendido', values: { posicao: 'Carregador', efeito: 'O pente chega ao limite de munição do tipo dele.' } },
+    { id: 'of-acc-escalar', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador escalar', values: { posicao: 'Carregador', efeito: 'Muda o pente de leve para médio e de médio para pesado, e vice-versa.' } },
+    { id: 'of-acc-duplo', kind: 'acessorio', typeId: 'arma-fogo', name: 'Carregador duplo', values: { posicao: 'Carregador', efeito: 'Se o pente tiver no máximo 30 munições, você recarrega com a ação bônus, uma vez sim, outra não.' } },
+    { id: 'of-acc-telemetro', kind: 'acessorio', typeId: 'arma-fogo', name: 'Telêmetro', values: { posicao: 'Empunhadura', efeito: 'Mostra em tempo real a distância até onde você está mirando (não muda o teste de Acuidade).' } },
+    { id: 'of-acc-mira-laser', kind: 'acessorio', typeId: 'arma-fogo', name: 'Mira laser', values: { posicao: 'Empunhadura', efeito: 'Mirando, dispensa o teste de Acuidade a média distância, mesmo contra cobertura parcial, mas dá –1 em furtividade de curta a média distância.' } },
+    { id: 'of-acc-lanterna', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna', values: { posicao: 'Empunhadura', efeito: 'Liga quando você quiser e ilumina um cone de 9 m à frente da arma.' } },
+    { id: 'of-acc-lanterna-uv', kind: 'acessorio', typeId: 'arma-fogo', name: 'Lanterna UV', values: { posicao: 'Empunhadura', efeito: 'Como a lanterna, mas a luz é UV e não serve para enxergar no escuro.' } },
+    { id: 'of-acc-tripe', kind: 'acessorio', typeId: 'arma-fogo', name: 'Tripé', values: { posicao: 'Empunhadura', efeito: 'Apoiar a arma custa só uma ação de movimento, em vez de uma ação completa.' } },
     // Acessórios corpo a corpo (um por posição) e peças de teste para o Armeiro
     { id: 'of-acc-ponta-serrilhada', kind: 'acessorio', typeId: 'arma-melee', name: 'Ponta serrilhada', values: { posicao: 'Ponta', efeito: 'Golpes cortantes que acertam deixam o alvo sangrando: ele perde 1 PV no começo do próximo turno dele.' } },
     { id: 'of-acc-dorso-pesado', kind: 'acessorio', typeId: 'arma-melee', name: 'Dorso pesado', values: { posicao: 'Dorso', efeito: 'Golpes com as duas mãos podem causar dano contundente em vez do dano normal da arma.' } },
@@ -609,17 +615,17 @@ window.VORTEX_ITEMS = {
     {
       id: 'of-esp-robo', kind: 'especime', name: 'Robô',
       values: { descricao: 'Meio que é… feito de lata né não?',
-        racial: 'Núcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Escudo. Ser eletrônico: efeitos de PEM atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nEngenharia | Não equipa itens, acopla armaduras e módulos (ao menos 1 hora); +1 de carga cibernética a cada +2 de carga dada pelo núcleo. | 1\nNão vivo | Não é afetado por coisas biológicas nem precisa descansar; não recupera PV por descanso nem curas, é consertado com Tecnologia e um kit de ferramentas. | 1' }
+        racial: 'Núcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início e os PV viram Blindagem: quando a vida zera, fica fora de combate em vez de agonizar. Ser eletrônico: efeitos de PEM atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nEngenharia | Não equipa itens, acopla armaduras e módulos (ao menos 1 hora); +1 de carga cibernética a cada +2 de carga dada pelo núcleo. | 1 | ccnucleo\nNão vivo | Não é afetado por coisas biológicas nem precisa descansar; não recupera PV por descanso nem curas, é consertado com Tecnologia e um Kit Técnico (no descanso longo, recupera Blindagem igual ao teste). | 1 | naovivo' }
     },
     {
       id: 'of-esp-android', kind: 'especime', name: 'Android',
       values: { descricao: 'Você é um robô, só que humanoide...',
-        racial: 'Engenharia | Não equipa, acopla armas e armaduras (ao menos 1 hora); acopladas, ocupam a carga cibernética em vez da carga; +1 de carga cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças e módulos não precisam de prótese. | 1 | acopla\nNúcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início, os PV viram blindagem e os negativos contam como Escudo. Ser eletrônico: efeitos de PEM atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nHumanidade | Você pode fazer testes para resistir a efeitos de PEM se tiver CD, e metade da sua blindagem pode ser regenerada como se fossem PV. | 1 | humanidade' }
+        racial: 'Engenharia | Não equipa, acopla armas e armaduras (ao menos 1 hora); acopladas, ocupam a carga cibernética em vez da carga; +1 de carga cibernética a cada +2 de carga dada pelo núcleo. Próteses são peças e módulos não precisam de prótese. | 1 | acopla; ccnucleo; modulolivre\nNúcleo | Depende de um núcleo acoplado para sobreviver; contém um núcleo +2 comum desde o início e os PV viram Blindagem: quando a vida zera, fica fora de combate em vez de agonizar. Ser eletrônico: efeitos de PEM atordoam. | 1 | vida: Blindagem; nucleo: 2; eletronico\nHumanidade | Você pode fazer testes para resistir a efeitos de PEM se tiver CD, e metade da sua Blindagem volta com o descanso, como se fosse PV. | 1 | humanidade' }
     },
     {
       id: 'of-esp-etheriano', kind: 'especime', name: 'Etheriano',
       values: { descricao: 'Cria do Éter.',
-        racial: 'Cria do Éter | Quando é afetado por energia Ether pura, recupera recursos iguais ao tamanho do Ether (10 de Resistência e PE para pequena, 25 para média, 50 para grande); o excesso conta como recurso bônus até o próximo descanso. Pode tornar um Éter instável e forçar sua absorção. | 1\nDom do Éter | 2 Up points extras iniciais, que também podem comprar características raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais). Só o Etheriano faz isso. | 1 | up: 2' }
+        racial: 'Cria do Éter | Quando é afetado por energia Ether pura, recupera recursos iguais ao tamanho do Ether (10 de PV e PE para pequena, 25 para média, 50 para grande); o excesso conta como recurso bônus até o próximo descanso. Pode tornar um Éter instável e forçar sua absorção. | 1\nDom do Éter | 2 Up points extras iniciais, que também podem comprar características raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais). Só o Etheriano faz isso. | 1 | up: 2' }
     },
     {
       id: 'of-esp-simbionte', kind: 'especime', name: 'Simbionte',
@@ -630,7 +636,7 @@ window.VORTEX_ITEMS = {
     {
       id: 'of-esp-neko', kind: 'especime', name: 'Neko', secreto: true,
       values: { descricao: 'Humanoide felino de orelhas atentas e cauda nervosa. Ninguém sabe de onde veio; dizem que caiu do vórtex de pé, e que ainda tem vidas sobrando. Só uma Neko pode ter o sexo Myauuu.',
-        racial: 'Patas leves | Sempre cai de pé: ignora dano de queda de até 9 m, sofre só metade do dano de quedas maiores e nunca fica caído por queda. Ganha +3 m de deslocamento (12 m), escala e salta sem gastar deslocamento extra e salta o dobro da distância normal. | 1 | deslocamento: 3\nNove vidas | Uma vez por descanso longo, ao chegar a 0 de Resistência, fica com 1 no lugar e, como reação, se afasta até metade do deslocamento sem provocar ataques. Só funciona 9 vezes por campanha: marque cada vida gasta. | 1\nInstinto selvagem | Traços selvagens: garras que contam como arma corpo a corpo leve de dano Cortante, sempre à mão e impossíveis de desarmar; enxerga no escuro como na penumbra; +1 em Reflexos. Faro: reconhece pessoas, criaturas e objetos pelo cheiro, segue rastros de até um dia, sente quem está escondido a até 9 m mesmo sem ver e tem vantagem em Sentidos quando o olfato ajuda. Ronrona para alguém e ganha +2 em Diplomacia, mas tem −2 em Vontade contra luzes que se mexem (lasers, miras, reflexos). | 1 | pericia: Reflexos +1' }
+        racial: 'Patas leves | Sempre cai de pé: ignora dano de queda de até 9 m, sofre só metade do dano de quedas maiores e nunca fica caído por queda. Ganha +3 m de deslocamento (12 m), escala e salta sem gastar deslocamento extra e salta o dobro da distância normal. | 1 | deslocamento: 3\nNove vidas | Uma vez por descanso longo, ao chegar a 0 PV, fica com 1 no lugar e, como reação, se afasta até metade do deslocamento sem provocar ataques. Só funciona 9 vezes por campanha: marque cada vida gasta. | 1\nInstinto selvagem | Traços selvagens: garras que contam como arma corpo a corpo leve de dano Cortante, sempre à mão e impossíveis de desarmar; enxerga no escuro como na penumbra; +1 em Reflexos. Faro: reconhece pessoas, criaturas e objetos pelo cheiro, segue rastros de até um dia, sente quem está escondido a até 9 m mesmo sem ver e tem vantagem em Sentidos quando o olfato ajuda. Ronrona para alguém e ganha +2 em Diplomacia, mas tem −2 em Vontade contra luzes que se mexem (lasers, miras, reflexos). | 1 | pericia: Reflexos +1' }
     },
 
     // Builds (recomendações da distribuição inicial)
@@ -652,8 +658,8 @@ window.VORTEX_ITEMS = {
     { id: 'of-npc-mecha', kind: 'npc', name: 'Mecha de Contenção', values: { categoria: 'Chefão', up: '10', corpo: '4', precisao: '2', essencia: '1', luta: '2', mira: '3', operacoes: '1', resistencia: '3', armadura: '9', pv: '20', escudo: '15', blindagem: '30', ataque: 'À distância', arma: 'Metralhadora rotativa', dano: 'Balístico, Explosivo', cadencia: '5', efetivo: 'Blindagem', descricao: 'Camadas de escudo e blindagem antes do piloto.', saque: 'Metralhadora rotativa\nPlaca de blindagem x3\nNúcleo de reator', cronos: '400' } },
 
     // Poderes (capítulo Habilidades)
-    { id: 'of-pod-defensivas', kind: 'poder', name: 'Defensivas', values: { custo: '1', momento: 'Defesa', efeito: 'Ativado durante a rolagem de defesa, pode ser ativado em apenas uma defesa, mas pode ser estendido por vários turnos ao critério e gasto proporcional do usuário.',
-      opcoes: 'Esquiva | Use precisão como atributo básico, e reflexo como perícia para os testes de defesa (incluindo defesa básica). | 1 PE\nExplosiva | Use sua reação: some sua armadura na defesa contra o ataque recebido. | 3 PE' } },
+    { id: 'of-pod-defensivas', kind: 'poder', name: 'Defensivas', values: { custo: '1', momento: 'Defesa', efeito: 'Truques de defesa pagos com PE: a Esquiva entra ao rolar a Defesa do combate e vale até o fim dele; a Explosiva é uma reação a um ataque recebido.',
+      opcoes: 'Esquiva | Na Defesa do combate, use Precisão + Reflexos (com a penalidade de armadura) no lugar de Corpo + Resistência, também na Defesa mínima. | 1 PE\nExplosiva | Use sua reação: some sua armadura na defesa contra o ataque recebido. | 3 PE' } },
     { id: 'of-pod-ataques', kind: 'poder', name: 'Ataques', values: { custo: '1', momento: 'Ataque', efeito: 'Ao realizar um ataque, você pode ativar essas vantagens ao custo citado.',
       opcoes: 'Avante | Você também se move 3 m na mesma ação (não usa um movimento); o ataque acontece após o movimento. | 1 PE\nCerteiro | Seu ataque causa acerto crítico com 5 e 6. | 1 PE' } },
     { id: 'of-pod-regeneracao', kind: 'poder', name: 'Regeneração', values: { custo: '1', efeito: 'Se for uma criatura biológica, recupere 3 PV por turno. Se caído, pode recobrar a consciência quando recuperar todos os PV.',
@@ -661,22 +667,22 @@ window.VORTEX_ITEMS = {
     { id: 'of-pod-doutor', kind: 'poder', name: 'Doutor', values: { custo: '1', efeito: 'Seu limite de modificador na perícia escolhida se torna 4. Também concede +1 em uma perícia à sua escolha. Pode ser comprado mais de uma vez, uma perícia por compra.' } },
     { id: 'of-pod-prof-arma', kind: 'poder', name: 'Proficiência em arma', values: { custo: '1', efeito: 'Escolha um tipo de arma o qual é proficiente, para usar a regra de cadência proficiente. Também concede +1 em uma perícia à sua escolha.' } },
     { id: 'of-pod-prof-armadura', kind: 'poder', name: 'Proficiência em armadura', values: { custo: '1', efeito: 'Escolha um tipo de armadura o qual é proficiente: ganha +1 de armadura com ela e usa a regra de proficiência com a armadura. Também concede +1 em uma perícia à sua escolha.' } },
-    { id: 'of-pod-cria-eter', kind: 'poder', name: 'Cria do Éter', values: { custoUso: 'Concedido por origem ou espécime (Etheriano)', efeito: 'Quando é afetado por energia Ether pura, recupera uma quantidade de recursos igual ao tamanho do Ether: 10 de Resistência e PE para pequena, 25 de Resistência e PE para média, 50 de Resistência e PE para a grande. Recursos sobressalentes contam como recursos bônus até seu próximo descanso, e não são acumulados com outra fonte (considere o maior bônus).\nVocê pode tornar um Éter instável e forçar sua absorção, ainda dividindo a todos os indivíduos na área o XP cedido pelo Éter.' } },
+    { id: 'of-pod-cria-eter', kind: 'poder', name: 'Cria do Éter', values: { custoUso: 'Concedido por origem ou espécime (Etheriano)', efeito: 'Quando é afetado por energia Ether pura, recupera uma quantidade de recursos igual ao tamanho do Ether: 10 de PV e PE para pequena, 25 de PV e PE para média, 50 de PV e PE para a grande. Recursos sobressalentes contam como recursos bônus até seu próximo descanso, e não são acumulados com outra fonte (considere o maior bônus).\nVocê pode tornar um Éter instável e forçar sua absorção, ainda dividindo a todos os indivíduos na área o XP cedido pelo Éter.' } },
     { id: 'of-pod-transformacao', kind: 'poder', name: 'Transformação', values: { efeito: 'Utilizando uma ação, você pode assumir uma nova forma, criando uma transformação, realocando seus UP livremente. Durante a transformação, os itens pertencentes à forma original tornam-se inutilizáveis.\nPara se transformar mais de uma vez no mesmo dia, é necessário gastar 1 PA a cada transformação adicional.\nOs recursos da nova forma não são diferenciados dos da forma original. Isso significa que, ao assumir a transformação, você passa a utilizar os valores atuais de seus recursos, aplicando apenas os ajustes positivos ou negativos próprios da nova forma. Ao retornar à forma original, os recursos permanecem nas quantidades em que se encontravam no momento da reversão. Recursos excedentes não são convertidos em recursos adicionais, e recursos que eram maiores antes da transformação voltam a ser contabilizados normalmente; caso tenham sido gastos durante a transformação, esse consumo é refletido nos pontos realocados.\nA nova forma deve manter a mesma quantidade de pontos em desvantagens da forma original, e o custo deste poder permanece atrelado à forma transformada. Quando seus Pontos de Vida forem reduzidos a zero, o jogador pode escolher entre manter a forma atual ou retornar à forma original. Cada UP investido corresponde a uma transformação distinta.',
       melhorias: 'Transformação de 1 UP | Uma forma nova, seguindo as regras acima. Cada uma comprada é uma transformação distinta. | 1\nTransformação de 2 UP | Ao adquirir uma transformação de custo 2 UP, os itens da forma original permanecem utilizáveis. Nesse caso, não é necessário manter a mesma quantidade de perdas, embora também não haja ganho de pontos adicionais por isso. Além disso, os recursos passam a ser diferenciados entre a forma original e a forma transformada. | 2\nÚnica | Você escolhe uma só transformação e monta a ficha dela. Não pode se transformar em nada além dela. Funciona como a transformação de 2 UP, pelo preço de 1 UP. Cada transformação escolhida assim custa 1 UP. | 1\nMutável | As transformações têm seus custos em UP diminuídos pela metade, e pode se transformar mais vezes ao dia usando 4 PE (ao invés de 1 PA); porém, os valores contabilizados na transformação não mudam e agora contabilizam essa habilidade. Pré-requisito: Transformação (1 ou 2). | 1' } },
     { id: 'of-pod-tecnomancia', kind: 'poder', name: 'Tecnomancia', values: { custo: '1', momento: 'Varia', efeito: 'Gaste Essência (PE) para criar efeitos com a sua tecnologia: um disparo de energia, um escudo recarregado, o efeito de um equipamento que você conhece.\nCada efeito começa simples (um ataque de toque, por exemplo) e você soma melhorias, como mais alcance, uma área ou mais dano, pagando PE por cada uma.\nCada nível de Tecnomancia (o nível deste poder, não o do personagem) compra um jeito de usar o poder (os modos abaixo). O seu tipo de tecnomante diz de onde vêm os efeitos que você conhece; cada jogador tem um só tipo.\nAs regras completas e as tabelas estão abaixo e no capítulo Habilidades.',
       opcoes: ((window.VORTEX_REGRAS || {}).tecnoAcoes || []).map((r) => [r[0], r[2], r[1]].join(' | ')).join('\n'),
       estiloRotulo: 'Tipo de tecnomante (um por jogador)',
       estilos: 'Engenheiro | Uma lista de componentes por nível de Tecnomancia. Característica do Engenheiro: cada lista usa Precisão ou Essência como atributo chave. Conhece atributo chave + Operações componentes de cada lista. | 0\nPatrocinado | Uma companhia patrocina você: a cada nível de Tecnomancia, recebe um catálogo inteiro dela (armas, armaduras...). Propriedades, acessórios e mods vêm por tipo de arma. | 0\nInsano | Em breve. | 0' } },
-    { id: 'of-pod-akimbo', kind: 'poder', name: 'Akimbo', values: { efeito: 'Empunhe itens de uma mão, um em cada mão. O tempo de recarga aumenta em uma categoria. Pode mirar em um único alvo com ambos ou escolher até dois alvos; faz um teste de ataque com cada arma, que aplicam dano separadamente.' } },
+    { id: 'of-pod-akimbo', kind: 'poder', name: 'Akimbo', values: { custo: '1', efeito: 'Empunhe dois itens de Uma mão (ou de Saque), um em cada mão; submetralhadoras só com proficiência. O tempo de recarga aumenta em uma categoria. Pode mirar em um único alvo com ambos ou escolher até dois alvos; faz um teste de ataque com cada arma, que aplicam dano separadamente.' } },
     { id: 'of-pod-telecinese', kind: 'poder', name: 'Telecinese', values: { custo: '1', efeito: 'Você pode manipular itens em curta distância, a custo de 1 PE por carga do objeto (se for igual ou menor que ½, o objeto não gera custos por carga), +1 por ação feita com ele (tirando livre). Você pode manipular uma quantidade de objetos simultaneamente igual à sua Essência (mínimo 1), cumprindo os gastos; se os itens fizerem a mesma ação, se utiliza a mesma ação para todos os usados na ação. Você pode deslocar esses objetos pelo seu deslocamento usando sua ação de movimento dividido pela carga do item, a cada ação gasta no objeto. Fazer testes com os objetos manipulados usa suas perícias e atributos normalmente; ações contra alguém têm –3 nos testes. Você pode usar suas técnicas e habilidades normalmente com os itens manipulados.',
       melhorias: 'Mental | Sua telecinese pode interferir em sinapses neurais: lê pensamentos e memórias. Com uma ação padrão, escolha um alvo; ele deve passar num teste de Vontade contra CD 7 + (um atributo à escolha do jogador) + Operações, ou terá os pensamentos lidos. Ler os pensamentos de um alvo concede, até o fim do seu próximo turno, vantagem em qualquer coisa que você faça contra ele. Pode sustentar após a primeira leitura com a ação de movimento. Um alvo incapacitado ou inconsciente falha automaticamente, e memórias de sonho ou pesadelo que esteja vivendo não podem ser lidas. O alvo só sente a mente sendo lida quando falha criticamente no teste de Vontade. Pré-requisito: Telecinese. | 1\nPreciso | Sua telecinese não recebe penalidades por ações contra alguém, e você considera a carga de todos os itens em –1 (itens de carga 1 podem ter carga ½, anulando o custo de peso). | 1' } },
-    { id: 'of-pod-mente-outro-mundo', kind: 'poder', name: 'Mente de outro mundo', values: { custo: '1', efeito: 'Você tem ganho em quaisquer testes contra efeitos mentais sobre você, e não é afetado por perda no teste em prol de falha crítica.' } },
+    { id: 'of-pod-mente-outro-mundo', kind: 'poder', name: 'Mente de outro mundo', values: { custo: '1', efeito: 'Você tem ganho (um dado a mais) em todos os testes contra efeitos mentais sobre você, e nesses testes a falha crítica (1) não anula a sua perícia.' } },
     { id: 'of-pod-luta', kind: 'poder', name: 'Luta', values: { custo: '1', momento: 'Passivo', efeito: 'Você domina o combate corpo a corpo e golpeia várias vezes por rodada, rivalizando em dano com quem usa armas de fogo.\nSeus punhos e chutes valem como uma arma contundente, e você é proficiente com eles.\nA cada rodada, você desfere uma sequência de golpes: tantos quanto o seu Corpo + a sua perícia Luta. Concentre todos num alvo ou espalhe entre vários inimigos, como uma rajada.\nCadência: a sequência de golpes usa as mesmas regras de cadência das armas de fogo, e cada golpe conta como um disparo. Com uma arma corpo a corpo da qual é proficiente (ou desarmado), você usa a cadência perita; sem proficiência, sofre a penalidade de cadência comum. O dano em cada alvo é multiplicado pelos golpes nele.\nEm vez de golpear, você pode usar esses golpes para se mover, empurrar, acertar vários inimigos, se defender ou arremessar mais longe (veja os efeitos marciais).\nVocê pode se especializar em um estilo de luta, Berserker, Armetista ou Renegado, cada um com técnicas e passivas próprias.\nLuta não se mistura com tecnomancia: ou você golpeia, ou conjura. Só um poder que diga “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia” junta os dois.',
       manobras: ((window.VORTEX_REGRAS || {}).lutaManobras || []).map((r) => r.join(' | ')).join('\n'),
       estiloRotulo: 'Estilo de luta (um por ficha)',
       estilos: ((window.VORTEX_REGRAS || {}).lutaEstilos || []).map((e) => [e.name, e.resumo, e.cost].join(' | ')).join('\n') } },
-    { id: 'of-pod-gatilho', kind: 'poder', name: 'Gatilho do velho mundo', values: { efeito: 'Com um revólver de disparo único, obtém cadência igual a 1 + metade da precisão (para cima). O primeiro disparo não conta na penalidade de cadência. Precisa da outra mão livre.' } },
+    { id: 'of-pod-gatilho', kind: 'poder', name: 'Gatilho do velho mundo', values: { custo: '1', efeito: 'Com um revólver de disparo único, obtém cadência igual a 1 + metade da precisão (para cima). O primeiro disparo não conta na penalidade de cadência. Precisa da outra mão livre.' } },
     // Próteses básicas: uma por slot do corpo, simples (Suporte, 1 CC). Sem Núcleo, só substituem a parte natural.
     { id: 'of-nuc-comum', kind: 'nucleo', name: 'Núcleo comum +2', values: { modelo: 'Núcleo padrão', raridade: 'Comum', capacidade: '2', carga: '1', especial: 'Núcleo básico: sustenta próteses e módulos até 2 de Carga Cibernética (somada ao Corpo). Só um núcleo ativo por personagem.' } },
     { id: 'of-pro-cabeca', kind: 'protese-modulo', typeId: 'cabeca', name: 'Prótese básica: Cabeça', values: { classe: 'Prótese', tipo: 'Suporte', cc: '1', efeito: 'Substitui a estrutura do crânio e da face por uma peça cibernética simples, que reproduz a função natural. Sem Núcleo, funciona só como substituição; com Núcleo, conta como prótese de Suporte (1 CC).' } },
@@ -767,7 +773,7 @@ window.VORTEX_ITEMS = {
     ['Tnnak Umbra & Flex', 'Média', 'Epica', 7, 1, 3, '19.500', 'Propriedade: 1'],
     ['Tnnak Brut', 'Pesada', 'Epica', 9, 2, 5, '32.500', 'Propriedade: 1'],
     ['Mirage', 'Leve', 'Lendária', 7, 0, 1, '12.000',
-      'Propriedade: 1 + Especial: OVER-R.E.S\nA armadura é equipada com módulo de radar (todos), módulo de I.A (Combate), e módulo perito (Precisão), por fim, módulo de rede. Esses módulos não dependem de núcleo e funcionam em qualquer condição, menos quando o equipamento for destruído, essa armadura pode assumir a forma de outras roupas comuns.'],
+      'Propriedade: 1 + Especial: OVER-R.E.S\nA armadura é equipada com módulo de radar (todos), módulo de I.A (Combate), e módulo perito (Mira), por fim, módulo de rede. Esses módulos não dependem de núcleo e funcionam em qualquer condição, menos quando o equipamento for destruído, essa armadura pode assumir a forma de outras roupas comuns.'],
     ['Heavy-Metal', 'Média', 'Lendária', 9, 1, 3, '36.000',
       'Propriedade: 1 + Especial: Hora do Show!\nUtilize 5 PE. Pelo restante da cena, sua Armadura aumenta em +3, você entra em chamas e se torna Imune a Fogo.\nEnquanto estiver sob este efeito, qualquer criatura que realizar um ataque contra você a uma distância adjacente recebe 2d6 de dano de fogo.\nAlém disso, todos os seus ataques passam a causar dano de fogo adicional e aplicam o efeito Incendiar. O dano causado por esta fonte pode se acumular normalmente.\nDurante a duração, você possui vantagem em testes realizados com armas ou instrumentos que possuam as palavras-chave Ritmo ou Musical.'],
     ['Juggernaut', 'Pesada', 'Lendária', 11, 2, 5, '60.000',
@@ -835,12 +841,12 @@ window.VORTEX_ITEMS = {
 
   /* Live Service (itens gerais de recuperação): [nome, raridade, tipo, usos, carga, bônus, efeito, preço] */
   [
-    ['Kit Médico LS-1', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar PV com medicina.', '200'],
-    ['Kit Técnico LS-2', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar Blindagem com engenharia/Tecnologia.', '200'],
-    ['Carregador de Campo LS-3', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar Escudos com operações.', '200'],
-    ['Estação Médica Portátil', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar PV com medicina.', '600'],
-    ['Estação Energética', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar Escudos usando operações.', '600'],
-    ['Oficina Compacta', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar Blindagem usando engenharia/tecnologia.', '600'],
+    ['Kit Médico LS-1', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar PV com Ofício (Medicina).', '200'],
+    ['Kit Técnico LS-2', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar Blindagem com Tecnologia ou Ofício (Engenharia); também serve para reanimar e consertar Robôs.', '200'],
+    ['Carregador de Campo LS-3', 'Comum', 'Ferramenta', '', 1, '', 'Permite recuperar Escudo com Operações.', '200'],
+    ['Estação Médica Portátil', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar PV com Ofício (Medicina).', '600'],
+    ['Estação Energética', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar Escudo usando Operações.', '600'],
+    ['Oficina Compacta', 'Comum', 'Estação', '', 3, '', 'Concede +2 em testes para recuperar Blindagem usando Tecnologia ou Ofício (Engenharia).', '600'],
     ['Nano Purificador', 'Incomum', 'Consumível', '', 1, '', 'Remove 1 condição negativa.', '400'],
     ['Antídoto Universal', 'Incomum', 'Consumível', '', 1, '', 'Remove todas as condições.', '500'],
     ['Choque Neural', 'Incomum', 'Consumível', '', 1, '', 'Remove todas as condições mentais.', '550'],
@@ -1026,7 +1032,7 @@ window.VORTEX_ITEMS = {
     ['Pente leve padrão', 'Pente leve', 20, 0.25, 'Comum', '40', '', '', ''],
     ['Pente médio padrão', 'Pente médio', 40, 0.5, 'Comum', '80', '', '', ''],
     ['Pente pesado padrão', 'Pente pesado', 150, 1, 'Comum', '220', '', '', ''],
-    ['Cinta de sobrecarga', 'Sobrecarga', 150, 1, 'Comum', '260', '', '', ''],
+    ['Cinta de sobrecarga', 'Sobrecarga', 1, 1, 'Comum', '260', '', '', ''],
     ['Caixa de cartuchos', 'Pente parcial', 20, 0.25, 'Comum', '30', '', '', ''],
     ['Carga de energia', 'Superaquecimento', 1, 1, 'Comum', '150', '', '', '']
   ].forEach(function (a) {

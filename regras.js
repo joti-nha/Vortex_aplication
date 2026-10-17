@@ -26,42 +26,42 @@ const PERDAS = [
   ['Essência fraca', 'Sua Essência se esgota rápido: você tem –3 PE máximos.', 'pe: -3'],
   ['Lento', 'Você se move devagar: –3 m de deslocamento.', 'deslocamento: -3'],
   ['Costas ruins', 'Você carrega menos peso: –3 de Carga.', 'carga: -3'],
-  ['Desajeitado', 'Você tem perda nos testes de Reflexos.', ''],
-  ['Míope', 'Você tem perda nos testes de Sentidos que dependem da visão e nos ataques à distância contra alvos a mais de 10 m.', ''],
-  ['Fobia', 'Escolha algo que você teme. Na presença disso, você tem perda em todos os testes até se afastar ou passar num teste de Vontade contra CD 7 (uma tentativa por rodada).', ''],
-  ['Vício', 'Escolha uma substância ou um hábito. Se passar um dia sem ele, você tem perda nos testes de Vontade e de Sentidos até satisfazer o vício.', ''],
-  ['Código de honra', 'Escolha um código (não atacar quem se rende, não mentir, não abandonar um aliado...). Quebrá-lo deixa você em perda em todos os testes até o fim da cena.', ''],
-  ['Implante instável', 'Quando um teste feito com uma prótese ou um módulo tiver duas perdas, a peça desliga até o fim da cena.', ''],
+  ['Desajeitado', 'Você rola um dado a menos (perda) nos testes de Reflexos.', ''],
+  ['Míope', 'Você rola um dado a menos (perda) nos testes de Sentidos que dependem da visão e nos ataques à distância contra alvos a mais de 10 m.', ''],
+  ['Fobia', 'Escolha algo que você teme. Na presença disso, você rola um dado a menos (perda) em todos os testes até se afastar ou passar num teste de Vontade contra CD 7 (uma tentativa por rodada).', ''],
+  ['Vício', 'Escolha uma substância ou um hábito. Se passar um dia sem ele, você rola um dado a menos (perda) nos testes de Vontade e de Sentidos até satisfazer o vício.', ''],
+  ['Código de honra', 'Escolha um código (não atacar quem se rende, não mentir, não abandonar um aliado...). Quebrá-lo faz você rolar um dado a menos (perda) em todos os testes até o fim da cena.', ''],
+  ['Implante instável', 'Quando um teste feito com uma prótese ou um módulo tiver duas falhas críticas (dois dados 1), a peça desliga até o fim da cena.', ''],
   ['Procurado', 'Alguém poderoso (uma corporação, uma gangue, a lei) quer você. O mestre decide quando e como isso aparece.', ''],
-  ['Dívida', 'Você deve a alguém perigoso: começa com metade do dinheiro inicial, e o credor vem cobrar.', '']
+  ['Dívida', 'Você deve a alguém perigoso: começa com metade do dinheiro inicial (750 dos 1.500 Cronos), e o credor vem cobrar.', '']
 ];
 /* Efeitos marciais básicos do poder Luta: [efeito, custo em ataques da rodada, o que faz].
    Só as capacidades genéricas; os estilos de luta (abaixo) trazem as técnicas e passivas próprias.
    A ficha (poder Luta, em items.js) e o capítulo Habilidades usam esta mesma tabela. */
 const LUTA_MANOBRAS = [
   ['Passo marcial', '1 por 3 m', 'Você se move 3 m por ataque gasto entre um golpe e outro, sem gastar a ação de movimento.'],
-  ['Empurrão', '1 por 3 m', 'Se o golpe acertar, o alvo é empurrado 3 m por ataque gasto (Corpo + Luta contra Atletismo dele).'],
+  ['Empurrão', '1 por 3 m', 'Se o golpe acertar, o alvo é empurrado 3 m por ataque gasto (Corpo + Luta contra a Resistência ou os Reflexos dele, o melhor).'],
   ['Alvo extra', '1 por alvo', 'O mesmo golpe acerta mais um alvo adjacente a você por ataque gasto; um só teste vale para todos.'],
   ['Golpe em área', '2 (+1 por 1,5 m)', 'Golpe giratório ou no chão: todos adjacentes a você (raio 1,5 m) sofrem o ataque, com metade do dano. Cada ataque a mais aumenta o raio em 1,5 m.'],
-  ['Junção à manobra', '3', 'O golpe e uma manobra (derrubar, desarmar, agarrar ou quebrar a guarda; Luta contra Resistência ou Reflexos) saem juntos, sem gastar outra ação.'],
-  ['Efeito do dano', '2', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante faz sangrar (perde 1d6 PV no começo de cada turno até ser tratado), contundente atordoa (o alvo perde a ação de movimento; se já estava atordoado, perde o turno), perfurante fere (–1 no ataque e na defesa por ferida, máximo –3, até receber cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta.'],
+  ['Junção à manobra', '3', 'O golpe e uma manobra (derrubar, desarmar, agarrar ou quebrar a guarda; Corpo + Luta contra a Resistência ou os Reflexos do alvo) saem juntos, sem gastar outra ação.'],
+  ['Efeito do dano', '2', 'Se o golpe acertar, causa o efeito do tipo de dano da arma: cortante deixa o alvo Sangrando (perde 1d6 PV no começo de cada turno dele até receber qualquer cura), contundente o deixa Atordoado (perde a ação de movimento; se já estava atordoado, perde o turno), perfurante o deixa Ferido (–1 no ataque e na Defesa por ferida, máximo –3, até receber qualquer cura). O alvo evita com Fortitude contra CD 6 + Corpo (ou Precisão) + Luta.'],
   ['Trocar o dano', '1', 'Neste golpe, a arma causa outro tipo de dano (cortante, contundente ou perfurante): de lado, com o cabo, com a ponta.'],
   ['Guarda', '1 por +1', 'Até o seu próximo turno, +1 na defesa contra ataques corpo a corpo por ataque gasto, até um máximo igual à sua Precisão.'],
-  ['Arremesso', '1 por +9 m', 'Todo mundo pode arremessar coisas; este efeito só aumenta a distância: seu arremesso alcança +9 m por ataque gasto.']
+  ['Arremesso', '1 por +9 m', 'Todo mundo pode arremessar coisas (alcance base de 9 m, veja Arremessar em Ações); este efeito só aumenta a distância: +9 m por ataque gasto.']
 ];
 /* Estilos de luta: o "upgrade" do poder Luta. Um por ficha; o custo em UP soma ao seu poder em Luta.
    Cada um traz passivas únicas e técnicas próprias, que gastam ataques da rodada como os efeitos básicos. */
 const LUTA_ESTILOS = [
   { name: 'Berserker', cost: 2, resumo: 'Fúria e força bruta: troca defesa por dano e fica mais perigoso quanto mais apanha.',
     passivas: [
-      ['Fúria', 'Uma vez por cena, como ação livre, você entra em fúria até o fim da cena ou até cair: +2 no dano corpo a corpo e –2 na defesa.'],
+      ['Fúria', 'Uma vez por cena, como ação livre, você entra em fúria até o fim da cena ou até cair: +2 de dano fixo nos ataques corpo a corpo e –2 na Defesa.'],
       ['Sangue quente', 'Com menos da metade dos PV, você tem +1 ataque por rodada.'],
       ['Couro grosso', 'Em fúria, cada golpe corpo a corpo que você recebe causa 1 de dano a menos.']
     ],
     tecnicas: [
-      ['Golpe brutal', '2', 'O golpe causa +1d6 de dano.'],
+      ['Golpe brutal', '2', 'O golpe causa +1d6 de dano de efeito.'],
       ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
-      ['Golpe esmagador', '2', 'Se o golpe acertar, o alvo cai (Corpo + Luta contra Atletismo dele).'],
+      ['Golpe esmagador', '2', 'Se o golpe acertar, o alvo fica Caído (Corpo + Luta contra a Resistência ou os Reflexos dele, o melhor).'],
       ['Grito de guerra', '1', 'Intimidação contra Vontade de quem ouvir, em 6 m; quem perder tem –1 no ataque contra você até o fim da rodada.'],
       ['Ignorar a dor', '1 (guardado)', 'Guarde um ataque: como reação a um golpe que acertou, o dano dele cai pela metade.']
     ] },
@@ -72,24 +72,24 @@ const LUTA_ESTILOS = [
       ['Domínio da arma', 'Trocar o dano custa 0 ataques, e você pode usar Precisão + Luta no ataque com qualquer arma corpo a corpo.']
     ],
     tecnicas: [
-      ['Aparar', '1 (guardado)', 'Guarde um ataque: como reação a um golpe corpo a corpo, faça um teste de Luta contra o ataque; se vencer, o golpe não acerta.'],
-      ['Desarme no golpe', '1', 'Se o golpe acertar, o alvo solta a arma (Luta contra Reflexos dele).'],
+      ['Aparar', '1 (guardado)', 'Guarde um ataque: como reação a um golpe corpo a corpo, faça um teste de Corpo + Luta contra o ataque; se vencer, o golpe é aparado e não causa dano.'],
+      ['Desarme no golpe', '1', 'Se o golpe acertar, o alvo solta a arma no chão (Corpo + Luta contra a Resistência ou os Reflexos dele, o melhor).'],
       ['Golpe certeiro', '2', 'O golpe causa crítico com 5 e 6.'],
       ['Guarda de lâmina', '1 por +2', 'Como a Guarda, mas +2 por ataque gasto; o máximo continua igual à sua Precisão.'],
       ['Arremesso duplo', '1', 'Arremessa duas armas à mão no mesmo ataque, em alvos até 9 m; cada uma faz o seu teste.']
     ] },
   { name: 'Renegado', cost: 2, resumo: 'Briga suja: golpes baixos, truques e saídas rápidas, com o que estiver à mão.',
     passivas: [
-      ['Golpe baixo', '+2 no dano contra alvos Caídos, Agarrados, Atordoados ou flanqueados.'],
-      ['Arma improvisada', 'Qualquer objeto à mão conta como uma arma da qual você é proficiente (1d6, contundente ou cortante).'],
+      ['Golpe baixo', '+2 de dano fixo contra alvos Caídos, Agarrados, Atordoados ou flanqueados (com dois inimigos adjacentes, em lados opostos).'],
+      ['Arma improvisada', 'Qualquer objeto à mão conta como uma arma corpo a corpo da qual você é proficiente, com dano contundente ou cortante (o que fizer mais sentido para o objeto).'],
       ['Escorregadio', 'Se você se moveu nesta rodada, tem +1 na defesa contra ataques corpo a corpo.']
     ],
     tecnicas: [
       ['Finta', '1', 'Enganação contra Sentidos do alvo; se vencer, seus próximos golpes nele, nesta rodada, têm +2 no ataque.'],
-      ['Contra-ataque', '1 (guardado)', 'Guarde um ataque: quando um inimigo errar um ataque corpo a corpo em você, golpeie-o como reação.'],
+      ['Contra-ataque', '1 (guardado)', 'Guarde um ataque: quando um inimigo errar um ataque corpo a corpo em você (não passar da sua Defesa), golpeie-o como reação.'],
       ['Areia nos olhos', '2', 'Enganação contra Reflexos do alvo; se vencer, ele fica Cego até o fim do próximo turno dele.'],
-      ['Rasteira', '1', 'Se o golpe acertar, o alvo cai (Luta contra Atletismo dele).'],
-      ['Saída suja', '1 por 3 m', 'Você se afasta 3 m por ataque gasto sem provocar reação de quem está adjacente.']
+      ['Rasteira', '1', 'Se o golpe acertar, o alvo fica Caído (Corpo + Luta contra a Resistência ou os Reflexos dele, o melhor).'],
+      ['Saída suja', '1 por 3 m', 'Você se afasta 3 m por ataque gasto sem provocar o ataque de oportunidade de quem está adjacente.']
     ] }
 ];
 /* Tecnomancia: o poder principal dos tecnomantes. Cada nível compra um modo de ação e uma lista de componentes.
@@ -97,8 +97,8 @@ const LUTA_ESTILOS = [
    Um tipo de tecnomante por jogador: Engenheiro (listas) e Patrocinado (catálogos de uma companhia); o Insano chega depois. */
 const TECNO_ACOES = [
   ['Instantâneo', 'Ação', 'Gera um efeito explosivo na hora. A duração em campo ou no alvo é a do efeito.'],
-  ['Passivo', 'Nenhuma', 'Fica ativo sem gastar ação. Paga a sustentação no mínimo uma vez por cena, então dura até uma cena. Só serve para efeitos que aprimoram ou energizam o alvo: nunca ataque, condição negativa ou habilidade que precise ser ativada ou gaste ação.'],
-  ['Concentrado', 'Ação, toda rodada', 'Gera o efeito uma vez por rodada pagando metade do custo, ou sustenta um efeito passivo pela metade do custo. Dura até você encerrar, cair inconsciente ou sofrer um efeito que tome a sua ação completa (movimento + padrão).'],
+  ['Passivo', 'Nenhuma', 'Fica ativo sem gastar ação. Paga a sustentação (o PE da operação) uma vez por cena, então dura até uma cena. Só serve para efeitos que aprimoram ou energizam o alvo: nunca ataque, condição negativa ou habilidade que precise ser ativada ou gaste ação.'],
+  ['Concentrado', 'Ação, toda rodada', 'Gera o efeito uma vez por rodada pagando metade do custo (arredondada para cima), ou sustenta um efeito passivo pela metade do custo. Dura até você encerrar, cair inconsciente ou sofrer um efeito que tome a sua ação completa (movimento + padrão).'],
   ['Ativo', 'Ação (ao ativar)', 'Você fabrica o efeito antes: paga o PE na fabricação e trabalha 1 hora por PE. Depois, ativa quando quiser, seguindo as regras do Instantâneo.'],
   ['Reativo', 'Reação', 'Como o Instantâneo, mas em reação a uma ação. Permite usar qualquer efeito que tenha a reação como ação.']
 ];
@@ -112,9 +112,9 @@ const TECNO_LISTAS = [
 ];
 // Bases de uma operação
 const TECNO_BASES = [
-  ['Ataque', 'Grátis', 'Ataque de toque, sem multiplicador de dano. Teste: 2d6 + atributo chave + Operações contra a Defesa do alvo. Dano = ataque – Defesa, do tipo mágico.'],
+  ['Ataque', 'Grátis', 'Ataque de toque, sem multiplicador de dano. Teste: 2d6 + atributo chave + Operações contra a Defesa do alvo. Dano = ataque – Defesa, do tipo Energia.'],
   ['Ação efetiva', 'Grátis', 'Causa um efeito em algo ou alguém. Se o alvo resistir, a CD é 6 + atributo chave.'],
-  ['Item', 'Raridade + custo do item', 'Usa um item conhecido como base: paga o PE da raridade + qualquer custo original do item.']
+  ['Item', 'Raridade + custo do item', 'Usa um item conhecido como base: paga o PE da raridade + qualquer custo original do item. Próteses e módulos não têm raridade: custam +1 PE por CC do tipo (Suporte 1, Operacional 2, Mecânico 3).']
 ];
 // PE por raridade de um componente (base Item ou implemento especial)
 const TECNO_RARIDADE = [['Comum', '+1 PE'], ['Incomum', '+2 PE'], ['Rara', '+3 PE'], ['Épica', '+4 PE'], ['Lendária', '+5 PE']];
@@ -126,7 +126,7 @@ const TECNO_IMPLEMENTOS = [
   ['Modificador', '+1 PE', '+1 no teste da operação (ataque, cura ou efeito).'],
   ['CD', '+1 PE', '+1 na CD que o alvo precisa vencer para resistir ao efeito (a CD padrão é 6 + atributo chave).'],
   ['Alvo extra', '+1 PE', 'Mais um alvo, cada um com o seu teste.'],
-  ['Tipo de dano', '+1 PE', 'Troca o dano mágico por um tipo que você tenha de uma fonte conhecida.']
+  ['Tipo de dano', '+1 PE', 'Troca o dano de Energia por um tipo que você tenha de uma fonte conhecida.']
 ];
 const TECNO_TIPOS = [
   { name: 'Engenheiro', cost: 0, resumo: 'Monta a tecnomancia a partir de listas de componentes, uma por nível de Tecnomancia.',
@@ -166,23 +166,33 @@ window.VORTEX_REGRAS = {
         ['h2', 'Rolagens'],
         ['p', 'Todo teste no Vortex segue a mesma base: você rola dois dados de seis faces e soma o atributo e a perícia envolvidos.'],
         ['formula', 'Todo teste', '2d6 + Atributo + Perícia'],
+        ['p', 'Quando uma regra cita só a perícia ("Luta contra Reflexos"), cada lado soma também o atributo dela.'],
+
+        ['h2', 'Classe de Dificuldade (CD)'],
+        ['p', 'Contra uma dificuldade fixa, você passa se o total for **igual ou maior** que a CD. Com duas falhas críticas, o teste falha mesmo que o total alcance a CD.'],
+        ['table', ['CD', 'Dificuldade'], [['6', 'Fácil'], ['9', 'Normal'], ['12', 'Difícil'], ['15', 'Muito difícil'], ['18', 'Quase impossível']]],
+        ['p', 'Quando o efeito é seu e o alvo resiste com um teste (Tecnomancia, granadas, armas com efeito no crítico), a própria regra diz a CD. Na cura, a CD tem regra própria (veja [Cura](cura#Classe de Dificuldade (CD))).'],
+
+        ['h2', 'Testes resistidos'],
+        ['p', 'Quando duas pessoas disputam (uma manobra, esconder-se contra perceber, agarrar contra soltar-se), as duas rolam e vence o maior total. **No empate, vence quem resiste** (o alvo da ação). Quem tira duas falhas críticas perde a disputa.'],
 
         ['h2', 'Críticos'],
-        ['p', 'Cada dado que mostrar 6 soma de novo o valor do atributo usado no teste. Já cada dado que mostrar 1 deixa você em **perda**, e uma perda anula os modificadores que vêm da perícia. Se o teste tiver duas perdas, ele falha completamente.'],
-        ['p', 'Você só pode se beneficiar de no máximo 1 crítico nos dados por teste, e uma falha crítica (1) anula um crítico (6).'],
+        ['p', 'Cada dado que mostrar 6 é um **crítico**: o teste soma de novo o valor do atributo usado. Cada dado que mostrar 1 é uma **falha crítica**: ela anula os modificadores que vêm da perícia. Com duas falhas críticas, o teste falha completamente, seja qual for o total.'],
+        ['p', 'Você só se beneficia de no máximo 1 crítico por teste, e cada falha crítica (1) anula um crítico (6). O crítico nunca tira pontos: com atributo zero ou negativo, ele não soma nada.'],
 
         ['h2', 'Ganho'],
         ['p', 'Um **ganho** aumenta a quantidade de dados rolados naquele teste. O terceiro dado vem de fontes de alto valor, e o quarto é concedido pelo mestre ou pelo sistema. O limite é de 4d6 em um teste.'],
         ['p', 'Na defesa, se houve um ganho durante o combate, some o resultado do ganho à sua defesa atual.'],
 
         ['h2', 'Perda'],
-        ['p', 'A **perda** é o contrário do ganho: você rola um dado a menos.'],
+        ['p', 'A **perda** é o contrário do ganho: você rola um dado a menos (no mínimo 1). Ganho e perda no mesmo teste se anulam um a um.'],
 
         ['h2', 'Vantagem'],
-        ['p', 'Com **vantagem** você rola mais dados, mas, em vez de somá-los, fica com o dado de maior valor.'],
+        ['p', 'Com **vantagem** você rola um dado a mais e descarta o menor: o teste soma só os dados que ficaram (os dois maiores, ou os três maiores com um ganho). Críticos e falhas críticas só contam nos dados que ficaram.'],
 
         ['h2', 'Desvantagem'],
-        ['p', 'Com **desvantagem** você também rola mais dados, mas fica com o pior resultado.'],
+        ['p', 'Com **desvantagem** você também rola um dado a mais, mas descarta o maior.'],
+        ['p', 'Vantagem e desvantagem não se acumulam: várias fontes de vantagem dão uma só, e uma vantagem anula uma desvantagem.'],
 
         ['h2', 'Bônus de mesma fonte'],
         ['note', 'Regra geral', '**Qualquer bônus de mesma fonte não acumula.** Vale para itens, poderes, operações de Tecnomancia, habilidades e qualquer outra fonte: usar, vestir ou ativar a mesma fonte de novo não soma o bônus dela outra vez.'],
@@ -202,7 +212,7 @@ window.VORTEX_REGRAS = {
           ['Essência', 'Energia interior, tecnomancia, vontade e presença.']
         ]],
         ['h3', 'Distribuição Inicial'],
-        ['p', 'Você começa com 3 pontos para distribuir entre os atributos. Se quiser, pode reduzir um atributo para –1 e ganhar +1 ponto extra. Nenhum atributo pode começar acima de +3, e o limite total é 6.'],
+        ['p', 'Você começa com 3 pontos para distribuir entre os atributos. Se quiser, pode reduzir um atributo para –1 e ganhar +1 ponto extra. Nenhum atributo pode começar acima de +3. Durante o jogo, os pontos de um atributo (os iniciais e os de UP) não passam de +6; só bônus de itens e poderes passam disso.'],
 
         ['h2', 'Recursos'],
         ['h3', 'Pontos de Vida (PV)'],
@@ -214,23 +224,29 @@ window.VORTEX_REGRAS = {
         ['p', 'Os PE representam esforço físico, tecnomancia e as habilidades que exigem energia interior.'],
 
         ['h3', 'Pontos de Ação (PA)'],
-        ['formula', 'PA', 'igual à Precisão'],
+        ['formula', 'PA', 'igual à Precisão (mínimo 1)'],
         ['example', 'Precisão 3 equivale a 3 PA.'],
-        ['p', 'Os PA representam um surto de criatividade inteligente (ou não) capaz de mudar a dinâmica das suas interações.'],
+        ['p', 'Os PA representam um surto de criatividade inteligente (ou não) capaz de mudar a dinâmica das suas interações. Gaste 1 PA para rolar de novo um teste que você acabou de fazer e ficar com o novo resultado (uma vez por teste), ou num efeito que peça PA (como o Simbionte e a Transformação).'],
+
+        ['h3', 'Escudo e Blindagem'],
+        ['p', 'Começam em 0 e vêm de equipamentos (escudos energéticos, armaduras), do espécime (no Robô e no Android, a vida é a Blindagem) ou de poderes. O dano passa primeiro pelo Escudo, depois pela Blindagem e só então pelos PV (veja [Ataque e Defesa](ataque-e-defesa#Camadas de vida)).'],
 
         ['h2', 'Recuperação'],
         ['p', 'Você recupera seus recursos depois de um descanso adequado, e a qualidade do descanso define quanto volta.'],
         ['dl', [
-          ['Péssimo estado', 'Você recupera de cada recurso uma quantidade igual ao atributo atrelado a ele.'],
-          ['Descanso curto (1 a 4 horas)', 'Recupera metade dos recursos. A quantidade cai à metade a cada descanso curto seguinte, e volta ao normal depois de um descanso longo.'],
-          ['Descanso longo (8 horas ou mais)', 'Recupera totalmente os recursos.']
+          ['Péssimo estado (menos de 1 hora, ou sem condições de descansar)', 'Você recupera de cada recurso uma quantidade igual ao atributo atrelado a ele (PV: Corpo; PE: Essência; PA: Precisão; no mínimo 1).'],
+          ['Descanso curto (de 1 hora até menos de 8)', 'Recupera metade de PV, PE, PA e Escudo. A quantidade cai à metade a cada descanso curto seguinte, e volta ao normal depois de um descanso longo. Quem está agonizando não se levanta com o descanso curto: precisa ser reanimado.'],
+          ['Descanso longo (8 horas ou mais)', 'Recupera tudo. Quem estava agonizando e estabilizado acorda.']
         ]],
+        ['p', 'A Blindagem não volta com o descanso: só com conserto (veja [Cura](cura#Blindagem (BL))). Robôs e outros seres não vivos também não recuperam a vida descansando.'],
 
         ['h2', 'Outros'],
         ['h3', 'Armadura básica'],
-        ['p', 'A armadura básica de todas as criaturas é 6.'],
+        ['p', 'A armadura básica de todos os seres é 6: é a Armadura de quem está sem armadura, ou com uma de valor menor (veja [Armaduras](armaduras#Outros)).'],
         ['h3', 'Movimento'],
-        ['p', 'O movimento padrão dos seres vivos, sem alterações por habilidades, poderes ou desvantagens, é de 9 m em terra (30 ft).']
+        ['p', 'O movimento padrão dos seres vivos, sem alterações por habilidades, poderes ou Perdas, é de 9 m em terra (30 ft).'],
+        ['h3', 'Tamanho'],
+        ['p', 'Do menor para o maior: Minúsculo, Pequeno, Médio (humanos, robôs e androides comuns), Grande, Enorme e Colossal. Algumas manobras mudam com a diferença de tamanho (veja [Ações](acoes#Manobras)).']
       ]
     },
 
@@ -261,11 +277,13 @@ window.VORTEX_REGRAS = {
         ['p', 'Além disso, ao enfrentar pela segunda vez o mesmo tipo de inimigo, a recompensa de XP por derrotá-lo é reduzida à metade.'],
 
         ['h2', 'Benefícios por UP'],
-        ['p', 'Sempre que o personagem alcançar um número par de UP (desconsiderando aqueles provenientes da Origem), poderá escolher dois dos seguintes benefícios:'],
+        ['p', 'Os benefícios abaixo contam só os **UP ganhos por XP**: os UP iniciais do espécime e os das Perdas não contam.'],
+        ['p', 'Sempre que o personagem alcançar um número par de UP ganhos por XP, poderá escolher dois dos seguintes benefícios:'],
         ['ul', ['+5 PV;', '+5 PE;', '+1 PA.']],
-        ['p', 'Sempre que alcançar um número ímpar de UP (também desconsiderando os provenientes da Origem), recebe +1 ponto em uma perícia à sua escolha.'],
-        ['p', 'Uma vez em cada bloco de 4 UP (UP 1 a 4, 5 a 8 e assim por diante, também desconsiderando os da Origem), em vez de receber esse +1 ponto em uma perícia, pode trocá-lo por uma **proficiência** à sua escolha. Só esse ponto ganho pelo UP pode ser trocado: os pontos iniciais, os de UP investido em perícias e os de poderes não. Na ficha, a troca fica em Perícias → Proficiências; no roteiro da build, na folha do UP ímpar.'],
-        ['p', 'Além disso, em cada bloco de 4 UP (também desconsiderando os da Origem), recebe +1 em um atributo à sua escolha. Os dois valem desde o começo do bloco: o do primeiro bloco já pode ser usado no UP 1 ou no 3, sem esperar o UP 4. Na ficha, ele é escolhido na aba Progressão.']
+        ['p', 'Sempre que alcançar um número ímpar de UP ganhos por XP, recebe +1 ponto em uma perícia à sua escolha.'],
+        ['p', 'Uma vez em cada bloco de 4 UP (UP 1 a 4, 5 a 8 e assim por diante), em vez de receber esse +1 ponto em uma perícia, pode trocá-lo por uma **proficiência** à sua escolha. Só esse ponto ganho pelo UP pode ser trocado: os pontos iniciais, os de UP investido em perícias e os de poderes não.'],
+        ['p', 'Além disso, em cada bloco de 4 UP, recebe +1 em um atributo à sua escolha. Os dois valem desde o começo do bloco: o do primeiro bloco já pode ser usado no UP 1 ou no 3, sem esperar o UP 4.'],
+        ['note', 'Na ficha', 'A troca do ponto por proficiência fica em Perícias → Proficiências (no roteiro da build, na folha do UP ímpar), e o +1 de atributo é escolhido na aba Progressão.']
       ]
     },
 
@@ -293,10 +311,10 @@ window.VORTEX_REGRAS = {
         ]),
 
         ['h2', 'Proficiência'],
-        ['p', 'A proficiência é um bônus dado pela vantagem “perito em” e, em geral, melhora o uso de um tipo de equipamento.'],
+        ['p', 'A proficiência é o domínio de um tipo de equipamento (um tipo de arma ou uma categoria de armadura) e melhora o uso dele.'],
         ['dl', [
-          ['Em armas', 'Dá a [cadência perita](cadencia) e libera as propriedades do tipo da arma.'],
-          ['Em armaduras', 'Reduz a penalidade da armadura à metade (sem proficiência, a penalidade básica é dobrada) e dá +1 de armadura.']
+          ['Em armas', 'Dá a [cadência perita](cadencia#Com proficiência (Cadência perita)) e os traços do tipo da arma: nas corpo a corpo, todos (veja [Armas](armas#Tipo)); nas de fogo, os que o card marca com “se for proficiente”.'],
+          ['Em armaduras', 'Você usa a penalidade da tabela da armadura (sem proficiência, ela dobra) e ganha +1 de Armadura com ela.']
         ]],
         ['p', 'Você escolhe 4 tipos de armas ou armaduras nos quais é proficiente desde o início.'],
 
@@ -305,7 +323,7 @@ window.VORTEX_REGRAS = {
         ['dl', [
           ['Doutor (1 UP cada)', 'O limite da perícia escolhida passa a ser +4.'],
           ['Proficiência em arma (1 UP cada)', 'Você fica proficiente com um tipo de arma e usa a cadência perita com ele.'],
-          ['Proficiência em armadura (1 UP cada)', 'Você fica proficiente com um tipo de armadura: ganha +1 de armadura com ela e a penalidade dela cai à metade.']
+          ['Proficiência em armadura (1 UP cada)', 'Você fica proficiente com um tipo de armadura: ganha +1 de Armadura com ela e não sofre a penalidade dobrada.']
         ]]
       ]
     },
@@ -323,7 +341,7 @@ window.VORTEX_REGRAS = {
         ['p', 'Itens equipados normalmente não ocupam Carga. Itens transportados ocupam a quantidade indicada em sua ficha.'],
 
         ['h2', 'Equipado'],
-        ['p', 'Os únicos espaços fixos são a **armadura**, o **núcleo** e as **duas mãos** (empunhadura). Não há espaço por parte do corpo: dá para vestir três camisas uma por cima da outra, ou três mochilas.'],
+        ['p', 'Os únicos espaços fixos são a **armadura**, o **núcleo** e as **duas mãos** (empunhadura). Não há espaço por parte do corpo: dá para vestir três camisas uma por cima da outra.'],
         ['ul', [
           '**Vestíveis** (roupas, mochilas, escudos energéticos...): você se beneficia de até **3 + Corpo** deles.',
           '**Mochilas**: há três, sem raridade, e nenhuma ocupa carga. Cada uma funciona como "a cada X da sua Carga (contada antes da mochila), você ganha +Y de carga": **Pequena**, a cada 6, +1; **Média**, a cada 4, +1 (requer Corpo 2); **Grande**, a cada 3, +1 (requer Corpo 3). Só a maior mochila vestida conta; sem o Corpo pedido, ela não dá benefício.',
@@ -333,8 +351,7 @@ window.VORTEX_REGRAS = {
         ['note', 'Bônus de mesma fonte', '**Qualquer bônus de mesma fonte não acumula** (regra geral, em Testes e Dados). Dois itens iguais equipados (duas camisas iguais, dois escudos do mesmo modelo) valem como um só.'],
 
         ['h2', 'Sobrecarga'],
-        ['p', 'Quando a Carga transportada passa do limite do personagem, ele fica **Sobrecarregado**: o deslocamento cai à metade e todas as ações físicas passam a exigir uma categoria de ação maior, assim:'],
-        ['formula', '', 'Bônus → Movimento → Padrão'],
+        ['p', 'Quando a Carga transportada passa do limite do personagem, ele fica **Sobrecarregado**: o deslocamento cai à metade e cada ação física sobe um degrau na [escada de ações](combate#Turno): livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
         ['p', 'A penalidade dura enquanto o personagem estiver acima do limite de Carga.']
       ]
     },
@@ -345,7 +362,7 @@ window.VORTEX_REGRAS = {
       blocks: [
         ['h2', 'Iniciativa'],
         ['formula', 'Iniciativa', '2d6 + Precisão + Iniciativa'],
-        ['p', 'Ao entrar em um combate, todos os envolvidos fazem um teste de Precisão + Iniciativa. O resultado define a ordem dos turnos, do maior para o menor: começa por quem tirou a maior rolagem e termina em quem tirou a menor. A ordem se mantém pelo restante do combate.'],
+        ['p', 'Ao entrar em um combate, todos os envolvidos fazem um teste de Precisão + Iniciativa. O resultado define a ordem dos turnos, do maior para o menor: começa por quem tirou a maior rolagem e termina em quem tirou a menor. A ordem se mantém pelo restante do combate. Em empate, age antes quem tem mais Precisão; se continuar empatado, decide a sorte. Quem chega no meio do combate rola ao entrar e entra na ordem pelo resultado.'],
         ['p', 'Junto com a iniciativa também é rolada a Defesa da cena (veja [Ataque e Defesa](ataque-e-defesa#Defesa)). A iniciativa é rolada no início de qualquer combate ou cena que precise de uma ordem.'],
 
         ['h2', 'Cena'],
@@ -355,15 +372,17 @@ window.VORTEX_REGRAS = {
         ['p', 'Uma rodada é a passagem de todos os participantes pela ordem da iniciativa, do primeiro ao último, e cada um tem o seu turno dentro dela. A rodada é um marco de tempo importante para habilidades, poderes e ações.'],
 
         ['h2', 'Turno'],
-        ['p', 'A ordem dos turnos é definida pela iniciativa. Dentro do seu turno, você dispõe destas ações:'],
+        ['p', 'A ordem dos turnos é definida pela iniciativa. Em cada turno você tem **1 ação padrão, 1 de movimento e 1 bônus**, mais ações livres e reações:'],
         ['dl', [
           ['Ação padrão', 'A ação principal: atacar, fazer uma manobra, usar efeitos utilitários e afins.'],
           ['Ação de movimento', 'Em geral, serve para se deslocar, mas efeitos e habilidades também podem usá-la. Você pode trocar a ação padrão por mais uma ação de movimento.'],
           ['Ação completa', 'A ação padrão e a de movimento juntas, gastas numa coisa só (como avançar ou curar).'],
           ['Ação bônus', 'Uma ação menor, para usar recursos rápidos e acionar mecanismos ou habilidades.'],
           ['Ação livre', 'Algo feito espontaneamente ou junto com as outras ações. Não há limite de ações livres por turno.'],
-          ['Reação', 'Uma resposta à ação de outra pessoa. Também não há limite de reações por turno.']
-        ]]
+          ['Reação', 'Uma resposta à ação de outra pessoa. Não há limite de reações por rodada, mas cada uma responde a um gatilho só.']
+        ]],
+        ['p', '**Escada de ações.** Livre → Bônus → Movimento → Padrão → Completa. Quando uma regra manda uma ação subir uma categoria (Sobrecarga, Akimbo), ela passa para o degrau seguinte.'],
+        ['p', '**Ataque de oportunidade.** Sair do alcance corpo a corpo de um inimigo, sem ser empurrado, deixa ele usar a reação para um ataque corpo a corpo contra você (uma vez por rodada para cada inimigo).']
       ]
     },
 
@@ -380,55 +399,59 @@ window.VORTEX_REGRAS = {
         ]],
         ['p', 'A regra geral para os ataques é: atributo + perícia atrelados.'],
         ['h3', 'Manobra'],
-        ['p', 'Funciona como um ataque, mas em vez de causar dano você tenta impor uma condição ou um estado ao alvo: agarrar, empurrar, derrubar, finalizar, desarmar ou afetar (este último também causa dano, numa parte do corpo). O teste de manobra é **2d6 + Corpo + Luta**. Cada manobra está em [Ações](acoes#Manobras); as condições que elas causam, em [Condições e Estados](condicoes-e-estados).'],
+        ['p', 'Funciona como um ataque, mas em vez de causar dano você tenta impor uma condição ou um estado ao alvo: agarrar, empurrar, derrubar, desarmar, quebrar a guarda, finalizar ou afetar (estes dois últimos são ataques, com dano). O teste de manobra é **2d6 + Corpo + Luta**. Cada manobra está em [Ações](acoes#Manobras); as condições que elas causam, em [Condições e Estados](condicoes-e-estados).'],
 
         ['h2', 'Defesa'],
-        ['p', 'Quando você é alvo de um ataque, sua defesa reduz ou anula esse ataque. Ela é definida no início de cada combate, junto da iniciativa, com um teste de defesa:'],
-        ['formula', '', '2d6 + Corpo + Resistência = Defesa'],
-        ['p', 'Se o teste ficar abaixo disso, usa-se a defesa mínima.'],
+        ['p', 'Quando você é alvo de um ataque, sua Defesa reduz esse ataque. Ela é definida no início de cada combate, junto da iniciativa, com um teste de defesa, e vale até o fim do combate:'],
+        ['formula', 'Defesa', '2d6 + Corpo + Resistência'],
+        ['p', 'Se o teste ficar abaixo da Defesa mínima (ou falhar com duas falhas críticas), vale a mínima. Fora de combate, quando uma regra pede a Defesa (uma queda, por exemplo), use a mínima.'],
         ['h3', 'Defesa mínima'],
-        ['formula', '', 'Armadura + Corpo + Resistência'],
+        ['formula', 'Defesa mínima', 'Armadura + Corpo + Resistência'],
+        ['p', 'A Armadura é a da armadura vestida, quando for maior que a [básica](atributos-e-recursos#Armadura básica) (6). Um bônus ou uma penalidade de Armadura que comece no meio do combate muda a Defesa atual no mesmo valor, enquanto durar, e a Defesa nunca fica abaixo da mínima.'],
 
         ['h2', 'Danos'],
-        ['formula', '', 'Fonte do dano = Ataque – Defesa do alvo'],
-        ['p', 'Se o resultado for zero ou negativo, o dano mínimo é sempre 1, a menos que alguma fonte mude isso. O dano atinge as suas resistências (Escudo, Blindagem e Vida), descritas abaixo.'],
-        ['p', '**Dano fixo e dano de efeito.** Fora do cálculo acima, só o dano fixo e o dano de efeito (como o Sangramento ou o dano adicional de alguns itens) podem rolar um dado de dano ou somar dano que passa pela Defesa do alvo.'],
+        ['formula', 'Dano', '(Ataque – Defesa do alvo) × disparos'],
+        ['p', 'O ataque **acerta** quando o total passa da Defesa do alvo. Se ficar igual ou abaixo, é um **raspão**: o ataque erra, causa só o dano mínimo (1 por disparo) e não aplica efeitos de acerto (os que dizem “se acertar”). Quando uma regra diz que o ataque erra automaticamente (Acuidade, Ofuscado, Cego), ele não causa nem o dano mínimo.'],
+        ['p', 'O dano atinge as suas camadas de vida (Escudo, Blindagem e PV), descritas abaixo.'],
+        ['p', '**Dano fixo e dano de efeito.** Fora do cálculo acima, só o dano fixo e o dano de efeito (como o Sangramento ou o dano adicional de alguns itens) podem rolar um dado de dano ou somar dano que passa pela Defesa do alvo. Eles entram uma vez por alvo, depois do multiplicador da cadência.'],
 
         ['h2', 'Tipo de dano'],
         ['p', 'Cada tipo de dano interage de um jeito com alvos que tenham fraquezas ou resistências a ele.'],
         ['dl', [
           ['Físicos', ['Cortante', 'Contundente', 'Perfurante', 'Balístico']],
           ['Elementos', ['Fogo', 'Ácido/químico', 'Elétrico']],
-          ['Especiais', ['Explosivo', 'Radioativo', 'Necrótico']]
+          ['Especiais', ['Explosivo', 'Radioativo', 'Necrótico', 'Energia', 'Impacto']]
         ]],
+        ['p', 'Energia (lasers, Tecnomancia) e Impacto não têm fraqueza nem resistência nas camadas de vida.'],
 
         ['h2', 'Fraquezas e Eficiência de Dano'],
-        ['p', 'Um ataque é **eficiente** quando o alvo é fraco ao tipo de dano dele: o dano é **dobrado** depois do cálculo normal.'],
+        ['p', 'Um ataque é **eficiente** quando a camada atingida é fraca ao tipo de dano dele: o dano nessa camada é **dobrado** depois do cálculo normal. Algumas armas são eficientes contra uma camada por natureza (a Marreta contra Blindagem, o Machado contra Escudo).'],
+        ['p', 'Um ataque é **resistido** quando a camada atingida resiste ao tipo dele: o dano nessa camada cai à **metade** (arredondado para baixo, mínimo 1).'],
 
-        ['h2', 'Tipos de Resistência'],
+        ['h2', 'Camadas de vida'],
         ['card', 'Pontos de Vida (PV)', [
           ['p', 'Carne, sangue e tecido vivo.'],
-          ['kv', '', [['Fraquezas', 'Radioativo, Cortante (dano dobrado).'], ['Resistência', 'Nenhuma.']]],
+          ['kv', '', [['Fraquezas', 'Radioativo, Cortante (dano dobrado).'], ['Resiste a', 'Nada.']]],
           ['p', 'Os PV podem ser recuperados por qualquer fonte médica ou efeito que afete Pontos de Vida.']
         ], 3],
         ['card', 'Escudo (E)', [
           ['p', 'Um campo de proteção energética.'],
-          ['kv', '', [['Fraquezas', 'Elétrico, Contundente (dano dobrado).'], ['Resistência', 'Cortante, Perfurante.']]],
-          ['p', 'O Escudo pode ser restaurado por qualquer fonte de energia compatível.']
+          ['kv', '', [['Fraquezas', 'Elétrico, Contundente (dano dobrado).'], ['Resiste a', 'Cortante, Perfurante (dano pela metade).']]],
+          ['p', 'O Escudo pode ser restaurado por qualquer fonte de energia compatível e volta no descanso.']
         ], 3],
         ['card', 'Blindagem (BL)', [
           ['p', 'Superfícies rígidas e reforçadas.'],
-          ['kv', '', [['Fraquezas', 'Ácido, Explosivo (dano dobrado).'], ['Resistência', 'Fogo, Cortante, Balístico.']]],
-          ['p', 'A Blindagem só pode ser reparada ou substituída.']
+          ['kv', '', [['Fraquezas', 'Ácido/químico, Explosivo (dano dobrado).'], ['Resiste a', 'Fogo, Cortante, Balístico (dano pela metade).']]],
+          ['p', 'A Blindagem não se regenera sozinha nem com descanso: volta com conserto (veja [Cura](cura#Blindagem (BL))), com efeitos que digam isso ou com a troca da peça.']
         ], 3],
 
         ['h2', 'Observações'],
         ['ul', [
           'Se um ataque causar **mais de um tipo de dano**, os efeitos de fraqueza ou resistência **não se acumulam**.',
-          'A redução de dano por dois tipos resistidos também **não acumula**, mas pode ser anulada se um dos tipos for efetivo contra o alvo.',
-          'Caso o alvo possua duas ou mais camadas de resistência, o dano é aplicado sempre na ordem: **Escudo → Blindagem → Vida.**',
-          'Se o dano exceder uma camada de resistência, o valor restante passa a ser afetado pelas propriedades da próxima camada atingida.',
-          'O bônus de **dano dobrado por fraqueza** não conta para o cálculo do dano excedente à resistência afetada (a menos que a próxima resistência também seja fraca ao dano recebido).'
+          'A redução de dano por dois tipos resistidos também **não acumula**, e a fraqueza vence a resistência: se um dos tipos for eficiente contra a camada, o dano dobra.',
+          'Caso o alvo possua duas ou mais camadas de vida, o dano é aplicado sempre na ordem: **Escudo → Blindagem → PV.**',
+          'Se o dano exceder uma camada, o valor restante passa a ser afetado pelas fraquezas e resistências da próxima camada atingida.',
+          'O bônus de **dano dobrado por fraqueza** não conta para o cálculo do dano excedente à camada afetada (a menos que a próxima camada também seja fraca ao dano recebido).'
         ]]
       ]
     },
@@ -437,19 +460,21 @@ window.VORTEX_REGRAS = {
     {
       id: 'morte-e-agonia', title: 'Morte e Agonia', group: 'Combate',
       blocks: [
-        ['p', 'Se o seu personagem chegar a 0 PV, ele cai **agonizando**. Ainda não é o fim: ele só morre quando chega ao valor negativo do seu PV máximo.'],
+        ['p', 'Se o seu personagem chegar a 0 PV, ele cai **agonizando**: fica inconsciente e Caído, sem ações, e continua sofrendo dano normalmente. Ainda não é o fim: ele só morre quando chega ao valor negativo do seu PV máximo.'],
         ['example', 'Um personagem com PV máximo 20 morre ao chegar a –20.'],
+        ['p', 'Quem não tem PV (o Robô, que vive da Blindagem, ou um ser só de Escudo e Blindagem) não agoniza: quando todas as camadas de vida zeram, ele fica **fora de combate**, sem ações, até ser consertado (veja [Cura](cura#Blindagem (BL))) ou reanimado.'],
 
         ['h2', 'Teste de Sobrevivência'],
-        ['p', 'Enquanto estiver com 0 PV ou menos, o personagem faz um teste de Fortitude com CD 6, que aumenta em +1 a cada nova tentativa no mesmo dia.'],
+        ['p', 'Enquanto estiver com 0 PV ou menos, o personagem faz, na vez dele, um teste de Fortitude contra CD 6, que aumenta em +1 a cada nova tentativa no mesmo dia.'],
         ['dl', [
-          ['Se falhar', 'Recebe 1 de dano, que o leva mais para o negativo. Esse dano aumenta em +1 a cada nova falha no mesmo dia.'],
-          ['Se passar', 'Estabiliza, mas continua inconsciente até ser reanimado, o que leva no mínimo um descanso longo ou exige uma fonte médica.']
+          ['Se falhar', 'Recebe 1 de dano direto no PV, que o leva mais para o negativo. Esse dano aumenta em +1 a cada nova falha no mesmo dia.'],
+          ['Se passar', 'Estabiliza: para de testar, mas continua inconsciente até ser reanimado ou até um descanso longo. Se sofrer dano de novo, volta a fazer o teste.']
         ]],
 
-        ['h2', 'Teste de medicina para reanimar'],
-        ['p', 'Para reanimar alguém caído, faça um teste de Ofício (Medicina) com CD 6, que aumenta em +1 a cada nova tentativa na mesma cena. Para tentar, você usa uma ação no caído, precisa ter Precisão 3 ou +1 em Ofício (Medicina) e gasta um uso de qualquer Kit Médico. Se passar, o alvo volta com 1 PV.'],
-        ['p', 'Se o caído for um robô ou outro ser não vivo, troque o teste de medicina por Tecnologia e o Kit Médico por um kit robótico.']
+        ['h2', 'Reanimar'],
+        ['p', 'Reanimar alguém caído (agonizando ou fora de combate) custa uma **ação padrão**: faça um teste de Ofício (Medicina) contra CD 6, que aumenta em +1 a cada nova tentativa na mesma cena. Para tentar, você precisa de Precisão 3 ou +1 em Ofício (Medicina) e de um Kit Médico, que gasta um uso se for consumível. Se passar, o alvo volta com 1 PV.'],
+        ['p', 'Se o caído for um Robô ou outro ser não vivo, troque o Ofício (Medicina) por Tecnologia (com Precisão 3 ou +1 em Tecnologia) e o Kit Médico por um Kit Técnico. Se passar, ele volta com 1 de Blindagem (ou 1 na camada que for a vida dele).'],
+        ['p', 'Quem estabilizou também acorda com um descanso longo (veja [Recuperação](atributos-e-recursos#Recuperação)). Quem morreu não volta com reanimação.']
       ]
     },
 
@@ -457,35 +482,38 @@ window.VORTEX_REGRAS = {
     {
       id: 'cura', title: 'Cura', group: 'Combate',
       blocks: [
-        ['p', 'Recuperar **Pontos de Vida (PV)**, **Escudo (E)** e **Blindagem (BL)** usa um método específico para cada recurso, mas todos seguem a mesma regra geral: você faz um **teste da perícia indicada** contra a **CD do alvo**.'],
+        ['p', 'Recuperar **Pontos de Vida (PV)**, **Escudo (E)** e **Blindagem (BL)** usa um método específico para cada recurso, mas todos seguem a mesma regra geral: com o item certo, você faz um **teste da perícia indicada** contra a **CD do alvo**. Curar custa uma **ação completa** (veja [Ações](acoes#Normais)).'],
 
         ['h2', 'Classe de Dificuldade (CD)'],
-        ['p', 'A CD depende do **valor máximo** do recurso que está sendo restaurado: se o recurso estiver com **menos da metade** do máximo, a **CD é 10**; caso contrário, a **CD é 6**.'],
-        ['p', 'Cada **condição negativa** que afeta o alvo aumenta a CD em **+2**. Contam também as condições vinculadas (as que vêm antes dela), e a cura sempre acontece antes de qualquer efeito que anule condições.'],
+        ['p', 'A cura não usa a tabela geral de CD (veja [Testes e Dados](testes-e-dados#Classe de Dificuldade (CD))): a CD depende de quanto falta do recurso. Se ele estiver com **menos da metade** do máximo, a **CD é 10**; caso contrário, a **CD é 6**.'],
+        ['p', 'Cada **condição negativa** que afeta o alvo aumenta a CD em **+2** (veja [Condições](condicoes-e-estados#Condições)); estados como Caído ou uma cobertura não contam. Contam também as condições vinculadas (as que vêm antes dela), e a cura sempre acontece antes de qualquer efeito que anule condições.'],
 
         ['h2', 'Recuperação'],
-        ['p', 'Em caso de sucesso, o alvo recupera do recurso a **diferença entre o resultado do teste e a CD**, somada aos bônus de habilidades, equipamentos ou outros efeitos. Se o resultado for igual ou menor que a CD, nada é recuperado.'],
+        ['p', 'O alvo recupera do recurso a **diferença entre o resultado do teste e a CD**. Um resultado igual ou menor que a CD (ou duas falhas críticas) não recupera nada pelo teste. Os bônus de itens e efeitos se somam a isso (veja Bônus, abaixo).'],
+        ['example', 'Contra CD 10, um teste 13 recupera 3 PV. Com um item de +2 PV, recupera 5; se o teste tivesse dado 9, recuperaria só os 2 do item.'],
 
         ['h2', 'Pré-requisitos'],
+        ['p', 'O Ofício conta com a especialidade certa (Medicina para PV, Engenharia para Blindagem) ou quando nenhuma especialidade foi escrita; com outra especialidade, o teste usa só o atributo.'],
         ['h3', 'Pontos de Vida (PV)'],
-        ['p', 'É necessário um **Kit Médico**.'],
+        ['p', 'É necessário um **Kit Médico** (ou outro item médico).'],
         ['formula', 'Teste', '2d6 + Precisão + Ofício (Medicina)'],
         ['h3', 'Escudo (E)'],
-        ['p', 'É necessário um **Carregador de Energia**.'],
+        ['p', 'É necessário um **Carregador de Energia**, como o Carregador de Campo LS-3.'],
         ['formula', 'Teste', '2d6 + Essência + Operações'],
         ['h3', 'Blindagem (BL)'],
-        ['p', 'São necessários **Componentes Mecânicos**.'],
-        ['formula', 'Teste', '2d6 + Precisão + Ofício (Engenharia)'],
+        ['p', 'É necessário um **Kit Técnico** ou **Componentes Mecânicos**. Vale o melhor dos dois testes.'],
+        ['formula', 'Teste', '2d6 + Precisão + Ofício (Engenharia) ou Tecnologia'],
 
         ['h2', 'Itens de recuperação (Live Service)'],
         ['h3', 'Tipos'],
         ['dl', [
           ['Ferramenta', 'Não é consumida pelo uso.'],
-          ['Consumível', 'É perdido depois do uso; cada um pode ter uma quantidade de usos e um custo de ação diferentes.'],
-          ['Estação', 'Leva uma ação completa para instalar ou retirar e outra para usar, e só pode ser usada por quem tem a perícia atrelada a ela.']
+          ['Consumível', 'Gasta um uso a cada cura ou reanimação e acaba quando os usos terminam.'],
+          ['Estação', 'Instalar ou retirar custa uma ação completa. Montada, ela soma o bônus dela nos testes de cura do recurso que indica (vale a maior estação), mas só para quem tem ao menos +1 na perícia do teste.']
         ]],
         ['h3', 'Bônus'],
-        ['p', 'O bônus de um item se soma à recuperação do recurso, e essa parte é recuperada mesmo quando o teste falha.']
+        ['p', 'O bônus de recuperação de um item (por exemplo, +5 PV) se soma ao que o teste recuperou, e essa parte entra mesmo quando o teste não recupera nada.'],
+        ['p', '**Usar sem teste.** Um consumível com bônus de recuperação também pode ser usado direto, com a ação padrão (Usar): o alvo recebe só o bônus do item, sem teste nem CD.']
       ]
     },
 
@@ -499,14 +527,16 @@ window.VORTEX_REGRAS = {
         ['h3', 'Normais'],
         ['dl', [
           ['Ataque', 'Qualquer ataque custa uma ação padrão.'],
+          ['Arremessar', 'Arremessar um objeto é um ataque à distância (ação padrão, 2d6 + Precisão + Mira) com alcance de 9 m. Granadas usam a regra própria (veja [Granadas](armas#Granadas)).'],
           ['Deslocamento', 'Usar o seu deslocamento custa uma ação de movimento.'],
-          ['Curar', 'Além dos componentes, curar consome uma ação completa (veja [Cura](cura)).']
+          ['Curar', 'Além do item, curar consome uma ação completa (veja [Cura](cura)).'],
+          ['Reanimar', 'Trazer de volta alguém caído custa uma ação padrão (veja [Reanimar](morte-e-agonia#Reanimar)).']
         ]],
 
         ['h3', 'Táticas'],
         ['dl', [
           ['Percepções', 'Analisar, procurar ou investigar custa uma ação de movimento.'],
-          ['Esconder-se', 'Você precisa de algo que engane os sentidos, como fumaça, escuridão, silêncio ou camuflagem. Em combate, esconder-se de algo ou de alguém é uma ação padrão, que permite fazer o teste de furtividade.'],
+          ['Esconder-se', 'Você precisa de algo que engane os sentidos, como fumaça, escuridão, silêncio ou camuflagem. Em combate, esconder-se é uma ação padrão com um teste de furtividade (2d6 + Precisão + Manha, com a penalidade de armadura). Você fica [Escondido](condicoes-e-estados#Específicos), e o resultado vira a dificuldade para quem tentar achar você.'],
           ['Mirar', 'Ação de movimento: você engaja a mira, e ela vale até o início do seu próximo turno.'],
           ['Apoiar equipamento', 'Apoiar a arma numa [cobertura](condicoes-e-estados#Benéficos) para atirar pelo campo de visão não coberto: ação completa. Sair de uma cobertura é uma ação livre.'],
           ['Avançar', 'Você usa sua ação completa para se deslocar em linha reta o dobro do seu deslocamento. Ao final, pode fazer um ataque corpo a corpo como parte da ação; esse ataque não ativa habilidades. Se houver no caminho uma criatura de tamanho igual ou menor que o seu, você a atropela.'],
@@ -516,20 +546,21 @@ window.VORTEX_REGRAS = {
         ['h3', 'Manobras'],
         ['p', 'Uma manobra costuma custar a ação padrão e só pode ser feita contra um alvo adjacente a você no momento da ação. O teste de manobra é **2d6 + Corpo + Luta**, contra o teste que cada manobra indicar.'],
         ['dl', [
-          ['Agarrar', 'Teste de manobra contra o teste que o alvo escolher: Corpo + Luta ou Precisão + Reflexos. Se você vencer, o alvo fica [Agarrado](condicoes-e-estados#Passageiras) por você. O teste de quem é agarrado ganha +2 para cada categoria de tamanho de diferença entre ele e quem agarra.'],
+          ['Agarrar', 'Teste de manobra contra o teste que o alvo escolher: Corpo + Luta ou Precisão + Reflexos. Se você vencer, o alvo fica [Agarrado](condicoes-e-estados#Passageiras) por você. O teste de quem é agarrado ganha +2 para cada categoria de [tamanho](atributos-e-recursos#Tamanho) de diferença entre ele e quem agarra.'],
           ['Empurrar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se o alvo perder, é empurrado na direção que você escolher: 1,5 m, mais 1,5 m a cada 3 pontos que o seu teste superar o dele. A distância dobra se o alvo for Pequeno ou menor.'],
-          ['Derrubar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, o alvo fica Caído.'],
-          ['Desarmar', 'Você faz a manobra contra um objeto empunhado, e quem o empunha faz um teste de Resistência ou Reflexos contra o seu. Se você vencer, escolhe: jogar o item no chão, arremessá-lo (como numa ação de arremesso) ou ficar com ele, se tiver as mãos livres.'],
+          ['Derrubar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, o alvo fica [Caído](condicoes-e-estados#Específicos).'],
+          ['Quebrar a guarda', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, ele fica com a guarda aberta: –2 na Defesa até a próxima rodada.'],
+          ['Desarmar', 'Você faz a manobra contra um objeto empunhado, e quem o empunha faz um teste de Resistência ou Reflexos contra o seu. Se você vencer, escolhe: jogar o item no chão, arremessá-lo (como em Arremessar, até 9 m) ou ficar com ele, se tiver uma mão livre. Pegar um item do chão custa uma ação de movimento.'],
           ['Finalizar', 'Só contra um alvo inconsciente, paralisado ou com 0 PV ou menos. Você faz um ataque normal, mas o dano é calculado apenas contra a Defesa mínima do alvo, com o valor cheio do seu ataque: os dados contam como o máximo, e você só os rola para ver se houve crítico.'],
-          ['Afetar', 'Você mira uma parte do corpo do alvo (pernas, braços, peito ou cabeça) e causa um dano massivo localizado. Se o teste tiver 2 críticos (6 nos dois dados), você também pode deixar um efeito naquela parte, que dura até o alvo receber qualquer cura. Seres abióticos são imunes a esse efeito.']
+          ['Afetar', 'Um ataque normal mirando uma parte do corpo do alvo: pernas, braços, peito ou cabeça. Se o ataque acertar e o teste tiver 2 críticos (6 nos dois dados), além do dano o alvo fica afetado naquela parte até receber qualquer cura: **pernas**, –3 m de deslocamento; **braços**, –2 nos ataques; **peito**, –2 na Defesa; **cabeça**, Atordoado. Seres abióticos (não vivos ou sem PV, como o Robô e o Android) são imunes a esse efeito.']
         ]],
 
         ['h3', 'Equipamento'],
         ['dl', [
           ['Saquear', 'Revistar um lugar ou um corpo custa uma ação completa.'],
-          ['Vestir / Entrar na direção de veículos', 'Ação completa.'],
-          ['Sacar', ['Armas: ação de movimento.', 'Itens utilitários e consumíveis com empunhadura [Saque](empunhadura#Saque): fazem parte da ação principal.']],
-          ['Usar', ['Consumíveis e utilitários: ação padrão.', 'Ferramentas: o custo da ação em que são usadas.', 'Estações: toda uma cena (incluindo o interlúdio, sem afetar a sua recuperação).']]
+          ['Vestir / Entrar na direção de veículos', 'Ação completa. Conduzir numa situação difícil pede um teste de Precisão + Pilotagem contra a CD que o mestre definir.'],
+          ['Sacar ou guardar', ['Armas: ação de movimento (pistola e revólver: ação bônus).', 'Itens de empunhadura [Saque](empunhadura#Saque): uma vez por turno, sem gastar ações. Utilitários e consumíveis de Saque também saem como parte da ação de usá-los.', 'Pegar um item do chão: ação de movimento.']],
+          ['Usar', ['Consumíveis e utilitários: ação padrão (o saque já está incluído).', 'Ferramentas: o custo da ação em que são usadas (curar com um Kit Médico é a ação completa de Curar).', 'Estações: instalar ou retirar custa uma ação completa; montada, a estação soma o bônus dela na cura (veja [Cura](cura#Tipos)).']]
         ]],
 
         ['h2', 'Salto, queda e fôlego'],
@@ -541,8 +572,8 @@ window.VORTEX_REGRAS = {
           ['Mais longe', 'Para passar desse limite, faça um teste de Atletismo: a cada 2 pontos acima de CD 6, +1 m.']
         ]],
         ['h3', 'Queda'],
-        ['p', 'A queda é um ataque de impacto contra você: role **1d6 a cada 3 m** de queda, até o máximo de **20d6** (passa dos 4 dados de um ataque comum). O total vai contra a sua Defesa como qualquer ataque, e você termina caído no chão.'],
-        ['formula', '', 'Dano da queda = rolagem da queda – Defesa'],
+        ['p', 'A queda é um ataque de impacto contra você: role **1d6 a cada 3 m** de queda, até o máximo de **20d6** (passa dos 4 dados de um ataque comum). O total vai contra a sua Defesa como qualquer ataque (fora de combate, a Defesa mínima), e você termina [Caído](condicoes-e-estados#Específicos).'],
+        ['formula', 'Dano da queda', 'rolagem da queda – Defesa'],
         ['h3', 'Fôlego'],
         ['p', 'Você aguenta prender a respiração por **1 + Corpo** minutos (mínimo 30 segundos). Depois disso, começa a sufocar: aguenta mais **Corpo** rodadas (mínimo 1) e então cai com 0 PV, agonizando. Voltar a respirar encerra a sufocação.'],
         ['p', 'Esforço intenso (combate, correr, nadar) enquanto prende a respiração corta o tempo pela metade.']
@@ -551,7 +582,7 @@ window.VORTEX_REGRAS = {
 
     /* ------------------------------------------------------------ */
     {
-      id: 'penalidades', title: 'Penalidades', group: 'Combate',
+      id: 'penalidades', title: 'Alcance e Acuidade', group: 'Combate',
       blocks: [
         ['h2', 'Alcance'],
         ['table', ['Distância', 'Alcance'], [
@@ -564,8 +595,9 @@ window.VORTEX_REGRAS = {
         ['p', 'Se você atirar a uma distância maior ou menor que a distância efetiva da sua arma, recebe –3 no ataque para cada faixa acima ou abaixo da efetiva. Atirar em um inimigo adjacente dá –2 no ataque.'],
 
         ['h2', 'Acuidade'],
-        ['p', 'Para disparar a partir da distância média (mesmo dentro da distância efetiva da arma), ou contra um alvo sob cobertura, você precisa antes de um teste de Sentidos para conseguir tentar acertar. Se for proficiente com a arma, pode fazer esse teste com Mira, usando a ação de mirar. Se usar a ação de mirar com uma mira ideal para a distância, ignora o teste. Sem nada disso, o disparo erra.'],
+        ['p', 'Para disparar a partir da distância média (mesmo dentro da distância efetiva da arma), ou contra um alvo sob cobertura, você precisa antes passar num **teste de Acuidade**: 2d6 + Essência + Sentidos contra a CD da tabela. Se for proficiente com a arma e usar a ação de mirar, pode fazer o teste com Precisão + Mira. Mirando com uma mira ideal para a distância (veja [Miras](mods-e-acessorios#Miras)), você dispensa o teste. Se falhar, o disparo erra automaticamente.'],
         ['table', ['Distância', 'CD'], [
+          ['Curto', 'só contra alvo sob cobertura: CD 6'],
           ['Médio', 'CD 6'],
           ['Longo', 'CD 12'],
           ['Muito longo', 'CD 18'],
@@ -584,17 +616,29 @@ window.VORTEX_REGRAS = {
     {
       id: 'cadencia', title: 'Regras de Cadência', group: 'Combate',
       blocks: [
-        ['p', 'Toda arma tem um número máximo de disparos por ação: a sua **cadência**.'],
+        ['p', 'Toda arma tem um número máximo de disparos por ação: a sua **cadência**. Você escolhe quantos disparos fazer, até a cadência, e pode dividi-los entre vários alvos: um só teste de ataque vale para todos, com a penalidade do total de disparos, e o dano de cada alvo é multiplicado pelos disparos que ele recebeu.'],
 
         ['h2', 'Sem proficiência'],
-        ['p', 'Um único disparo não sofre penalidade. A cada disparo adicional, você soma à penalidade o número daquele disparo. O dano final é multiplicado pelo número de disparos contra cada alvo.'],
+        ['p', 'Um único disparo não sofre penalidade. Com dois ou mais, cada disparo soma o número dele à penalidade, contando desde o primeiro. O dano final é multiplicado pelo número de disparos contra cada alvo.'],
         ['example', 'Cadência 4 → o usuário dispara 3 vezes. Penalidade: –1 –2 –3 = –6 no ataque. Dano final ×3.'],
 
         ['h2', 'Com proficiência (Cadência perita)'],
         ['p', 'Um único disparo também não sofre penalidade, mas, com mais de um, a penalidade é igual à quantidade de disparos. O dano final é multiplicado da mesma forma.'],
         ['example', 'Cadência 4 → o usuário dispara 3 vezes. Penalidade –3 no ataque. Dano final ×3.'],
 
-        ['p', 'A penalidade sai primeiro do seu modificador fixo de ataque: primeiro da perícia, depois do atributo. A cadência é contada por rodada e por arma.']
+        ['h2', 'Resumo'],
+        ['table', ['Disparos', 'Sem proficiência', 'Cadência perita', 'Dano'], [
+          ['1', '0', '0', '×1'],
+          ['2', '–3', '–2', '×2'],
+          ['3', '–6', '–3', '×3'],
+          ['4', '–10', '–4', '×4'],
+          ['5', '–15', '–5', '×5'],
+          ['6', '–21', '–6', '×6']
+        ]],
+
+        ['h2', 'Como a penalidade entra'],
+        ['p', 'A penalidade vale inteira no ataque. Ela é descontada primeiro do bônus da perícia e, o que passar dele, do atributo; por isso o crítico, que soma o atributo de novo, soma só o que sobrou do atributo. A cadência é contada por rodada e por arma.'],
+        ['p', 'O Laser é a exceção: a rajada sai inteira num alvo só, sem penalidade nem multiplicador (veja [Laser](armas#Laser)).']
       ]
     },
 
@@ -604,19 +648,27 @@ window.VORTEX_REGRAS = {
       blocks: [
         ['h2', 'Condições'],
         ['p', 'Condições são aplicadas diretamente ao personagem, como doenças, envenenamento e cegueira. Também podem ser benéficas: voraz, furioso (esse nem tanto), energizado, imune e assim por diante.'],
-        ['p', 'Condições se acumulam entre si, e uma condição pode anular a sua oposta; nesse caso, vale a última aplicada.'],
+        ['p', 'Condições diferentes se acumulam entre si, mas a mesma condição aplicada de novo só renova a duração (o Atordoado e o Ferido têm regra própria). Uma condição pode anular a sua oposta; nesse caso, vale a última aplicada. Cada condição negativa no alvo aumenta a CD da [cura](cura#Classe de Dificuldade (CD)) em +2.'],
         ['h3', 'Instantâneas'],
+        ['p', 'Pegam na hora e duram pouco: o efeito que as causou diz a duração; se não disser, vão até o fim do próximo turno do afetado.'],
         ['dl', [
-          ['Zonzo', 'Se tentar se mover, o afetado vai para uma direção aleatória decidida pelo mestre, e tem perdas na defesa.'],
+          ['Zonzo', 'O afetado tem –2 na Defesa e, se tentar se mover, vai para uma direção aleatória decidida pelo mestre.'],
           ['Atordoado', 'Cada atordoamento consome a ação de movimento do próximo turno do afetado. Se essa ação já tiver sido consumida por outro atordoamento, ele perde o próximo turno inteiro e, até lá, sua defesa vira a defesa mínima. Quem é imune a efeitos mentais ignora esta condição.'],
-          ['Ofuscado', 'Você tem perdas em testes de percepção que dependem da visão. Em ataques à distância, role 1d4: com 1 ou 2 o ataque erra automaticamente; em ataques corpo a corpo, erra com 1.'],
+          ['Ofuscado', 'Você rola um dado a menos (perda) nos testes de percepção que dependem da visão. Antes de cada ataque, role 1d4: à distância, com 1 ou 2 o ataque erra automaticamente; corpo a corpo, erra com 1.'],
+          ['Cego', 'Você escolhe a direção do ataque e quem acha que é o alvo; depois rola 1d4: com 1 ou 2, o ataque erra automaticamente, seja qual for o resultado do ataque.'],
           ['Imóvel', 'Você não pode se mover por conta própria: seu deslocamento vira 0, e ataques contra você têm vantagem.']
         ]],
         ['h3', 'Passageiras'],
+        ['p', 'Ficam até algo encerrá-las: a duração do efeito, um teste para se livrar ou uma cura, conforme a descrição.'],
         ['dl', [
-          ['Envenenamento', 'O afetado recebe o dado de dano químico do veneno (d“x”) no início do seu turno, pela quantidade de turnos indicada na descrição do veneno.'],
-          ['Necrose', 'Como o envenenamento, mas o dano é necrótico. Se o afetado receber metade da sua vida máxima em dano necrótico, o efeito acaba, mas o membro que a necrose infectou é perdido. Seres e membros artificiais são imunes à necrose.'],
-          ['Agarrado', 'Quem perde o teste contra uma tentativa de [Agarrar](acoes#Manobras) fica Agarrado. Você se move junto com quem o agarrou, e o deslocamento dos dois cai à metade. Para se soltar, use sua ação de movimento para repetir o teste; se vencer, fica livre. Enquanto estiver Agarrado, você só pode fazer ações desarmadas ou com itens de empunhadura Saque, e conta como Imóvel para todos os efeitos.']
+          ['Envenenado', 'O afetado recebe o dado de dano químico do veneno (d“x”) no início do seu turno, pela quantidade de turnos indicada na descrição do veneno.'],
+          ['Necrose', 'Como o Envenenado, mas o dano é necrótico. Se o afetado receber metade da sua vida máxima em dano necrótico, o efeito acaba, mas o membro que a necrose infectou é perdido. Seres e membros artificiais são imunes à necrose.'],
+          ['Agarrado', 'Quem perde o teste contra uma tentativa de [Agarrar](acoes#Manobras) fica Agarrado. Você se move junto com quem o agarrou, e o deslocamento dos dois cai à metade. Para se soltar, use sua ação de movimento para repetir o teste; se vencer, fica livre. Enquanto estiver Agarrado, você só pode fazer ações desarmadas ou com itens de empunhadura Saque, e conta como Imóvel para todos os efeitos.'],
+          ['Sangrando', 'O afetado perde PV no começo de cada turno dele, até receber qualquer cura: a quantidade que a fonte disser (1d6, se ela não disser).'],
+          ['Ferido', '–1 no ataque e na Defesa por ferida, até o máximo de –3, até receber qualquer cura.'],
+          ['Em chamas', 'Vem do efeito **Incendiar**. O afetado sofre o dano de fogo da fonte (1d6, se ela não disser) no começo de cada turno dele, até o fogo ser apagado (uma ação de movimento rolando no chão ou abafando, ou entrar na água). Quem é imune a fogo não sofre o dano.'],
+          ['Inconsciente', 'O afetado não age, fica Caído e pode ser [finalizado](acoes#Manobras). Quem está agonizando também está inconsciente.'],
+          ['Paralisado', 'O afetado não age nem se move, mas continua consciente, e pode ser finalizado.']
         ]],
 
         ['h2', 'Estados'],
@@ -634,9 +686,21 @@ window.VORTEX_REGRAS = {
         ]],
         ['h3', 'Específicos'],
         ['dl', [
+          ['Caído', 'No chão: –2 na Defesa até se levantar, o que custa uma ação de movimento.'],
+          ['Guarda aberta', 'Depois de [Quebrar a guarda](acoes#Manobras): –2 na Defesa até a próxima rodada.'],
           ['No ar', 'Um alvo caindo sem meio de voo (ou voando, se nada disser o contrário) tem –3 em testes.'],
           ['Muito perto!', 'Atirar em um alvo adjacente com uma arma à distância dá –2 no ataque.'],
-          ['Cego', 'Você escolhe a direção do ataque e quem acha que é o alvo; depois rola 1d4: com 1 ou 2, o ataque erra, seja qual for o resultado do ataque.']
+          ['Escondido', 'Quem passou no teste de [esconder-se](acoes#Táticas). O resultado do teste é a dificuldade para achar você (Sentidos) e a CD da [Acuidade](penalidades#Acuidade) contra você, se for maior. Atacar revela a sua posição.'],
+          ['Flanqueado', 'Com dois inimigos adjacentes em lados opostos. Sozinho não muda os testes, mas ativa efeitos como o Golpe baixo do Renegado.'],
+          ['PEM', 'Um pulso eletromagnético atordoa automaticamente os seres eletrônicos e desativa Escudos, pela duração do efeito. O Android, com a Humanidade, testa contra a CD do efeito; sem CD, não é afetado.']
+        ]],
+
+        ['h2', 'Categorias'],
+        ['p', 'Algumas regras falam de tipos de efeito ou de ser:'],
+        ['dl', [
+          ['Efeitos mentais', 'O Atordoado e tudo o que mexe com a mente (medo, leitura de pensamentos). Quem é imune a efeitos mentais os ignora; o poder Mente de outro mundo dá ganho nos testes contra eles.'],
+          ['Efeitos biológicos', 'Venenos, necrose, sangramento e doenças. Seres não vivos (como o Robô) não são afetados.'],
+          ['Seres eletrônicos', 'Robô, Android, drones e outros seres de circuito: são afetados pelo PEM. Os que não têm PV, como o Robô e o Android, também são abióticos e imunes a Afetar.']
         ]]
       ]
     },
@@ -670,11 +734,14 @@ window.VORTEX_REGRAS = {
         ['p', 'Nas armaduras, a raridade define a qualidade da proteção.'],
         ['dl', [
           ['Comum', 'Normal, ou quase isso.'],
-          ['Incomum', 'Pode ter uma propriedade.'],
+          ['Incomum', 'Tem uma propriedade.'],
           ['Rara', 'Tem mais armadura!'],
           ['Épica', 'Tem mais armadura e uma propriedade.'],
-          ['Lendária', 'Tem muita armadura e umas propriedades aí…']
-        ]]
+          ['Lendária', 'Tem muita armadura e uma **grande propriedade**: uma propriedade mais um efeito especial próprio da peça.']
+        ]],
+
+        ['h2', 'Nos outros itens'],
+        ['p', 'Nos demais itens (granadas, escudos energéticos, kits, consumíveis), a raridade diz o preço e a disponibilidade: os mais raros custam mais, aparecem menos e costumam ter efeitos maiores.']
       ]
     },
 
@@ -688,7 +755,7 @@ window.VORTEX_REGRAS = {
         ['fields', ['Mod (tipo)', 'Raridade', 'Efeito', 'Acessórios']],
 
         ['h2', 'Acessórios'],
-        ['p', 'Acessórios vêm embutidos nos mods. Fora disso, cada slot de mod comporta 3 acessórios, ao custo de 50C a cada 3. Em armas especiais, os acessórios já fazem parte das propriedades.'],
+        ['p', 'Acessórios vêm embutidos nos mods. Fora disso, cada slot de mod comporta 3 acessórios, ao custo de 50 Cronos a cada 3. Em armas especiais, os acessórios já fazem parte das propriedades.'],
         ['p', 'Cada posição abaixo comporta um só acessório. Acessórios de mods diferentes não se acumulam, mas você escolhe quais dos 3 de cada mod quer usar.'],
 
         ['h3', 'Melee'],
@@ -697,13 +764,13 @@ window.VORTEX_REGRAS = {
         ['h3', 'Armas de fogo'],
         ['h4', 'Miras'],
         ['dl', [
-          ['Red dot/Holográfica', 'Ignora a dificuldade de percepção de média distância e cobertura parcial na mesma distância quando estiver mirando.'],
-          ['Ampliação', 'Ignora a dificuldade de percepção de média distância a longa e cobertura parcial nas mesmas distâncias quando estiver mirando.'],
-          ['Telescópica', 'Ignora a dificuldade de percepção de longa a muito longa distância e meia cobertura nas mesmas distâncias quando estiver mirando.']
+          ['Red dot/Holográfica', 'Mirando, dispensa o teste de Acuidade a média distância, mesmo contra alvo em cobertura parcial.'],
+          ['Ampliação', 'Mirando, dispensa o teste de Acuidade de média a longa distância, mesmo contra alvo em cobertura parcial.'],
+          ['Telescópica', 'Mirando, dispensa o teste de Acuidade de longa a muito longa distância, mesmo contra alvo em meia cobertura.']
         ]],
         ['h4', 'Bocal'],
         ['dl', [
-          ['Silenciador', 'Permite fazer teste de furtividade para os disparos.'],
+          ['Silenciador', 'Permite fazer um teste de furtividade (Precisão + Manha) nos disparos, contra os Sentidos de quem poderia ouvir.'],
           ['Cano longo', 'Aumenta em uma categoria o alcance da arma.']
         ]],
         ['h4', 'Carregador'],
@@ -714,8 +781,8 @@ window.VORTEX_REGRAS = {
         ]],
         ['h4', 'Empunhadura'],
         ['dl', [
-          ['Telêmetro', 'Mostra em tempo real a distância até onde você está mirando.'],
-          ['Mira laser', 'Ignora a dificuldade de percepção de média distância e a cobertura parcial nessa distância, mas dá –1 em furtividade de curta a média distância.'],
+          ['Telêmetro', 'Mostra em tempo real a distância até onde você está mirando (não muda o teste de Acuidade).'],
+          ['Mira laser', 'Mirando, dispensa o teste de Acuidade a média distância, mesmo contra cobertura parcial, mas dá –1 em furtividade de curta a média distância.'],
           ['Lanterna', 'Liga quando você quiser e ilumina um cone de 9 m à frente da arma.'],
           ['Lanterna UV', 'Como a lanterna, mas a luz é UV e não serve para enxergar no escuro.'],
           ['Tripé', 'Apoiar a arma custa só uma ação de movimento, em vez de uma ação completa.']
@@ -729,7 +796,7 @@ window.VORTEX_REGRAS = {
       blocks: [
         ['p', 'A recarga consome ações dependendo do “peso” do pente ou do mecanismo de alimentação da arma.'],
         ['h2', 'Pente leve'],
-        ['p', 'Até 20 disparos. Recarregar custa uma ação bônus (ou uma ação padrão, se você estiver debilitado), e cada pente ocupa ¼ de carga.'],
+        ['p', 'Até 20 disparos. Recarregar custa uma ação bônus (ou uma ação padrão, se você estiver debilitado: Agarrado ou com os braços afetados), e cada pente ocupa ¼ de carga.'],
         ['h2', 'Pente médio'],
         ['p', 'Até 40 disparos. Recarregar custa uma ação de movimento, e cada pente ocupa ½ de carga.'],
         ['h2', 'Pente pesado'],
@@ -737,9 +804,9 @@ window.VORTEX_REGRAS = {
         ['h2', 'Recarga parcial'],
         ['p', 'Se a arma recarrega cartucho a cartucho, cada cartucho inserido é uma ação livre, até 2 por turno. Para inserir mais, use outras ações: até 5 com a ação bônus, ou até 10 com a ação de movimento ou a padrão. Cada 20 munições ocupam ¼ de carga.'],
         ['h2', 'Superaquecimento'],
-        ['p', 'Algumas armas não têm limite definido de munição, porque a fonte é energética, mítica ou anormal, ou porque têm tantos disparos que o mecanismo esquenta demais (o pente **Sobrecarga**).'],
-        ['p', 'No lugar da cadência, a arma tem um limite de disparos seguidos. Se você passar desse limite somando os disparos desta rodada e da anterior, a arma superaquece e entra em resfriamento até o fim do seu próximo turno; nesse tempo, você não pode atacar com ela.'],
-        ['p', 'Cada recarga ocupa 1 de carga, dura a cena inteira e funciona por até 2 cenas seguidas antes de você precisar de munição de novo. Recarregar custa a ação completa, incluindo a ação bônus.']
+        ['p', 'Algumas armas não têm limite definido de munição, porque a fonte é energética, mítica ou anormal, ou porque têm tantos disparos que o mecanismo esquenta demais (o pente **Sobrecarga**, que não tem nada a ver com a [Sobrecarga](carga#Sobrecarga) de peso).'],
+        ['p', 'No lugar de um pente, a arma tem um limite de disparos seguidos: o valor de munição dela (sem esse valor, o dobro da cadência). A cadência continua limitando cada ataque. Se você passar do limite somando os disparos desta rodada e da anterior, a arma superaquece e entra em resfriamento até o fim do seu próximo turno; nesse tempo, você não pode atacar com ela.'],
+        ['p', 'Cada carga (Cinta de sobrecarga ou Carga de energia) ocupa 1 de carga e funciona por até 2 cenas seguidas; depois, a arma precisa de uma carga nova. Recarregar custa a ação completa e também a ação bônus.']
       ]
     },
 
@@ -772,26 +839,27 @@ window.VORTEX_REGRAS = {
 
         ['h2', 'Tipo'],
         ['p', 'O tipo da arma define a sua base: o mecanismo que gera os disparos ou o modelo de construção. Cada tipo dá alguns benefícios por natureza, e a **média de criação** diz os valores típicos de uma arma daquele tipo.'],
+        ['note', 'Catálogo', 'As armas do catálogo seguem a média de criação do tipo, mas um modelo pode fugir dela (um pente maior, outro alcance): vale o que está na ficha do item.'],
         ['note', 'Sem proficiência em arma corpo a corpo', 'Sem proficiência com o tipo da arma corpo a corpo, você não recebe as propriedades básicas da arma (como a Espada com Precisão, o crítico que sangra ou atordoa e ser efetiva contra escudo ou blindagem). Ela continua causando o dano normal.'],
 
         ['card', 'Espada', [
-          ['p', 'O ataque com espada pode usar Precisão no lugar de Corpo. O crítico causa sangramento (perde 1d6 PV); o alvo evita com Fortitude contra CD 6 + Precisão + Luta.'],
+          ['p', 'O ataque com espada pode usar Precisão no lugar de Corpo. Num crítico que acerta, o alvo sangra: perde 1d6 PV na hora, a menos que passe num teste de Fortitude contra CD 6 + Precisão + Luta.'],
           ['kv', 'Média de criação', [['Carga', 'Máximo de 2.'], ['Dano', 'Cortante.']]]
         ]],
         ['card', 'Lança', [
-          ['p', 'A lança tem 1,5 m de alcance para cada carga que ocupa.'],
+          ['p', 'A lança alcança 1,5 m para cada carga que ocupa (mínimo 1,5 m): com carga 2, ataca alvos a até 3 m.'],
           ['kv', 'Média de criação', [['Carga', 'Máximo de 3.'], ['Dano', 'Perfurante.']]]
         ]],
         ['card', 'Marreta', [
-          ['p', 'O crítico causa atordoamento; o alvo evita com Fortitude contra CD 6 + Corpo + Luta. É eficiente contra Blindagem.'],
+          ['p', 'Num crítico que acerta, o alvo fica Atordoado, a menos que passe num teste de Fortitude contra CD 6 + Corpo + Luta. É eficiente contra Blindagem (dano dobrado nela).'],
           ['kv', 'Média de criação', [['Carga', 'Máximo de 3.'], ['Dano', 'Contundente.']]]
         ]],
         ['card', 'Machado', [
-          ['p', 'O crítico causa sangramento (perde 1d6 PV); o alvo evita com Fortitude contra CD 6 + Corpo + Luta. É eficiente contra Escudo.'],
+          ['p', 'Num crítico que acerta, o alvo sangra: perde 1d6 PV na hora, a menos que passe num teste de Fortitude contra CD 6 + Corpo + Luta. É eficiente contra Escudo (dano dobrado nele).'],
           ['kv', 'Média de criação', [['Carga', 'Máximo de 3.'], ['Dano', 'Contundente ou Cortante.']]]
         ]],
         ['card', 'Pistola', [
-          ['p', 'Sacar e guardar a pistola custa uma ação bônus. Ela não sofre penalidade por atirar em inimigos adjacentes nem por disparar com uma só mão, e pode ser usada com a habilidade Akimbo.'],
+          ['p', 'Sacar e guardar a pistola custa uma ação bônus. Ela não sofre a penalidade por atirar em inimigos adjacentes e pode ser usada com a habilidade Akimbo.'],
           ['kv', 'Média de criação', [['Pente', 'Pente leve.'], ['Modo', 'semi, único e automático.'], ['Carga', 'Máximo de 1'], ['Alcance', 'Curto a Médio.']]],
           ['p', '*Variante:*'],
           ['p', 'Revólver: mantém as propriedades da pistola e pode ser usado com a habilidade Gatilho do velho mundo.'],
@@ -814,7 +882,7 @@ window.VORTEX_REGRAS = {
           ['dl', [
             ['Assalto (Leve)', 'Recarrega um pente médio de até 30 disparos com a ação bônus e não sofre penalidade por atirar em terreno difícil ou em situação difícil.'],
             ['Batalha (Médio)', 'Todas as penalidades caem 1 (incluindo a de cadência).'],
-            ['Precisão (Pesado)', 'Aceita um pente pesado de até 50 disparos como se fosse médio e, apoiado, não sofre penalidade de percepção até a média distância.']
+            ['Precisão (Pesado)', 'Aceita um pente pesado de até 50 disparos como se fosse médio e, apoiado, dispensa o teste de Acuidade até a média distância.']
           ]],
           ['p', 'Se você for proficiente com fuzis, recarrega o pente médio com a ação bônus.'],
           ['kv', 'Média de criação', [['Pente', 'Pente médio, pente pesado.'], ['Modo', 'Automático e semi automático.'], ['Carga', 'Máximo de 3.'], ['Alcance', 'Médio a longo.']]]
@@ -834,7 +902,7 @@ window.VORTEX_REGRAS = {
         ]],
 
         ['h2', 'Granadas'],
-        ['p', 'A granada é arremessada até o alcance dela e explode na área. Quem está na área faz um teste de **Reflexos**: quem passa sofre metade do dano.'],
+        ['p', 'Arremessar uma granada é uma ação padrão: ela vai até o alcance dela e explode na área. Quem está na área faz um teste de **Reflexos**: quem passa sofre metade do dano.'],
         ['p', 'Cada granada tem uma **CD base**. A CD do teste soma a Precisão de quem arremessa:'],
         ['formula', 'CD da granada', 'CD base da granada + Precisão de quem arremessa'],
         ['example', 'Uma Pink Pop (CD base 7) arremessada por alguém com Precisão 2 tem CD 9.'],
@@ -882,11 +950,11 @@ window.VORTEX_REGRAS = {
         ], 3],
 
         ['h2', 'Penalidade de Armadura'],
-        ['p', 'A penalidade da armadura entra como modificador negativo em **Manha**, **Reflexos**, **Sentidos** e **Operações**. Se o personagem for **proficiente** com a categoria da armadura, a penalidade cai à metade.'],
-        ['p', 'O valor da penalidade final, sem o sinal, também é a **Carga** que a armadura ocupa quando transportada.'],
+        ['p', 'A penalidade da armadura entra como modificador negativo em **Manha**, **Reflexos**, **Sentidos** e **Operações**. A penalidade das tabelas é a de quem é **proficiente** com a categoria da armadura; sem proficiência, ela **dobra**.'],
+        ['p', 'Vestida, a armadura não ocupa Carga; levada na mochila, ocupa a carga do tipo (Leve 1, Média 3, Pesada 5).'],
 
         ['h2', 'Outros'],
-        ['p', 'A armadura básica de todos os seres é 6. Um personagem só pode vestir **uma armadura por vez**.'],
+        ['p', 'A armadura básica de todos os seres é 6. A armadura vestida (com +1 se você for proficiente com ela) substitui a básica quando for maior. Um personagem só pode vestir **uma armadura por vez**.'],
 
         ['h2', 'Ficha de Armadura'],
         ['fields', ['Modelo/Fabricante', 'Núcleo (Sim/Não. Se sim, qual?)', 'Armadura', 'Penalidade', 'Carga', 'Raridade/tipo']]
@@ -914,9 +982,9 @@ window.VORTEX_REGRAS = {
         ['h2', 'Carga Cibernética (CC)'],
         ['p', 'A **Carga Cibernética** representa a capacidade do Núcleo de alimentar e controlar sistemas cibernéticos.'],
         ['p', 'O limite total de próteses e módulos é:'],
-        ['formula', '', 'CC Total = Núcleo + Corpo'],
+        ['formula', 'CC total', 'Núcleo + Corpo'],
         ['p', 'Além disso, a Essência concede uma reserva adicional exclusiva para módulos:'],
-        ['formula', '', 'Carga adicional de Módulos = Essência'],
+        ['formula', 'Reserva de módulos', 'Essência'],
         ['p', 'Essa carga adicional não pode ser usada para instalar próteses.'],
         ['p', 'O mesmo Núcleo é utilizado para calcular ambos os limites. Os slots de instalação não são somados novamente para criar um limite separado.'],
 
@@ -950,22 +1018,22 @@ window.VORTEX_REGRAS = {
           ['p', 'Por padrão, um radar permite fazer **testes de Sentidos** para perceber o que ele detecta. Exemplo: um radar de radiodetecção pode revelar a posição de inimigos atrás de uma parede que o radar atravessa.'],
           ['p', 'Cada radar conta como um módulo.'],
           ['note', 'Exemplos', ['Radiodetecção: corpos e objetos sólidos, atrás de paredes.', 'Térmico: fontes de calor, mesmo no escuro ou na fumaça.', 'Sonar: movimento e formato do ambiente, sem luz.', 'Eletromagnético: eletrônicos, implantes, núcleos e escudos.', 'Completo: tudo o que os quatro detectam.']]
-        ], 2],
+        ]],
         ['card', 'I.A.', [
-          ['p', 'O módulo de I.A. acrescenta uma inteligência artificial que faz ações de **busca, pesquisa e análise** por você. Quem faz o teste é o mestre, usando a **Precisão** da I.A., que é o nível de inteligência dela.'],
-          ['p', 'I.A. não tem raridade. Como módulo só existe a **I.A. leve**, e as variações dela são a especialidade (pesquisa, análise, infiltração, combate...). Diferente dos outros módulos, ela só pode ser instalada em itens **Épicos ou Lendários**.'],
+          ['p', 'O módulo de I.A. acrescenta uma inteligência artificial que faz ações de **busca, pesquisa e análise** por você. O teste é **2d6 + a Precisão da I.A.** (o nível de inteligência dela), e quem rola é o mestre.'],
+          ['p', 'I.A. não tem raridade. Como módulo só existe a **I.A. leve**, e as variações dela são a especialidade (pesquisa, análise, infiltração, combate...). Diferente dos outros módulos, ela só funciona instalada num item **Épico ou Lendário** equipado (próteses e módulos não têm raridade, então não servem de base).'],
           ['p', 'A **I.A. própria** não é um módulo: ela é como uma personagem, com alta consciência e todo o fator de interpretação de uma I.A. Só itens **Lendários** a suportam, e só ela pode ser colocada em um corpo próprio.'],
           ['p', 'O **preço** da I.A. leve é o que define a Precisão dela; a especialidade só muda o que ela faz:'],
           ['kv', '', [['4.000 Cronos', 'Precisão 1'], ['6.000 Cronos', 'Precisão 2'], ['9.000 Cronos', 'Precisão 3']]]
-        ], 2],
+        ]],
         ['card', 'Perito', [
           ['p', 'O **módulo perito (perícia)** funciona como o poder Doutor naquela perícia: o limite de modificador nela se torna 4 e você ganha +1 ponto de perícia enquanto o módulo estiver ativo.'],
           ['p', 'Não acumula com Doutor: se você já tem Doutor na mesma perícia, o módulo não muda nada.']
-        ], 2],
+        ]],
         ['card', 'Rede', [
           ['p', 'O **módulo de rede** permite se conectar livremente à internet, sem precisar de um aparelho.'],
           ['p', 'Versões melhores criptografam a conexão ou funcionam mesmo sob bloqueio de sinal.']
-        ], 2],
+        ]],
 
         ['h2', 'Ficha de Próteses e Módulos'],
         ['fields', ['Modelo (Prótese ou Módulo)', 'Tipo / CC', 'Efeito']]
@@ -980,8 +1048,9 @@ window.VORTEX_REGRAS = {
           ['p', 'Vivendo nas ruínas das cidades corporativas, sobreviveu nas sombras, roubando energia, vendendo informações e lidando com o submundo.'],
           ['p', 'Itens iniciais:'],
           ['ul', [
-            '1 Lâmina simples ou fuzil de assalto comum (3 cargas de munição);',
-            '1 armadura média improvisada (4 armadura, –1 penalidade comum);',
+            'Pink Fang ou Hammer F-12 (espada ou fuzil de assalto);',
+            'Pente médio padrão (para o fuzil);',
+            'Tnnak Blazer (armadura média);',
             '1 comunicador portátil;',
             '1 injetor de estímulo (restaura 5 PE em troca de 5 PV, uma vez por cena).'
           ]]
@@ -990,20 +1059,23 @@ window.VORTEX_REGRAS = {
           ['p', 'Viveu entre os destroços das zonas externas, endurecido e acostumado a negociar por munição.'],
           ['p', 'Itens iniciais:'],
           ['ul', [
-            '1 arma de fogo comum (à escolha, 3 cargas de munição);',
-            '1 armadura leve (armadura 2) com núcleo simples +2;',
-            '1 kit de manutenção de robô (2 usos, cura 3d6 de Blindagem, 1 h de trabalho, ¼ de carga);',
-            '1 kit de primeiros socorros (cura 2d6 PV, ¼ de carga).'
+            '1 arma de fogo comum (à escolha);',
+            'Pente leve padrão ou Pente médio padrão ou Caixa de cartuchos (a que servir na arma);',
+            'Tnnaks Jackt (armadura leve);',
+            'Núcleo comum +2;',
+            'Kit Técnico LS-2;',
+            'Kit Médico LS-1.'
           ]]
         ]],
         ['card', 'Engenheiro', [
           ['p', 'Ex-funcionário de megacorporação ou catador com cérebro afiado.'],
           ['p', 'Itens iniciais:'],
           ['ul', [
-            '1 ferramenta multifunção (permite usar a perícia Tecnologia);',
-            '1 pistola básica ou rifle (3 slots de munição);',
-            '1 ano Chirlez backup (20 slots digitais de itens);',
-            '1 vestimenta de proteção leve (armadura leve +2).'
+            'Kit Técnico LS-2 (ferramenta multifunção);',
+            'Pulse P-01 ou Carbine R-10 (pistola ou rifle);',
+            'Pente leve padrão;',
+            '1 ano de Chirlez backup (guarda até 20 itens digitais);',
+            'Tnnaks Jackt (armadura leve).'
           ]]
         ]],
         ['card', 'Médico de Rua', [
@@ -1022,7 +1094,7 @@ window.VORTEX_REGRAS = {
           ['p', 'Itens iniciais:'],
           ['ul', [
             'Iron Revolver ER-2 ou Carbine R-10;',
-            'Pente leve padrão;',
+            'Caixa de cartuchos ou Pente leve padrão (cartuchos para o revólver, pente para a Carbine);',
             'Static Candy (granada elétrica);',
             'Tnnaks Jackt (armadura leve);',
             'Mochila pequena.'
@@ -1033,7 +1105,7 @@ window.VORTEX_REGRAS = {
           ['p', 'Itens iniciais:'],
           ['ul', [
             'Storm SM-5 ou Crusher SG-4;',
-            'Pente médio padrão;',
+            'Pente médio padrão ou Caixa de cartuchos (pente para a Storm, cartuchos para a Crusher);',
             'Tnnak Blazer (armadura média);',
             'Pink Pop (granada de fragmentação);',
             'Kit Médico LS-1.'
@@ -1044,6 +1116,7 @@ window.VORTEX_REGRAS = {
           ['p', 'Itens iniciais:'],
           ['ul', [
             'Pulse P-01 (pistola comum);',
+            'Pente leve padrão;',
             'Stiletto Noir (lâmina de saque);',
             'Carregador de Campo LS-3;',
             'Blush Smoke (granada de fumaça);',
@@ -1074,6 +1147,7 @@ window.VORTEX_REGRAS = {
         ['card', 'Klyntar', [
           ['p', 'Os simbiontes estão longe de serem apenas parasitas espaciais aleatórios: eles fazem parte de uma mitologia cósmica ancestral baseada no abismo, na escuridão e em uma rebelião contra um deus tirano.'],
           ['p', 'Como os simbiontes originais foram forjados dentro da cabeça decapitada e incandescente de um Celestial, sob intensas batidas de martelo, toda a espécie herdou duas grandes fraquezas biológicas: o fogo e o som extremo (explosão).'],
+          ['p', 'As peças dos itens iniciais servem em armas corpo a corpo, inclusive nas que um Simbionte cria (veja [Assimilação Abiótica](especimes#Assimilação Abiótica)).'],
           ['p', 'Itens iniciais:'],
           ['ul', [
             'Reforçada;',
@@ -1084,9 +1158,11 @@ window.VORTEX_REGRAS = {
           ]]
         ]],
         ['card', 'Assassino', [
+          ['p', 'Mata por contrato e some antes que o corpo esfrie: prefere distância, silêncio e um único disparo certeiro.'],
           ['p', 'Itens iniciais:'],
           ['ul', [
             'Iron Revolver ER-2;',
+            'Caixa de cartuchos;',
             'Ampliação;',
             'Tnnaks Jackt (armadura leve);',
             'Blush Smoke.'
@@ -1099,6 +1175,7 @@ window.VORTEX_REGRAS = {
     {
       id: 'especimes', title: 'Espécimes', group: 'Personagem',
       blocks: [
+        ['p', 'O espécime é a raça do personagem. Cada um traz habilidades raciais próprias, que entram sozinhas na ficha. Só o Etheriano pode comprar habilidades raciais de outros espécimes.'],
         ['card', 'Humano', [
           ['p', 'Nada de especial, talvez a sua experiência passada: tome 3 UP de início!'],
           ['p', 'Regra opcional, **Experiência mundana**: a idade do humano define quantos UP ele recebe e quantas Perdas carrega.'],
@@ -1113,11 +1190,11 @@ window.VORTEX_REGRAS = {
         ['card', 'Robô', [
           ['p', 'Meio que é… feito de lata né não?'],
           ['h4', 'Núcleo'],
-          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, seus PV viram Blindagem, e o que ficar negativo conta como Escudo!'],
+          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as suas camadas de vida zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
           ['h4', 'Engenharia'],
           ['p', 'Como um bom pedaço de lata, você não equipa itens: você os acopla ao corpo. Isso vale para armaduras e módulos. Acoplar leva ao menos 1 hora, e cada +2 de Carga Cibernética dado pelo núcleo acoplado vale +1 de Carga Cibernética a mais.'],
           ['h4', 'Não vivo'],
-          ['p', 'Você é lata, e lata não é afetada por coisas biológicas nem precisa descansar: é só colocar na tomada! Você não recupera PV por descanso nem por cura, mas pode ser consertado com testes de Tecnologia e um kit de ferramentas adequado. O conserto leva 1 descanso longo fora de serviço, e o teste de Tecnologia recupera Blindagem igual ao resultado dos dados.']
+          ['p', 'Você é lata, e lata não é afetada por coisas biológicas nem precisa descansar: é só colocar na tomada! Você não recupera a vida (Blindagem) descansando, mas pode ser consertado: no descanso longo, fora de serviço, quem tiver a melhor Tecnologia do grupo faz o teste com um Kit Técnico, e você recupera Blindagem igual ao resultado do teste. Em combate, o conserto é a cura de Blindagem (veja [Cura](cura#Blindagem (BL))).']
         ]],
         ['card', 'Android', [
           ['p', 'Você é um robô, só que humanoide...'],
@@ -1125,10 +1202,17 @@ window.VORTEX_REGRAS = {
           ['p', 'Como um bom pedaço de lata, você não equipa itens: você os acopla ao corpo. Isso vale para armas e armaduras, que, acopladas, ocupam a sua Carga Cibernética em vez da Carga. Acoplar leva ao menos 1 hora, e cada +2 de Carga Cibernética dado pelo núcleo acoplado vale +1 de Carga Cibernética a mais.'],
           ['p', 'Para você, próteses são peças, e você não precisa de uma prótese para instalar módulos.'],
           ['h4', 'Núcleo'],
-          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, seus PV viram Blindagem, e o que ficar negativo conta como Escudo!'],
+          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as suas camadas de vida zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
           ['h4', 'Humanidade'],
-          ['p', 'Você pode fazer testes para resistir a efeitos de PEM (pulso eletromagnético) quando eles tiverem CD, e metade da sua Blindagem pode ser regenerada como se fosse PV.'],
-          ['p', 'Efeitos de PEM atordoam automaticamente seres elétricos ou eletrônicos e desativam Escudos. Com a Humanidade, o Android faz o teste quando houver CD; se não houver, ele não é afetado pelo PEM.']
+          ['p', 'Você pode fazer testes para resistir a efeitos de PEM (pulso eletromagnético) quando eles tiverem CD, e metade da sua Blindagem volta com o descanso, como se fosse PV (a outra metade só com conserto).'],
+          ['p', 'Efeitos de [PEM](condicoes-e-estados#Específicos) atordoam automaticamente seres elétricos ou eletrônicos e desativam Escudos. Com a Humanidade, o Android faz o teste quando houver CD; se não houver, ele não é afetado pelo PEM.']
+        ]],
+        ['card', 'Etheriano', [
+          ['p', 'Cria do Éter.'],
+          ['h4', 'Cria do Éter'],
+          ['p', 'Quando é afetado por energia Ether pura, você recupera recursos iguais ao tamanho do Ether: 10 de PV e de PE para a pequena, 25 para a média e 50 para a grande. O que passar do máximo conta como recurso bônus até o próximo descanso (não acumula com outra fonte: vale o maior bônus). Você também pode tornar um Éter instável e forçar a absorção dele, dividindo com todos na área o XP que o Éter cede.'],
+          ['h4', 'Dom do Éter'],
+          ['p', 'Você recebe 2 UP extras no início, que também podem comprar habilidades raciais de qualquer outro espécime, inclusive os criados na Oficina (aba Poderes → Características raciais).']
         ]],
         ['card', 'Simbionte', [
           ['p', 'Massa amorfa, viva e independente, que molda o próprio corpo: tira da própria matéria força, cura e armas.'],
@@ -1137,7 +1221,7 @@ window.VORTEX_REGRAS = {
           ['h4', 'Cura Regenerativa'],
           ['p', 'Cura ferimentos mortais em questão de segundos, regenera membros decepados e pode até neutralizar doenças terminais.'],
           ['p', 'Ressuscita o alvo se sobrar algo dele que não esteja sendo afetado por algum efeito.'],
-          ['p', 'No início de cada turno, faça um teste de regeneração: 2d6 + Fortitude + Tecnologia. A regeneração segue a regra normal de Cura: o teste é contra a CD do recurso (6, ou 10 se estiver abaixo da metade, +2 por condição negativa) e o simbionte recupera a diferença entre o resultado e a CD. Cura PV e também Blindagem.'],
+          ['p', 'No início de cada turno, faça um teste de regeneração: 2d6 + Fortitude + Tecnologia. A regeneração segue a regra normal de Cura: o teste é contra a CD do recurso (6, ou 10 se estiver abaixo da metade, +2 por condição negativa) e o simbionte recupera a diferença entre o resultado e a CD. Cura PV e também Blindagem (uma exceção à regra de que a Blindagem só volta com conserto).'],
           ['p', 'A regeneração é engajada por cena e custa 1 PE por cena.'],
           ['h4', 'Assimilação Abiótica'],
           ['p', 'O simbionte estica a própria massa amorfa para criar tentáculos, escudos protetores, garras, lâminas, machados, espigões, martelos sólidos, armaduras e outros itens que não sejam consumíveis. O simbionte escolhe o item e o tipo de dano.'],
@@ -1154,15 +1238,26 @@ window.VORTEX_REGRAS = {
     {
       id: 'habilidades', title: 'Habilidades', group: 'Personagem',
       blocks: [
-        ['card', 'Esquiva', [
-          ['kv', '', [['Custo', '1 UP']]],
-          ['p', 'Nos testes de defesa, você usa Precisão como atributo e Reflexos como perícia.'],
-          ['p', 'Gastando +1 UP, a Esquiva passa a valer também na defesa mínima.']
+        ['card', 'Defensivas', [
+          ['kv', '', [['Custo', '1 UP por opção'], ['Quando usa', 'Defesa']]],
+          ['p', 'Truques de defesa que você ativa pagando PE.'],
+          ['dl', [
+            ['Esquiva (1 PE)', 'Ao rolar a Defesa do combate, você usa Precisão + Reflexos (com a penalidade de armadura) no lugar de Corpo + Resistência. Vale também na Defesa mínima (Armadura + Precisão + Reflexos, com a penalidade) e dura o combate inteiro.'],
+            ['Explosiva (3 PE)', 'Reação a um ataque recebido: você soma a sua Armadura à Defesa contra esse ataque.']
+          ]]
+        ]],
+        ['card', 'Ataques', [
+          ['kv', '', [['Custo', '1 UP por opção'], ['Quando usa', 'Ataque']]],
+          ['p', 'Ao fazer um ataque, você pode ativar estas vantagens pagando o PE de cada uma.'],
+          ['dl', [
+            ['Avante (1 PE)', 'Você também se move 3 m na mesma ação, sem gastar a ação de movimento; o ataque acontece depois do movimento.'],
+            ['Certeiro (1 PE)', 'O ataque causa crítico com 5 e 6.']
+          ]]
         ]],
         ['card', 'Regeneração', [
           ['kv', '', [['Custo', '1 UP']]],
           ['p', 'Só funciona se você for uma criatura biológica. Você recupera 3 PV por turno.'],
-          ['p', 'Se estiver caído, pode recobrar a consciência quando recuperar todos os PV.'],
+          ['p', 'Se estiver agonizando, pode recobrar a consciência quando recuperar todos os PV.'],
           ['p', 'Cada UP investido nesta habilidade além do custo inicial aumenta a recuperação em +1 PV por turno.']
         ]],
         ['card', 'Transformação', [
@@ -1178,7 +1273,7 @@ window.VORTEX_REGRAS = {
           ['kv', '', [['Custo', '1 UP (+ o custo do estilo de luta, se comprar um)']]],
           ['p', 'Você domina o combate corpo a corpo e golpeia várias vezes por rodada, rivalizando em dano com quem usa armas de fogo.'],
           ['p', 'Seus ataques desarmados contam como uma arma contundente para todos os efeitos, sem precisar de luvas ou armas desse gênero, e você é proficiente com eles.'],
-          ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu atributo Corpo + a sua perícia Luta. Eles seguem as mesmas regras de cadência das armas de fogo (veja Regras de Cadência), e cada golpe conta como um disparo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
+          ['p', '**Ataques múltiplos.** Por rodada, você tem uma quantidade de ataques igual ao seu atributo Corpo + a sua perícia Luta. Eles seguem as mesmas regras de cadência das armas de fogo (veja [Regras de Cadência](cadencia)), e cada golpe conta como um disparo: com uma arma corpo a corpo da qual é proficiente (ou desarmado), use a cadência perita; sem proficiência, a penalidade de cadência comum. O dano de cada alvo é multiplicado pelos golpes nele.'],
           ['example', 'Corpo 2 e perícia Luta 1 → 3 ataques por rodada. Desarmado, dois golpes no mesmo alvo: –2 no ataque, dano ×2.'],
           ['p', 'Em vez de golpear, você pode gastar esses ataques nos efeitos marciais básicos abaixo. A tabela é proporcional: cada ataque gasto vale 3 m de movimento, e os efeitos que acumulam crescem um passo por ataque. Os ataques são contados por rodada e não acumulam.'],
           ['table', ['Efeito', 'Custo', 'O que faz'], LUTA_MANOBRAS],
@@ -1188,7 +1283,7 @@ window.VORTEX_REGRAS = {
             ['dl', e.passivas],
             ['table', ['Técnica', 'Custo', 'O que faz'], e.tecnicas]
           ]),
-          ['note', 'Técnico', 'Luta não combina direto com tecnomancia: ela se refere à ação de atacar, e não dá para atacar e conjurar ao mesmo tempo. Para complementar os ataques com tecnomancia, é preciso um poder cuja descrição diga que “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia”.']
+          ['note', 'Luta e Tecnomancia', 'Luta não combina direto com tecnomancia: ela se refere à ação de atacar, e não dá para atacar e conjurar ao mesmo tempo. Para complementar os ataques com tecnomancia, é preciso um poder cuja descrição diga que “pode complementar seus ataques à distância e marciais com técnicas de tecnomancia”.']
         ]],
         ['card', 'Tecnomancia', [
           ['kv', '', [['Custo', '1 UP por nível de Tecnomancia (até 5)'], ['Recurso', 'Essência (PE)'], ['Efeitos ao mesmo tempo', 'um por modo de ação'], ['CD contra os seus efeitos', '6 + atributo chave']]],
@@ -1224,11 +1319,25 @@ window.VORTEX_REGRAS = {
           ['example', 'Um Patrocinado escolhe a Wathrever. No nível 1 de Tecnomancia, pega o catálogo de armas de fogo dela e conhece todas. No nível 2, pega acessórios de armas de fogo.'],
           ['p', '**Insano.** Obtém componentes de um jeito diferente. Em breve.']
         ]],
+        ['card', 'Telecinese', [
+          ['kv', '', [['Custo', '1 UP (+1 UP por melhoria)']]],
+          ['p', 'Você manipula objetos a curta distância pagando 1 PE por carga do objeto (com carga ½ ou menos, o peso não custa) e +1 PE por ação feita com ele (as livres não custam). Controla ao mesmo tempo um número de objetos igual à sua Essência (mínimo 1); se eles fazem a mesma ação, ela vale para todos.'],
+          ['p', 'Com a ação de movimento, você desloca os objetos pelo seu deslocamento dividido pela carga do item. Testes com os objetos usam as suas perícias e atributos normalmente, mas ações contra alguém têm –3. Suas técnicas e habilidades funcionam com os objetos manipulados.'],
+          ['p', '**Melhorias**'],
+          ['p', '**Mental (1 UP):** a telecinese mexe nas sinapses. Com uma ação padrão, escolha um alvo: ele faz um teste de Vontade contra CD 7 + (um atributo à sua escolha) + Operações ou tem os pensamentos lidos. Lendo os pensamentos, você tem vantagem em tudo o que fizer contra ele até o fim do seu próximo turno, e pode sustentar a leitura com a ação de movimento. Um alvo incapacitado ou inconsciente falha automaticamente; memórias de sonho ou pesadelo que ele esteja vivendo não podem ser lidas. O alvo só sente a leitura se tirar duas falhas críticas no teste.'],
+          ['p', '**Preciso (1 UP):** as ações contra alguém não têm os –3, e a carga de todos os itens conta 1 a menos (carga 1 vira ½, sem custo de peso).']
+        ]],
+        ['card', 'Mente de outro mundo', [
+          ['kv', '', [['Custo', '1 UP']]],
+          ['p', 'Você tem ganho (um dado a mais) em todos os testes contra efeitos mentais sobre você, e nesses testes a falha crítica (1) não anula a sua perícia.']
+        ]],
         ['card', 'Akimbo', [
-          ['p', 'Você pode empunhar itens de uma mão, um em cada mão (ou um de cada tipo, seja irado!). A recarga sobe uma categoria de ação: livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
+          ['kv', '', [['Custo', '1 UP']]],
+          ['p', 'Você pode empunhar dois itens de Uma mão (ou de Saque), um em cada mão (ou um de cada tipo, seja irado!). Submetralhadoras só entram no Akimbo se você for proficiente com elas (veja [Submetralhadora](armas#Submetralhadora)). A recarga sobe uma categoria de ação: livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
           ['p', 'Em troca, você pode mirar num único alvo com os dois itens ou escolher até dois alvos. Os disparos saem na mesma ação, mas cada arma faz o seu teste de ataque e causa o seu dano separado.']
         ]],
         ['card', 'Gatilho do velho mundo', [
+          ['kv', '', [['Custo', '1 UP']]],
           ['p', 'Com um revólver de disparo único, você força a arma a ter cadência igual a 1 + metade da sua Precisão, arredondada para cima. O primeiro disparo não entra na penalidade de cadência.'],
           ['p', 'Você pode dividir os disparos entre vários alvos; o ataque é o mesmo para todos, com a penalidade do total de disparos.'],
           ['p', 'Você precisa da outra mão livre para usar esta habilidade.']
@@ -1242,12 +1351,12 @@ window.VORTEX_REGRAS = {
       blocks: [
         ['p', 'Uma **Perda** funciona como um poder ao contrário: em vez de custar UP, ela **dá +1 UP** em troca de uma desvantagem que fica com o personagem.'],
         ['ul', [
-          'Cada Perda dá +1 UP. Esses UP não contam para os benefícios de UP par e ímpar, como os de origem.',
+          'Cada Perda dá +1 UP. Esses UP não contam para os benefícios de UP par e ímpar, como os iniciais do espécime.',
           'A mecânica de uma Perda (menos PV, menos deslocamento...) entra sozinha na ficha.',
           'Você pode **compensar** uma Perda gastando 1 UP: ela deixa de valer, e o UP que ela deu fica empatado com o que você gastou.'
         ]],
         ['note', 'Na ficha', 'Aba Poderes → Perdas: "Adicionar perda" traz uma Perda do banco, e "Compensar (1 UP)" a desliga. Perdas novas podem ser criadas na Oficina.'],
-        ...PERDAS.map((x) => ['card', x[0], [['kv', '', [['Ganho', '+1 UP']]], ['p', x[1]]]])
+        ...PERDAS.map((x) => ['card', x[0], [['kv', '', [['Concede', '+1 UP']]], ['p', x[1]]]])
       ]
     },
 
@@ -1261,7 +1370,7 @@ window.VORTEX_REGRAS = {
         ['fields', ['Corpo', 'Precisão', 'Essência']],
 
         ['h2', 'Recursos'],
-        ['fields', ['PV: 5 + (Corpo × 5)', 'Escudo', 'Blindagem', 'PE: 5 + (Essência × 5)', 'PA = Precisão (mínimo 1)']],
+        ['fields', ['PV: 5 + (Corpo × 5)', 'Escudo', 'Blindagem', 'PE: 5 + (Essência × 5)', 'PA: Precisão (mínimo 1)']],
 
         ['h2', 'Perícias'],
         ['h3', 'Perícias de Corpo'],
@@ -1275,12 +1384,12 @@ window.VORTEX_REGRAS = {
         ['fields', ['—', '—', '—', '—']],
 
         ['h2', 'Ataques'],
-        ['formula', '', '2d6 + atributo + perícia do ataque = Ataque'],
+        ['formula', 'Ataque', '2d6 + atributo + perícia do ataque'],
 
         ['h2', 'Defesa'],
-        ['formula', '', '2d6 + Corpo + Resistência = Defesa'],
+        ['formula', 'Defesa', '2d6 + Corpo + Resistência (uma vez por combate)'],
         ['h3', 'Defesa mínima'],
-        ['formula', '', 'Armadura + Corpo + Resistência'],
+        ['formula', 'Defesa mínima', 'Armadura + Corpo + Resistência'],
 
         ['h2', 'Núcleo'],
         ['formula', 'Carga Cibernética', 'Núcleo + Corpo'],
