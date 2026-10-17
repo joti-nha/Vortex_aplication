@@ -3467,7 +3467,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 @media (max-width: 760px) { .adj__cols { grid-template-columns: minmax(0, 1fr); } }
 
 /* Filtros por especificação (todas as telas de busca) */
-.facets { margin: 0.6rem 0; padding: 0.5rem 0.75rem; border: 1px solid var(--linha-forte); border-radius: 12px; background: var(--casco-2); }
+.facets { margin: 0.6rem 0; padding: 0.5rem 0.75rem; border: 1px solid var(--linha-forte); border-radius: var(--r-s); background: var(--casco-2); }
 .facets[hidden] { display: none; }
 .facets__sum { cursor: pointer; font-size: var(--t-s); font-weight: 700; color: var(--nevoa-2); list-style: none; display: flex; align-items: center; gap: 0.5rem; min-height: 32px; }
 .facets__sum::-webkit-details-marker { display: none; }
@@ -4052,3 +4052,17 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .npcb__up.is-over { color: var(--perigo, #e0484a); }
 .npcb__read { margin: 0 0 0.35rem; }
 .cmd__item--static { cursor: default; }
+
+/* Ações da criatura (Bestiário): um cartão por ação; o "+" só aparece quando a última tem nome */
+.npca { display: grid; gap: 0.75rem; }
+.npca__list { display: grid; gap: 0.75rem; }
+.npca__card { display: grid; gap: 0.6rem; padding: 0.75rem; border: 1px solid var(--linha); border-radius: var(--r-s); background: var(--casco-2); }
+.npca__head { display: flex; align-items: center; gap: 0.5rem; }
+.npca__n { flex: none; display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--ambar); color: var(--ambar-tinta); font-weight: 700; font-size: 0.85rem; }
+.npca__name { flex: 1; min-width: 0; font-weight: 600; }
+.npca__add { justify-self: start; }
+.npca__add[hidden] { display: none; }
+.npca__desc { opacity: 0.85; }
+.npcl__qty { min-width: 2.2rem; text-align: center; font-weight: 600; }
+.mag__act { display: block; font-size: 0.88rem; }
+.cmd__sub { margin: 0.25rem 0 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.75; }
