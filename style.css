@@ -1719,7 +1719,7 @@ body {
     line-height: 1.1;
     text-align: center;
   }
-  .app-nav__label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* o mesmo nome do desktop */
+  .app-nav__label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(0.6rem, 2.75vw, 0.7rem); letter-spacing: -0.02em; } /* o mesmo nome do desktop; encolhe para "Personagens" caber */
   .app-nav__link[aria-current="page"] { color: var(--ambar); box-shadow: none; background: rgba(var(--ambar-rgb), 0.1); }
   .container { padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)); }
   .toast { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
@@ -4036,3 +4036,19 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .fsec__grid--stats .field__label { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
 .fsec__grid--stats .input { max-width: 6rem; font-size: 1.35rem; font-weight: 700; text-align: center; }
 .fsec__sum { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0; }
+/* ficha da criatura no formulário do Bestiário */
+.npcb { display: grid; gap: 1rem; }
+.npcb__block { display: grid; gap: 0.5rem; }
+.npcb__title { margin: 0; font-size: 0.95rem; }
+.npcb__line, .npcb__btns { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.npcb__name { margin-right: 0.25rem; }
+.npcb__racial, .npcb__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.npcb__racial li { font-size: 0.9rem; color: var(--texto-2, inherit); }
+.npcb__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--linha); }
+.npcb__main { display: grid; min-width: 0; }
+.npcb__meta { font-size: 0.85rem; opacity: 0.8; }
+.npcb__acts { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.npcb__up { margin: 0; }
+.npcb__up.is-over { color: var(--perigo, #e0484a); }
+.npcb__read { margin: 0 0 0.35rem; }
+.cmd__item--static { cursor: default; }
