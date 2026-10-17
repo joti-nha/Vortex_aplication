@@ -1012,8 +1012,8 @@ window.VORTEX_REGRAS = {
           ['note', 'Exemplos', ['Braço de combate com força ampliada.', 'Espinha artificial que melhora processamento motor.', 'Sistema muscular artificial de alta potência.', 'Armadura com membros auxiliares automatizados.', 'Núcleo de combate integrado com funções avançadas.']]
         ], 3],
 
-        ['h2', 'Módulos especiais'],
-        ['p', 'Alguns módulos têm regras próprias. São os mesmos que equipam a armadura **Mirage**: radar, I.A., perito e rede.'],
+        ['h2', 'Regras dos módulos'],
+        ['p', 'Cada módulo segue a regra do tipo dele: radar, I.A., perito ou rede. São os mesmos módulos que equipam a armadura **Mirage**.'],
         ['card', 'Radares', [
           ['p', 'Radares são como uma percepção bônus que identifica o que o seu método permite detectar.'],
           ['p', 'Por padrão, um radar permite fazer **testes de Sentidos** para perceber o que ele detecta. Exemplo: um radar de radiodetecção pode revelar a posição de inimigos atrás de uma parede que o radar atravessa.'],
