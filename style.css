@@ -185,7 +185,8 @@ code { font-family: var(--fonte-ui); }
 }
 .profile-btn:hover { border-color: var(--ambar); }
 .profile-btn--on { border-color: var(--ambar); color: var(--ambar); }
-#form-profile-name { margin-bottom: 1.5rem; }
+#form-profile-name { margin-bottom: 0; justify-content: start; } /* o botão do tamanho do texto */
+.screen > .themes { margin-top: 1.25rem; } /* Temas ficam no fim do Perfil */
 #form-login .check { margin-top: 0.5rem; }
 .mode-pill--error { border-color: var(--erro); color: var(--erro); }
 
@@ -385,6 +386,7 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
 
 .rows { border-top: 1px solid var(--linha); }
 .rows > li { border-bottom: 1px solid var(--linha); }
+.rows > li.rows__more { display: flex; justify-content: center; padding: 0.75rem 0; border-bottom: 0; }
 .row { display: flex; align-items: center; gap: 0.5rem; }
 .row__open {
   flex: 1;
@@ -406,6 +408,9 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .row__meta { font-size: var(--t-s); color: var(--nevoa-2); }
 .row__meta:empty { display: none; }
 .row > .btn { flex: none; margin-right: 0.25rem; }
+/* ficha sua no perfil: Tirar e Excluir descem para uma linha própria (em qualquer largura; na coluna do desktop o nome quebrava letra por letra) */
+.row--own { flex-wrap: wrap; justify-content: flex-end; row-gap: 0.25rem; }
+.row--own > .row__open { flex-basis: 100%; }
 
 .code-tag {
   padding: 0.2rem 0.6rem;
@@ -633,9 +638,6 @@ fieldset.field { min-width: 0; margin: 0; padding: 0; border: 0; }
   .profile-btn { max-width: 8rem; padding-inline: 0.6rem; }
   .row:has(> .star) .row__open > .badge { display: none; } /* a cor do avatar já diz o tipo */
   .row:has(> .star) .row__open { gap: 0.6rem; }
-  /* ficha sua no perfil: Tirar e Excluir descem para uma linha própria */
-  .row--own { flex-wrap: wrap; justify-content: flex-end; row-gap: 0.25rem; }
-  .row--own > .row__open { flex-basis: 100%; }
 }
 @media (max-width: 640px) {
   .hero__spiral { opacity: 0.4; }
@@ -1437,6 +1439,7 @@ textarea.input { min-height: 5.5rem; resize: vertical; line-height: 1.45; }
 
 .res-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
 .res-dmg { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; margin-right: auto; max-width: 100%; }
+.res-dmg__hint { flex-basis: 100%; font-size: var(--t-s); color: var(--nevoa-2); }
 .res__dmg { width: 6rem; min-height: 40px; }
 .check--off { opacity: 0.4; cursor: not-allowed; }
 .pick-grid--form { margin-bottom: 0; }
@@ -1716,8 +1719,7 @@ body {
     line-height: 1.1;
     text-align: center;
   }
-  .app-nav__label { display: none; }
-  .app-nav__link::after { content: attr(data-short); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* rótulo curto nas abas */
+  .app-nav__label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* o mesmo nome do desktop */
   .app-nav__link[aria-current="page"] { color: var(--ambar); box-shadow: none; background: rgba(var(--ambar-rgb), 0.1); }
   .container { padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)); }
   .toast { bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
@@ -2078,6 +2080,11 @@ body {
   scrollbar-width: none;
 }
 .sheet-tabs::-webkit-scrollbar { display: none; }
+/* faixa que rola no celular: esmaece a borda onde ainda há abas (o app liga as classes) */
+.sheet-tabs { scroll-padding-inline: 2.5rem; }
+.sheet-tabs.is-more-right { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 2.5rem), transparent); }
+.sheet-tabs.is-more-left { -webkit-mask-image: linear-gradient(90deg, transparent, #000 2.5rem); mask-image: linear-gradient(90deg, transparent, #000 2.5rem); }
+.sheet-tabs.is-more-left.is-more-right { -webkit-mask-image: linear-gradient(90deg, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(90deg, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent); }
 .sheet-tab {
   flex: 1 0 auto;
   min-height: 2.6rem;
@@ -2469,6 +2476,9 @@ body {
 .fighter__act { min-height: 2rem; padding: 0.1rem 0.6rem; border: 1px solid var(--linha); border-radius: var(--r-s); background: rgba(0, 0, 0, 0.2); color: var(--nevoa-2); font: 700 0.75rem/1.2 var(--fonte-ui); cursor: pointer; }
 .fighter__act:hover { border-color: var(--ambar); color: var(--nevoa); }
 .fighter__act--bad:hover { border-color: var(--erro); color: var(--erro); }
+/* o próximo passo do card (rolar a Defesa) e uma reação já preparada */
+.fighter__act--go { border-color: var(--ambar); color: var(--ambar); }
+.fighter__act--on { border-color: var(--mare); color: var(--mare); background: rgba(var(--mare-rgb), 0.14); }
 .battle__hint { margin: -0.25rem 0 0; text-align: center; font-size: var(--t-s); color: var(--nevoa-2); }
 
 /* Janelas azuis dos RPGs antigos: comandos e registro */
@@ -2606,6 +2616,9 @@ body {
 .tagdlg { width: min(94vw, 30rem); }
 .tagdlg__body { display: grid; gap: 0.75rem; }
 .tagdlg__body h2 { margin: 0; }
+.tagdlg__groups { display: grid; gap: 0.7rem; }
+.tagdlg__group { display: grid; gap: 0.35rem; }
+.tagdlg__head { margin: 0; font: 700 0.72rem/1.2 var(--fonte-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--nevoa-2); }
 .tagdlg__grid { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .tagdlg__opt { min-height: 2.25rem; padding: 0.2rem 0.75rem; border: 1px solid var(--linha); border-radius: 999px; background: var(--casco-2); color: var(--nevoa); font: 700 0.85rem/1.2 var(--fonte-ui); cursor: pointer; }
 .tagdlg__opt:hover { border-color: var(--ambar); }
@@ -2836,6 +2849,7 @@ body {
 .sound-btn:hover { border-color: var(--ambar); transform: scale(1.06); }
 .sound-btn[aria-pressed="false"] { opacity: 0.6; }
 .btn, .has-ripple, .tslot, .cmd__item, .cmd__tab, .inv__act, .man__opt, .sheet-tab, .fighter__act, .qtest { position: relative; overflow: hidden; }
+.toc-fab.btn { position: fixed; } /* o botão do índice das regras flutua sobre a página */
 .ripple { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(var(--ambar-rgb), 0.45) 0%, rgba(var(--ambar-rgb), 0) 70%); transform: scale(0); pointer-events: none; animation: ripple 0.55s ease-out forwards; }
 @keyframes ripple { to { transform: scale(1); opacity: 0; } }
 .btn:active:not(:disabled), .tslot:active:not(:disabled), .sheet-tab:active, .cmd__item:active:not(:disabled), .inv__act:active:not(:disabled) { transform: scale(0.96); }
@@ -3975,8 +3989,16 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .cell--assim-plus:hover, .cell--assim-plus:focus-visible { border-color: var(--ambar); color: var(--nevoa); outline: none; }
 
 /* Galeria do personagem: botão discreto sob o retrato e vitrine de fotos */
-.portrait__gallery { background: none; border: 0; padding: 0.1rem 0.4rem; font: inherit; font-size: 0.72rem; letter-spacing: 0.04em; color: var(--nevoa-2); opacity: 0.45; cursor: pointer; text-transform: lowercase; }
-.portrait__gallery:hover, .portrait__gallery:focus-visible { opacity: 1; color: var(--nevoa); outline: none; text-decoration: underline; }
+.portrait__gallery { background: none; border: 0; padding: 0.1rem 0.4rem; font: inherit; font-size: 0.72rem; letter-spacing: 0.04em; color: var(--nevoa-2); opacity: 0.75; cursor: pointer; text-transform: lowercase; }
+.portrait__gallery:hover, .portrait__gallery:focus-visible { opacity: 1; color: var(--nevoa); text-decoration: underline; }
+/* alvos de toque: nada clicável abaixo de 24 px (WCAG 2.5.8); no toque, os controles pequenos crescem */
+.link-more, .arena__add, .tag--btn, .portrait__gallery { display: inline-flex; align-items: center; min-height: 24px; }
+@media (pointer: coarse) {
+  .link-more { min-height: 44px; }
+  .alerts__x, .vital__btn { width: 40px; height: 40px; }
+  .chip--toggle, .mag__chip, .facets__sum, .fighter__act, .arena__add { min-height: 40px; }
+}
+.profile-btn[aria-current="page"] { border-color: var(--ambar); color: var(--ambar); }
 .gallery__body { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
 .gallery__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0.6rem; }
 .gallery__slot { aspect-ratio: 1; padding: 0; overflow: hidden; border-radius: var(--r-m, 12px); border: 1px solid var(--linha-forte); background: var(--casco-2); color: var(--nevoa-2); cursor: pointer; font: inherit; }
