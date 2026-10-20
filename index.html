@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=219">
+  <link rel="stylesheet" href="style.css?v=221">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -558,6 +558,10 @@
             <div class="equip-mods" id="equip-prot"></div>
             <h3 class="inv-title">Módulos</h3>
             <div class="equip-mods" id="equip-mods"></div>
+            <div id="acopla-row" hidden>
+              <h3 class="inv-title">Acoplados (Engenharia) <span class="count" id="acopla-count"></span></h3>
+              <div class="equip-mods" id="equip-acopla"></div>
+            </div>
             <div id="assim-row" hidden>
               <h3 class="inv-title">Assimilações <span class="count" id="assim-count"></span></h3>
               <div class="equip-mods" id="equip-assim"></div>
@@ -895,7 +899,7 @@
           <button class="btn btn--ghost btn--sm" type="button" id="member-add-mine" hidden>Pôr um personagem meu no grupo</button>
 
           <form class="xp-give" id="form-xp" novalidate hidden>
-            <h3 class="sub-title">Dar XP (mestre)</h3>
+            <h3 class="sub-title">Dar XP e Cronos (mestre)</h3>
             <div class="xp-give__row">
               <div class="field">
                 <label class="field__label" for="xp-amount">Quantidade de XP</label>
@@ -903,11 +907,18 @@
               </div>
               <button class="btn btn--primary" type="submit" id="xp-give">Dar XP</button>
             </div>
+            <div class="xp-give__row">
+              <div class="field">
+                <label class="field__label" for="cronos-amount">Quantidade de Cronos</label>
+                <input class="input" id="cronos-amount" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex.: 500">
+              </div>
+              <button class="btn btn--primary" type="button" id="cronos-give">Dar Cronos</button>
+            </div>
             <div class="xp-give__who">
               <label class="check"><input type="checkbox" id="xp-all" checked><span>Todos</span></label>
-              <div class="checks" id="xp-list" role="group" aria-label="Personagens que recebem XP"></div>
+              <div class="checks" id="xp-list" role="group" aria-label="Personagens que recebem XP ou Cronos"></div>
             </div>
-            <p class="field__hint">10 XP = 1 UP. Os jogadores veem os novos pontos para distribuir na ficha.</p>
+            <p class="field__hint">10 XP = 1 UP. Os jogadores veem os novos pontos para distribuir na ficha. Os Cronos entram no dinheiro do personagem nesta campanha.</p>
           </form>
         </section>
         <!-- Descanso: o mestre descansa o grupo todo; o jogador, os personagens dele -->
@@ -1166,10 +1177,10 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="pericias.js?v=219"></script>
-  <script src="regras.js?v=219"></script>
-  <script src="items.js?v=219"></script>
-  <script src="pixelart.js?v=219"></script>
-  <script src="app.js?v=219"></script>
+  <script src="pericias.js?v=221"></script>
+  <script src="regras.js?v=221"></script>
+  <script src="items.js?v=221"></script>
+  <script src="pixelart.js?v=221"></script>
+  <script src="app.js?v=221"></script>
 </body>
 </html>
