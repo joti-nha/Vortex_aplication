@@ -4098,3 +4098,5 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .racial__result span { font-size: 0.8rem; font-weight: 500; color: var(--nevoa-2); }
 .racial__result:hover, .racial__result:focus-visible { border-color: var(--ambar); }
 .racial__back { align-self: flex-start; margin: 0 0 0.3rem; }
+.fsec__toggle { grid-column: 1 / -1; justify-self: start; }
+.fsec__more[hidden] { display: none; }

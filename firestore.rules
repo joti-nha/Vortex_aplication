@@ -84,6 +84,19 @@ service cloud.firestore {
       allow update: if signedIn() && validEntry()
                     && request.resource.data.ownerUid == resource.data.ownerUid;
       allow delete: if signedIn();
+
+      // Galeria da criatura do Bestiário: as mesmas regras da galeria da ficha
+      match /gallery/{photoId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+                      && request.resource.data.keys().hasOnly(['image', 'url', 'by', 'at'])
+                      && request.resource.data.image is string && request.resource.data.image.size() <= 400000
+                      && request.resource.data.url is string && request.resource.data.url.size() <= 600
+                      && (request.resource.data.image.size() > 0 || request.resource.data.url.size() > 0)
+                      && request.resource.data.by == request.auth.uid;
+        allow update: if false;
+        allow delete: if signedIn();
+      }
     }
 
     // ---------- Personagens e criaturas: públicos e editáveis ----------

@@ -764,6 +764,7 @@ const FIREBASE_CONFIG = {
     const chars = () => fs.collection('characters');
     const camps = () => fs.collection('campaigns');
     const names = () => fs.collection('names');
+    const galColl = (id) => (/^lib:/.test(id) ? fs.collection('library').doc(id.slice(4)) : chars().doc(id)).collection('gallery'); // galeria da ficha ou da criatura
     const lib = () => fs.collection('library');
     const libCache = new Map();
     // criaturas reservam o nome em "c_~criatura " + nome; personagens, em "c_" + nome (fichas antigas de criatura ainda podem estar no "c_" + nome)
@@ -888,16 +889,17 @@ const FIREBASE_CONFIG = {
       },
 
       // Galeria do personagem: subcoleção, uma foto por documento (cabe muito mais que na ficha)
+      // id "lib:..." é a galeria de uma criatura do Bestiário (registro do banco); o resto, de uma ficha
       async listGallery(id) {
-        const snap = await chars().doc(id).collection('gallery').orderBy('at').limit(60).get();
+        const snap = await galColl(id).orderBy('at').limit(60).get();
         return snap.docs.map((x) => { const g = x.data(); return { id: x.id, image: g.image || '', url: g.url || '', at: g.at && g.at.toMillis ? g.at.toMillis() : 0 }; });
       },
       async addGalleryPhoto(id, photo) {
-        const ref = await chars().doc(id).collection('gallery').add({ image: String(photo.image || ''), url: String(photo.url || ''), by: me, at: FV.serverTimestamp() });
+        const ref = await galColl(id).add({ image: String(photo.image || ''), url: String(photo.url || ''), by: me, at: FV.serverTimestamp() });
         return ref.id;
       },
       async removeGalleryPhoto(id, pid) {
-        await chars().doc(id).collection('gallery').doc(pid).delete();
+        await galColl(id).doc(pid).delete();
       },
 
       // Grava só os campos enviados (assim não apaga o que outra pessoa editou nos outros campos)
@@ -4832,6 +4834,7 @@ const FIREBASE_CONFIG = {
       grid.append(sec);
     });
     const place = (f, el) => (secBox[f.sec] || grid).append(el);
+    const moreFields = [];
     // resumo da criatura (como as pílulas da revista): camadas da Resistência e Defesa mínima
     const paintSum = () => {
       if (!sheetSum) return;
@@ -4869,8 +4872,21 @@ const FIREBASE_CONFIG = {
       const wrap = h('div', 'field' + (f.big || f.kind === 'multi' ? ' field--wide' : ''), label, ctrl);
       if (f.kind === 'number' && ctrl.max) wrap.append(h('p', 'field__hint', 'Máximo ' + ctrl.max + ' para este tipo.'));
       if (f.hint) wrap.append(h('p', 'field__hint', f.hint));
+      if (f.more) { wrap.classList.add('fsec__more'); moreFields.push(wrap); }
       place(f, wrap);
     });
+    // perícias completas da criatura: um botão abre as que não aparecem de início
+    if (moreFields.length) {
+      const extra = cat.fields.filter((f) => f.more);
+      let open = extra.some((f) => num(d.values[f.key]));
+      const tog = h('button', 'btn btn--ghost btn--sm fsec__toggle');
+      tog.type = 'button';
+      tog.dataset.fid = 'item-more-skills';
+      const paintMore = () => { moreFields.forEach((w) => { w.hidden = !open; }); tog.textContent = open ? 'Menos perícias' : 'Perícias completas (+' + moreFields.length + ')'; tog.setAttribute('aria-expanded', String(open)); };
+      tog.addEventListener('click', () => { open = !open; paintMore(); });
+      paintMore();
+      (secBox[extra[0].sec] || grid).append(tog);
+    }
     paintSum();
 
     $('#item-image-slot').hidden = !cat.image;
@@ -11580,7 +11596,7 @@ const FIREBASE_CONFIG = {
   /* Galeria do personagem: botão discreto embaixo do retrato. Uma vitrine de fotos em que só abre
      uma vaga nova (o "+") depois que a anterior foi ocupada; o "+" pergunta de onde vem a foto. */
   const GAL_MAX = 30;
-  const gal = { ch: null, list: [], view: 'grid', sel: null, busy: false };
+  const gal = { ch: null, list: [], view: 'grid', sel: null, busy: false }; // ch: { id, name } (ficha, ou "lib:" + id da criatura)
   let galDlg = null;
   // reduz a foto mantendo a proporção até caber no banco (cerca de 400 mil caracteres)
   function fitPhoto(file) {
@@ -11615,14 +11631,15 @@ const FIREBASE_CONFIG = {
   }
   // quem pode mexer na ficha aberta também põe e tira fotos (a ficha não tem modo só de leitura)
   const galCanEdit = () => Boolean(gal.ch);
-  async function openGallery() {
-    if (!sheetChar) return;
+  async function openGallery(target) {
+    const who = target && target.id ? target : sheetChar;
+    if (!who) return;
     if (!galDlg) {
       galDlg = h('dialog', 'dialog dialog--wide gallery');
       galDlg.setAttribute('aria-labelledby', 'gallery-title');
       document.body.append(galDlg);
     }
-    gal.ch = sheetChar;
+    gal.ch = who;
     gal.list = [];
     gal.view = 'grid';
     gal.sel = null;
@@ -11728,7 +11745,7 @@ const FIREBASE_CONFIG = {
     galDlg.replaceChildren(h('div', 'picker', head, body));
     if (keep) { const el = galDlg.querySelector('[data-fid="' + keep + '"]'); if (el) el.focus({ preventScroll: true }); }
   }
-  $('#gallery-open').addEventListener('click', openGallery);
+  $('#gallery-open').addEventListener('click', () => openGallery());
 
   // Vincular a uma campanha
   inAttach.addEventListener('input', () => setError(errAttach, inAttach, ''));
@@ -13579,7 +13596,8 @@ const FIREBASE_CONFIG = {
   function foeTests(f) {
     const v = foeVals(f);
     const out = ATTRS.map((at) => ({ id: 'a:' + at.id, label: at.label + ' ' + signed(num(v[at.id])), make: () => ({ label: 'Teste de ' + at.label, attrName: at.label, attr: num(v[at.id]) }) }));
-    ['luta', 'mira', 'operacoes', 'resistencia', 'reflexos', 'fortitude', 'sentidos', 'iniciativa'].forEach((sk) => {
+    const base = ['luta', 'mira', 'operacoes', 'resistencia', 'reflexos', 'fortitude', 'sentidos', 'iniciativa'];
+    base.concat(Object.keys(SKILL_LABEL).filter((sk) => base.indexOf(sk) < 0 && num(v[sk]))).forEach((sk) => { // as perícias completas entram quando têm valor
       const at = SKILL_ATTR[sk];
       const atl = ATTR_LABEL[at];
       const fixed = num(v[at]) + num(v[sk]);
@@ -15982,7 +16000,7 @@ const FIREBASE_CONFIG = {
   const CAMP_NPC_MAX = 40;
   let npcsCat = '', npcsSeq = 0;
   const campNpcs = () => (currentCamp && Array.isArray(currentCamp.npcs) ? currentCamp.npcs.filter((x) => x && x.snap && x.snap.name) : []);
-  const campNpcKey = (e) => e.id || 'n:' + nameKey(e.name);
+  const campNpcKey = (e) => (e.fromChar ? 'c:' + e.fromChar : e.id || 'n:' + nameKey(e.name));
   const isCampNpc = (e) => campNpcs().some((x) => x.id === campNpcKey(e));
   const npcSnap = (e) => { const s = deep(e); delete s.image; delete s.mine; if (s.values) delete s.values.lore; return s; };
   async function saveCampNpcs(list) {
@@ -16000,6 +16018,87 @@ const FIREBASE_CONFIG = {
     if (list.length >= CAMP_NPC_MAX) { toast('A campanha já tem ' + CAMP_NPC_MAX + ' NPCs salvos. Tire algum antes.'); return; }
     if (await saveCampNpcs(list.concat([{ id: k, snap: npcSnap(e) }]))) toast(e.name + ' está nos NPCs da campanha.');
   }
+  /* Ficha normal como NPC: atributos, perícias, Resistência e Defesa vêm da ficha; espécime, poderes e inventário
+     viram a ficha da criatura (as ações saem das sugestões). Fica só nos NPCs da campanha (id "c:" + ficha); cada
+     "Pôr na arena" é uma cópia, então o dano não mexe na ficha. */
+  const stripPics = (list) => (list || []).map((x) => { const y = deep(x); delete y.image; delete y.thumb; return y; });
+  function charToNpc(ch) {
+    const c = sheetOf(ch);
+    const s = c.sheet;
+    const m = compute(c);
+    const v = { categoria: 'Comum', up: '0', corpo: String(attrOf(s, 'corpo')), precisao: String(attrOf(s, 'precisao')), essencia: String(attrOf(s, 'essencia')),
+      armadura: String(m.max.armadura || 0), pv: String(m.max.pv || 0), escudo: String(m.max.escudo || 0), blindagem: String(m.max.blindagem || 0),
+      ficha: { specimen: s.specimen ? stripPics([s.specimen])[0] : null, powers: stripPics(s.powers), inventory: stripPics(s.inventory) },
+      descricao: ['Ficha de ' + (isCreature(ch.type) ? 'criatura' : 'personagem') + ': ' + ch.name, [ch.species, ch.origin].filter(Boolean).join(' · ')].filter(Boolean).join('. ') };
+    Object.keys(SKILL_LABEL).forEach((k) => { v[k] = String(skillOf(s, k)); });
+    v.acoes = npcActSuggest(v).slice(0, NPC_ACT_MAX).map((x) => Object.assign(x.a, { id: uid().slice(0, 8) }));
+    return { id: '', kind: 'npc', typeId: '', name: ch.name, thumb: ch.thumb || '', values: v, fromChar: ch.id };
+  }
+  let sheetNpcDlg = null;
+  function openSheetAsNpc() {
+    if (!sheetNpcDlg) { sheetNpcDlg = h('dialog', 'dialog pickchar'); sheetNpcDlg.setAttribute('aria-labelledby', 'sheetnpc-title'); document.body.append(sheetNpcDlg); }
+    const dlg = sheetNpcDlg;
+    const found = h('ul', 'pickchar__list');
+    const q = h('input', 'input');
+    q.type = 'search';
+    q.id = 'sheetnpc-q';
+    q.placeholder = 'Buscar ficha por nome, espécie ou origem';
+    q.setAttribute('aria-label', 'Buscar ficha');
+    q.autocomplete = 'off';
+    let seq = 0;
+    const search = debounce(async () => {
+      const my = ++seq;
+      let list = [];
+      try { list = await db.searchCharacters(q.value.trim()); } catch (err) { if (my === seq) found.replaceChildren(h('li', 'field__hint', errorMessage(err))); return; }
+      if (my !== seq) return;
+      list = list.slice(0, 20);
+      found.replaceChildren(...list.map((c) => {
+        const k = 'c:' + c.id;
+        const here = campNpcs().some((x) => x.id === k);
+        const art = h('span', 'pickchar__art');
+        const pic = c.thumb || c.image;
+        if (pic) { const img = h('img'); img.src = pic; img.alt = ''; art.append(img); art.classList.add('pickchar__art--img'); }
+        else art.textContent = (c.name || '?').trim().charAt(0).toUpperCase();
+        const b = h('button', 'btn btn--sm ' + (here ? 'btn--ghost' : 'btn--primary'), here ? 'Já é NPC' : 'Usar como NPC');
+        b.type = 'button';
+        b.disabled = here;
+        b.dataset.fid = 'sheetnpc-' + c.id;
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          try {
+            const full = await db.getCharacter(c.id);
+            if (!full || !full.sheet || !full.sheet.attrs) { toast(c.name + ': a ficha ainda não tem a distribuição inicial.'); b.disabled = false; return; }
+            const list2 = campNpcs();
+            if (list2.length >= CAMP_NPC_MAX) { toast('A campanha já tem ' + CAMP_NPC_MAX + ' NPCs salvos. Tire algum antes.'); b.disabled = false; return; }
+            if (await saveCampNpcs(list2.concat([{ id: k, snap: charToNpc(full) }]))) { toast(c.name + ' está nos NPCs da campanha.'); search(); }
+            else b.disabled = false;
+          } catch (err) { toast(errorMessage(err)); b.disabled = false; }
+        });
+        return h('li', 'pickchar__card' + (here ? ' is-here' : ''), art,
+          h('span', 'pickchar__info', h('strong', 'pickchar__name', c.name), h('span', 'pickchar__meta', [c.species, c.origin].filter(Boolean).join(' · ') || (isCreature(c.type) ? 'Criatura' : 'Personagem'))), b);
+      }));
+      if (!list.length) found.replaceChildren(h('li', 'field__hint', 'Nenhuma ficha com esse nome.'));
+    }, 250);
+    q.addEventListener('input', search);
+    const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
+    close.type = 'button';
+    close.addEventListener('click', () => closeDialog(dlg));
+    const title = h('h2', '', 'Ficha como NPC');
+    title.id = 'sheetnpc-title';
+    dlg.replaceChildren(h('div', 'pickchar__body', title,
+      h('p', 'field__hint', 'Qualquer ficha de personagem ou criatura vira um NPC da campanha: atributos, perícias, Resistência, poderes e inventário vêm da ficha. Na arena entra uma cópia, então a ficha não perde vida.'),
+      q, found, h('div', 'dialog__actions', close)));
+    openDialog(dlg);
+    search();
+  }
+  // NPC feito de ficha: na vitrine, os números acompanham a ficha (se ela ainda existir)
+  async function freshSheetNpcs(saved) {
+    const out = {};
+    await Promise.all(saved.filter((x) => /^c:/.test(x.id)).map(async (x) => {
+      try { const ch = await db.getCharacter(x.id.slice(2)); if (ch && ch.sheet && ch.sheet.attrs) out[x.id] = charToNpc(ch); } catch (err) { /* fica a cópia guardada */ }
+    }));
+    return out;
+  }
   // editou ou criou pela vitrine: a cópia guardada acompanha
   async function refreshCampNpc(saved) {
     if (!saved || !saved.name) { renderNpcs(); return; }
@@ -16013,9 +16112,11 @@ const FIREBASE_CONFIG = {
     const seq = ++npcsSeq;
     const saved = campNpcs();
     let fresh = [];
-    if (saved.length) { const r = await libFind(['npc'], ''); fresh = r.list; }
+    let sheets = {};
+    if (saved.some((x) => !/^c:/.test(x.id))) { const r = await libFind(['npc'], ''); fresh = r.list; }
+    if (saved.some((x) => /^c:/.test(x.id))) sheets = await freshSheetNpcs(saved);
     if (seq !== npcsSeq) return;
-    let list = saved.map((x) => fresh.find((e) => campNpcKey(e) === x.id) || x.snap);
+    let list = saved.map((x) => sheets[x.id] || fresh.find((e) => campNpcKey(e) === x.id) || x.snap);
     const q = nameKey($('#npcs-q').value || '');
     if (q) list = list.filter((e) => nameKey(e.name).indexOf(q) >= 0);
     npcsCat = beastCats($('#npcs-cats'), list, npcsCat, (c) => { npcsCat = c; renderNpcs(); });
@@ -16023,7 +16124,7 @@ const FIREBASE_CONFIG = {
     $('#npcs-mag').replaceChildren(...list.map((e) => magPage(e, 'npcs')));
     $('#npcs-hint').textContent = !saved.length ? 'Nenhum NPC salvo ainda. Abra o Bestiário e toque em "Salvar na campanha", ou crie um NPC.'
       : !list.length ? 'Nenhum NPC com esse nome.' : plural(list.length, 'NPC', 'NPCs') + (list.length < saved.length ? ' de ' + saved.length : '') + '.';
-    const open = beastOpen || !saved.length;
+    const open = beastOpen; // o Bestiário fica oculto até o mestre abrir
     $('#beast-block').hidden = !open;
     $('#npcs-beast').textContent = open ? 'Esconder o Bestiário' : 'Abrir o Bestiário';
     $('#npcs-beast').setAttribute('aria-expanded', String(open));
@@ -16035,6 +16136,7 @@ const FIREBASE_CONFIG = {
     renderNpcs();
     if (beastOpen) { runBeast(); $('#beast-block').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   });
+  $('#npcs-sheet').addEventListener('click', openSheetAsNpc);
   $('#npcs-new').addEventListener('click', () => openHostedForm($('#npcs-form-slot'), 'npc', null, async (saved) => {
     if (saved && saved.name && !isCampNpc(saved)) await toggleCampNpc(saved);
     else renderNpcs();
@@ -16084,12 +16186,14 @@ const FIREBASE_CONFIG = {
       b.addEventListener('click', onClick);
       return b;
     };
-    const read = btn('Ficha completa', 'btn--ghost', () => openEntry(e));
+    const read = e.fromChar ? btn('Abrir a ficha', 'btn--ghost', () => { location.hash = '#/character/' + e.fromChar; }, 'Abrir a ficha de ' + e.name) : btn('Ficha completa', 'btn--ghost', () => openEntry(e));
     const npcs = where === 'npcs';
     const slot = $(npcs ? '#npcs-form-slot' : camp ? '#beast-form-slot' : '#bst-form-slot');
     const rerun = npcs ? (saved) => refreshCampNpc(saved) : camp ? (saved) => { refreshCampNpc(saved); runBeast(); } : runBestiary;
     const acts = [read];
-    if (!e.oficial) acts.push(btn('Editar', 'btn--ghost', () => openHostedForm(slot, 'npc', e, rerun), 'Editar ' + e.name));
+    // galeria de fotos, como a dos personagens (a do NPC feito de ficha é a da própria ficha)
+    if (e.fromChar || e.id) acts.push(btn('Galeria', 'btn--ghost', () => openGallery({ id: e.fromChar || 'lib:' + e.id, name: e.name }), 'Galeria de ' + e.name));
+    if (!e.oficial && !e.fromChar) acts.push(btn('Editar', 'btn--ghost', () => openHostedForm(slot, 'npc', e, rerun), 'Editar ' + e.name));
     if (camp || npcs) {
       const saved = isCampNpc(e);
       if (npcs) acts.push(btn('Tirar da campanha', 'btn--ghost', () => toggleCampNpc(e), 'Tirar ' + e.name + ' dos NPCs da campanha'));
@@ -16108,7 +16212,7 @@ const FIREBASE_CONFIG = {
     }
     const page = h('article', 'mag__page', cover,
       h('div', 'mag__body',
-        h('div', 'mag__head', h('p', 'mag__kicker', 'Ameaça' + (e.oficial ? ' · oficial' : e.mine ? ' · sua' : '') + (kills ? ' · derrotado ' + (kills === 1 ? '1 vez' : kills + ' vezes') : '')),
+        h('div', 'mag__head', h('p', 'mag__kicker', (e.fromChar ? 'Ficha' : 'Ameaça') + (e.oficial ? ' · oficial' : e.mine ? ' · sua' : '') + (kills ? ' · derrotado ' + (kills === 1 ? '1 vez' : kills + ' vezes') : '')),
           camp ? null : starButton(e, () => { if ($('#bst-fav').checked) runBestiary(); })),
         h('h3', 'mag__title', e.name),
         h('div', 'mag__pills', ...layers),
