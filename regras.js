@@ -637,6 +637,23 @@ window.VORTEX_REGRAS = {
           ['6', '–21', '–6', '×6']
         ]],
 
+        ['h2', 'Modos de tiro'],
+        ['p', 'O **modo** da arma de fogo diz como a cadência pode ser usada. Uma arma com mais de um modo escolhe qual usar a cada ataque.'],
+        ['card', 'Único', [
+          ['p', 'O dispositivo atira **uma única vez** por ataque, sem penalidade de cadência.']
+        ]],
+        ['card', 'Automático', [
+          ['p', 'Você atira livremente quantos disparos quiser, até a cadência, seguindo normalmente a regra de cadência.'],
+          ['p', 'Você também pode **quebrar** a sequência de tiros para usar o restante dela em outro ataque. Para isso, precisa deixar sem usar, no mínimo, **¼ da cadência, arredondado para cima**.'],
+          ['example', 'Cadência 6 → ¼ de 6 é 1,5, arredondado para 2. Para guardar disparos para outro ataque, o primeiro usa no máximo 4; os que sobraram ficam para o ataque seguinte, cada um com a sua penalidade.']
+        ]],
+        ['card', 'Semi', [
+          ['p', 'Funciona como o automático, mas a cadência é dividida em **disparos e rajadas**, escrita como disparos/rajadas. Uma cadência **3/2** são 3 disparos, duas vezes; para todos os efeitos, multiplique os dois números para ter a cadência normal (3/2 = cadência 6).'],
+          ['p', 'Por ataque, você dispara **exatamente uma rajada**, nem mais nem menos. Cada rajada conta com a **sua própria penalidade** de cadência.'],
+          ['example', 'Cadência 3/2, com proficiência → cada ataque dispara 3 vezes com –3 e dano ×3; a segunda rajada, num outro ataque, tem de novo –3.']
+        ]],
+        ['p', 'Na arena, a ficha de ataque mostra o **Modo de tiro** quando a arma tem mais de um. No Semi, a rajada sai inteira e os disparos dela podem ser divididos entre os alvos; a rajada é anotada no campo Rajada da arma (Oficina), e sem ele a rajada é a cadência inteira.'],
+
         ['h2', 'Como a penalidade entra'],
         ['p', 'A penalidade vale inteira no ataque. Ela é descontada primeiro do bônus da perícia e, o que passar dele, do atributo; por isso o crítico, que soma o atributo de novo, soma só o que sobrou do atributo. A cadência é contada por rodada e por arma.'],
         ['p', 'O Laser é a exceção: a rajada sai inteira num alvo só, sem penalidade nem multiplicador (veja [Laser](armas#Laser)).']
@@ -1022,10 +1039,10 @@ window.VORTEX_REGRAS = {
         ]],
         ['card', 'I.A.', [
           ['p', 'O módulo de I.A. acrescenta uma inteligência artificial que faz ações de **busca, pesquisa e análise** por você. O teste é **2d6 + a Precisão da I.A.** (o nível de inteligência dela), e quem rola é o mestre.'],
-          ['p', 'I.A. não tem raridade. Como módulo só existe a **I.A. leve**, e as variações dela são a especialidade (pesquisa, análise, infiltração, combate...). Diferente dos outros módulos, ela só funciona instalada num item **Épico ou Lendário** equipado (próteses e módulos não têm raridade, então não servem de base).'],
+          ['p', 'I.A. não tem raridade e existe um único **Módulo de I.A.**, que serve para tudo: pesquisa, análise, infiltração, leitura de combate e qualquer outra tarefa de busca. Diferente dos outros módulos, ela só funciona instalada num item **Épico ou Lendário** equipado (próteses e módulos não têm raridade, então não servem de base).'],
           ['p', 'A **I.A. própria** não é um módulo: ela é como uma personagem, com alta consciência e todo o fator de interpretação de uma I.A. Só itens **Lendários** a suportam, e só ela pode ser colocada em um corpo próprio.'],
-          ['p', 'O **preço** da I.A. leve é o que define a Precisão dela; a especialidade só muda o que ela faz:'],
-          ['kv', '', [['4.000 Cronos', 'Precisão 1'], ['6.000 Cronos', 'Precisão 2'], ['9.000 Cronos', 'Precisão 3']]]
+          ['p', 'A Precisão do Módulo de I.A. depende da conexão:'],
+          ['kv', '', [['Fora da internet', 'Precisão 3'], ['Conectada à internet', 'Precisão 6']]]
         ]],
         ['card', 'Perito', [
           ['p', 'O **módulo perito (perícia)** funciona como o poder Doutor naquela perícia: o limite de modificador nela se torna 4 e você ganha +1 ponto de perícia enquanto o módulo estiver ativo.'],
@@ -1176,7 +1193,7 @@ window.VORTEX_REGRAS = {
     {
       id: 'especimes', title: 'Espécimes', group: 'Personagem',
       blocks: [
-        ['p', 'O espécime é a raça do personagem. Cada um traz habilidades raciais próprias, que entram sozinhas na ficha. Só o Etheriano pode comprar habilidades raciais de outros espécimes.'],
+        ['p', 'O espécime é a raça do personagem. Cada um traz habilidades raciais próprias, que entram sozinhas na ficha. O Etheriano pode comprar habilidades raciais de outros espécimes com UP, e o Android escolhe uma delas de graça (Inspirado em humanoides), inclusive de espécimes criados na Oficina.'],
         ['card', 'Humano', [
           ['p', 'Nada de especial, talvez a sua experiência passada: tome 3 UP de início!'],
           ['p', 'Regra opcional, **Experiência mundana**: a idade do humano define quantos UP ele recebe e quantas Perdas carrega.'],
@@ -1193,19 +1210,20 @@ window.VORTEX_REGRAS = {
           ['h4', 'Núcleo'],
           ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as camadas da sua Resistência zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
           ['h4', 'Engenharia'],
-          ['p', 'Como um bom pedaço de lata, você não equipa itens: você os acopla ao corpo. Isso vale para armaduras e módulos. Acoplar leva ao menos 1 hora, e cada +2 de Carga Cibernética dado pelo núcleo acoplado vale +1 de Carga Cibernética a mais.'],
+          ['p', 'Como um bom pedaço de lata, você pode equipar itens normalmente ou acoplá-los ao próprio corpo. Acoplar exige 2 horas de trabalho (Tecnologia ou Ofício (Engenharia)) para cada ponto de Carga do item e vale para armaduras, armas, acessórios, mods, propriedades e demais itens, exceto consumíveis. Um item acoplado ocupa Carga Cibernética igual à Carga dele.'],
+          ['p', 'Você se beneficia de uma armadura por vez, e as armas acopladas contam como sempre empunhadas. Para mods e acessórios, você conta ao mesmo tempo como um item **Lendário** de arma de fogo e de arma corpo a corpo: os mods e acessórios acoplados em você valem para você e para qualquer arma da mesma categoria que você estiver usando.'],
+          ['p', 'A cada +2 de Carga Cibernética dados pelo núcleo acoplado, você ganha +1 de Carga Cibernética a mais, e você escolhe o atributo-chave do cálculo da sua Carga Cibernética (na ficha, aba Inventário).'],
           ['h4', 'Não vivo'],
           ['p', 'Você é lata, e lata não é afetada por coisas biológicas nem precisa descansar: é só colocar na tomada! Você não recupera a vida (Blindagem) descansando, mas pode ser consertado: no descanso longo, fora de serviço, quem tiver a melhor Tecnologia do grupo faz o teste com um Kit Técnico, e você recupera Blindagem igual ao resultado do teste. Em combate, o conserto é a cura de Blindagem (veja [Cura](cura#Blindagem (BL))).']
         ]],
         ['card', 'Android', [
           ['p', 'Você é um robô, só que humanoide...'],
-          ['h4', 'Engenharia'],
-          ['p', 'Como um bom pedaço de lata, você não equipa itens: você os acopla ao corpo. Isso vale para armas e armaduras, que, acopladas, ocupam a sua Carga Cibernética em vez da Carga. Acoplar leva ao menos 1 hora, e cada +2 de Carga Cibernética dado pelo núcleo acoplado vale +1 de Carga Cibernética a mais.'],
-          ['p', 'Para você, próteses são peças, e você não precisa de uma prótese para instalar módulos.'],
           ['h4', 'Núcleo'],
-          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as camadas da sua Resistência zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
+          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as camadas da sua Resistência zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é vulnerável a tudo o que afeta eletrônicos. Você não precisa de uma prótese para acoplar módulos.'],
+          ['h4', 'Inspirado em humanoides'],
+          ['p', 'Você pode escolher livremente um poder (habilidade racial) de qualquer espécime, inclusive dos criados na Oficina (aba Poderes → Características raciais). Se a habilidade escolhida conceder UP, ela fornece só 1 UP.'],
           ['h4', 'Humanidade'],
-          ['p', 'Você pode fazer testes para resistir a efeitos de PEM (pulso eletromagnético) quando eles tiverem CD, e metade da sua Blindagem volta com o descanso, como se fosse PV (a outra metade só com conserto).'],
+          ['p', 'Você pode fazer testes para resistir a efeitos de PEM (pulso eletromagnético) quando eles tiverem CD, e metade da sua Blindagem pode ser restaurada como se fosse PV (a outra metade, só com conserto).'],
           ['p', 'Efeitos de [PEM](condicoes-e-estados#Específicos) atordoam automaticamente seres elétricos ou eletrônicos e desativam Escudos. Com a Humanidade, o Android faz o teste quando houver CD; se não houver, ele não é afetado pelo PEM.']
         ]],
         ['card', 'Etheriano', [

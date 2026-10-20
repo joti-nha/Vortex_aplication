@@ -4066,3 +4066,22 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .npcl__qty { min-width: 2.2rem; text-align: center; font-weight: 600; }
 .mag__act { display: block; font-size: 0.88rem; }
 .cmd__sub { margin: 0.25rem 0 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.75; }
+
+/* Lojas: escolher a categoria inteira no menu e acertar o estoque de vários itens de uma vez */
+.picker__all { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0 0 0.5rem; }
+.picker__all[hidden] { display: none; }
+.stockdlg__body { display: grid; gap: 0.5rem; padding: 1rem 1.1rem; }
+.stockdlg__body h2 { margin: 0; font-size: 1.2rem; }
+.stockdlg__bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.5rem; border: 1px solid var(--linha, rgba(255, 255, 255, 0.12)); border-radius: 0.6rem; }
+.stockdlg__bulk .stockdlg__num { width: 5.5rem; }
+.stockdlg__count { margin: 0; font-size: var(--t-s); }
+.stockdlg__list { list-style: none; margin: 0; padding: 0; max-height: 55vh; overflow-y: auto; display: grid; gap: 0.15rem; }
+.stockdlg__cat { margin-top: 0.4rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--nevoa-2); }
+.stockdlg__row { display: flex; align-items: center; gap: 0.4rem; padding: 0.15rem 0; font-size: 0.82rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.stockdlg__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stockdlg__name small { color: var(--nevoa-2); }
+.stockdlg__lab { display: flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--nevoa-2); }
+.stockdlg__num { width: 4.6rem; min-height: 32px; padding: 0.2rem 0.4rem; font-size: 0.82rem; }
+.stockdlg__rm { min-height: 32px; padding: 0 0.55rem; }
+.pricing__target { max-width: 18rem; margin-bottom: 0.4rem; }
+@media (max-width: 520px) { .stockdlg__lab span, .stockdlg__lab { font-size: 0.7rem; } .stockdlg__num { width: 3.8rem; } }

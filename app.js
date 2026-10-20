@@ -3166,6 +3166,7 @@ const FIREBASE_CONFIG = {
       ok.disabled = !n;
     };
     const reset = () => { st.on = false; st.sel.clear(); paint(); };
+    const addAll = (list) => { list.forEach((e) => st.sel.set(multiKey(e), e)); st.on = true; paint(); };
     const toggle = (row) => {
       const e = row.libEntry;
       if (!e) return;
@@ -3208,7 +3209,7 @@ const FIREBASE_CONFIG = {
     }, true);
     clear.addEventListener('click', reset);
     ok.addEventListener('click', () => { const list = [...st.sel.values()].map(deep); reset(); cfg.onConfirm(list); });
-    return { bar, tip, paint, reset, get on() { return st.on; } };
+    return { bar, tip, paint, reset, addAll, get on() { return st.on; } };
   }
 
   // campos de mecânica que o espécime tinha antes do script dos poderes
@@ -3755,6 +3756,8 @@ const FIREBASE_CONFIG = {
       [{ label: 'Escolher', cls: 'btn--primary', onClick: () => finishPicker(deep(e)) }],
       () => { if ($('#picker-fav').checked) runPicker(); })));
     $('#picker-empty').hidden = list.length > 0;
+    pk.list = list;
+    pkAll.paint();
     pkMulti.paint();
     suggestAfter($('#picker-list'), list.length ? '' : suggest, $('#picker-q'), runPicker);
     $('#picker-hint').textContent = warn || plural(list.length, 'opção compatível', 'opções compatíveis') + (favOnly ? ' entre os favoritos' : '');
@@ -3803,6 +3806,45 @@ const FIREBASE_CONFIG = {
   $('#picker-hint').before(pkFacets.box);
   const pkMulti = multiPick($('#picker-list'), { enabled: () => pk.multi, label: (n) => 'Adicionar ' + (n || ''), onConfirm: (list) => finishPicker(list) });
   $('#picker-list').before(pkMulti.tip);
+  /* Menus de vários itens: pegar uma categoria inteira (ou tudo o que está listado) num clique */
+  const pkAll = (() => {
+    const box = h('div', 'picker__all');
+    box.hidden = true;
+    const add = async (c) => {
+      const o = pk.opts;
+      let list;
+      try { list = await libSearch(c.kinds, ''); }
+      catch (err) { list = BUILTINS.filter((e) => c.kinds.indexOf(e.kind) >= 0); }
+      if (pk.opts !== o) return;
+      list = list.filter((e) => c.kinds.indexOf(e.kind) >= 0 && (!c.test || c.test(e)) && (!o.filter || o.filter(e)));
+      if (!list.length) { toast('Nada em ' + c.label + '.'); return; }
+      pkMulti.addAll(list.map(deep));
+      toast(plural(list.length, 'item', 'itens') + ' de ' + c.label + ' selecionados.');
+    };
+    return {
+      box,
+      paint() {
+        const o = pk.opts;
+        box.hidden = !(o && pk.multi);
+        if (box.hidden) return;
+        const cats = (o.chips || []).filter((c) => c && c.kinds);
+        const all = h('button', 'btn btn--ghost btn--sm', 'Todos os listados (' + (pk.list || []).length + ')');
+        all.type = 'button';
+        all.dataset.fid = 'picker-all';
+        all.disabled = !(pk.list || []).length;
+        all.addEventListener('click', () => pkMulti.addAll((pk.list || []).map(deep)));
+        box.replaceChildren(h('span', 'picker__filter-label', 'Selecionar de uma vez:'), all, ...cats.map((c) => {
+          const b = h('button', 'btn btn--ghost btn--sm', '+ ' + c.label);
+          b.type = 'button';
+          b.dataset.fid = 'picker-cat-' + nameKey(c.label).replace(/\s+/g, '-');
+          b.setAttribute('aria-label', 'Selecionar toda a categoria ' + c.label);
+          b.addEventListener('click', () => add(c));
+          return b;
+        }));
+      }
+    };
+  })();
+  $('#picker-list').before(pkAll.box);
   $('#picker-list').after(pkMulti.bar);
   // como openPicker, mas devolve sempre uma lista (vazia se fechar sem escolher)
   async function openPickerMany(opts) {
@@ -4388,7 +4430,7 @@ const FIREBASE_CONFIG = {
           powerOpts(p).length ? btn('Opções', 'btn--ghost', 'npcb-pw-opt-' + i, () => openPowerOpts(ch, p, p)) : null,
           p.birth ? null : btn('Devolver', 'btn--ghost', 'npcb-pw-off-' + i, () => { s.powers.splice(s.powers.indexOf(p), 1); save(); draw(); })))) : h('p', 'field__hint', 'Nenhum poder. Os poderes custam UP, como na ficha do jogador.'),
         h('div', 'npcb__btns', btn('Comprar poder', 'btn--primary', 'npcb-pw-add', () => buyPower(ch)),
-          isEtheriano(sp) ? btn('Características raciais (Etheriano)', 'btn--ghost', 'npcb-racial', () => openRacial(ch)) : null));
+          racialMode(s) ? btn('Características raciais (' + (racialMode(s) === 'inspirado' ? 'Android' : 'Etheriano') + ')', 'btn--ghost', 'npcb-racial', () => openRacial(ch)) : null));
       const inv = h('div', 'npcb__block',
         h('h4', 'npcb__title', 'Inventário'),
         simb ? simbLine() : null,
@@ -7211,17 +7253,19 @@ const FIREBASE_CONFIG = {
   /* Script dos poderes: a mecânica que antes ficava no espécime (vida base, UP iniciais, núcleo, ser orgânico
      ou eletrônico, bônus). Uma linha por regra, "chave: valor"; flags valem sozinhas ("acopla"). */
   // cada flag liga uma ou mais regras; "engenharia" é a do Android inteira
-  const SCRIPT_FLAGS = { acopla: ['acopla'], engenharia: ['acopla', 'ccnucleo', 'modulolivre'], ccnucleo: ['ccnucleo'], modulolivre: ['modulolivre'], humanidade: ['humanidade'], organico: ['humanidade'], eletronico: ['eletronico'], eletrico: ['eletronico'], naovivo: ['naovivo'] };
-  const FLAG_KEYS = ['acopla', 'ccnucleo', 'modulolivre', 'humanidade', 'eletronico', 'naovivo'];
-  const FLAG_TEXT = { acopla: 'acopla armas e armaduras', ccnucleo: '+1 CC a cada +2 do núcleo', modulolivre: 'módulos sem prótese', humanidade: 'Humanidade', eletronico: 'eletrônico', naovivo: 'não vivo' };
+  const SCRIPT_FLAGS = { acopla: ['acopla'], engenharia: ['acopla', 'ccnucleo', 'ccattr'], ccnucleo: ['ccnucleo'], ccattr: ['ccattr'], modulolivre: ['modulolivre'], humanidade: ['humanidade'], organico: ['humanidade'], eletronico: ['eletronico'], eletrico: ['eletronico'], naovivo: ['naovivo'], inspirado: ['inspirado'] };
+  const FLAG_KEYS = ['acopla', 'ccnucleo', 'ccattr', 'modulolivre', 'humanidade', 'eletronico', 'naovivo', 'inspirado'];
+  const FLAG_TEXT = { acopla: 'acopla itens ao corpo', ccnucleo: '+1 CC a cada +2 do núcleo', ccattr: 'escolhe o atributo da CC', modulolivre: 'módulos sem prótese', humanidade: 'Humanidade', eletronico: 'eletrônico', naovivo: 'não vivo', inspirado: 'uma habilidade racial de qualquer espécime' };
   const SCRIPT_HELP = [
     ['vida: Blindagem', 'os PV viram Blindagem (ou Escudo, ou PV)'],
     ['up: 3', 'UP iniciais'],
     ['nucleo: 2', 'núcleo de nascença (capacidade)'],
-    ['acopla', 'armas e armaduras acopladas ocupam a Carga Cibernética'],
+    ['acopla', 'pode acoplar itens ao corpo: ocupam a Carga Cibernética pela carga deles'],
     ['ccnucleo', 'Engenharia: cada +2 de Carga Cibernética do núcleo vale +1 a mais'],
-    ['modulolivre', 'módulos sem precisar de prótese (próteses são peças)'],
-    ['engenharia', 'acopla + ccnucleo + modulolivre (a Engenharia do Android)'],
+    ['ccattr', 'escolhe o atributo-chave da Carga Cibernética (o padrão é Corpo)'],
+    ['modulolivre', 'módulos sem precisar de prótese'],
+    ['engenharia', 'acopla + ccnucleo + ccattr (a Engenharia do Robô)'],
+    ['inspirado', 'escolhe de graça uma habilidade racial de qualquer espécime (UP dados por ela: no máximo 1)'],
     ['humanidade', 'testes contra efeitos de PEM com CD; metade da Blindagem/Escudo regenera como PV'],
     ['eletronico', 'ser eletrônico: efeitos de PEM atordoam'],
     ['naovivo', 'não vivo: a vida não volta por descanso nem cura, só com conserto (Tecnologia)'],
@@ -7327,7 +7371,7 @@ const FIREBASE_CONFIG = {
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
   const isModule = (i) => i.kind === 'protese-modulo' && i.values.classe === 'Módulo';
   const twoHanded = (i) => /duas/i.test(String((i.values && i.values.empunhadura) || ''));
-  // I.A. (leve): só funciona instalada num item Épico ou Lendário equipado (próteses e módulos não têm raridade)
+  // Módulo de I.A.: só funciona instalada num item Épico ou Lendário equipado (próteses e módulos não têm raridade)
   const iaHost = (s) => s.inventory.find((x) => x.slot && x.slot !== 'assim' && x.kind !== 'protese-modulo' && /^(lend|epic)/.test(nameKey((x.values || {}).raridade || ''))) || null;
 
   function compute(c) {
@@ -7345,12 +7389,13 @@ const FIREBASE_CONFIG = {
     const implants = equipped.filter((i) => i.kind === 'protese-modulo');
     const protUsed = implants.filter((i) => !isModule(i)).reduce((t, i) => t + ccOf(i), 0);
     const modUsed = implants.filter(isModule).reduce((t, i) => t + ccOf(i), 0);
-    // acopla (Android): armas e armadura acopladas ocupam a Carga Cibernética, não a carga.
-    // Engenharia (Android e Robô): cada +2 de CC dado pelo núcleo acoplado vale +1 de CC a mais
+    // Engenharia (Robô): o que ele escolhe acoplar ocupa a Carga Cibernética pela carga do item; cada +2 de CC do núcleo
+    // vale +1 a mais, e o atributo-chave da CC é o que ele escolher (s.ccAttr; o padrão é Corpo)
     const acopla = mech.acopla;
-    const attached = acopla ? equipped.filter((i) => isWeapon(i.kind) || i.kind === 'armadura') : [];
-    const attachUsed = Math.round(attached.reduce((t, i) => t + parseCarga(i.values.carga), 0) * 100) / 100;
-    const ccMax = nucleo > 0 ? Math.max(0, nucleo + a.corpo) + (mech.ccnucleo ? Math.floor(nucleo / 2) : 0) : 0;
+    const attached = acopla ? equipped.filter((i) => i.acoplado) : [];
+    const attachUsed = Math.round(attached.reduce((t, i) => t + parseCarga(i.values.carga) * (i.qty || 1), 0) * 100) / 100;
+    const ccAttr = mech.ccattr && a[s.ccAttr] !== undefined ? s.ccAttr : 'corpo';
+    const ccMax = nucleo > 0 ? Math.max(0, nucleo + a[ccAttr]) + (mech.ccnucleo ? Math.floor(nucleo / 2) : 0) : 0;
     const modExtra = nucleo > 0 ? Math.max(0, a.essencia) : 0;
 
     const sources = [];
@@ -7428,7 +7473,7 @@ const FIREBASE_CONFIG = {
       cargaUsed: Math.round(cargaUsed * 100) / 100, cargaMax: max.carga, over: cargaUsed > max.carga,
       desloc: Math.max(0, 9 + mech.desloc) / (cargaUsed > max.carga ? 2 : 1), // sobrecarregado: metade
       defMin: max.armadura + a.corpo + skillOf(s, 'resistencia'),
-      ccMax, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: mech.humanidade, eletronico: mech.eletronico, naovivo: mech.naovivo, modulolivre: mech.modulolivre,
+      ccMax, ccAttr, ccattr: mech.ccattr, modExtra, protUsed, modUsed, acopla, attachUsed, humanidade: mech.humanidade, eletronico: mech.eletronico, naovivo: mech.naovivo, modulolivre: mech.modulolivre,
       ccOver: (nucleo > 0 || attachUsed > 0) && (protUsed + attachUsed > ccMax || protUsed + attachUsed + modUsed > ccMax + modExtra),
       upEarned, upTotal: upEarned + mech.up + num(s.upExtra) + (s.perdas || []).length, // cada Perda dá +1 UP
       upSpent: s.up.per + powerCost + (s.perdas || []).filter((x) => x.comp).length, // compensar uma Perda custa 1 UP
@@ -8924,8 +8969,9 @@ const FIREBASE_CONFIG = {
 
   function renderPowers() {
     const s = sheetChar.sheet;
-    const canRacial = isEtheriano(s.specimen);
+    const canRacial = racialMode(s);
     $('#racial-open').hidden = !canRacial;
+    $('#racial-open').textContent = canRacial === 'inspirado' ? 'Características raciais (Android)' : 'Características raciais (Etheriano)';
     $('#power-list').replaceChildren(...s.powers.map((p, i) => {
       const v = p.values || {};
       const opts = powerOpts(p);
@@ -9131,7 +9177,23 @@ const FIREBASE_CONFIG = {
   const ASSIM_SLOT = { id: 'assim', label: 'Assimilado', full: 'Assimilação', multi: true, accepts: 'um item do catálogo de assimilações' };
   const MULTI_SLOTS = { modulo: MODULE_SLOT, vestivel: VEST_SLOT, protese: PROT_SLOT, assim: ASSIM_SLOT };
   // item que o simbionte fez da própria massa: guardar devolve para dentro dele, não para a mochila
-  const stow = (i) => { i.slot = i.assim ? 'assim' : ''; };
+  const stow = (i) => { i.slot = i.assim ? 'assim' : ''; delete i.acoplado; };
+  // Engenharia (Robô): itens acoplados ao corpo; armas acopladas contam como sempre empunhadas
+  const ACOPLA_SLOT = { id: 'acoplado', label: 'Acoplado', full: 'Acoplado ao corpo', multi: true, accepts: 'um item acoplado (Engenharia)' };
+  MULTI_SLOTS.acoplado = ACOPLA_SLOT;
+  const acoplavel = (i) => ['municao', 'granada', 'nucleo', 'protese-modulo'].indexOf(i.kind) < 0 && nameKey((i.values || {}).tipoUso || '') !== 'consumivel';
+  function acoplar(i) {
+    const s = sheetChar.sheet;
+    const m = compute(sheetChar);
+    const c = parseCarga(i.values.carga);
+    if (m.protUsed + m.attachUsed + c > m.ccMax) { toast('Carga Cibernética insuficiente: ' + i.name + ' ocupa ' + fmtNum(c) + ' CC (carga). Livre: ' + fmtNum(Math.max(0, m.ccMax - m.protUsed - m.attachUsed)) + '.'); return false; }
+    if ((i.qty || 1) > 1) { const one = deep(i); one.uid = uid(); one.qty = 1; i.qty -= 1; s.inventory.push(one); i = one; }
+    if (i.kind === 'armadura') { s.inventory.forEach((x) => { if (x !== i && x.slot === 'armadura') stow(x); }); i.slot = 'armadura'; } // uma armadura por vez
+    else i.slot = 'acoplado';
+    i.acoplado = true;
+    toast(i.name + ' acoplado: ' + fmtNum(c) + ' CC. Leva ' + plural(Math.max(1, Math.ceil(c)) * 2, 'hora', 'horas') + ' de trabalho (Tecnologia ou Ofício (Engenharia)).');
+    return true;
+  }
   const OLD_BODY_SLOTS = ['cabeca', 'orgaos', 'braco-d', 'tronco', 'braco-e', 'perna-d', 'perna-e']; // espaços do corpo das fichas antigas
   const slotDef = (id) => MULTI_SLOTS[id] || EQUIP.find((e) => e.id === id);
   const vestMaxOf = (s) => Math.max(0, 3 + attrOf(s, 'corpo'));
@@ -9164,7 +9226,7 @@ const FIREBASE_CONFIG = {
       const mod = isModule(i);
       if (mod && !m.nucleo) { toast('Sem um Núcleo ativo os módulos ficam inativos. Implante um núcleo (ou vista uma armadura com núcleo) antes.'); return false; }
       if (mod && !m.modulolivre && !s.inventory.some((x) => x.slot === 'protese')) { toast('Os módulos só abrem espaço com ao menos uma prótese implantada.'); return false; }
-      // I.A. (leve): só funciona instalada num item Épico ou Lendário equipado (próteses e módulos não têm raridade)
+      // Módulo de I.A.: só funciona instalada num item Épico ou Lendário equipado (próteses e módulos não têm raridade)
       if (mod && /^m[oó]dulo de i\.?a\b/i.test(cleanName(i.name))) {
         if (!iaHost(s)) { toast(i.name + ' só funciona instalada num item Épico ou Lendário (uma armadura, por exemplo). Equipe um antes.'); return false; }
       }
@@ -9211,7 +9273,7 @@ const FIREBASE_CONFIG = {
     const v = i.values || {};
     const out = [];
     const add = (l, val) => { if (val !== undefined && val !== null && val !== '') out.push([l, String(val)]); };
-    add('Dano', v.dano); add('Propriedade', v.subtipo); add('Modo', v.modo); add('Cadência', v.cadencia); if (i.kind !== 'municao') add('Pente', v.pente); add('Munição', v.municao); add('Alcance', v.alcance); add('Empunhadura', v.empunhadura);
+    add('Dano', v.dano); add('Propriedade', v.subtipo); add('Modo', v.modo); add('Cadência', v.cadencia); add('Rajada', v.rajada); if (i.kind !== 'municao') add('Pente', v.pente); add('Munição', v.municao); add('Alcance', v.alcance); add('Empunhadura', v.empunhadura);
     if (i.kind === 'armadura') {
       add('Defesa', v.armadura);
       add('Penalidade', num(v.penalidade) ? '–' + Math.abs(num(v.penalidade)) + ' (sem proficiência –' + Math.abs(num(v.penalidade)) * 2 + ')' : 'nenhuma');
@@ -9267,7 +9329,7 @@ const FIREBASE_CONFIG = {
       const draw = slotsFor(i)[0];
       if (draw) actions.append(act('Sacar', 'btn--primary', () => { if (equipItem(i, draw)) changed(); }));
       actions.append(act('Desfazer', 'btn--ghost', () => { s.inventory.splice(s.inventory.indexOf(i), 1); changed(); }));
-    } else if (i.slot) actions.append(act(i.assim ? 'Recolher' : 'Guardar', 'btn--primary', () => { stow(i); changed(); }));
+    } else if (i.slot) actions.append(act(i.assim ? 'Recolher' : i.acoplado ? 'Desacoplar' : 'Guardar', 'btn--primary', () => { stow(i); changed(); }));
     else {
       const opts = slotsFor(i);
       if (opts[0] === 'modulo' || opts[0] === 'protese') actions.append(act(opts[0] === 'modulo' ? 'Instalar' : 'Implantar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
@@ -9276,6 +9338,7 @@ const FIREBASE_CONFIG = {
       else if (opts.length === 1) actions.append(act('Equipar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
       else opts.forEach((id) => actions.append(act(slotDef(id).full, 'btn--primary', () => { if (equipItem(i, id)) changed(); })));
     }
+    if (m.acopla && !i.slot && acoplavel(i)) actions.append(act('Acoplar', 'btn--ghost', () => { if (acoplar(i)) changed(); }));
     if (canArmory(i)) actions.append(act('Armeiro', 'btn--ghost', () => openArmory(i.uid)));
     if (isGun(i)) {
       actions.append(act('Procurar munição', 'btn--ghost', () => findAmmo(i)));
@@ -9393,6 +9456,13 @@ const FIREBASE_CONFIG = {
       if (!i && def.id === 'mao-e') { const d = inv.find((x) => x.slot === 'mao-d'); if (d && twoHanded(d)) { i = d; ghost = true; } }
       return makeCell(i || null, m, def, ghost);
     }));
+    $('#acopla-row').hidden = !m.acopla;
+    if (m.acopla) {
+      const ac = inv.filter((x) => x.acoplado);
+      $('#acopla-count').textContent = fmtNum(m.attachUsed) + ' CC';
+      $('#equip-acopla').replaceChildren(...inv.filter((x) => x.slot === 'acoplado').map((x) => makeCell(x, m, ACOPLA_SLOT, false)),
+        ...(ac.length ? [] : [Object.assign(h('p', 'field__hint', 'Nada acoplado. Na mochila, use "Acoplar" num item.'), { style: 'grid-column: 1 / -1; margin: 0' })]));
+    }
     const mods = inv.filter((x) => x.slot === 'modulo');
     // a vaga de módulo só abre com ao menos uma prótese implantada (para o Android, próteses são peças: abre sempre)
     const modOpen = prots.length > 0 || m.modulolivre;
@@ -9428,7 +9498,17 @@ const FIREBASE_CONFIG = {
       line('Armadura', m.armor ? m.armor.name + (m.armorProf ? ' · proficiente' : ' · sem proficiência') + (m.pen ? ' · penalidade –' + m.pen : '') : 'nenhuma (vale a básica, ' + ARMOR_BASE + ')'),
       line('Núcleo', m.nucleo ? '+' + m.nucleo + ' ativo' : 'sem núcleo: próteses só substituem o órgão; módulos inativos'),
       line('Carga Cibernética', m.nucleo || m.acopla ? 'próteses ' + m.protUsed + (m.acopla ? ' · acoplados ' + fmtNum(m.attachUsed) : '') + ' / ' + m.ccMax + ' · módulos ' + m.modUsed + (m.modExtra ? ' (reserva +' + m.modExtra + ' da Essência)' : '') : '—', m.ccOver));
-    if (m.acopla) $('#equip-info').append(h('p', 'field__hint', 'Engenharia: armas e armadura em uso estão acopladas e ocupam a Carga Cibernética pela carga delas. Acoplar ou tirar leva ao menos 1 hora.'));
+    if (m.acopla) $('#equip-info').append(h('p', 'field__hint', 'Engenharia: o que você acopla ocupa a Carga Cibernética pela carga do item (2 horas de Tecnologia ou Ofício (Engenharia) por ponto de carga). Armas acopladas contam sempre empunhadas; vale uma armadura por vez. Mods e acessórios acoplados valem para você e para as armas da mesma categoria que usar.'));
+    if (m.ccattr) {
+      const sel = h('select', 'input');
+      sel.id = 'cc-attr';
+      [['corpo', 'Corpo'], ['precisao', 'Precisão'], ['essencia', 'Essência']].forEach((x) => { const o = h('option', '', x[1] + ' (' + signed(attrOf(s, x[0])) + ')'); o.value = x[0]; sel.append(o); });
+      sel.value = m.ccAttr;
+      sel.addEventListener('change', () => { s.ccAttr = sel.value; changed(); });
+      const lab = h('label', 'field__label', 'Atributo-chave da Carga Cibernética');
+      lab.htmlFor = 'cc-attr';
+      $('#equip-info').append(h('div', 'field', lab, sel));
+    }
     const ia = mods.find((x) => /^m[oó]dulo de i\.?a\b/i.test(cleanName(x.name)));
     if (ia && !iaHost(s)) $('#equip-info').append(h('p', 'res-state', ia.name + ' está inativa: a I.A. só funciona com um item Épico ou Lendário equipado.'));
     if (mods.length && !m.nucleo) $('#equip-info').append(h('p', 'res-state', 'Sem núcleo ativo: os módulos estão inativos (o módulo perito não dá a perícia).'));
@@ -10578,12 +10658,13 @@ const FIREBASE_CONFIG = {
     if (!e || sheetChar !== ch) return;
     if (old && old.id === e.id && nameKey(old.name) === nameKey(e.name)) return;
     // trocar de espécime: as habilidades raciais e os poderes de nascença do anterior saem da ficha
-    const lostRacial = isEtheriano(old) && !isEtheriano(e) && ch.sheet.powers.some((p) => /^racial:/.test(p.id || ''));
+    const lostRacial = Boolean(old) && ch.sheet.powers.some((p) => /^racial:/.test(p.id || ''));
     if (old && !(await askConfirm({ title: 'Trocar espécime', ok: 'Trocar',
       text: 'Trocar ' + old.name + ' por ' + e.name + '? As habilidades raciais e os poderes de nascença de ' + old.name + ' saem da ficha, e entram os de ' + e.name + '.'
-        + (lostRacial ? ' As características raciais compradas como Etheriano também saem, devolvendo os UP.' : '') }))) return;
+        + (lostRacial ? ' As características raciais de outros espécimes também saem (os UP voltam).' : '') }))) return;
     if (sheetChar !== ch) return;
     ch.sheet.specimen = Object.assign(slotSnap(e), { thumb: e.thumb || '' });
+    ch.sheet.powers = ch.sheet.powers.filter((p) => !/^racial:/.test(p.id || '')); // as de outros espécimes eram do espécime anterior
     ch.species = e.name;
     fSpecies.value = e.name;
     dirty.add('species');
@@ -10640,15 +10721,24 @@ const FIREBASE_CONFIG = {
     (s.perdas || []).filter((x) => !x.comp).forEach((x) => add(x.name, perdaVals(x).script)); // perda compensada não vale mais
     return Object.assign(mergeMech(parts), { powers, vidaFrom, bonus });
   }
-  // comprar características raciais de outros espécimes é exclusivo do Etheriano
+  // características raciais de outros espécimes: o Etheriano compra com UP; o Android (Inspirado em humanoides) escolhe uma, de graça
   function isEtheriano(sp) { return Boolean(sp && (sp.id === 'of-esp-etheriano' || nameKey(sp.name) === 'etheriano')); }
+  const racialMode = (s) => (isEtheriano(s.specimen) ? 'compra' : s.specimen && racialLines(specimenVals(s)).some((t) => parseScript(t.script).inspirado) ? 'inspirado' : '');
+  const RACIAL_FREE = 1; // quantas o Android escolhe
+  const capUp = (script) => String(script || '').replace(/\b(ups?|upinicia(?:l|is))\s*[:=]\s*\d+/gi, 'up: 1'); // Inspirado: habilidade que dá UP dá só 1
   const racialLines = (v) => powerLines(v && v.racial).map((t) => Object.assign(t, { cost: t.cost === '' ? 1 : Math.max(0, Math.round(num(t.cost))) }));
   const racialId = (esp, t) => 'racial:' + (esp.id || nameKey(esp.name)) + ':' + nameKey(t.name);
   function grantBirthPowers(s) {
     const names = birthNames(specimenVals(s));
     // trocar de espécime tira os poderes de nascença do anterior (a mecânica dele vinha deles)
     s.powers = s.powers.filter((p) => !OLD_BIRTH.test(p.id || '') && (!p.birth || names.some((n) => nameKey(n) === nameKey(p.name))));
-    if (!isEtheriano(s.specimen)) s.powers = s.powers.filter((p) => !/^racial:/.test(p.id || '')); // características de outros espécimes são só do Etheriano
+    const mode = racialMode(s);
+    if (!mode) s.powers = s.powers.filter((p) => !/^racial:/.test(p.id || '')); // características de outros espécimes: só Etheriano e Android
+    if (mode === 'inspirado') { // o Android fica com uma só, de graça
+      let kept = 0;
+      s.powers = s.powers.filter((p) => !/^racial:/.test(p.id || '') || ++kept <= RACIAL_FREE);
+      s.powers.forEach((p) => { if (/^racial:/.test(p.id || '')) { p.values = Object.assign({}, p.values, { custo: '0', script: capUp(p.values && p.values.script) }); } });
+    }
     names.forEach((n) => {
       if (s.powers.some((p) => nameKey(p.name) === nameKey(n))) return;
       const e = findBirthPower(n);
@@ -10658,22 +10748,19 @@ const FIREBASE_CONFIG = {
   let racialDlg = null;
   let racialPick = '';
   let racialOpen = false; // lista de espécimes expandida
-  // de cada espécime, o Etheriano pega uma ou duas das 3 habilidades raciais, nunca as 3
-  const RACIAL_MAX = 2;
   const racialTaken = (s, esp) => racialLines(esp.values).filter((t) => s.powers.some((p) => p.id === racialId(esp, t))).length;
-  function racialAll(s, esp, id) {
-    return !s.powers.some((p) => p.id === id) && racialTaken(s, esp) >= RACIAL_MAX;
-  }
+  const racialCount = (s) => s.powers.filter((p) => /^racial:/.test(p.id || '')).length;
   async function openRacial(target) {
     const ch = target || sheetChar;
     if (!ch) return;
-    if (!isEtheriano(ch.sheet.specimen)) { toast('Características raciais de outros espécimes são exclusivas do Etheriano.'); return; }
+    const mode = racialMode(ch.sheet);
+    if (!mode) { toast('Características raciais de outros espécimes: o Etheriano compra com UP e o Android escolhe uma de graça.'); return; }
     if (!racialDlg) { racialDlg = h('dialog', 'dialog pickchar racial'); racialDlg.setAttribute('aria-labelledby', 'racial-title'); document.body.append(racialDlg); }
     const dlg = racialDlg;
     let list = BUILTINS.filter((e) => e.kind === 'especime' && !e.secreto);
     try { list = await libSearch(['especime'], ''); } catch (err) { /* fica o catálogo oficial */ }
     const mine = ch.sheet.specimen;
-    list = list.filter((e) => racialLines(e.values).length && !isEtheriano(e) && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
+    list = list.filter((e) => racialLines(e.values).length && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
     // busca por espécime: fica fora do que é redesenhado, para não perder o foco ao digitar
     const q = h('input', 'input');
     q.type = 'search';
@@ -10710,28 +10797,29 @@ const FIREBASE_CONFIG = {
       const traits = esp ? racialLines(esp.values).map((t) => {
         const id = racialId(esp, t);
         const have = s.powers.findIndex((p) => p.id === id);
-        const full = racialAll(s, esp, id);
-        const b = h('button', 'btn btn--sm ' + (have >= 0 || full ? 'btn--ghost' : 'btn--primary'), have >= 0 ? 'Devolver' : full ? 'Já tem 2 deste espécime' : 'Pegar · ' + t.cost + ' UP');
+        const gift = mode === 'inspirado';
+        const full = gift && have < 0 && racialCount(s) >= RACIAL_FREE; // o Android escolhe uma só
+        const b = h('button', 'btn btn--sm ' + (have >= 0 || full ? 'btn--ghost' : 'btn--primary'), have >= 0 ? 'Devolver' : full ? 'Já escolheu a sua' : gift ? 'Escolher (grátis)' : 'Pegar · ' + t.cost + ' UP');
         b.type = 'button';
         b.dataset.fid = ('racial-' + nameKey(esp.name) + '-' + nameKey(t.name)).replace(/\s+/g, '-');
-        b.disabled = have < 0 && t.cost > free && !racialAll(s, esp, id);
+        b.disabled = have < 0 && (full || (!gift && t.cost > free));
         b.addEventListener('click', () => {
           if (have >= 0) s.powers.splice(have, 1);
-          else if (racialAll(s, esp, id)) { toast(/^experi[eê]ncia passada/i.test(t.name) ? 'Se achando muito esperto, não é? Os 3 UP do Humano não vêm juntos.' : 'Do ' + esp.name + ' dá para pegar só uma ou duas das 3 habilidades. Devolva uma para trocar.'); return; }
-          else s.powers.push({ id, kind: 'poder', typeId: '', typeTitle: '', name: (esp.name + ' · ' + t.name).slice(0, 60), values: { custo: String(t.cost), efeito: t.text, script: t.script }, bonus: {}, slots: null, thumb: '', racial: esp.name });
+          else if (full) return;
+          else s.powers.push({ id, kind: 'poder', typeId: '', typeTitle: '', name: (esp.name + ' · ' + t.name).slice(0, 60), values: { custo: gift ? '0' : String(t.cost), efeito: t.text + (gift && /\bups?\s*[:=]/i.test(t.script || '') ? ' (Inspirado em humanoides: dá só 1 UP)' : ''), script: gift ? capUp(t.script) : t.script }, bonus: {}, slots: null, thumb: '', racial: esp.name });
           doneOf(ch);
           draw();
         });
         return h('li', 'pickchar__card racial__trait' + (have >= 0 ? ' is-here' : ''),
-          h('span', 'pickchar__info', h('strong', 'pickchar__name', t.name), h('span', 'pickchar__meta', t.cost + ' UP'), t.text ? h('span', 'racial__text', t.text) : null), b);
+          h('span', 'pickchar__info', h('strong', 'pickchar__name', t.name), h('span', 'pickchar__meta', gift ? 'grátis' : t.cost + ' UP'), t.text ? h('span', 'racial__text', t.text) : null), b);
       }) : [];
       const taken = esp ? racialTaken(s, esp) : 0;
       content.replaceChildren(...[ // replaceChildren escreveria "null" na tela para o botão que não existe
-        h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free))),
+        mode === 'inspirado' ? h('p', 'racial__free', 'Escolhida: ', h('strong', '', racialCount(s) + ' de ' + RACIAL_FREE)) : h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free))),
         races,
         more,
         esp ? h('h3', 'pickchar__sub', esp.name) : h('p', 'empty', q.value ? 'Nenhum espécime com esse nome.' : 'Nenhum espécime com características raciais.'),
-        esp ? h('p', 'field__hint racial__count', 'Escolhidas: ' + taken + ' de ' + RACIAL_MAX + ' (uma ou duas das ' + racialLines(esp.values).length + ' habilidades)') : null,
+        esp && taken ? h('p', 'field__hint racial__count', 'Deste espécime: ' + plural(taken, 'habilidade', 'habilidades')) : null,
         h('ul', 'pickchar__list', ...traits)].filter(Boolean));
     };
     q.addEventListener('input', draw);
@@ -10741,8 +10829,10 @@ const FIREBASE_CONFIG = {
     const title = h('h2', '', 'Características raciais');
     title.id = 'racial-title';
     dlg.replaceChildren(h('div', 'pickchar__body', title,
-      h('p', 'racial__only', 'Exclusivo do Etheriano'),
-      h('p', 'field__hint', 'Só o Etheriano gasta UP em características raciais. De qualquer espécime, inclusive dos criados na Oficina, ele escolhe uma ou duas das 3 habilidades raciais. Busque ou toque num espécime para ver as habilidades dele.'),
+      h('p', 'racial__only', racialMode(ch.sheet) === 'inspirado' ? 'Android: Inspirado em humanoides' : 'Etheriano: Dom do Éter'),
+      h('p', 'field__hint', racialMode(ch.sheet) === 'inspirado'
+        ? 'Escolha de graça uma habilidade racial de qualquer espécime, inclusive dos criados na Oficina. Se ela der UP, dá só 1 UP.'
+        : 'Compre com UP habilidades raciais de qualquer espécime, inclusive dos criados na Oficina. Busque ou toque num espécime para ver as habilidades dele.'),
       h('div', 'field racial__search', qLab, q),
       content,
       h('div', 'dialog__actions', close)));
@@ -10788,11 +10878,31 @@ const FIREBASE_CONFIG = {
   // ataques de Luta por rodada: Poder (UP investidos em Luta, com o estilo) + a perícia Luta
   const hasLuta = (s) => ((s && s.powers) || []).some((p) => p.id === 'of-pod-luta');
   const lutaAttacks = (s) => (hasLuta(s) ? Math.max(1, attrOf(s, 'corpo') + skillOf(s, 'luta')) : 0);
-  const maxShots = (i, s) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || 1, 1, 20)
+  /* Modos de tiro (Regras de Cadência): Único dispara uma vez; Semi dispara uma rajada inteira por ataque
+     (cadência em rajadas, "3/2" = 3 disparos, duas vezes; cada rajada com a sua penalidade); Automático usa
+     a cadência livre e, para guardar o resto para outro ataque, deixa sem usar pelo menos ¼ dela (para cima). */
+  const rajadaOf = (i) => { const r = String(((i && i.values) || {}).rajada || '').match(/^\s*(\d+)\s*[/x×]\s*(\d+)/); return r ? { n: clamp(parseInt(r[1], 10), 1, 20), k: Math.max(1, parseInt(r[2], 10)) } : null; };
+  const maxShots = (i, s) => (i && i.kind === 'arma-fogo' ? clamp(Math.round(num(i.values.cadencia)) || (rajadaOf(i) ? rajadaOf(i).n * rajadaOf(i).k : 1), 1, 20)
     : (!i || i.kind === 'arma-melee') && lutaAttacks(s) ? clamp(lutaAttacks(s), 1, 20) : 1);
   // pistola e revólver: a cadência perita vale mesmo sem proficiência (card Pistola); desarmado com Luta é proficiente
   const atkProf = (s, i) => (i ? isProficient(s, i) || (isGun(i) && (i.typeId === 'pistola' || i.typeId === 'revolver')) : lutaAttacks(s) > 0);
   const shotWord = (i, n) => (i && i.kind === 'arma-fogo' ? (n === 1 ? 'disparo' : 'disparos') : (n === 1 ? 'golpe' : 'golpes'));
+  const fireKey = (t) => { const k = nameKey(t); return /^unic/.test(k) ? 'unico' : /^semi/.test(k) ? 'semi' : /^auto/.test(k) ? 'auto' : ''; };
+  const FIRE_LABEL = { unico: 'Único', semi: 'Semi', auto: 'Automático' };
+  const fireModesOf = (i) => (i && i.kind === 'arma-fogo' && !isLaser(i) ? Array.from(new Set(String(i.values.modo || '').split(',').map(fireKey).filter(Boolean))) : []);
+  function fireOf(i, s, st) {
+    const modes = fireModesOf(i);
+    const cad = maxShots(i, s);
+    if (!modes.length) return { modes, mode: '', cad, exact: false, note: '' };
+    if (modes.indexOf(st.fire) < 0) st.fire = modes.indexOf('auto') >= 0 ? 'auto' : modes.indexOf('semi') >= 0 ? 'semi' : modes[0];
+    if (st.fire === 'unico') return { modes, mode: 'unico', cad: 1, exact: false, note: 'Único: um disparo por ataque' };
+    if (st.fire === 'semi') {
+      const r = rajadaOf(i) || { n: cad, k: 1 };
+      return { modes, mode: 'semi', cad: r.n, exact: true, note: 'Semi: cada ataque é uma rajada de ' + r.n + ' (nem mais, nem menos), com a penalidade dela; ' + plural(r.k, 'rajada', 'rajadas') + ' por rodada' };
+    }
+    const keep = Math.ceil(cad / 4);
+    return { modes, mode: 'auto', cad, exact: false, note: cad > 1 ? 'Automático: para guardar o resto da cadência para outro ataque, deixe ao menos ' + keep + ' sem usar (até ' + Math.max(1, cad - keep) + ' neste)' : '' };
+  }
   // cadência: com proficiência, –N para N disparos; sem, –(1 + 2 + ... + N). Um disparo não tem penalidade.
   const shotPenalty = (n, prof) => (n <= 1 ? 0 : prof ? n : (n * (n + 1)) / 2);
 
@@ -10941,28 +11051,43 @@ const FIREBASE_CONFIG = {
       const wSel = h('select', 'input');
       [['', 'Desarmado']].concat(weapons.map((w) => [w.uid, w.name + (w.slot ? ' (em mãos)' : ' (na mochila)')])).forEach((p) => { const o = h('option', '', p[1]); o.value = p[0]; wSel.append(o); });
       wSel.value = st.uid;
-      wSel.addEventListener('change', () => { st.uid = wSel.value; st.mode = ''; st.shots = 1; draw(); });
+      wSel.addEventListener('change', () => { st.uid = wSel.value; st.mode = ''; st.fire = ''; st.shots = 1; draw(); });
       const mSel = h('select', 'input');
       modes.forEach((x) => { const o = h('option', '', x.label); o.value = x.id; mSel.append(o); });
       mSel.value = st.mode;
       mSel.addEventListener('change', () => { st.mode = mSel.value; draw(); });
       const fields = [field('weapon', 'Arma', wSel), field('mode', 'Forma de ataque', mSel)];
+      const fire = fireOf(weapon, s, st);
+      if (fire.modes.length > 1) {
+        const fSel = h('select', 'input');
+        fire.modes.forEach((k) => { const o = h('option', '', FIRE_LABEL[k]); o.value = k; fSel.append(o); });
+        fSel.value = fire.mode;
+        fSel.addEventListener('change', () => { st.fire = fSel.value; st.per = null; st.shots = 1; draw(); });
+        fields.push(field('fire', 'Modo de tiro', fSel));
+      }
       const targets = c.targets || [];
       const prof = atkProf(s, weapon);
       const beam = isLaser(weapon);
-      const cadAll = beam ? 1 : maxShots(weapon, s); // laser: a cadência sai de uma vez, num alvo só
-      const cadMax = st.cad === false ? 1 : cadAll; // "Usar cadência" desmarcado: um disparo só
+      const cadAll = beam ? 1 : fire.cad; // laser: a cadência sai de uma vez, num alvo só
+      const cadMax = st.cad === false && !fire.exact ? 1 : cadAll; // "Usar cadência" desmarcado: um disparo só (no Semi a rajada sai inteira)
+      if (fire.exact) st.shots = cadAll;
       let per = null;
       if (cadMax > 1 && targets.length) {
         per = perTargetShots(st, cadMax, targets, prof, draw, idp, weapon);
+        if (fire.exact && per.total < cadMax && !per.over) { // Semi: a rajada inteira tem alvo
+          st.per[targets[0].id] += cadMax - per.total;
+          per = perTargetShots(st, cadMax, targets, prof, draw, idp, weapon);
+        }
         st.shots = per.total;
         fields.push(per.box);
+      } else if (cadAll > 1 && c.aim && fire.exact) {
+        fields.push(h('p', 'cad__rule field--wide', 'Semi: a rajada de ' + cadAll + ' ' + shotWord(weapon, cadAll) + ' sai inteira (–' + shotPenalty(cadAll, prof) + ' no ataque' + (prof ? ', perita' : '') + '). Divida os disparos entre os alvos.'));
       } else if (cadAll > 1 && c.aim) {
         fields.push(cadenceBox(st, cadAll, prof, draw, idp, weapon));
       } else if (cadAll > 1 && !c.aim) {
         st.per = null;
         const nSel = h('select', 'input');
-        for (let k = 1; k <= cadAll; k++) {
+        for (let k = fire.exact ? cadAll : 1; k <= cadAll; k++) {
           const p = shotPenalty(k, prof);
           const o = h('option', '', k + ' ' + shotWord(weapon, k) + (k === 1 ? '' : ' · –' + p + ' · dano ×' + k));
           o.value = String(k);
@@ -10998,7 +11123,7 @@ const FIREBASE_CONFIG = {
       if (c.peek) c.peek(t);
       const fixed = testFixed(t);
       const stowed = c.handsOnly ? all.filter((w) => !handOf(w)).length : 0;
-      const info = [weapon && isGun(weapon) ? ammoLine(weapon, s) : '', beam ? 'laser: a cadência ' + maxShots(weapon, s) + ' sai de uma vez num alvo só, sem penalidade nem multiplicador; +1 a cada turno seguido no mesmo alvo' : '', c.aim && cadMax > 1 ? (weapon && weapon.kind === 'arma-fogo' ? 'cadência ' : 'Luta: ') + cadMax + ': cada toque num alvo é um ' + shotWord(weapon, 1) : '', weapon ? (prof ? 'Proficiente' : 'Sem proficiência' + (weapon.kind === 'arma-melee' ? ': sem as propriedades da arma' : '')) : lutaAttacks(s) ? 'Desarmado (Luta): contundente, proficiente' : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
+      const info = [weapon && isGun(weapon) ? ammoLine(weapon, s) : '', fire.note, beam ? 'laser: a cadência ' + maxShots(weapon, s) + ' sai de uma vez num alvo só, sem penalidade nem multiplicador; +1 a cada turno seguido no mesmo alvo' : '', c.aim && cadMax > 1 ? (weapon && weapon.kind === 'arma-fogo' ? 'cadência ' : 'Luta: ') + cadMax + ': cada toque num alvo é um ' + shotWord(weapon, 1) : '', weapon ? (prof ? 'Proficiente' : 'Sem proficiência' + (weapon.kind === 'arma-melee' ? ': sem as propriedades da arma' : '')) : lutaAttacks(s) ? 'Desarmado (Luta): contundente, proficiente' : '', stowed ? plural(stowed, 'arma na mochila', 'armas na mochila') + ' (saque em Itens)' : '', weapon && !weapon.slot ? 'não está em mãos' : '', weapon && weapon.values.dano ? 'dano ' + weapon.values.dano : '', weapon && weapon.values.alcance ? 'alcance ' + weapon.values.alcance : ''].filter(Boolean).join(' · ');
       const go = h('button', 'btn btn--primary btn--sm', (c.btnLabel || 'Atacar') + ' · ' + diceText(st) + ' ' + (fixed ? signed(fixed) : '+0'));
       go.type = 'button';
       // munição: sem disparos no pente (ou arma superaquecida) não dá para atacar; recarregar custa a ação da regra
@@ -11702,7 +11827,7 @@ const FIREBASE_CONFIG = {
     b.addEventListener('click', onClick);
     return b;
   }
-  const specimenLine = (e) => mechLine(speciesMech(e)) + (racialLines(e.values).length ? ' · ' + racialLines(e.values).map((t) => t.name).join(', ') : '') + (isEtheriano(e) ? ' · exclusivo: compra características raciais de qualquer espécime' : '');
+  const specimenLine = (e) => mechLine(speciesMech(e)) + (racialLines(e.values).length ? ' · ' + racialLines(e.values).map((t) => t.name).join(', ') : '') + (isEtheriano(e) ? ' · compra características raciais de qualquer espécime' : '');
 
   function previewSheet() { // a ficha como ficaria com as escolhas do assistente
     const s = normSheet(deep(sheetChar.sheet));
@@ -12634,18 +12759,40 @@ const FIREBASE_CONFIG = {
     }));
   }
   xpAll.addEventListener('change', () => { $$('input', $('#xp-list')).forEach((x) => { x.checked = xpAll.checked; }); });
+  const xpChosen = () => {
+    const ids = $$('input:checked', $('#xp-list')).map((x) => x.value);
+    const chosen = members.filter((m) => ids.indexOf(m.characterId) >= 0);
+    if (!chosen.length) toast('Escolha pelo menos um personagem.');
+    return chosen;
+  };
   $('#form-xp').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const amount = Math.round(num($('#xp-amount').value));
     if (amount < 1) { toast('Digite quanto XP dar (1 ou mais).'); $('#xp-amount').focus(); return; }
-    const ids = $$('input:checked', $('#xp-list')).map((x) => x.value);
-    const chosen = members.filter((m) => ids.indexOf(m.characterId) >= 0);
-    if (!chosen.length) { toast('Escolha pelo menos um personagem.'); return; }
+    const chosen = xpChosen();
+    if (!chosen.length) return;
     const btn = $('#xp-give');
     btn.disabled = true;
     await giveXp(chosen, amount);
     btn.disabled = false;
     $('#xp-amount').value = '';
+  });
+  $('#cronos-give').addEventListener('click', async () => {
+    const amount = Math.round(num($('#cronos-amount').value));
+    if (amount < 1) { toast('Digite quantos Cronos dar (1 ou mais).'); $('#cronos-amount').focus(); return; }
+    const chosen = xpChosen();
+    if (!chosen.length) return;
+    const btn = $('#cronos-give');
+    btn.disabled = true;
+    const ok = [], failed = [];
+    for (const m of chosen) {
+      try { await patchMemberSheet(m, (s) => { s.money = Object.assign({}, s.money); s.money[currentCamp.id] = num(s.money[currentCamp.id]) + amount; }); ok.push(m.name); }
+      catch (err) { console.warn(err); failed.push(m.name); }
+    }
+    toast((ok.length ? '+' + fmtCronos(amount) + ' Cronos para ' + ok.join(', ') + '.' : '') + (failed.length ? ' Não foi possível dar Cronos para ' + failed.join(', ') + '.' : ''));
+    $('#member-list').replaceChildren(...members.map(memberRow));
+    btn.disabled = false;
+    $('#cronos-amount').value = '';
   });
   async function giveXp(chosen, amount) {
     const ok = [], failed = [];
@@ -13539,7 +13686,7 @@ const FIREBASE_CONFIG = {
     cancel.addEventListener('click', () => { endAim(); renderBattle(); });
     const kids = [h('strong', 'aimbar__title', a.label), h('span', 'aimbar__txt', a.max > 1
       ? (a.each ? 'Toque nos alvos dentro da área (' + total + ' de ' + a.max + ').' : 'Toque nos alvos destacados: cada toque é um ' + (a.word || 'disparo') + ' (' + total + ' de ' + a.max + ').') + (total ? ' ' + list.filter((x) => a.shots[x.id]).map((x) => x.name + ' ×' + a.shots[x.id]).join(', ') + '.' : '') + (a.penalty && a.penalty(total) ? ' ' + a.penalty(total) + '.' : '')
-      : 'Toque num dos alvos destacados.')];
+      : 'Toque num dos alvos destacados.'), a.exact && a.max > 1 && total < a.max ? h('span', 'aimbar__txt', 'Semi: marque os ' + a.max + ' disparos da rajada.') : null];
     if (a.max > 1) {
       const clear = h('button', 'btn btn--ghost btn--sm', 'Limpar');
       clear.type = 'button';
@@ -13547,7 +13694,7 @@ const FIREBASE_CONFIG = {
       clear.addEventListener('click', () => { a.shots = {}; renderBattle(); });
       const ok = h('button', 'btn btn--primary btn--sm', a.each ? 'Confirmar ' + plural(total, 'alvo', 'alvos') : (a.word === 'golpe' ? 'Golpear ' : 'Disparar ') + plural(total, 'vez', 'vezes'));
       ok.type = 'button';
-      ok.disabled = !total;
+      ok.disabled = !total || (a.exact && total !== a.max); // Semi: a rajada sai inteira
       ok.addEventListener('click', async () => {
         const shots = Object.assign({}, a.shots);
         endAim();
@@ -13971,7 +14118,8 @@ const FIREBASE_CONFIG = {
     const aimWith = () => {
       const weapon = weaponsOf(c.sheet).find((w) => w.uid === st.uid) || null;
       const beam = isLaser(weapon);
-      const cad = st.cad === false || beam ? 1 : maxShots(weapon, c.sheet);
+      const fire = fireOf(weapon, c.sheet, st);
+      const cad = beam || (st.cad === false && !fire.exact) ? 1 : fire.cad;
       const prof = atkProf(c.sheet, weapon);
       const peek = () => {
         let t = null;
@@ -13979,7 +14127,7 @@ const FIREBASE_CONFIG = {
         attackBuilder(Object.assign({}, base, { targets, peek: (x) => { t = x; } }), st, () => {}, 'pk-');
         return t;
       };
-      startAim({ label: (ak ? 'Akimbo: ' : 'Ataque: ') + (weapon ? weapon.name : 'desarmado'), valid: valid.map((x) => x.id), max: cad, word: shotWord(weapon, 1), oneTarget: Boolean(ak),
+      startAim({ label: (ak ? 'Akimbo: ' : 'Ataque: ') + (weapon ? weapon.name : 'desarmado'), valid: valid.map((x) => x.id), max: cad, exact: fire.exact, word: shotWord(weapon, 1), oneTarget: Boolean(ak),
         penalty: (n) => (n > 1 ? '–' + shotPenalty(n, prof) + ' no ataque (' + (prof ? 'cadência perita' : 'sem proficiência') + ')' : ''),
         pick: (x) => go({ member: mb, c }, st, { [x.id]: 1 }, peek), confirm: (shots) => go({ member: mb, c }, st, shots, peek) });
     };
@@ -14276,7 +14424,7 @@ const FIREBASE_CONFIG = {
   /* Itens: só o que o personagem tem, separado em mãos e mochila. Pegar um item custa a ação do capítulo
      Ações (arma: movimento; pistola: bônus; Saque: grátis uma vez por turno) e precisa de mão livre
      (Duas mãos precisa das duas). Usar consumível ou utilitário é ação padrão, com o saque incluído. */
-  const handOf = (i) => i.slot === 'mao-d' || i.slot === 'mao-e';
+  const handOf = (i) => i.slot === 'mao-d' || i.slot === 'mao-e' || (i.slot === 'acoplado' && isWeapon(i.kind)); // arma acoplada: sempre empunhada
   const isSaque = (i) => /saque/i.test(String((i.values && i.values.empunhadura) || ''));
   function drawCost(actor, i) {
     if (isSaque(i)) return econLive(actor) && econOf(actor.id).saque ? 'movimento' : 'saque';
@@ -16413,7 +16561,7 @@ const FIREBASE_CONFIG = {
      Com fluxo de pessoas e NPCs comprando, cada descanso que o mestre passa pode vender o que está à venda.
      A chance cai com a raridade e com o preço acima do catálogo, e é baixa de propósito: o estoque demora a esvaziar. */
   let shops = [];
-  const shopUi = { open: new Set(), busy: false };
+  const shopUi = { open: new Set(), busy: false, pricing: new Map() }; // pricing: loja → categoria aberta nos preços avançados
   const TRAFFIC = [['nenhum', 'Sem fluxo de pessoas'], ['baixo', 'Fluxo baixo'], ['medio', 'Fluxo médio'], ['alto', 'Fluxo alto']];
   const TRAFFIC_P = { baixo: 0.04, medio: 0.08, alto: 0.14 };   // chance por tentativa, item comum no preço do catálogo
   const TRAFFIC_TRIES = { baixo: 1, medio: 2, alto: 3 };          // tentativas por item num descanso curto (longo: o dobro)
@@ -16439,36 +16587,56 @@ const FIREBASE_CONFIG = {
   }
   const stockText = (it) => (it.qty === null || it.qty === undefined ? '∞' : '×' + it.qty);
   /* Preços avançados (lojas do mestre, de companhia e de NPC): inflação ou desconto geral, por raridade
-     e por categoria, variação aleatória fixa por item e arredondamento. O preço do item é a base. */
+     e variação aleatória fixa por item, para a loja toda ou só para uma categoria, e arredondamento.
+     O preço do item é a base. */
   const PRICE_RARITIES = ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária'];
-  const PRICE_CATS = [['armas', 'Armas'], ['protecao', 'Proteção'], ['implantes', 'Implantes'], ['gerais', 'Itens gerais'], ['outros', 'Outros']];
   const PRICE_ROUND = [1, 5, 10, 50, 100];
   const PRICE_PRESETS = [
-    ['Zerar', { all: 0, rar: {}, cat: {}, jitter: 0 }],
+    ['Zerar', { all: 0, rar: {}, jitter: 0 }],
     ['Promoção (–20%)', { all: -20 }],
     ['Inflação de guerra (+50%)', { all: 50 }],
+    ['Em falta (+40%)', { all: 40 }],
     ['Raros mais caros', { rar: { 'Rara': 25, 'Épica': 50, 'Lendária': 100 } }],
-    ['Armas em falta (+40%)', { cat: { armas: 40 } }],
     ['Mercado instável (±15%)', { jitter: 15 }]
   ];
+  // categorias das lojas: as mesmas do filtro do banco de itens
+  const SHOP_CATS = INV_CHIPS.map((c) => [nameKey(c.label).replace(/\s+/g, '-'), c.label, c.kinds]);
+  const shopCatOf = (kind) => (SHOP_CATS.find((c) => c[2].indexOf(kind) >= 0) || ['outros'])[0];
+  const shopCatLabel = (k) => (SHOP_CATS.find((c) => c[0] === k) || [k, 'Outros'])[1];
+  // preços antigos (5 categorias largas) continuam valendo até o mestre salvar de novo
   const priceCat = (kind) => (/^arma/.test(kind) || kind === 'granada' ? 'armas' : kind === 'armadura' || kind === 'vestivel' || kind === 'escudo-energetico' ? 'protecao' : kind === 'nucleo' || kind === 'protese-modulo' ? 'implantes' : kind === 'item-geral' ? 'gerais' : 'outros');
+  const LEGACY_CATS = { armas: ['armas', 'granadas'], protecao: ['armaduras', 'vestiveis'], implantes: ['nucleos', 'proteses-e-modulos'], gerais: ['itens-gerais'], outros: ['municoes', 'mods', 'propriedades', 'acessorios'] };
   const rarKey = (r) => String(r || '').replace('Epica', 'Épica');
   function seededUnit(str) { // de –1 a 1, sempre o mesmo para o mesmo texto
     let x = 2166136261;
     for (let i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = Math.imul(x, 16777619); }
     return ((x >>> 0) / 4294967295) * 2 - 1;
   }
+  const scopePct = (sc, it, salt) => (!sc ? 0 : num(sc.all) + num((sc.rar || {})[rarKey((it.entry.values || {}).raridade)])
+    + (num(sc.jitter) ? seededUnit(it.uid + ':' + salt) * num(sc.jitter) : 0));
   function shopPrice(sh, it) {
     const base = Math.max(0, Math.round(num(it.price)));
     const p = sh.pricing;
     if (!p || sh.kind === 'jogador') return base;
-    const pct = num(p.all) + num((p.rar || {})[rarKey((it.entry.values || {}).raridade)]) + num((p.cat || {})[priceCat(it.entry.kind)])
-      + (num(p.jitter) ? seededUnit(it.uid + ':' + (p.seed || '')) * num(p.jitter) : 0);
+    const cat = shopCatOf(it.entry.kind);
+    const pct = scopePct(p, it, p.seed || '') + num((p.cat || {})[priceCat(it.entry.kind)]) + scopePct((p.by || {})[cat], it, cat + (p.seed || ''));
     const step = PRICE_ROUND.indexOf(num(p.round)) >= 0 ? num(p.round) : 1;
     return Math.max(0, Math.round(base * Math.max(0, 1 + pct / 100) / step) * step);
   }
+  const scopeOn = (sc) => Boolean(sc) && (num(sc.all) || num(sc.jitter) || Object.values(sc.rar || {}).some((v) => num(v)));
   function pricingPanel(sh) {
-    const p = Object.assign({ all: 0, rar: {}, cat: {}, jitter: 0, round: 1, seed: '' }, deep(sh.pricing || {}));
+    const p = Object.assign({ all: 0, rar: {}, jitter: 0, round: 1, seed: '', by: {} }, deep(sh.pricing || {}));
+    p.by = p.by || {};
+    Object.keys(p.cat || {}).forEach((k) => { // passa os preços por categoria antigos para as categorias novas
+      if (!num(p.cat[k])) return;
+      (LEGACY_CATS[k] || []).forEach((nk) => { p.by[nk] = Object.assign({ all: 0, rar: {}, jitter: 0 }, p.by[nk]); p.by[nk].all = num(p.by[nk].all) + num(p.cat[k]); });
+    });
+    delete p.cat;
+    // só aparecem as categorias que a loja tem (ou que já têm preço ajustado)
+    const present = new Set(shopStock(sh).map((it) => shopCatOf(it.entry.kind)));
+    const cats = SHOP_CATS.map((c) => c[0]).concat(['outros']).filter((k) => present.has(k) || scopeOn(p.by[k]));
+    let scope = cats.indexOf(shopUi.pricing.get(sh.id)) >= 0 ? shopUi.pricing.get(sh.id) : 'all';
+    const target = () => (scope === 'all' ? p : (p.by[scope] = Object.assign({ all: 0, rar: {}, jitter: 0 }, p.by[scope])));
     const numIn = (val, label, onv) => {
       const n = h('input', 'input shop__num');
       n.type = 'number';
@@ -16484,27 +16652,55 @@ const FIREBASE_CONFIG = {
     PRICE_ROUND.forEach((r) => { const o = h('option', '', r === 1 ? 'Sem arredondar' : 'Arredondar para ' + r); o.value = String(r); round.append(o); });
     round.value = String(p.round || 1);
     round.addEventListener('change', () => { p.round = num(round.value); });
-    const save = async (patch) => {
-      const next = Object.assign({}, p, patch || {});
-      if (patch && patch.rar) next.rar = Object.assign({}, patch.rar);
-      if (patch && patch.cat) next.cat = Object.assign({}, patch.cat);
-      if (await saveShop(sh, { pricing: next })) toast('Preços de ' + sh.name + ' atualizados.');
+    const clean = () => {
+      const next = deep(p);
+      Object.keys(next.by).forEach((k) => { if (!scopeOn(next.by[k])) delete next.by[k]; });
+      return next;
     };
-    const quick = PRICE_PRESETS.map((q) => { const b = h('button', 'btn btn--ghost btn--sm', q[0]); b.type = 'button'; b.addEventListener('click', () => save(q[1])); return b; });
+    const save = async () => { if (await saveShop(sh, { pricing: clean() })) toast('Preços de ' + sh.name + ' atualizados.'); };
+    const scopeSel = h('select', 'input shop__sel');
+    scopeSel.dataset.fid = 'pricing-scope';
+    scopeSel.setAttribute('aria-label', 'Categoria em que os ajustes valem');
+    [['all', 'Toda a loja']].concat(cats.map((k) => [k, shopCatLabel(k)])).forEach((c) => { const o = h('option', '', c[1]); o.value = c[0]; scopeSel.append(o); });
+    const body = h('div', 'pricing__scope');
+    const paint = () => {
+      const t = target();
+      const quick = PRICE_PRESETS.map((q) => {
+        const b = h('button', 'btn btn--ghost btn--sm', q[0]);
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          if (scope === 'all' && q[0] === 'Zerar') p.by = {};
+          Object.assign(t, deep(q[1]));
+          save();
+        });
+        return b;
+      });
+      const active = Object.keys(p.by).filter((k) => scopeOn(p.by[k])).map((k) => shopCatLabel(k) + (num(p.by[k].all) ? ' ' + (num(p.by[k].all) > 0 ? '+' : '–') + Math.abs(num(p.by[k].all)) + '%' : ' (ajustada)'));
+      body.replaceChildren(
+        h('div', 'pricing__quick', ...quick),
+        grid(scope === 'all' ? 'Geral' : 'Geral em ' + shopCatLabel(scope), [numIn(t.all, 'Inflação ou desconto', (v) => { t.all = v; }), numIn(t.jitter, 'Variação aleatória (±)', (v) => { t.jitter = Math.abs(v); })]),
+        grid(scope === 'all' ? 'Por raridade' : 'Por raridade em ' + shopCatLabel(scope), PRICE_RARITIES.map((r) => numIn((t.rar || {})[r], r, (v) => { t.rar = t.rar || {}; t.rar[r] = v; }))),
+        active.length ? h('p', 'field__hint', 'Categorias com ajuste próprio: ' + active.join(' · ') + '.') : null);
+    };
+    scopeSel.value = scope;
+    scopeSel.addEventListener('change', () => { scope = scopeSel.value; shopUi.pricing.set(sh.id, scope); paint(); });
+    paint();
     const reroll = h('button', 'btn btn--ghost btn--sm', 'Sortear nova variação');
     reroll.type = 'button';
-    reroll.addEventListener('click', () => save({ seed: uid().slice(0, 6) }));
+    reroll.addEventListener('click', () => { p.seed = uid().slice(0, 6); save(); });
     const ok = h('button', 'btn btn--primary btn--sm', 'Aplicar preços');
     ok.type = 'button';
     ok.dataset.fid = 'pricing-save';
     ok.addEventListener('click', () => save());
-    return h('details', 'pricing', h('summary', '', 'Preços avançados (mestre)' + (sh.pricing ? ' · ativos' : '')),
-      h('p', 'field__hint', 'Somam por cima do preço de cada item: geral + raridade + categoria (+ variação). Negativo é desconto. Quem compra vê só o preço final.'),
-      h('div', 'pricing__quick', ...quick),
-      grid('Geral', [numIn(p.all, 'Inflação ou desconto geral', (v) => { p.all = v; }), numIn(p.jitter, 'Variação aleatória (±)', (v) => { p.jitter = Math.abs(v); })]),
-      grid('Por raridade', PRICE_RARITIES.map((r) => numIn(p.rar[r], r, (v) => { p.rar[r] = v; }))),
-      grid('Por categoria', PRICE_CATS.map((c) => numIn(p.cat[c[0]], c[1], (v) => { p.cat[c[0]] = v; }))),
+    const lab = h('label', 'field__label', 'Aplicar a');
+    const det = h('details', 'pricing', h('summary', '', 'Preços avançados (mestre)' + (sh.pricing ? ' · ativos' : '')),
+      h('p', 'field__hint', 'Somam por cima do preço de cada item: o ajuste da loja toda + o da categoria do item (geral, raridade e variação). Negativo é desconto. Quem compra vê só o preço final.'),
+      h('div', 'field pricing__target', lab, scopeSel),
+      body,
       h('div', 'pricing__foot', round, reroll, ok));
+    det.open = shopUi.pricing.has(sh.id);
+    det.addEventListener('toggle', () => { if (det.open) { if (!shopUi.pricing.has(sh.id)) shopUi.pricing.set(sh.id, scope); } else shopUi.pricing.delete(sh.id); });
+    return det;
   }
   async function saveShop(sh, patch) {
     try { await db.updateShop(currentCamp.id, sh.id, patch); return true; }
@@ -16577,8 +16773,114 @@ const FIREBASE_CONFIG = {
   async function addBankItem(sh) {
     const picked = await openPickerMany({ title: 'Item para ' + sh.name, kinds: INVENTORY_KINDS, chips: INV_CHIPS, filter: (x) => INVENTORY_KINDS.indexOf(x.kind) >= 0 });
     if (!picked.length) return;
+    let rows = picked.map((e) => ({ entry: e, qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e) }));
+    if (rows.length > 1) rows = await askStock(sh, rows);
+    if (!rows || !rows.length) return;
     const fresh = shops.find((x) => x.id === sh.id) || sh;
-    await saveShop(fresh, { items: fresh.items.concat(picked.map((e) => ({ uid: uid(), entry: slotSnap(e), qty: sh.kind === 'companhia' ? null : 1, price: priceOf(e), sale: true }))) });
+    await saveShop(fresh, { items: fresh.items.concat(rows.map((r) => ({ uid: uid(), entry: slotSnap(r.entry), qty: r.qty, price: r.price, sale: true }))) });
+  }
+  /* Vários itens de uma vez: lista compacta, como um armazém, para acertar quantidade e preço
+     de cada item, de todos ou de uma categoria (só aparecem as categorias que estão na lista). */
+  let stockDlg = null;
+  function askStock(sh, rows) {
+    if (!stockDlg) {
+      stockDlg = h('dialog', 'dialog dialog--wide stockdlg');
+      stockDlg.setAttribute('aria-labelledby', 'stockdlg-title');
+      document.body.append(stockDlg);
+    }
+    const order = SHOP_CATS.map((c) => c[0]).concat(['outros']);
+    rows = rows.map((r) => Object.assign({}, r, { cat: shopCatOf(r.entry.kind) }))
+      .sort((a, b) => (order.indexOf(a.cat) - order.indexOf(b.cat)) || a.entry.name.localeCompare(b.entry.name, 'pt-BR'));
+    const qtyOk = sh.kind !== 'companhia'; // companhia tem estoque infinito
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (stockDlg.open) closeDialog(stockDlg); };
+      const numBox = (val, label, inf) => {
+        const n = h('input', 'input stockdlg__num');
+        n.type = 'number';
+        n.min = '0';
+        n.step = '1';
+        if (inf) n.placeholder = '∞';
+        n.value = val === null || val === undefined ? '' : String(val);
+        n.setAttribute('aria-label', label);
+        return n;
+      };
+      const list = h('ul', 'stockdlg__list');
+      const count = h('strong', '', '');
+      const paint = () => {
+        const kids = [];
+        let last = '';
+        rows.forEach((r) => {
+          if (r.cat !== last) { last = r.cat; kids.push(h('li', 'stockdlg__cat', shopCatLabel(r.cat))); }
+          const q = numBox(r.qty, 'Quantidade de ' + r.entry.name + ' (vazio = infinito)', true);
+          q.addEventListener('input', () => { r.qty = q.value.trim() === '' ? null : Math.max(0, Math.round(num(q.value))); });
+          const p = numBox(r.price, 'Preço de ' + r.entry.name);
+          p.addEventListener('input', () => { r.price = Math.max(0, Math.round(num(p.value))); });
+          const rm = h('button', 'btn btn--ghost btn--sm stockdlg__rm', '×');
+          rm.type = 'button';
+          rm.setAttribute('aria-label', 'Tirar ' + r.entry.name + ' da lista');
+          rm.addEventListener('click', () => { rows = rows.filter((x) => x !== r); paint(); });
+          const v = r.entry.values || {};
+          kids.push(h('li', 'stockdlg__row', h('span', 'stockdlg__name', r.entry.name, v.raridade ? h('small', '', ' · ' + v.raridade) : null),
+            qtyOk ? h('label', 'stockdlg__lab', 'Qtd.', q) : null, h('label', 'stockdlg__lab', 'Preço', p), rm));
+        });
+        list.replaceChildren(...kids);
+        count.textContent = plural(rows.length, 'item', 'itens');
+        okBtn.disabled = !rows.length;
+        okBtn.textContent = 'Pôr na loja (' + rows.length + ')';
+        const cats = [...new Set(rows.map((r) => r.cat))];
+        const keep = scopeSel.value;
+        scopeSel.replaceChildren(...[['all', 'Todos os itens']].concat(cats.map((k) => [k, shopCatLabel(k)])).map((c) => { const o = h('option', '', c[1]); o.value = c[0]; return o; }));
+        scopeSel.value = keep === 'all' || cats.indexOf(keep) >= 0 ? keep : 'all';
+      };
+      const scopeSel = h('select', 'input shop__sel');
+      scopeSel.dataset.fid = 'stock-scope';
+      scopeSel.setAttribute('aria-label', 'Itens que recebem o ajuste');
+      scopeSel.append(h('option', '', 'Todos os itens'));
+      scopeSel.options[0].value = 'all';
+      const bulkQty = numBox('', 'Quantidade para os itens escolhidos (vazio = não muda)');
+      bulkQty.placeholder = 'Qtd.';
+      const bulkPrice = numBox('', 'Preço para os itens escolhidos (vazio = não muda)');
+      bulkPrice.placeholder = 'Preço';
+      const unit = h('select', 'input shop__sel');
+      unit.setAttribute('aria-label', 'O preço é em Cronos ou em % do preço do banco');
+      [['cr', 'Cronos'], ['pct', '% do preço do banco']].forEach((c) => { const o = h('option', '', c[1]); o.value = c[0]; unit.append(o); });
+      const inf = h('input');
+      inf.type = 'checkbox';
+      const apply = h('button', 'btn btn--ghost btn--sm', 'Aplicar');
+      apply.type = 'button';
+      apply.dataset.fid = 'stock-apply';
+      apply.addEventListener('click', () => {
+        const sel = rows.filter((r) => scopeSel.value === 'all' || r.cat === scopeSel.value);
+        const hasQ = qtyOk && (inf.checked || bulkQty.value.trim() !== '');
+        const hasP = bulkPrice.value.trim() !== '';
+        if (!hasQ && !hasP) { toast('Digite uma quantidade ou um preço para aplicar.'); bulkQty.focus(); return; }
+        sel.forEach((r) => {
+          if (hasQ) r.qty = inf.checked ? null : Math.max(0, Math.round(num(bulkQty.value)));
+          if (hasP) r.price = unit.value === 'pct' ? Math.max(0, Math.round(priceOf(r.entry) * num(bulkPrice.value) / 100)) : Math.max(0, Math.round(num(bulkPrice.value)));
+        });
+        paint();
+        toast('Ajuste aplicado a ' + plural(sel.length, 'item', 'itens') + '.');
+      });
+      const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => finish(null));
+      const okBtn = h('button', 'btn btn--primary btn--sm', '');
+      okBtn.type = 'button';
+      okBtn.dataset.fid = 'stock-ok';
+      okBtn.addEventListener('click', () => finish(rows.filter((r) => r.qty === null || r.qty > 0)));
+      const title = h('h2', '', 'Estoque para ' + sh.name);
+      title.id = 'stockdlg-title';
+      stockDlg.replaceChildren(h('div', 'stockdlg__body', title,
+        h('p', 'field__hint', 'Acerte a quantidade e o preço de cada item, ou de vários de uma vez. ' + (qtyOk ? 'Quantidade vazia é estoque infinito; 0 tira o item.' : 'Companhia tem estoque infinito.')),
+        h('div', 'stockdlg__bulk', h('span', 'picker__filter-label', 'Ajustar'), scopeSel, qtyOk ? bulkQty : null, qtyOk ? h('label', 'check', inf, h('span', '', '∞')) : null, bulkPrice, unit, apply),
+        h('p', 'stockdlg__count', count),
+        list,
+        h('div', 'dialog__actions', cancel, okBtn)));
+      stockDlg.onclose = () => finish(null);
+      paint();
+      openDialog(stockDlg);
+    });
   }
 
   // Descanso passado pelo mestre: NPCs podem comprar o que está à venda nas lojas com fluxo
