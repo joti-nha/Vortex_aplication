@@ -549,7 +549,9 @@ window.VORTEX_ITEMS = {
         { key: 'acoes', sec: 'atk', label: 'Ações', kind: 'npcactions' },
         { key: 'ataque', hidden: true }, { key: 'arma', hidden: true }, { key: 'dano', hidden: true }, { key: 'cadencia', hidden: true }, { key: 'proficiente', hidden: true }, { key: 'efetivo', hidden: true },
         { key: 'descricao', sec: 'hab', label: 'Descrição e habilidades', kind: 'textarea', big: true },
-        { key: 'saqueItens', sec: 'saque', label: 'Itens do banco que deixa ao cair', kind: 'npcloot' },
+        // o inventário da criatura cai junto (saqueSem: os itens do inventário que o mestre tirou do saque)
+        { key: 'saqueItens', sec: 'saque', label: 'O que deixa ao cair: o inventário e itens do banco', kind: 'npcloot' },
+        { key: 'saqueSem', hidden: true },
         { key: 'saque', sec: 'saque', label: 'Outros (o que não está no banco, um por linha)', kind: 'textarea', big: true, placeholder: 'Ex.: Sucata eletrônica\nGlândula x2' },
         { key: 'cronos', sec: 'saque', label: 'Cronos que deixa ao cair', kind: 'number', min: 0, step: 1 },
         { key: 'lore', sec: 'lore', label: 'Lore (opcional)', kind: 'textarea', big: true, placeholder: 'História e lugar desta ameaça no mundo. Aparece no ícone 📜.' }

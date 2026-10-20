@@ -4085,3 +4085,10 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .stockdlg__rm { min-height: 32px; padding: 0 0.55rem; }
 .pricing__target { max-width: 18rem; margin-bottom: 0.4rem; }
 @media (max-width: 520px) { .stockdlg__lab span, .stockdlg__lab { font-size: 0.7rem; } .stockdlg__num { width: 3.8rem; } }
+.npcb__sub { margin: 0.6rem 0 0.25rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--nevoa-2); }
+.npcl__inv { display: flex; align-items: center; gap: 0.55rem; flex: 1; min-width: 0; }
+/* Ações da criatura: tipo no cabeçalho e as sugestões da ficha */
+.npca__kind { width: auto; max-width: 13rem; min-height: 38px; }
+.npca__tips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.4rem 0; }
+.npca__tips-label { font-size: var(--t-s); color: var(--nevoa-2); }
+.npca__tip small { color: var(--nevoa-2); font-weight: 400; }

@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=221">
+  <link rel="stylesheet" href="style.css?v=222">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -690,7 +690,7 @@
         <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-combate" data-ctab="combate" aria-controls="cpanel-combate" aria-selected="true"><span class="camp-tab__label">Combate</span><span class="camp-tab__live" id="ctab-live" hidden>ao vivo</span></button>
         <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-lojas" data-ctab="lojas" aria-controls="cpanel-lojas" aria-selected="false" tabindex="-1"><span class="camp-tab__label">Lojas</span></button>
         <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-saque" data-ctab="saque" aria-controls="cpanel-saque" aria-selected="false" tabindex="-1"><span class="camp-tab__label">Saque e armazém</span><span class="camp-tab__badge" id="ctab-saque-n" hidden></span></button>
-        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-bestiario" data-ctab="bestiario" aria-controls="cpanel-bestiario" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__label">Bestiário</span><span class="camp-tab__badge camp-tab__badge--hot" id="ctab-bestiario-n" hidden></span></button>
+        <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-bestiario" data-ctab="bestiario" aria-controls="cpanel-bestiario" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__label">NPCs</span><span class="camp-tab__badge camp-tab__badge--hot" id="ctab-bestiario-n" hidden></span></button>
         <button class="sheet-tab camp-tab" type="button" role="tab" id="ctab-itens" data-ctab="itens" aria-controls="cpanel-itens" aria-selected="false" tabindex="-1" hidden><span class="camp-tab__label">Itens</span></button>
       </nav>
       <div class="camp-main">
@@ -838,6 +838,21 @@
 
       <!-- Bestiário: só o mestre (derrotados e a revista de monstros) -->
       <div class="camp-panel" id="cpanel-bestiario" role="tabpanel" aria-labelledby="ctab-bestiario" hidden>
+        <section class="block beast npcs" id="npcs-block" aria-labelledby="npcs-title">
+          <div class="block__head">
+            <h2 class="block__title" id="npcs-title">NPCs da campanha</h2>
+            <div class="block__tools">
+              <input class="input beast__q" id="npcs-q" type="search" autocomplete="off" placeholder="Buscar NPC" aria-label="Buscar NPC da campanha">
+              <button class="btn btn--ghost btn--sm" type="button" id="npcs-beast" aria-expanded="false">Abrir o Bestiário</button>
+              <button class="btn btn--primary btn--sm" type="button" id="npcs-new">Criar NPC</button>
+            </div>
+          </div>
+          <p class="block__hint">Os NPCs que você salvou nesta campanha, à mão para pôr na arena. "Salvar na campanha" no Bestiário traz uma criatura para cá; "Criar NPC" cria no banco e já salva aqui.</p>
+          <div class="beast-form" id="npcs-form-slot"></div>
+          <div class="mag__chips" id="npcs-cats" role="group" aria-label="Categoria"></div>
+          <p class="block__hint" id="npcs-hint" role="status"></p>
+          <div class="mag" id="npcs-mag"></div>
+        </section>
         <section class="block fallen" id="fallen-block" aria-labelledby="fallen-title" hidden>
           <div class="block__head">
             <h2 class="block__title" id="fallen-title">Monstros derrotados</h2>
@@ -846,10 +861,10 @@
               <button class="btn btn--ghost btn--sm" type="button" id="fallen-clear" hidden>Limpar histórico</button>
             </div>
           </div>
-          <p class="block__hint">Quem cai no combate entra aqui sozinho. Um clique em "Deixar nos drops" põe o saque da criatura (campos Saque e Cronos do bestiário) para o grupo pegar.</p>
+          <p class="block__hint">Quem cai no combate entra aqui sozinho. Um clique em "Deixar nos drops" põe o saque da criatura (o inventário dela, os itens a mais e os Cronos) para o grupo pegar.</p>
           <ul class="rows" id="fallen-list"></ul>
         </section>
-        <section class="block beast" aria-labelledby="beast-title">
+        <section class="block beast" id="beast-block" aria-labelledby="beast-title" hidden>
           <div class="block__head">
             <h2 class="block__title" id="beast-title">Bestiário</h2>
             <div class="block__tools">
@@ -857,7 +872,7 @@
               <button class="btn btn--primary btn--sm" type="button" id="beast-new">Criar criatura</button>
             </div>
           </div>
-          <p class="block__hint">Uma página por criatura. "Pôr na arena" pergunta o time e põe no Combate. "Criar criatura" salva no banco e ela já aparece aqui.</p>
+          <p class="block__hint">Todas as criaturas do banco. "Pôr na arena" pergunta o time e põe no Combate; "Salvar na campanha" deixa a criatura nos NPCs desta campanha.</p>
           <div class="beast-form" id="beast-form-slot"></div>
           <div class="mag__chips" id="gmlib-cats" role="group" aria-label="Categoria"></div>
           <p class="block__hint" id="beast-hint" role="status"></p>
@@ -1177,10 +1192,10 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="pericias.js?v=221"></script>
-  <script src="regras.js?v=221"></script>
-  <script src="items.js?v=221"></script>
-  <script src="pixelart.js?v=221"></script>
-  <script src="app.js?v=221"></script>
+  <script src="pericias.js?v=222"></script>
+  <script src="regras.js?v=222"></script>
+  <script src="items.js?v=222"></script>
+  <script src="pixelart.js?v=222"></script>
+  <script src="app.js?v=222"></script>
 </body>
 </html>
