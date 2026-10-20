@@ -10914,7 +10914,21 @@ const FIREBASE_CONFIG = {
     const qLab = h('label', 'visually-hidden', 'Buscar espécime');
     qLab.htmlFor = 'racial-q';
     const content = h('div', 'racial__content');
-    const search = h('div', 'field racial__search', qLab, q);
+    // filtro por origem do espécime: todos, só os oficiais do livro ou só os da Oficina
+    let src = '';
+    const srcSeg = h('div', 'segmented racial__src');
+    const srcOpts = [['', 'Todos'], ['oficial', 'Oficiais'], ['oficina', 'Da Oficina']].map(([val, label]) => {
+      const r = h('input');
+      r.type = 'radio';
+      r.name = 'racial-src';
+      r.value = val;
+      r.checked = val === src;
+      r.dataset.fid = 'racial-src-' + (val || 'todos');
+      r.addEventListener('change', () => { src = val; draw(); });
+      srcSeg.append(h('label', 'segmented__opt', r, h('span', '', label)));
+      return r;
+    });
+    const search = h('div', 'field racial__search', qLab, q, srcSeg);
     const draw = () => {
       const s = ch.sheet;
       const free = freeUpOf(ch);
@@ -10922,7 +10936,8 @@ const FIREBASE_CONFIG = {
       search.hidden = Boolean(esp); // dentro de um espécime, a busca dá lugar ao botão de voltar
       const counter = mode === 'inspirado' ? h('p', 'racial__free', 'Escolhida: ', h('strong', '', racialCount(s) + ' de ' + RACIAL_FREE)) : h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free)));
       if (!esp) { // lista de espécimes, como uma busca: tocar num abre as habilidades raciais dele
-        const shown = rankSearch(list, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
+        const pool = src ? list.filter((e) => (src === 'oficial') === Boolean(e.oficial)) : list;
+        const shown = rankSearch(pool, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
         content.replaceChildren(...[counter, warn ? h('p', 'field__hint', 'Os espécimes da Oficina não carregaram agora (' + warn + '). Feche e abra de novo.') : null].filter(Boolean), shown.length ? h('ul', 'racial__results', ...shown.map((e) => {
           const n = racialLines(e.values).length;
           const taken = racialTaken(s, e);
@@ -10931,7 +10946,7 @@ const FIREBASE_CONFIG = {
           b.dataset.fid = 'racial-esp-' + nameKey(e.name).replace(/\s+/g, '-');
           b.addEventListener('click', () => { racialPick = e.id; draw(); const k = $('.racial__back', content); if (k) k.focus(); });
           return h('li', '', b);
-        })) : h('p', 'empty', q.value ? 'Nenhum espécime encontrado.' : 'Nenhum espécime com características raciais.'));
+        })) : h('p', 'empty', q.value ? 'Nenhum espécime encontrado.' : src === 'oficina' ? 'Nenhum espécime criado na Oficina ainda.' : 'Nenhum espécime com características raciais.'));
         return;
       }
       const traits = racialLines(esp.values).map((t) => {
@@ -10966,6 +10981,17 @@ const FIREBASE_CONFIG = {
     const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
     close.type = 'button';
     close.addEventListener('click', () => closeDialog(dlg));
+    // atalho no fundo: volta para a lista mostrando só os espécimes criados na Oficina
+    const fromShop = h('button', 'btn btn--ghost btn--sm', 'Da Oficina');
+    fromShop.type = 'button';
+    fromShop.dataset.fid = 'racial-from-oficina';
+    fromShop.addEventListener('click', () => {
+      src = 'oficina';
+      srcOpts.forEach((r) => { r.checked = r.value === src; });
+      racialPick = '';
+      draw();
+      q.focus();
+    });
     const title = h('h2', '', 'Características raciais');
     title.id = 'racial-title';
     dlg.replaceChildren(h('div', 'pickchar__body', title,
@@ -10975,7 +11001,7 @@ const FIREBASE_CONFIG = {
         : 'Compre com UP habilidades raciais de qualquer espécime, inclusive dos criados na Oficina. Busque um espécime e toque nele para ver as habilidades raciais.'),
       search,
       content,
-      h('div', 'dialog__actions', close)));
+      h('div', 'dialog__actions', fromShop, close)));
     draw();
     openDialog(dlg);
   }

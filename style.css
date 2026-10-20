@@ -3257,6 +3257,7 @@ html, body { max-width: 100%; overflow-x: clip; }
 .creator .gear__budget .setup__pool { margin: 0; }
 .picker > * { flex-shrink: 0; } /* a lista não encolhe por baixo do "Não achou?" no celular */
 .racial__search { margin: 0.2rem 0 0.6rem; }
+.racial__src { margin-top: 0.45rem; flex-wrap: wrap; }
 .racial__only { align-self: flex-start; }
 @media (max-width: 480px) { /* listas de busca no celular: nome inteiro na linha de cima, estrela e botão embaixo */
   .picker__tools { grid-template-columns: minmax(0, 1fr); }
