@@ -956,16 +956,16 @@ window.VORTEX_ITEMS = {
   /* Granadas Pinger: [nome, raridade, dano, multiplicador de dano, área, alcance, carga, preço, efeito].
      Consumíveis de saque: o arremesso é um ataque normal e o dano (ataque – Defesa) vai vezes o multiplicador. */
   [
-    ['Pink Pop', 'Comum', 'Explosivo', 2, 'Raio 3 m', 'Curto', 0.25, '80', 'Fragmentação.'],
+    ['Pink Pop', 'Comum', 'Explosivo', 1, 'Raio 3 m', 'Curto', 0.25, '80', 'Fragmentação.'],
     ['Static Candy', 'Comum', 'Elétrico', 1, 'Raio 3 m', 'Curto', 0.25, '90', 'Pulso elétrico.'],
     ['Blush Smoke', 'Comum', '', 0, 'Raio 6 m', 'Curto', 0.25, '50', 'Fumaça rosa: a área fica obscurecida por 2 rodadas. Quem está dentro dela tem meia cobertura contra ataques à distância.'],
     ['Kiss Flash', 'Incomum', '', 0, 'Raio 6 m', 'Curto', 0.25, '200', 'Clarão rosa. Quem for atingido fica Ofuscado até o fim do próximo turno dele.'],
-    ['Thermite Lipstick', 'Incomum', 'Fogo', 2, 'Raio 3 m', 'Curto', 0.25, '250', 'Tem formato de batom. A área queima por 2 rodadas: quem começar o turno nela sofre 1d6 de fogo.'],
-    ['Acid Bloom', 'Rara', 'Ácido/químico', 3, 'Raio 3 m', 'Médio', 0.25, '450', 'Abre como uma flor. Quem for atingido fica com –1 de Armadura até o fim da cena (corrosão).'],
-    ['Magnet Heart', 'Rara', 'Impacto', 2, 'Raio 6 m', 'Curto', 0.5, '500', 'Núcleo gravitacional: antes do dano, puxa as criaturas da área 3 m em direção ao centro.'],
-    ['Black Rose', 'Epica', 'Explosivo', 4, 'Raio 6 m', 'Médio', 0.5, '900', 'Explode duas vezes: a segunda explosão (um novo ataque na mesma área, dano ×2) acontece no começo da próxima rodada.'],
-    ['Pink Nova', 'Epica', 'Elétrico', 3, 'Raio 6 m', 'Médio', 0.5, '1.000', 'Pulso eletromagnético. Quem for atingido fica com os módulos inativos até o fim do próximo turno dele.'],
-    ['Pinger Finale', 'Lendária', 'Explosivo', 6, 'Raio 9 m', 'Médio', 1, '3.000',
+    ['Thermite Lipstick', 'Incomum', 'Fogo', 1, 'Raio 3 m', 'Curto', 0.25, '250', 'Tem formato de batom. A área queima por 2 rodadas: quem começar o turno nela sofre 1d6 de fogo.'],
+    ['Acid Bloom', 'Rara', 'Ácido/químico', 2, 'Raio 3 m', 'Médio', 0.25, '450', 'Abre como uma flor. Quem for atingido fica com –1 de Armadura até o fim da cena (corrosão).'],
+    ['Magnet Heart', 'Rara', 'Impacto', 1, 'Raio 6 m', 'Curto', 0.5, '500', 'Núcleo gravitacional: antes do dano, puxa as criaturas da área 3 m em direção ao centro.'],
+    ['Black Rose', 'Epica', 'Explosivo', 2, 'Raio 6 m', 'Médio', 0.5, '900', 'Explode duas vezes: a segunda explosão (um novo ataque na mesma área, dano ×1) acontece no começo da próxima rodada.'],
+    ['Pink Nova', 'Epica', 'Elétrico', 2, 'Raio 6 m', 'Médio', 0.5, '1.000', 'Pulso eletromagnético. Quem for atingido fica com os módulos inativos até o fim do próximo turno dele.'],
+    ['Pinger Finale', 'Lendária', 'Explosivo', 3, 'Raio 9 m', 'Médio', 1, '3.000',
       'Especial: Grand Finale\nUm show de fogos rosa e preto. Quem for atingido também fica Atordoado. Você escolhe até [Precisão] criaturas na área que não são afetadas.']
   ].forEach(function (a) {
     cat.push({

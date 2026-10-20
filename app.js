@@ -10881,9 +10881,11 @@ const FIREBASE_CONFIG = {
     if (!racialDlg) { racialDlg = h('dialog', 'dialog pickchar racial'); racialDlg.setAttribute('aria-labelledby', 'racial-title'); document.body.append(racialDlg); }
     const dlg = racialDlg;
     let list = BUILTINS.filter((e) => e.kind === 'especime' && !e.secreto);
-    try { list = await libSearch(['especime'], ''); } catch (err) { /* fica o catálogo oficial */ }
+    let warn = '';
+    try { list = await libSearch(['especime'], ''); warn = libSearch.warn; } catch (err) { warn = errorMessage(err); /* fica o catálogo oficial */ }
     const mine = ch.sheet.specimen;
-    list = list.filter((e) => racialLines(e.values).length && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
+    // oficiais e da Oficina; os da Oficina aparecem mesmo sem habilidade racial preenchida (avisa ao abrir)
+    list = list.filter((e) => (!e.oficial || racialLines(e.values).length) && !(mine && (e.id === mine.id || nameKey(e.name) === nameKey(mine.name))));
     // busca por espécime: fica fora do que é redesenhado, para não perder o foco ao digitar
     const q = h('input', 'input');
     q.type = 'search';
@@ -10902,10 +10904,10 @@ const FIREBASE_CONFIG = {
       const counter = mode === 'inspirado' ? h('p', 'racial__free', 'Escolhida: ', h('strong', '', racialCount(s) + ' de ' + RACIAL_FREE)) : h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free)));
       if (!esp) { // lista de espécimes, como uma busca: tocar num abre as habilidades raciais dele
         const shown = rankSearch(list, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
-        content.replaceChildren(counter, shown.length ? h('ul', 'racial__results', ...shown.map((e) => {
+        content.replaceChildren(...[counter, warn ? h('p', 'field__hint', 'Os espécimes da Oficina não carregaram agora (' + warn + '). Feche e abra de novo.') : null].filter(Boolean), shown.length ? h('ul', 'racial__results', ...shown.map((e) => {
           const n = racialLines(e.values).length;
           const taken = racialTaken(s, e);
-          const b = h('button', 'racial__result', h('strong', '', e.name), h('span', '', plural(n, 'habilidade racial', 'habilidades raciais') + (taken ? ' · ' + taken + ' na ficha' : '')));
+          const b = h('button', 'racial__result', h('strong', '', e.name), h('span', '', [e.oficial ? 'Oficial' : 'Oficina', n ? plural(n, 'habilidade racial', 'habilidades raciais') : 'sem habilidade racial', taken ? taken + ' na ficha' : ''].filter(Boolean).join(' · ')));
           b.type = 'button';
           b.dataset.fid = 'racial-esp-' + nameKey(e.name).replace(/\s+/g, '-');
           b.addEventListener('click', () => { racialPick = e.id; draw(); const k = $('.racial__back', content); if (k) k.focus(); });
@@ -10937,6 +10939,7 @@ const FIREBASE_CONFIG = {
       back.type = 'button';
       back.addEventListener('click', () => { racialPick = ''; draw(); q.focus(); });
       content.replaceChildren(...[back, counter, h('h3', 'pickchar__sub', esp.name),
+        traits.length ? null : h('p', 'empty', 'Este espécime ainda não tem habilidades raciais preenchidas na Oficina.'),
         taken ? h('p', 'field__hint racial__count', 'Deste espécime: ' + plural(taken, 'habilidade', 'habilidades')) : null,
         h('ul', 'pickchar__list', ...traits)].filter(Boolean)); // replaceChildren escreveria "null" na tela
     };
