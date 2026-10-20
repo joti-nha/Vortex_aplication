@@ -23,7 +23,7 @@
    ===================================================================== */
 window.VORTEX_ITEMS = {
   // registros do banco que viraram oficiais (2026-10-16): somem da busca para não aparecer em dobro
-  oficializados: ['CAAyJdcA0fiUcLIjqOvc', 'z270o7F7R8ePty8BxN99'], // origens Klyntar e Assassino
+  oficializados: ['CAAyJdcA0fiUcLIjqOvc', 'z270o7F7R8ePty8BxN99', '7UGGzWDgNn4IYVmEYkYn'], // origens Klyntar, Assassino e Fanático
   raridades: ['Comum', 'Incomum', 'Rara', 'Epica', 'Lendária'],
   raridadesMod: ['Comum', 'Rara', 'Lendária'],
   raridadeCor: { 'Comum': '#9db2c1', 'Incomum': '#7fd68a', 'Rara': '#6aa8ff', 'Epica': '#c08bff', 'Lendária': '#f0b85a' },

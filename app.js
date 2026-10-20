@@ -16048,12 +16048,30 @@ const FIREBASE_CONFIG = {
     q.placeholder = 'Buscar ficha por nome, espécie ou origem';
     q.setAttribute('aria-label', 'Buscar ficha');
     q.autocomplete = 'off';
+    // só as fichas que o mestre criou ou fixou no acesso rápido; filtro Todos / Personagens / Criaturas como na busca de Personagens
+    let kind = '';
+    const seg = h('div', 'segmented');
+    [['', 'Todos'], ['personagem', 'Personagens'], ['criatura', 'Criaturas']].forEach(([val, label]) => {
+      const r = h('input');
+      r.type = 'radio';
+      r.name = 'sheetnpc-type';
+      r.value = val;
+      r.checked = val === kind;
+      r.addEventListener('change', () => { kind = val; search(); });
+      seg.append(h('label', 'segmented__opt', r, h('span', '', label)));
+    });
     let seq = 0;
     const search = debounce(async () => {
       const my = ++seq;
       let list = [];
-      try { list = await db.searchCharacters(q.value.trim()); } catch (err) { if (my === seq) found.replaceChildren(h('li', 'field__hint', errorMessage(err))); return; }
-      if (my !== seq) return;
+      try {
+        const quick = await refreshQuick().catch(() => quickLoad());
+        const text = q.value.trim();
+        const found = text ? rankSearch(quick, text, charFields) : quick;
+        const own = text ? (await db.searchCharacters(text)).filter((c) => c.mine || isMyChar(c.id)) : [];
+        list = found.concat(own.filter((c) => !found.some((x) => x.id === c.id)));
+        if (kind) list = list.filter((c) => (kind === 'criatura') === isCreature(c.type));
+      } catch (err) { if (my === seq) found0(err); return; }
       list = list.slice(0, 20);
       found.replaceChildren(...list.map((c) => {
         const k = 'c:' + c.id;
@@ -16080,8 +16098,9 @@ const FIREBASE_CONFIG = {
         return h('li', 'pickchar__card' + (here ? ' is-here' : ''), art,
           h('span', 'pickchar__info', h('strong', 'pickchar__name', c.name), h('span', 'pickchar__meta', [c.species, c.origin].filter(Boolean).join(' · ') || (isCreature(c.type) ? 'Criatura' : 'Personagem'))), b);
       }));
-      if (!list.length) found.replaceChildren(h('li', 'field__hint', 'Nenhuma ficha com esse nome.'));
+      if (!list.length) found.replaceChildren(h('li', 'field__hint', q.value.trim() ? 'Nenhuma ficha sua ou fixada com esse nome.' : 'Nenhuma ficha criada ou fixada por você. Fixe uma ficha no acesso rápido (Personagens) para ela aparecer aqui.'));
     }, 250);
+    const found0 = (err) => found.replaceChildren(h('li', 'field__hint', errorMessage(err)));
     q.addEventListener('input', search);
     const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
     close.type = 'button';
@@ -16089,8 +16108,8 @@ const FIREBASE_CONFIG = {
     const title = h('h2', '', 'Ficha como NPC');
     title.id = 'sheetnpc-title';
     dlg.replaceChildren(h('div', 'pickchar__body', title,
-      h('p', 'field__hint', 'Qualquer ficha de personagem ou criatura vira um NPC da campanha: atributos, perícias, Resistência, poderes e inventário vêm da ficha. Na arena entra uma cópia, então a ficha não perde vida.'),
-      q, found, h('div', 'dialog__actions', close)));
+      h('p', 'field__hint', 'Aparecem as fichas de personagem ou criatura que você criou ou fixou no acesso rápido. Atributos, perícias, Resistência, poderes e inventário vêm da ficha. Na arena entra uma cópia, então a ficha não perde vida.'),
+      q, h('fieldset', 'field', h('legend', 'field__label', 'Tipo'), seg), found, h('div', 'dialog__actions', close)));
     openDialog(dlg);
     search();
   }

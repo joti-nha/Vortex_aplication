@@ -1186,6 +1186,10 @@ window.VORTEX_REGRAS = {
             'Tnnaks Jackt (armadura leve);',
             'Blush Smoke.'
           ]]
+        ]],
+        ['card', 'Fanático', [
+          ['p', 'Vive por uma causa e morreria por ela sem pensar duas vezes. Pode ser um deus esquecido, uma corporação que prometeu salvação ou uma ideia que ouviu nas ruas: o que importa é que ele acredita, e essa fé pesa mais que qualquer dor, medo ou argumento.'],
+          ['p', 'Onde os outros hesitam, o fanático avança. Ele carrega símbolos da sua crença no corpo e no equipamento, cumpre o que acha que é a sua missão e enxerga os inimigos da causa como obstáculos a remover.']
         ]]
       ]
     },
