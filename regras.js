@@ -171,7 +171,7 @@ window.VORTEX_REGRAS = {
         ['h2', 'Classe de Dificuldade (CD)'],
         ['p', 'Contra uma dificuldade fixa, você passa se o total for **igual ou maior** que a CD. Com duas falhas críticas, o teste falha mesmo que o total alcance a CD.'],
         ['table', ['CD', 'Dificuldade'], [['6', 'Fácil'], ['9', 'Normal'], ['12', 'Difícil'], ['15', 'Muito difícil'], ['18', 'Quase impossível']]],
-        ['p', 'Quando o efeito é seu e o alvo resiste com um teste (Tecnomancia, granadas, armas com efeito no crítico), a própria regra diz a CD. Na cura, a CD tem regra própria (veja [Cura](cura#Classe de Dificuldade (CD))).'],
+        ['p', 'Quando o efeito é seu e o alvo resiste com um teste (Tecnomancia, armas com efeito no crítico), a própria regra diz a CD. Na cura, a CD tem regra própria (veja [Cura](cura#Classe de Dificuldade (CD))).'],
 
         ['h2', 'Testes resistidos'],
         ['p', 'Quando duas pessoas disputam (uma manobra, esconder-se contra perceber, agarrar contra soltar-se), as duas rolam e vence o maior total. **No empate, vence quem resiste** (o alvo da ação). Quem tira duas falhas críticas perde a disputa.'],
@@ -528,7 +528,7 @@ window.VORTEX_REGRAS = {
         ['h3', 'Normais'],
         ['dl', [
           ['Ataque', 'Qualquer ataque custa uma ação padrão.'],
-          ['Arremessar', 'Arremessar um objeto é um ataque à distância (ação padrão, 2d6 + Precisão + Mira) com alcance de 9 m. Granadas usam a regra própria (veja [Granadas](armas#Granadas)).'],
+          ['Arremessar', 'Arremessar um objeto é um ataque à distância (ação padrão, 2d6 + Precisão + Mira) com alcance de 9 m. Granadas também são arremessadas assim, com o dano da regra delas (veja [Granadas](armas#Granadas)).'],
           ['Deslocamento', 'Usar o seu deslocamento custa uma ação de movimento.'],
           ['Curar', 'Além do item, curar consome uma ação completa (veja [Cura](cura)).'],
           ['Reanimar', 'Trazer de volta alguém caído custa uma ação padrão (veja [Reanimar](morte-e-agonia#Reanimar)).']
@@ -920,10 +920,11 @@ window.VORTEX_REGRAS = {
         ]],
 
         ['h2', 'Granadas'],
-        ['p', 'Arremessar uma granada é uma ação padrão: ela vai até o alcance dela e explode na área. Quem está na área faz um teste de **Reflexos**: quem passa sofre metade do dano.'],
-        ['p', 'Cada granada tem uma **CD base**. A CD do teste soma a Precisão de quem arremessa:'],
-        ['formula', 'CD da granada', 'CD base da granada + Precisão de quem arremessa'],
-        ['example', 'Uma Pink Pop (CD base 7) arremessada por alguém com Precisão 2 tem CD 9.'],
+        ['p', 'Granadas são **consumíveis** de empunhadura **Saque**: sacar uma é grátis uma vez por turno, e cada uma é usada uma vez.'],
+        ['p', 'Arremessar uma granada funciona como um **ataque normal** (ação padrão, 2d6 + Precisão + Mira), com um teste só contra a Defesa de cada um que está na área. Em vez de dados de dano, a granada tem um **multiplicador de dano fixo**:'],
+        ['formula', 'Dano da granada', '(ataque – Defesa do alvo, mínimo 1) × multiplicador da granada'],
+        ['example', 'Uma Pink Pop (×2) com ataque 11 contra Defesa 8 causa (11 – 8) × 2 = 6 de dano. Contra Defesa 12, é um raspão: 1 × 2 = 2.'],
+        ['p', 'Os efeitos da granada (Ofuscado, corrosão, fumaça...) valem para quem for atingido. Granadas sem multiplicador só têm o efeito.'],
         ['p', 'Uma [cobertura completa](condicoes-e-estados#Benéficos) protege da explosão se o ponto central dela não tiver uma linha reta até você.']
       ]
     },

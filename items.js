@@ -270,18 +270,18 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'granada', title: 'Granada', group: 'Armas', inventory: true, image: true,
-      hint: 'Arremessada até o alcance, explode na área. O dano é fixo (rola os dados): quem passar no teste de Reflexos contra a CD sofre metade. CD = CD base da granada + Precisão de quem arremessa. Cada granada é usada uma vez.',
-      defaults: { empunhadura: 'Saque', carga: '0.25' },
+      hint: 'Consumível, de saque. Arremessar é um ataque normal (2d6 + Precisão + Mira) contra a Defesa de cada um na área; o dano é o de sempre (ataque – Defesa) vezes o multiplicador da granada, em vez de dados. Cada granada é usada uma vez.',
+      defaults: { empunhadura: 'Saque', carga: '0.25', tipoUso: 'Consumível' },
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
         { key: 'raridade', label: 'Raridade', kind: 'rarity', options: 'raridades' },
         { key: 'preco', label: 'Preço (Cronos)', kind: 'text', placeholder: 'Ex.: 100' },
         { key: 'dano', label: 'Tipo de dano', kind: 'select', options: 'tiposDano', blank: 'Sem dano' },
-        { key: 'danoFixo', label: 'Dano fixo', kind: 'text', placeholder: 'Ex.: 2d6' },
+        { key: 'mult', label: 'Multiplicador de dano', kind: 'number', min: 0, step: 1, hint: 'O dano é ataque – Defesa (mínimo 1) vezes este número. 0 ou vazio: só o efeito, sem dano.' },
         { key: 'area', label: 'Área', kind: 'text', placeholder: 'Ex.: Raio 3 m' },
         { key: 'alcance', label: 'Alcance do arremesso', kind: 'select', options: 'alcances' },
-        { key: 'cd', label: 'CD base de Reflexos', kind: 'number', min: 0, step: 1, hint: 'A CD do teste é esta base + a Precisão de quem arremessa.' },
+        { key: 'tipoUso', hidden: true }, { key: 'danoFixo', hidden: true }, { key: 'cd', hidden: true },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
         { key: 'efeito', label: 'Efeito', kind: 'textarea', big: true, placeholder: 'O que acontece na área além do dano.' },
@@ -953,23 +953,24 @@ window.VORTEX_ITEMS = {
     });
   });
 
-  /* Granadas Pinger: [nome, raridade, dano, dano fixo, área, alcance, CD de Reflexos, carga, preço, efeito] */
+  /* Granadas Pinger: [nome, raridade, dano, multiplicador de dano, área, alcance, carga, preço, efeito].
+     Consumíveis de saque: o arremesso é um ataque normal e o dano (ataque – Defesa) vai vezes o multiplicador. */
   [
-    ['Pink Pop', 'Comum', 'Explosivo', '2d6', 'Raio 3 m', 'Curto', 7, 0.25, '80', 'Fragmentação. Quem passa no teste de Reflexos sofre metade do dano.'],
-    ['Static Candy', 'Comum', 'Elétrico', '1d6', 'Raio 3 m', 'Curto', 7, 0.25, '90', 'Pulso elétrico. Quem passa no teste de Reflexos sofre metade do dano.'],
-    ['Blush Smoke', 'Comum', '', '', 'Raio 6 m', 'Curto', 0, 0.25, '50', 'Fumaça rosa: a área fica obscurecida por 2 rodadas. Quem está dentro dela tem meia cobertura contra ataques à distância.'],
-    ['Kiss Flash', 'Incomum', '', '', 'Raio 6 m', 'Curto', 8, 0.25, '200', 'Clarão rosa. Quem falhar no teste de Reflexos fica Ofuscado até o fim do próximo turno dele.'],
-    ['Thermite Lipstick', 'Incomum', 'Fogo', '2d6', 'Raio 3 m', 'Curto', 8, 0.25, '250', 'Tem formato de batom. A área queima por 2 rodadas: quem começar o turno nela sofre 1d6 de fogo.'],
-    ['Acid Bloom', 'Rara', 'Ácido/químico', '3d6', 'Raio 3 m', 'Médio', 9, 0.25, '450', 'Abre como uma flor. Quem falhar no teste de Reflexos fica com –1 de Armadura até o fim da cena (corrosão).'],
-    ['Magnet Heart', 'Rara', 'Impacto', '2d6', 'Raio 6 m', 'Curto', 9, 0.5, '500', 'Núcleo gravitacional: antes do dano, puxa as criaturas da área 3 m em direção ao centro.'],
-    ['Black Rose', 'Epica', 'Explosivo', '4d6', 'Raio 6 m', 'Médio', 10, 0.5, '900', 'Explode duas vezes: a segunda explosão (2d6 explosivo, mesma área e CD) acontece no começo da próxima rodada.'],
-    ['Pink Nova', 'Epica', 'Elétrico', '3d6', 'Raio 6 m', 'Médio', 10, 0.5, '1.000', 'Pulso eletromagnético. Quem falhar no teste de Reflexos fica com os módulos inativos até o fim do próximo turno dele.'],
-    ['Pinger Finale', 'Lendária', 'Explosivo', '6d6', 'Raio 9 m', 'Médio', 12, 1, '3.000',
-      'Especial: Grand Finale\nUm show de fogos rosa e preto. Quem falhar no teste de Reflexos também fica Atordoado. Você escolhe até [Precisão] criaturas na área que não são afetadas.']
+    ['Pink Pop', 'Comum', 'Explosivo', 2, 'Raio 3 m', 'Curto', 0.25, '80', 'Fragmentação.'],
+    ['Static Candy', 'Comum', 'Elétrico', 1, 'Raio 3 m', 'Curto', 0.25, '90', 'Pulso elétrico.'],
+    ['Blush Smoke', 'Comum', '', 0, 'Raio 6 m', 'Curto', 0.25, '50', 'Fumaça rosa: a área fica obscurecida por 2 rodadas. Quem está dentro dela tem meia cobertura contra ataques à distância.'],
+    ['Kiss Flash', 'Incomum', '', 0, 'Raio 6 m', 'Curto', 0.25, '200', 'Clarão rosa. Quem for atingido fica Ofuscado até o fim do próximo turno dele.'],
+    ['Thermite Lipstick', 'Incomum', 'Fogo', 2, 'Raio 3 m', 'Curto', 0.25, '250', 'Tem formato de batom. A área queima por 2 rodadas: quem começar o turno nela sofre 1d6 de fogo.'],
+    ['Acid Bloom', 'Rara', 'Ácido/químico', 3, 'Raio 3 m', 'Médio', 0.25, '450', 'Abre como uma flor. Quem for atingido fica com –1 de Armadura até o fim da cena (corrosão).'],
+    ['Magnet Heart', 'Rara', 'Impacto', 2, 'Raio 6 m', 'Curto', 0.5, '500', 'Núcleo gravitacional: antes do dano, puxa as criaturas da área 3 m em direção ao centro.'],
+    ['Black Rose', 'Epica', 'Explosivo', 4, 'Raio 6 m', 'Médio', 0.5, '900', 'Explode duas vezes: a segunda explosão (um novo ataque na mesma área, dano ×2) acontece no começo da próxima rodada.'],
+    ['Pink Nova', 'Epica', 'Elétrico', 3, 'Raio 6 m', 'Médio', 0.5, '1.000', 'Pulso eletromagnético. Quem for atingido fica com os módulos inativos até o fim do próximo turno dele.'],
+    ['Pinger Finale', 'Lendária', 'Explosivo', 6, 'Raio 9 m', 'Médio', 1, '3.000',
+      'Especial: Grand Finale\nUm show de fogos rosa e preto. Quem for atingido também fica Atordoado. Você escolhe até [Precisão] criaturas na área que não são afetadas.']
   ].forEach(function (a) {
     cat.push({
       id: 'of-pin-' + slug(a[0]), kind: 'granada', typeId: '', name: a[0],
-      values: { fabricante: 'Pinger', raridade: a[1], preco: a[8], dano: a[2], danoFixo: a[3], area: a[4], alcance: a[5], cd: a[6] ? String(a[6]) : '', empunhadura: 'Saque', carga: String(a[7]), efeito: a[9], lore: pingerLore(a[0]) }
+      values: { fabricante: 'Pinger', raridade: a[1], preco: a[7], dano: a[2], mult: String(a[3]), area: a[4], alcance: a[5], empunhadura: 'Saque', tipoUso: 'Consumível', carga: String(a[6]), efeito: a[8], lore: pingerLore(a[0]) }
     });
   });
 

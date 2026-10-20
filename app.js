@@ -3288,7 +3288,7 @@ const FIREBASE_CONFIG = {
       }
       if (f.key === 'fabricante') { add(f.key, label, makerTag(String(val)), 'stat'); return; }
       if (f.key === 'preco') { add(f.key, label, priceText(val), 'stat'); return; }
-      if (e.kind === 'granada' && f.key === 'cd') { add(f.key, 'CD de Reflexos', grenadeCd(val), 'stat'); return; }
+      if (e.kind === 'granada' && f.key === 'mult') { add(f.key, label, grenMult(e) ? '×' + grenMult(e) : 'só o efeito', 'stat'); return; }
       const c = classify(f, val);
       if (c[0] === 'list') add(f.key, label, null, 'list', { items: c[1] });
       else add(f.key, label, c[1], c[0]);
@@ -9389,13 +9389,9 @@ const FIREBASE_CONFIG = {
     return true;
   }
 
-  // CD da granada: CD base + Precisão de quem arremessa (com a ficha, já mostra a conta)
-  function grenadeCd(base, s) {
-    if (String(base === undefined || base === null ? '' : base).trim() === '') return '';
-    if (!s) return num(base) + ' + Precisão';
-    const p = attrOf(s, 'precisao');
-    return num(base) + ' + Precisão (' + signed(p) + ') = ' + (num(base) + p);
-  }
+  /* Granada: ataque normal (2d6 + Precisão + Mira) e o dano vezes um multiplicador fixo.
+     Granadas antigas (com "dano fixo" em dados) usam o número de dados como multiplicador. */
+  const grenMult = (i) => { const v = (i && i.values) || {}; if (String(v.mult || '').trim() !== '') return Math.max(0, Math.round(num(v.mult))); const d = String(v.danoFixo || '').match(/^\s*(\d+)\s*d/i); return v.dano && d ? parseInt(d[1], 10) : 0; };
   function itemFacts(i) {
     const v = i.values || {};
     const out = [];
@@ -9407,7 +9403,7 @@ const FIREBASE_CONFIG = {
       if (v.nucleo === 'Sim') add('Núcleo', '+' + num(v.capacidade));
     }
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
-    if (i.kind === 'granada') { add('Dano fixo', v.danoFixo); add('Área', v.area); add('CD de Reflexos', grenadeCd(v.cd, sheetChar && sheetChar.sheet)); add('Efeito', v.efeito); }
+    if (i.kind === 'granada') { add('Multiplicador de dano', grenMult(i) ? '×' + grenMult(i) : 'só o efeito'); add('Área', v.area); add('Ataque', 'Precisão + Mira'); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
     if (isBackpack(i)) add('Mochila', bagRate(v) ? 'A cada ' + bagRule(v).cada + ' da sua Carga, +' + bagRule(v).ganho + ' de carga' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
@@ -13746,6 +13742,7 @@ const FIREBASE_CONFIG = {
     atacar: 'Escolha a arma (só o que está nas mãos, ou desarmado) e depois toque nos alvos. Com cadência (ou os ataques múltiplos de Luta), cada toque é um disparo ou golpe.',
     manobra: 'Teste de Manobra (Corpo + Luta) contra Resistência ou Reflexos do alvo, o melhor dele. Se você vencer, o efeito entra sozinho.',
     usar: 'Consumíveis e utilitários: o saque já está incluído na ação.',
+    granada: 'Um ataque normal (2d6 + Precisão + Mira) comparado com a Defesa de cada alvo na área. O dano é (ataque – Defesa, mínimo 1) × o multiplicador da granada; quem é atingido recebe o efeito. A granada é gasta.',
     reanimar: 'Traz de volta um aliado agonizando ou sem resistência: Ofício (Medicina) e um kit médico (Robô ou não vivo: Tecnologia e um kit técnico) contra CD 6, +1 a cada tentativa na cena. Volta com 1 PV.',
     esconder: 'Precisa de algo que engane os sentidos. Teste de Manha; o resultado vira a dificuldade para te achar.',
     soltar: 'Repete o teste do Agarrar (Luta ou Reflexos, o melhor) contra a Luta de quem agarra. Se vencer, fica livre.',
@@ -14100,9 +14097,10 @@ const FIREBASE_CONFIG = {
       const a = foeActs(actor.foe).find((x) => x.id === battle.act);
       return h('div', 'cmd__panel', back, h('div', 'cmd__about', h('strong', '', a ? a.nome : 'Ação'), h('span', '', a ? npcActCost(a) : '')), npcActCfg(actor, list));
     }
-    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', reanimar: 'Reanimar', teste: 'Teste da ficha', disputa: 'Disputa', poderes: 'Poderes', defesa: 'Rolar defesa', abrigar: 'Abrigar-se' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
+    const about = h('div', 'cmd__about', h('strong', '', ({ atacar: 'Atacar', manobra: 'Manobra', avancar: 'Avançar', curar: 'Curar', reanimar: 'Reanimar', teste: 'Teste da ficha', disputa: 'Disputa', poderes: 'Poderes', defesa: 'Rolar defesa', abrigar: 'Abrigar-se', granada: 'Arremessar granada' })[id] || ''), h('span', '', ACTION_TEXT[id] || ''));
     let body;
     if (id === 'atacar') body = attackCfg(actor, list);
+    else if (id === 'granada') body = grenadeCfg(actor, list);
     else if (id === 'manobra') body = maneuverCfg(actor, list);
     else if (id === 'abrigar') body = coverCfg(actor);
     else if (id === 'avancar') {
@@ -14152,6 +14150,67 @@ const FIREBASE_CONFIG = {
     const l = h('label', 'field__label', label);
     l.htmlFor = id;
     return h('div', 'field', l, s);
+  }
+
+  /* Granada (capítulo Equipamento): consumível de Saque. Arremessar é um ataque normal (Precisão + Mira) com um teste
+     só, comparado com a Defesa de cada alvo na área; o dano é (ataque – Defesa, mínimo 1) × o multiplicador da granada. */
+  function grenadeCfg(actor, list) {
+    const mb = actor.member;
+    const c = sheetOf(mb);
+    const s = c.sheet;
+    const g = s.inventory.find((i) => i.uid === battle.gren && i.kind === 'granada' && handOf(i));
+    if (!g) return h('p', 'cmd__note', 'A granada não está mais nas mãos.');
+    const st = memberAtk['g:' + mb.characterId] = memberAtk['g:' + mb.characterId] || { mod: 0, dice: 'n2', dist: '' };
+    const valid = attackable(list, actor);
+    const box = h('div', 'attack');
+    const build = () => {
+      const t = { label: ('Granada: ' + g.name).slice(0, 60), attrName: 'Precisão', attr: attrOf(s, 'precisao'), skillName: 'Mira', skill: skillOf(s, 'mira'), mods: [], pen: 0 };
+      const dist = DISTANCES.find((d) => d.id === st.dist);
+      if (dist && dist.mod) t.mods.push([dist.short, dist.mod]);
+      if (st.mod) t.mods.push(['modificador', st.mod]);
+      return applyDice(t, st);
+    };
+    const throwIt = async (ids) => {
+      const why = econWhy(actor, 'padrao');
+      if (why) { toast(why); return; }
+      const t = build();
+      const paid = econPay(actor, 'padrao');
+      let left = '';
+      try {
+        await patchMemberSheet(mb, (ss) => {
+          const x = ss.inventory.find((y) => y.uid === g.uid);
+          if (!x) throw new UserError(g.name + ' não está mais no inventário.');
+          if ((x.qty || 1) > 1) x.qty -= 1; else ss.inventory.splice(ss.inventory.indexOf(x), 1);
+          const n = ss.inventory.filter((y) => y.kind === 'granada' && y.name === g.name).reduce((tt, y) => tt + (y.qty || 1), 0); // o resto continua na mochila
+          left = n ? ' (sobram ' + n + ')' : ' (acabou)';
+        });
+      } catch (err) { toast(errorMessage(err)); return; }
+      combat.targets = new Set(ids);
+      await runAttack({ member: mb, c }, t, { gren: g, shots: 1, per: null }, h('button'), paid + ' · granada gasta' + left);
+    };
+    const draw = () => {
+      const t = build();
+      const field = (id, label, control) => { control.id = 'gr-' + id; const l = h('label', 'field__label', label); l.htmlFor = control.id; return h('div', 'field', l, control); };
+      const dSel = h('select', 'input');
+      DISTANCES.filter((d) => d.id !== 'adj').forEach((d) => { const o = h('option', '', d.id ? d.label : 'Dentro do alcance da granada'); o.value = d.id; dSel.append(o); });
+      dSel.value = st.dist || '';
+      dSel.addEventListener('change', () => { st.dist = dSel.value; draw(); });
+      const mod = h('input', 'input');
+      mod.type = 'number';
+      mod.value = String(st.mod || 0);
+      mod.addEventListener('change', () => { st.mod = Math.round(num(mod.value)); draw(); });
+      const k = grenMult(g);
+      const go = h('button', 'btn btn--primary btn--sm', 'Escolher os alvos na área · ' + diceText(st) + ' ' + signed(testFixed(t)));
+      go.type = 'button';
+      go.disabled = !valid.length;
+      go.addEventListener('click', () => startAim({ label: 'Granada: ' + g.name, valid: valid.map((x) => x.id), max: valid.length, each: true, word: 'alvo',
+        pick: (x) => throwIt([x.id]), confirm: (shots) => throwIt(Object.keys(shots)) }));
+      const info = [k ? 'dano: (ataque – Defesa, mínimo 1) × ' + k : 'sem multiplicador: só o efeito em quem for atingido', g.values.dano, g.values.area ? 'área ' + g.values.area : '', g.values.alcance ? 'alcance ' + g.values.alcance : '', g.values.efeito].filter(Boolean).join(' · ');
+      box.replaceChildren(h('div', 'attack__fields', field('dice', 'Dados', diceSelect(st, draw)), field('dist', 'Distância', dSel), field('mod', 'Modificador', mod)),
+        h('div', 'attack__go', go, h('span', 'attack__info', info)));
+    };
+    draw();
+    return h('div', 'cmd__stack', h('p', 'cmd__note', 'Escolha os alvos dentro da área na arena (toque de novo para tirar) e confirme. A granada sai do inventário ao arremessar.'), box);
   }
 
   // Atacar: escolhe a arma e as opções; o botão volta para a arena para escolher os alvos
@@ -14388,7 +14447,7 @@ const FIREBASE_CONFIG = {
     String((i.values && i.values.bonusRec) || '').replace(/([+-]?\d+)\s*(pv|vida|pe|pa|escudo|blindagem|bl|e)\b/gi, (m, n, k) => { const key = REC_KEYS[k.toLowerCase()]; if (key) out[key] = (out[key] || 0) + num(n); return m; });
     return out;
   }
-  const usableItems = (s) => s.inventory.filter((i) => isWeapon(i.kind) || i.kind === 'item-geral');
+  const usableItems = (s) => s.inventory.filter((i) => isWeapon(i.kind) || i.kind === 'item-geral' || i.kind === 'granada');
   const healsWith = (i, hl) => new RegExp('recuperar\\s+' + hl.label, 'i').test(String((i.values || {}).efeito || ''));
   const isKit = (i, hl) => i.kind === 'item-geral' && (i.values || {}).tipoUso !== 'Estação' && !i.chao && (hl.rx.test(i.name) || Boolean(recOf(i)[hl.key]) || healsWith(i, hl));
   // o que serve para curar o recurso, as ferramentas (que não gastam) primeiro
@@ -14552,7 +14611,7 @@ const FIREBASE_CONFIG = {
      Ações (arma: movimento; pistola: bônus; Saque: grátis uma vez por turno) e precisa de mão livre
      (Duas mãos precisa das duas). Usar consumível ou utilitário é ação padrão, com o saque incluído. */
   const handOf = (i) => i.slot === 'mao-d' || i.slot === 'mao-e' || (i.slot === 'acoplado' && isWeapon(i.kind)); // arma acoplada: sempre empunhada
-  const isSaque = (i) => /saque/i.test(String((i.values && i.values.empunhadura) || ''));
+  const isSaque = (i) => i.kind === 'granada' || /saque/i.test(String((i.values && i.values.empunhadura) || '')); // granada: sempre de Saque
   function drawCost(actor, i) {
     if (isSaque(i)) return econLive(actor) && econOf(actor.id).saque ? 'movimento' : 'saque';
     if (i.typeId === 'pistola' || i.typeId === 'revolver') return 'bonus';
@@ -14583,7 +14642,7 @@ const FIREBASE_CONFIG = {
       b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } catch (err) { toast(errorMessage(err)); } b.disabled = false; renderBattle(); });
       return b;
     };
-    const facts = (i) => [i.values.empunhadura, i.values.tipoUso, i.values.dano ? 'dano ' + i.values.dano : '', i.values.cadencia && num(i.values.cadencia) > 1 ? 'cadência ' + i.values.cadencia : '', i.values.bonusRec].filter(Boolean).join(' · ');
+    const facts = (i) => [i.values.empunhadura, i.values.tipoUso, i.kind === 'granada' ? (grenMult(i) ? 'dano ×' + grenMult(i) : 'só o efeito') : '', i.values.area ? 'área ' + i.values.area : '', i.values.dano ? (i.kind === 'granada' ? '' : 'dano ') + i.values.dano : '', i.values.cadencia && num(i.values.cadencia) > 1 ? 'cadência ' + i.values.cadencia : '', i.values.bonusRec].filter(Boolean).join(' · ');
     // com bônus de recuperação, volta para a arena para escolher em quem usar
     const useItem = (i) => async () => {
       const rec = recOf(i);
@@ -14606,6 +14665,7 @@ const FIREBASE_CONFIG = {
     const row = (i, inHand) => {
       const acts = [];
       if (inHand) {
+        if (i.kind === 'granada') acts.push(btn('Arremessar', 'padrao', async () => { battle.gren = i.uid; battle.slot = 'padrao'; battle.cmd = 'granada'; battle.view = 'cfg'; }));
         if (isWeapon(i.kind)) acts.push(btn('Atacar', 'padrao', async () => { const st = memberAtk[mb.characterId] = memberAtk[mb.characterId] || { uid: null, mode: '', shots: 1, mod: 0, dice: 'n2', dist: '' }; st.uid = i.uid; st.mode = ''; st.shots = 1; battle.slot = 'padrao'; battle.cmd = 'atacar'; battle.view = 'cfg'; }));
         const cost = drawCost(actor, i);
         acts.push(btn('Guardar', cost, async () => {
@@ -14613,7 +14673,7 @@ const FIREBASE_CONFIG = {
           await patchMemberSheet(mb, (ss) => { const x = ss.inventory.find((y) => y.uid === i.uid); if (x) x.slot = ''; });
           await actLog(actor, ('Guardar: ' + i.name).slice(0, 60), paid + '.');
         }));
-      } else if (isWeapon(i.kind) || i.values.empunhadura) {
+      } else if (isWeapon(i.kind) || i.values.empunhadura || i.kind === 'granada') {
         const room = handRoom(s, i);
         const cost = i.chao ? 'movimento' : drawCost(actor, i);
         acts.push(btn(i.chao ? 'Pegar do chão' : 'Sacar', cost, async () => {
@@ -15185,6 +15245,10 @@ const FIREBASE_CONFIG = {
       }
       const ca = st.mode === NPC_CUSTOM ? foeAct(who.foe, st) : null; // valores escolhidos: à distância se o alcance não for corpo a corpo
       ranged = ca ? Boolean(ca.alcance) && ca.alcance !== 'Corpo a corpo' : st.mode !== 'Corpo a corpo';
+    } else if (st.gren) { // granada: um ataque normal à distância, dano × multiplicador fixo (0 = só o efeito)
+      types = splitTypes(st.gren.values.dano);
+      shots = grenMult(st.gren);
+      ranged = true;
     } else {
       weapon = weaponsOf(who.c.sheet).find((w) => w.uid === st.uid) || null;
       types = weapon ? splitTypes(weapon.values.dano) : ['Contundente'];
@@ -15239,11 +15303,12 @@ const FIREBASE_CONFIG = {
     for (const x of list) {
       const fin = finishable(x); // Finalizar: os dados contam no máximo (só rolam pelo crítico), contra a Defesa mínima
       if (r.flag === 'falha' && !fin) { lines.push(x.name + ': errou (falha completa)'); continue; }
+      if (st.gren && !shots) { const ok = fin || r.total > (fin ? x.defMin : x.def); lines.push(x.name + ': ' + (ok ? 'atingido' : 'não atingido') + ' vs defesa ' + (fin ? x.defMin : x.def) + (ok && st.gren.values.efeito ? ' → ' + st.gren.values.efeito : '')); continue; }
       let k = beam ? 1 : st.per && shots > 1 ? st.per[x.id] || 1 : shots; // cadência por alvo
       const notes = [];
       const cov = fin ? null : coverOf(x.id);
       if (cov && cov.id === 'completa') { lines.push(x.name + ': cobertura completa, nenhum dano'); continue; }
-      if (cov && ranged && k >= 2) {
+      if (cov && ranged && k >= 2 && !st.gren) { // a granada não é cadência: a cobertura parcial não absorve o multiplicador
         const soak = Math.min(k, randInt(cov.soak));
         k -= soak;
         notes.push(cov.n.toLowerCase() + ' absorveu ' + plural(soak, 'disparo', 'disparos'));
@@ -15276,6 +15341,7 @@ const FIREBASE_CONFIG = {
       // efeito da ação da criatura (o "script"): entra ao acertar, ou só no crítico
       if (act && act.cond && hits && (act.quando !== 'crit' || r.flag === 'crit') && lifeState(res.layers) !== 'morto') fx += await npcActEffect(act, x);
       const state = lifeState(res.layers);
+      if (st.gren && hits && st.gren.values.efeito) fx += ' · efeito: ' + st.gren.values.efeito;
       lines.push(x.name + ': ' + base + ' de dano' + (k > 1 ? ' (×' + k + ')' : '') + (fin ? ' (finalizar: ' + hit + ' contra a Defesa mínima ' + def + ')' : ' vs defesa ' + def + (hits ? '' : ' (raspão)')) + (notes.length ? ' · ' + notes.join(' · ') : '') + (parts.length ? ' → ' + parts.join(', ') : '') + fx + (state ? ' · ' + state : ''));
       // quem mantém um laser e é atingido testa Resistência (CD 8 em terreno normal) para não perder o bônus
       const tb = beamOf(x.id);
