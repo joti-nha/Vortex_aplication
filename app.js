@@ -1164,6 +1164,11 @@ const FIREBASE_CONFIG = {
           name: p.name || '', chars: p.chars || [], camps: p.camps || [], gm: p.gm || [], favs: p.favs || [],
           updatedAt: FV.serverTimestamp()
         }, { merge: true });
+        // Recentes em gravação separada: se as regras publicadas ainda não aceitam o campo, o resto do perfil salva igual
+        if (Array.isArray(p.recent)) {
+          await fs.collection('profiles').doc(code).set({ recent: p.recent.slice(0, 50) }, { merge: true })
+            .catch((e) => console.warn('Recentes não sincronizaram (publique as regras novas do Firestore).', e));
+        }
       },
 
       // Aparelhos que entraram no perfil: as regras deixam qualquer um deles excluir as fichas do perfil
@@ -1600,13 +1605,26 @@ const FIREBASE_CONFIG = {
   let db = LocalDb;
   let quickKey = 'vortex.quick.v1.local'; // uma lista por modo, para nunca misturar local com Firebase
 
-  function quickLoad() {
+  const RECENT_MAX = 50; // quantos "Recentes" vão junto no perfil
+  function quickLocal() {
     try { const l = JSON.parse(localStorage.getItem(quickKey)); return Array.isArray(l) ? l : []; }
     catch (e) { return []; }
+  }
+  // com um perfil aberto, a ordem dos Recentes vem do perfil (vale em todos os aparelhos da conta);
+  // o que só este aparelho conhece (nome, imagem) completa cada item, e refreshQuick busca o resto no banco
+  function quickLoad() {
+    const local = quickLocal();
+    if (!profile || !profile.recent.length) return local;
+    return profile.recent.map((id) => local.find((x) => x.id === id) || { id, name: 'Ficha', type: '', thumb: '', species: '', mine: false, ownerProfile: '' });
   }
   function quickSave(list) {
     try { localStorage.setItem(quickKey, JSON.stringify(list)); }
     catch (e) { toast('Não foi possível salvar o acesso rápido: o armazenamento está cheio.'); }
+    if (!profile) return;
+    const ids = list.map((x) => x.id).slice(0, RECENT_MAX);
+    if (ids.join('|') === profile.recent.join('|')) return;
+    profile.recent = ids;
+    profileSave();
   }
   const quickEntry = (c) => ({ id: c.id, name: c.name, type: c.type, thumb: c.thumb || '', species: c.species || '', mine: Boolean(c.mine), ownerProfile: c.ownerProfile || '' });
   const quickHas = (id) => quickLoad().some((x) => x.id === id);
@@ -1625,6 +1643,14 @@ const FIREBASE_CONFIG = {
 
   // Confere cada item da lista no banco: atualiza nome e imagem, tira o que foi apagado
   async function refreshQuick() {
+    if (profile) { // pega o que outro aparelho do perfil abriu
+      const code = profile.code;
+      await profileQueue;
+      try {
+        const p = await db.getProfile(code);
+        if (p && profile && profile.code === code) profile.recent = idList(p.recent).slice(0, RECENT_MAX);
+      } catch (e) { console.warn(e); /* sem conexão: fica com o que já tinha */ }
+    }
     const list = quickLoad();
     const out = [];
     await Promise.all(list.map(async (q, i) => {
@@ -1645,7 +1671,7 @@ const FIREBASE_CONFIG = {
   let profileKey = 'vortex.profile.v1.local';
   let profile = null; // { code, name, chars, camps, gm, favs }
   const CHAR_FAV_KEY = 'vortex.charfav.v1';
-  const PROFILE_LISTS = ['chars', 'camps', 'gm', 'favs'];
+  const PROFILE_LISTS = ['chars', 'camps', 'gm', 'favs', 'recent'];
   const idList = (l) => (Array.isArray(l) ? l.filter((x) => typeof x === 'string' && x).slice(0, 300) : []);
   function normProfile(p, code) {
     const out = { code, name: String((p && p.name) || '').slice(0, 40) };
@@ -2736,11 +2762,14 @@ const FIREBASE_CONFIG = {
           return;
         }
         profileUse(p, code);
+        // os Recentes deste aparelho entram na lista do perfil, depois dos que já estavam lá
+        const merged = Array.from(new Set(profile.recent.concat(quickLocal().map((x) => x.id)))).slice(0, RECENT_MAX);
+        if (merged.length !== profile.recent.length) { profile.recent = merged; profileSave(); }
         toast('Perfil aberto' + (profile.name ? ': ' + profile.name : '') + '.');
       } else {
-        const fresh = { name: cleanName(inLoginName.value).slice(0, 40), chars: [], camps: [], gm: [], favs: localCharFavs() };
+        const fresh = { name: cleanName(inLoginName.value).slice(0, 40), chars: [], camps: [], gm: [], favs: localCharFavs(), recent: quickLocal().map((x) => x.id).slice(0, RECENT_MAX) };
         if ($('#login-bring').checked) { // traz o que já está neste aparelho
-          fresh.chars = quickLoad().filter((q) => q.mine).map((q) => q.id).concat(fresh.favs);
+          fresh.chars = quickLocal().filter((q) => q.mine).map((q) => q.id).concat(fresh.favs);
           const camps = await db.listMyCampaigns().catch(() => []);
           fresh.camps = camps.map((c) => c.id);
           fresh.gm = camps.filter((c) => c.isOwner).map((c) => c.id);
@@ -15994,15 +16023,38 @@ const FIREBASE_CONFIG = {
     catch (err) { return { list: rankSearch(BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0), q, entryFields), warn: errorMessage(err), suggest: '' }; }
   }
   let itemsSeq = 0;
+  // como os outros menus só de item (inventário, kit, loja): chips de categoria, busca e "Só favoritos"
+  const gmlibOn = new Set();
+  $('#gmlib-chips').replaceChildren(h('span', 'picker__filter-label', 'Filtro (toque para mostrar só as escolhidas):'), ...INV_CHIPS.map((c) => {
+    const b = h('button', 'chip chip--toggle', c.label);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', 'false');
+    b.dataset.fid = 'gmlib-chip-' + nameKey(c.label).replace(/\s+/g, '-');
+    b.addEventListener('click', () => {
+      if (gmlibOn.has(c.label)) gmlibOn.delete(c.label); else gmlibOn.add(c.label);
+      b.setAttribute('aria-pressed', String(gmlibOn.has(c.label)));
+      gmFacets.reset();
+      runItems();
+    });
+    return b;
+  }));
   async function runItems() {
-    const kinds = GMLIB_KINDS[$('#gmlib-kind').value] || GMLIB_KINDS.armas;
+    const kinds = INVENTORY_KINDS;
     const seq = ++itemsSeq;
-    const r = await libFind(kinds, $('#gmlib-q').value);
+    const q = $('#gmlib-q').value;
+    const r = await libFind(kinds, q);
     if (seq !== itemsSeq) return;
-    const list = gmFacets.apply(r.list, kinds);
+    const favs = favLoad();
+    const favOnly = $('#gmlib-fav').checked;
+    const picked = INV_CHIPS.filter((c) => gmlibOn.has(c.label));
+    const allowed = picked.length ? picked.reduce((t, c) => t.concat(c.kinds), []) : null;
+    let list = r.list.filter((e) => (!favOnly || favs.has(e.id)) && (!allowed || allowed.indexOf(e.kind) >= 0));
+    list = gmFacets.apply(list, allowed || kinds);
+    // com texto, vale a relevância; sem texto, favoritos primeiro e o resto em ordem alfabética
+    if (!hasQuery(q)) list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
     suggestAfter($('#gmlib-list'), r.suggest, $('#gmlib-q'), runItems);
     const noChars = !members.some((mb) => mb.sheet && mb.sheet.attrs);
-    $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
+    $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }], () => { if (favOnly) runItems(); })));
     gmMulti.paint();
     $('#gmlib-hint').textContent = r.warn || (!list.length ? 'Nada encontrado.'
       : plural(list.length, 'resultado', 'resultados') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
@@ -16344,12 +16396,12 @@ const FIREBASE_CONFIG = {
       toast(e.name + ' foi para a mochila de ' + mb.name + '.');
     } catch (err) { toast(errorMessage(err)); }
   }
-  const gmFacets = facetBox(() => runItems());
+  const gmFacets = facetBox(() => runItems(), { skip: ['_kind'] }); // a categoria já tem os chips do topo
   $('#gmlib-hint').before(gmFacets.box);
   // a categoria do bestiário já tem os chips coloridos da revista
   const beastFacets = facetBox(() => runBeast(), { skip: ['categoria'] });
   $('#gmlib-cats').after(beastFacets.box);
-  $('#gmlib-kind').addEventListener('change', () => { gmFacets.reset(); runItems(); });
+  $('#gmlib-fav').addEventListener('change', runItems);
   $('#gmlib-q').addEventListener('input', debounce(runItems, 250));
   $('#beast-q').addEventListener('input', debounce(runBeast, 250));
   $('#beast-new').addEventListener('click', () => openHostedForm($('#beast-form-slot'), 'npc', null, runBeast));

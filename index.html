@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=231">
+  <link rel="stylesheet" href="style.css?v=232">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -162,7 +162,7 @@
 
       <section class="block" aria-labelledby="quick-title">
         <h2 class="block__title" id="quick-title"><button class="help" type="button" data-help="fichas">Recentes</button></h2>
-        <p class="block__hint">Salvo neste aparelho.</p>
+        <p class="block__hint">Com um perfil aberto, os recentes vão junto para outros aparelhos.</p>
         <ul class="rows" id="quick-list"></ul>
         <p class="empty" id="quick-empty">Nada por aqui ainda. Crie um personagem ou encontre um pela busca abaixo.</p>
       </section>
@@ -886,21 +886,13 @@
         <section class="block gmlib" aria-labelledby="gmlib-title">
           <h2 class="block__title" id="gmlib-title">Itens</h2>
           <p class="block__hint">Dê itens direto na mochila de um personagem. Para deixar algo para o grupo pegar, use uma lista em "Saque e armazém".</p>
-          <div class="gmlib__bar">
+          <p class="picker__filter" id="gmlib-chips"></p>
+          <div class="picker__tools">
             <div class="field">
-              <label class="field__label" for="gmlib-kind">Mostrar</label>
-              <select class="input" id="gmlib-kind">
-                <option value="armas">Armas</option>
-                <option value="municao">Munições</option>
-                <option value="protecao">Armaduras e vestíveis</option>
-                <option value="implantes">Implantes</option>
-                <option value="gerais">Itens gerais</option>
-              </select>
+              <label class="visually-hidden" for="gmlib-q">Buscar pelo nome</label>
+              <input class="input" id="gmlib-q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar por nome, tipo ou efeito">
             </div>
-            <div class="field">
-              <label class="field__label" for="gmlib-q">Buscar</label>
-              <input class="input" id="gmlib-q" type="search" autocomplete="off" placeholder="Nome, tipo, dano ou efeito">
-            </div>
+            <label class="check"><input type="checkbox" id="gmlib-fav"><span>Só favoritos</span></label>
           </div>
           <p class="block__hint" id="gmlib-hint" role="status"></p>
           <ul class="rows" id="gmlib-list"></ul>
@@ -1193,10 +1185,10 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="pericias.js?v=231"></script>
-  <script src="regras.js?v=231"></script>
-  <script src="items.js?v=231"></script>
-  <script src="pixelart.js?v=231"></script>
-  <script src="app.js?v=231"></script>
+  <script src="pericias.js?v=232"></script>
+  <script src="regras.js?v=232"></script>
+  <script src="items.js?v=232"></script>
+  <script src="pixelart.js?v=232"></script>
+  <script src="app.js?v=232"></script>
 </body>
 </html>
