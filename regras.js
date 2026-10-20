@@ -921,7 +921,7 @@ window.VORTEX_REGRAS = {
 
         ['h2', 'Granadas'],
         ['p', 'Granadas são **consumíveis** de empunhadura **Saque**: sacar uma é grátis uma vez por turno, e cada uma é usada uma vez.'],
-        ['p', 'Arremessar uma granada funciona como um **ataque normal** (ação padrão, 2d6 + Precisão + Mira), com um teste só contra a Defesa de cada um que está na área. Em vez de dados de dano, a granada tem um **multiplicador de dano fixo**:'],
+        ['p', 'Toda granada tem **alcance curto** de arremesso. Arremessar uma granada funciona como um **ataque normal** (ação padrão, 2d6 + Precisão + Mira), com um teste só contra a Defesa de cada um que está na área. Em vez de dados de dano, a granada tem um **multiplicador de dano fixo**:'],
         ['formula', 'Dano da granada', '(ataque – Defesa do alvo, mínimo 1) × multiplicador da granada'],
         ['example', 'Uma Acid Bloom (×2) com ataque 11 contra Defesa 8 causa (11 – 8) × 2 = 6 de dano. Contra Defesa 12, é um raspão: 1 × 2 = 2.'],
         ['p', 'Os efeitos da granada (Ofuscado, corrosão, fumaça...) valem para quem for atingido. Granadas sem multiplicador só têm o efeito.'],

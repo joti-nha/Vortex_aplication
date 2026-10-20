@@ -9403,7 +9403,7 @@ const FIREBASE_CONFIG = {
       if (v.nucleo === 'Sim') add('Núcleo', '+' + num(v.capacidade));
     }
     if (i.kind === 'nucleo') add('Capacidade', v.capacidade);
-    if (i.kind === 'granada') { add('Multiplicador de dano', grenMult(i) ? '×' + grenMult(i) : 'só o efeito'); add('Área', v.area); add('Ataque', 'Precisão + Mira'); add('Efeito', v.efeito); }
+    if (i.kind === 'granada') { add('Multiplicador de dano', grenMult(i) ? '×' + grenMult(i) : 'só o efeito'); add('Área', v.area); add('Alcance', 'Curto'); add('Ataque', 'Precisão + Mira'); add('Efeito', v.efeito); }
     if (i.kind === 'escudo-energetico') add('Escudo', v.escudo ? '+' + num(v.escudo) : '');
     if (isBackpack(i)) add('Mochila', bagRate(v) ? 'A cada ' + bagRule(v).cada + ' da sua Carga, +' + bagRule(v).ganho + ' de carga' : '');
     if (i.kind === 'protese-modulo') { add('Classe', v.classe || 'Prótese'); add('Tipo', [v.tipo, ccOf(i) + ' CC'].filter(Boolean).join(' · ')); }
@@ -11154,6 +11154,7 @@ const FIREBASE_CONFIG = {
 
   /* Ação de ataque (fica na campanha, no painel de cada personagem seu).
      st guarda as escolhas: { uid, mode, shots, mod }. onRoll recebe o teste pronto. */
+  const hasAdaptive = (w) => Boolean(w && w.slots && (w.slots.mods || []).some((m) => m && (m.id === 'of-mod-nucleo-adaptativo' || nameKey(m.name) === nameKey('Núcleo adaptativo'))));
   function attackBuilder(c, st, onRoll, idp) {
     const s = c.sheet;
     const m = compute(c);
@@ -11231,6 +11232,17 @@ const FIREBASE_CONFIG = {
         dSel.value = st.dist || '';
         dSel.addEventListener('change', () => { st.dist = dSel.value; draw(); });
         fields.push(field('dist', 'Distância do alvo', dSel));
+      }
+      // Núcleo adaptativo: uma vez por turno, escolhe o tipo de dano da arma (depois de atacar, fica até o próximo turno)
+      if (hasAdaptive(weapon)) {
+        const used = st.adaptUsed !== undefined && st.adaptUsed === sceneRound() && sceneRound() > 0;
+        const aSel = h('select', 'input');
+        [['', 'O da arma (' + (weapon.values.dano || 'sem tipo') + ')']].concat((ITEM_DATA.tiposDano || []).map((x) => [x, x])).forEach((o) => { const op = h('option', '', o[1]); op.value = o[0]; aSel.append(op); });
+        aSel.value = st.adaptType || '';
+        aSel.disabled = used;
+        if (used) aSel.title = 'Núcleo adaptativo: o tipo já foi escolhido neste turno.';
+        aSel.addEventListener('change', () => { st.adaptType = aSel.value; draw(); });
+        fields.push(field('adapt', 'Tipo de dano (Núcleo adaptativo' + (used ? ', já escolhido neste turno' : '') + ')', aSel));
       }
       fields.push(field('dice', 'Dados', diceSelect(st, draw)));
       fields.push(field('mod', 'Outro modificador', modIn));
@@ -14190,7 +14202,7 @@ const FIREBASE_CONFIG = {
       const t = build();
       const field = (id, label, control) => { control.id = 'gr-' + id; const l = h('label', 'field__label', label); l.htmlFor = control.id; return h('div', 'field', l, control); };
       const dSel = h('select', 'input');
-      DISTANCES.filter((d) => d.id !== 'adj').forEach((d) => { const o = h('option', '', d.id ? d.label : 'Dentro do alcance da granada'); o.value = d.id; dSel.append(o); });
+      DISTANCES.filter((d) => d.id !== 'adj').forEach((d) => { const o = h('option', '', d.id ? d.label : 'Dentro do alcance curto'); o.value = d.id; dSel.append(o); });
       dSel.value = st.dist || '';
       dSel.addEventListener('change', () => { st.dist = dSel.value; draw(); });
       const mod = h('input', 'input');
@@ -14203,7 +14215,7 @@ const FIREBASE_CONFIG = {
       go.disabled = !valid.length;
       go.addEventListener('click', () => startAim({ label: 'Granada: ' + g.name, valid: valid.map((x) => x.id), max: valid.length, each: true, word: 'alvo',
         pick: (x) => throwIt([x.id]), confirm: (shots) => throwIt(Object.keys(shots)) }));
-      const info = [k ? 'dano: (ataque – Defesa, mínimo 1) × ' + k : 'sem multiplicador: só o efeito em quem for atingido', g.values.dano, g.values.area ? 'área ' + g.values.area : '', g.values.alcance ? 'alcance ' + g.values.alcance : '', g.values.efeito].filter(Boolean).join(' · ');
+      const info = [k ? 'dano: (ataque – Defesa, mínimo 1) × ' + k : 'sem multiplicador: só o efeito em quem for atingido', g.values.dano, g.values.area ? 'área ' + g.values.area : '', 'alcance curto', g.values.efeito].filter(Boolean).join(' · ');
       box.replaceChildren(h('div', 'attack__fields', field('dice', 'Dados', diceSelect(st, draw)), field('dist', 'Distância', dSel), field('mod', 'Modificador', mod)),
         h('div', 'attack__go', go, h('span', 'attack__info', info)));
     };
@@ -15250,6 +15262,10 @@ const FIREBASE_CONFIG = {
     } else {
       weapon = weaponsOf(who.c.sheet).find((w) => w.uid === st.uid) || null;
       types = weapon ? splitTypes(weapon.values.dano) : ['Contundente'];
+      if (hasAdaptive(weapon)) { // Núcleo adaptativo: o tipo escolhido vale para o turno todo
+        if (st.adaptType) types = [st.adaptType];
+        st.adaptUsed = sceneRound();
+      }
       // sem proficiência, a arma corpo a corpo perde as propriedades do tipo
       const prop = weapon && (weapon.kind !== 'arma-melee' || isProficient(who.c.sheet, weapon));
       if (prop && weapon.typeId === 'marreta') effective = 'blindagem';

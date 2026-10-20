@@ -270,8 +270,8 @@ window.VORTEX_ITEMS = {
     },
     {
       id: 'granada', title: 'Granada', group: 'Armas', inventory: true, image: true,
-      hint: 'Consumível, de saque. Arremessar é um ataque normal (2d6 + Precisão + Mira) contra a Defesa de cada um na área; o dano é o de sempre (ataque – Defesa) vezes o multiplicador da granada, em vez de dados. Cada granada é usada uma vez.',
-      defaults: { empunhadura: 'Saque', carga: '0.25', tipoUso: 'Consumível' },
+      hint: 'Consumível, de saque. Arremessar é um ataque normal (2d6 + Precisão + Mira) contra a Defesa de cada um na área; o dano é o de sempre (ataque – Defesa) vezes o multiplicador da granada, em vez de dados. Cada granada é usada uma vez e todas têm alcance curto de arremesso.',
+      defaults: { empunhadura: 'Saque', carga: '0.25', tipoUso: 'Consumível', alcance: 'Curto' },
       fields: [
         { key: 'nome', label: 'Nome do item', kind: 'text', big: true },
         { key: 'fabricante', label: 'Criadora / companhia / corporação (opcional)', kind: 'select', options: 'fabricantes', blank: 'Nenhuma' },
@@ -280,7 +280,7 @@ window.VORTEX_ITEMS = {
         { key: 'dano', label: 'Tipo de dano', kind: 'select', options: 'tiposDano', blank: 'Sem dano' },
         { key: 'mult', label: 'Multiplicador de dano', kind: 'number', min: 0, step: 1, hint: 'O dano é ataque – Defesa (mínimo 1) vezes este número. 0 ou vazio: só o efeito, sem dano.' },
         { key: 'area', label: 'Área', kind: 'text', placeholder: 'Ex.: Raio 3 m' },
-        { key: 'alcance', label: 'Alcance do arremesso', kind: 'select', options: 'alcances' },
+        { key: 'alcance', hidden: true }, // toda granada: alcance curto de arremesso
         { key: 'tipoUso', hidden: true }, { key: 'danoFixo', hidden: true }, { key: 'cd', hidden: true },
         { key: 'empunhadura', label: 'Empunhadura', kind: 'select', options: 'empunhaduras' },
         { key: 'carga', label: 'Carga', kind: 'number', min: 0, step: 0.25 },
@@ -604,7 +604,7 @@ window.VORTEX_ITEMS = {
     { id: 'of-acc-empunhadura-emborrachada', kind: 'acessorio', typeId: 'arma-melee', name: 'Empunhadura emborrachada', values: { posicao: 'Empunhadura', efeito: 'Ganho nos testes para resistir a ser desarmado.' } },
     { id: 'of-acc-cabo-laco', kind: 'acessorio', typeId: 'arma-melee', name: 'Cabo com laço', values: { posicao: 'Cabo', efeito: 'Sacar ou guardar esta arma é ação livre, uma vez por turno.' } },
     { id: 'of-mod-lamina-vibratoria', kind: 'mod-arma', name: 'Lâmina vibratória', values: { raridade: 'Rara', para: 'Arma corpo a corpo', tipo: 'Vibração', efeito: 'Uma vez por cena, um golpe que acertar ignora a Blindagem do alvo (o dano vai direto para a próxima camada).' } },
-    { id: 'of-mod-nucleo-adaptativo', kind: 'mod-arma', name: 'Núcleo adaptativo', values: { raridade: 'Lendária', para: 'Qualquer arma', tipo: 'Adaptativo', efeito: 'Uma vez por cena, antes de atacar, escolha o tipo de dano do ataque entre os tipos de dano do sistema.' } },
+    { id: 'of-mod-nucleo-adaptativo', kind: 'mod-arma', name: 'Núcleo adaptativo', values: { raridade: 'Lendária', para: 'Qualquer arma', tipo: 'Adaptativo', efeito: 'Uma vez por turno, escolha o tipo de dano da arma entre os tipos de dano do sistema. O tipo escolhido vale até o seu próximo turno.' } },
     { id: 'of-prop-reforcada', kind: 'propriedade', name: 'Reforçada', values: { para: 'Qualquer item', efeito: 'Não quebra nem se danifica por desgaste comum, queda ou efeitos de ambiente.' } },
     { id: 'of-prop-ricochete', kind: 'propriedade', name: 'Ricochete', values: { para: 'Arma', efeito: 'Quando um ataque errar o alvo por 1, ele acerta outro alvo adjacente a esse, à sua escolha (com o mesmo resultado).' } },
     { id: 'of-prop-isolamento', kind: 'propriedade', name: 'Isolamento elétrico', values: { para: 'Armadura', efeito: 'Enquanto vestida, efeitos de PEM não desativam seus Escudos.' } },
@@ -961,11 +961,11 @@ window.VORTEX_ITEMS = {
     ['Blush Smoke', 'Comum', '', 0, 'Raio 6 m', 'Curto', 0.25, '50', 'Fumaça rosa: a área fica obscurecida por 2 rodadas. Quem está dentro dela tem meia cobertura contra ataques à distância.'],
     ['Kiss Flash', 'Incomum', '', 0, 'Raio 6 m', 'Curto', 0.25, '200', 'Clarão rosa. Quem for atingido fica Ofuscado até o fim do próximo turno dele.'],
     ['Thermite Lipstick', 'Incomum', 'Fogo', 1, 'Raio 3 m', 'Curto', 0.25, '250', 'Tem formato de batom. A área queima por 2 rodadas: quem começar o turno nela sofre 1d6 de fogo.'],
-    ['Acid Bloom', 'Rara', 'Ácido/químico', 2, 'Raio 3 m', 'Médio', 0.25, '450', 'Abre como uma flor. Quem for atingido fica com –1 de Armadura até o fim da cena (corrosão).'],
+    ['Acid Bloom', 'Rara', 'Ácido/químico', 2, 'Raio 3 m', 'Curto', 0.25, '450', 'Abre como uma flor. Quem for atingido fica com –1 de Armadura até o fim da cena (corrosão).'],
     ['Magnet Heart', 'Rara', 'Impacto', 1, 'Raio 6 m', 'Curto', 0.5, '500', 'Núcleo gravitacional: antes do dano, puxa as criaturas da área 3 m em direção ao centro.'],
-    ['Black Rose', 'Epica', 'Explosivo', 2, 'Raio 6 m', 'Médio', 0.5, '900', 'Explode duas vezes: a segunda explosão (um novo ataque na mesma área, dano ×1) acontece no começo da próxima rodada.'],
-    ['Pink Nova', 'Epica', 'Elétrico', 2, 'Raio 6 m', 'Médio', 0.5, '1.000', 'Pulso eletromagnético. Quem for atingido fica com os módulos inativos até o fim do próximo turno dele.'],
-    ['Pinger Finale', 'Lendária', 'Explosivo', 3, 'Raio 9 m', 'Médio', 1, '3.000',
+    ['Black Rose', 'Epica', 'Explosivo', 2, 'Raio 6 m', 'Curto', 0.5, '900', 'Explode duas vezes: a segunda explosão (um novo ataque na mesma área, dano ×1) acontece no começo da próxima rodada.'],
+    ['Pink Nova', 'Epica', 'Elétrico', 2, 'Raio 6 m', 'Curto', 0.5, '1.000', 'Pulso eletromagnético. Quem for atingido fica com os módulos inativos até o fim do próximo turno dele.'],
+    ['Pinger Finale', 'Lendária', 'Explosivo', 3, 'Raio 9 m', 'Curto', 1, '3.000',
       'Especial: Grand Finale\nUm show de fogos rosa e preto. Quem for atingido também fica Atordoado. Você escolhe até [Precisão] criaturas na área que não são afetadas.']
   ].forEach(function (a) {
     cat.push({
