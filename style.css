@@ -4092,3 +4092,9 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .npca__tips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.4rem 0; }
 .npca__tips-label { font-size: var(--t-s); color: var(--nevoa-2); }
 .npca__tip small { color: var(--nevoa-2); font-weight: 400; }
+/* Características raciais: lista de espécimes como resultado de busca; tocar abre as habilidades */
+.racial__results { list-style: none; margin: 0.4rem 0 0; padding: 0; display: grid; gap: 0.35rem; }
+.racial__result { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; width: 100%; min-height: 44px; padding: 0.55rem 0.8rem; border: 1px solid var(--linha); border-radius: var(--r-s); background: var(--casco-2); color: var(--nevoa); font: 600 0.95rem var(--fonte-ui); text-align: left; cursor: pointer; }
+.racial__result span { font-size: 0.8rem; font-weight: 500; color: var(--nevoa-2); }
+.racial__result:hover, .racial__result:focus-visible { border-color: var(--ambar); }
+.racial__back { align-self: flex-start; margin: 0 0 0.3rem; }

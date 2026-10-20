@@ -10870,7 +10870,6 @@ const FIREBASE_CONFIG = {
   }
   let racialDlg = null;
   let racialPick = '';
-  let racialOpen = false; // lista de espécimes expandida
   const racialTaken = (s, esp) => racialLines(esp.values).filter((t) => s.powers.some((p) => p.id === racialId(esp, t))).length;
   const racialCount = (s) => s.powers.filter((p) => /^racial:/.test(p.id || '')).length;
   async function openRacial(target) {
@@ -10878,6 +10877,7 @@ const FIREBASE_CONFIG = {
     if (!ch) return;
     const mode = racialMode(ch.sheet);
     if (!mode) { toast('Características raciais de outros espécimes: o Etheriano compra com UP e o Android escolhe uma de graça.'); return; }
+    racialPick = ''; // abre sempre na lista de espécimes
     if (!racialDlg) { racialDlg = h('dialog', 'dialog pickchar racial'); racialDlg.setAttribute('aria-labelledby', 'racial-title'); document.body.append(racialDlg); }
     const dlg = racialDlg;
     let list = BUILTINS.filter((e) => e.kind === 'especime' && !e.secreto);
@@ -10893,31 +10893,27 @@ const FIREBASE_CONFIG = {
     const qLab = h('label', 'visually-hidden', 'Buscar espécime');
     qLab.htmlFor = 'racial-q';
     const content = h('div', 'racial__content');
+    const search = h('div', 'field racial__search', qLab, q);
     const draw = () => {
       const s = ch.sheet;
       const free = freeUpOf(ch);
-      const shown = rankSearch(list, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
-      if (!shown.some((e) => e.id === racialPick)) racialPick = shown[0] ? shown[0].id : '';
-      const esp = shown.find((e) => e.id === racialPick);
-      // com muitos espécimes, mostra só os primeiros (e o escolhido); o resto abre no "Mostrar todos"
-      const LIMIT = 6;
-      const cut = !racialOpen && !q.value && shown.length > LIMIT + 1;
-      const visible = cut ? shown.slice(0, LIMIT).concat(esp && shown.indexOf(esp) >= LIMIT ? [esp] : []) : shown;
-      const more = shown.length > LIMIT + 1 && !q.value ? h('button', 'link-btn racial__more', racialOpen ? 'Mostrar menos' : 'Mostrar todos (' + shown.length + ')') : null;
-      if (more) {
-        more.type = 'button';
-        more.setAttribute('aria-expanded', String(racialOpen));
-        more.dataset.fid = 'racial-more';
-        more.addEventListener('click', () => { racialOpen = !racialOpen; draw(); const m = $('[data-fid="racial-more"]', content); if (m) m.focus(); });
+      const esp = list.find((e) => e.id === racialPick) || null;
+      search.hidden = Boolean(esp); // dentro de um espécime, a busca dá lugar ao botão de voltar
+      const counter = mode === 'inspirado' ? h('p', 'racial__free', 'Escolhida: ', h('strong', '', racialCount(s) + ' de ' + RACIAL_FREE)) : h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free)));
+      if (!esp) { // lista de espécimes, como uma busca: tocar num abre as habilidades raciais dele
+        const shown = rankSearch(list, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
+        content.replaceChildren(counter, shown.length ? h('ul', 'racial__results', ...shown.map((e) => {
+          const n = racialLines(e.values).length;
+          const taken = racialTaken(s, e);
+          const b = h('button', 'racial__result', h('strong', '', e.name), h('span', '', plural(n, 'habilidade racial', 'habilidades raciais') + (taken ? ' · ' + taken + ' na ficha' : '')));
+          b.type = 'button';
+          b.dataset.fid = 'racial-esp-' + nameKey(e.name).replace(/\s+/g, '-');
+          b.addEventListener('click', () => { racialPick = e.id; draw(); const k = $('.racial__back', content); if (k) k.focus(); });
+          return h('li', '', b);
+        })) : h('p', 'empty', q.value ? 'Nenhum espécime encontrado.' : 'Nenhum espécime com características raciais.'));
+        return;
       }
-      const races = h('div', 'racial__races', ...visible.map((e) => {
-        const b = h('button', 'racial__race' + (e.id === racialPick ? ' is-on' : ''), entryIcon(e), h('span', '', e.name));
-        b.type = 'button';
-        b.setAttribute('aria-pressed', String(e.id === racialPick));
-        b.addEventListener('click', () => { racialPick = e.id; draw(); });
-        return b;
-      }));
-      const traits = esp ? racialLines(esp.values).map((t) => {
+      const traits = racialLines(esp.values).map((t) => {
         const id = racialId(esp, t);
         const have = s.powers.findIndex((p) => p.id === id);
         const gift = mode === 'inspirado';
@@ -10935,15 +10931,14 @@ const FIREBASE_CONFIG = {
         });
         return h('li', 'pickchar__card racial__trait' + (have >= 0 ? ' is-here' : ''),
           h('span', 'pickchar__info', h('strong', 'pickchar__name', t.name), h('span', 'pickchar__meta', gift ? 'grátis' : t.cost + ' UP'), t.text ? h('span', 'racial__text', t.text) : null), b);
-      }) : [];
-      const taken = esp ? racialTaken(s, esp) : 0;
-      content.replaceChildren(...[ // replaceChildren escreveria "null" na tela para o botão que não existe
-        mode === 'inspirado' ? h('p', 'racial__free', 'Escolhida: ', h('strong', '', racialCount(s) + ' de ' + RACIAL_FREE)) : h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free))),
-        races,
-        more,
-        esp ? h('h3', 'pickchar__sub', esp.name) : h('p', 'empty', q.value ? 'Nenhum espécime com esse nome.' : 'Nenhum espécime com características raciais.'),
-        esp && taken ? h('p', 'field__hint racial__count', 'Deste espécime: ' + plural(taken, 'habilidade', 'habilidades')) : null,
-        h('ul', 'pickchar__list', ...traits)].filter(Boolean));
+      });
+      const taken = racialTaken(s, esp);
+      const back = h('button', 'link-btn racial__back', '◀ Espécimes');
+      back.type = 'button';
+      back.addEventListener('click', () => { racialPick = ''; draw(); q.focus(); });
+      content.replaceChildren(...[back, counter, h('h3', 'pickchar__sub', esp.name),
+        taken ? h('p', 'field__hint racial__count', 'Deste espécime: ' + plural(taken, 'habilidade', 'habilidades')) : null,
+        h('ul', 'pickchar__list', ...traits)].filter(Boolean)); // replaceChildren escreveria "null" na tela
     };
     q.addEventListener('input', draw);
     const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
@@ -10955,8 +10950,8 @@ const FIREBASE_CONFIG = {
       h('p', 'racial__only', racialMode(ch.sheet) === 'inspirado' ? 'Android: Inspirado em humanoides' : 'Etheriano: Dom do Éter'),
       h('p', 'field__hint', racialMode(ch.sheet) === 'inspirado'
         ? 'Escolha de graça uma habilidade racial de qualquer espécime, inclusive dos criados na Oficina. Se ela der UP, dá só 1 UP.'
-        : 'Compre com UP habilidades raciais de qualquer espécime, inclusive dos criados na Oficina. Busque ou toque num espécime para ver as habilidades dele.'),
-      h('div', 'field racial__search', qLab, q),
+        : 'Compre com UP habilidades raciais de qualquer espécime, inclusive dos criados na Oficina. Busque um espécime e toque nele para ver as habilidades raciais.'),
+      search,
       content,
       h('div', 'dialog__actions', close)));
     draw();
