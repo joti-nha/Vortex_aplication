@@ -3264,6 +3264,12 @@ html, body { max-width: 100%; overflow-x: clip; }
   .picker .lib-row { justify-content: flex-end; gap: 0.4rem 0.6rem; }
   .picker .row__title { overflow-wrap: break-word; }
 }
+/* Oficina e demais listas do banco no celular: o texto usa a linha inteira e os botões descem para baixo dele */
+@media (max-width: 560px) {
+  .lib-row .row__open { flex-basis: 100%; }
+  .lib-row { justify-content: flex-end; gap: 0.2rem 0.6rem; padding-bottom: 0.4rem; }
+  .lib-row .row__title, .lib-row .row__text, .lib-row .row__meta { overflow-wrap: break-word; }
+}
 /* caixa com botãozinho de opções (sexo): o texto continua livre */
 .pick-wrap { position: relative; }
 .pick-wrap__row { display: flex; gap: 0.4rem; }

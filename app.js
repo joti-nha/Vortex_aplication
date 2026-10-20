@@ -3092,7 +3092,7 @@ const FIREBASE_CONFIG = {
     const lb = entryLore(e);
     if (lb) title.append(' ', lb);
     const main = h('span', 'row__main', title, h('span', 'row__meta', entryMeta(e)));
-    const text = entryText(e);
+    const text = String(entryText(e) || '').split(/\s*\n+\s*/).filter(Boolean).map((l) => (/[.:!?;]$/.test(l) ? l : l + '.')).join(' '); // linhas viram frases no resumo
     if (text) main.append(h('span', 'row__text', text));
     const open = h('span', 'row__open lib-row__open', entryIcon(e), main);
     open.tabIndex = 0;
@@ -4325,7 +4325,10 @@ const FIREBASE_CONFIG = {
       ta.maxLength = 1200;
       ta.value = value || '';
       if (field.placeholder) ta.placeholder = field.placeholder;
-      ta.addEventListener('input', () => onChange(ta.value));
+      // o bloco cresce com o texto (sem barra de rolagem dentro do campo)
+      const fit = () => { ta.style.height = 'auto'; if (ta.scrollHeight) ta.style.height = ta.scrollHeight + 2 + 'px'; };
+      ta.addEventListener('input', () => { onChange(ta.value); fit(); });
+      requestAnimationFrame(fit);
       return ta;
     }
     const inp = h('input', 'input');
