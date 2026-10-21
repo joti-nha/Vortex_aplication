@@ -4107,3 +4107,11 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .racial__back { align-self: flex-start; margin: 0 0 0.3rem; }
 .fsec__toggle { grid-column: 1 / -1; justify-self: start; }
 .fsec__more[hidden] { display: none; }
+/* Aba Tec (Tecnomancia) */
+.tec__modes { margin: 0 0 0.6rem; }
+.tec__group { margin-top: 0.9rem; }
+.tec__head { margin-bottom: 0.2rem; }
+.tec__head h3 { margin: 0; }
+.tec__over { color: var(--erro); }
+.tec__std { margin-top: 1rem; }
+.tec__imps { margin: 0.4rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }

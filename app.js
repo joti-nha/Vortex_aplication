@@ -8557,6 +8557,7 @@ const FIREBASE_CONFIG = {
     renderGuide(m);
     renderSpeciesLink();
     renderPowers(m);
+    renderTec();
     renderPerdas();
     renderInventory(m);
     renderAlerts(m);
@@ -8585,9 +8586,11 @@ const FIREBASE_CONFIG = {
     try { localStorage.setItem(SHEET_TAB_KEY, panel.id); } catch (e) { /* só nesta visita */ }
     if (panel.id === 'spanel-progressao') requestAnimationFrame(progTrackScroll);
   }
-  $$('.sheet-tab[data-stab]').forEach((tab, i, all) => {
+  $$('.sheet-tab[data-stab]').forEach((tab) => {
     tab.addEventListener('click', () => showSheetTab($('#' + tab.getAttribute('aria-controls'))));
     tab.addEventListener('keydown', (ev) => {
+      const all = $$('.sheet-tab[data-stab]').filter((t) => !t.hidden); // a aba Tec só aparece com Tecnomancia
+      const i = all.indexOf(tab);
       const k = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
       if (ev.key === 'Home' || ev.key === 'End') { ev.preventDefault(); const t2 = all[ev.key === 'Home' ? 0 : all.length - 1]; showSheetTab($('#' + t2.getAttribute('aria-controls')), true); return; }
       if (!k) return;
@@ -9293,6 +9296,100 @@ const FIREBASE_CONFIG = {
     }) : [h('span', 'pw-opt__text', 'Escolha a companhia para ver os catálogos dela.')];
     return h('span', 'pw-sub', h('span', 'pw-sub__title', 'Patrocínio: uma companhia e um catálogo por nível de Tecnomancia'),
       h('span', 'pw-opt' + (co ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Companhia'), coSel)), ...rows);
+  }
+
+  /* Aba Tec: quem tem Tecnomancia vê os modos, os limites e as tecnologias conhecidas.
+     Engenheiro: escolhe os componentes de cada lista (atributo chave + Operações por nível que pegou a lista).
+     Patrocinado: conhece os catálogos inteiros, então a lista sai pronta. */
+  const TECNO_LIST_KINDS = {
+    'Poderes': ['poder'],
+    'Equipamento': ['arma-melee', 'arma-fogo', 'granada', 'municao', 'armadura', 'vestivel', 'escudo-energetico', 'nucleo', 'item-geral'],
+    'Propriedades': ['propriedade'],
+    'Mods': ['mod-arma'],
+    'Próteses e módulos': ['protese-modulo']
+  };
+  const tecSnap = (e) => ({ id: e.id, kind: e.kind, typeId: e.typeId || '', name: e.name, values: Object.assign({}, e.values || {}), oficial: Boolean(e.oficial) });
+  function tecnoSponsorKnown(p, catId) {
+    const co = p.companhia;
+    if (!co || !catId) return [];
+    const [kind, alvo] = catId.split(':');
+    if (!alvo) return BUILTINS.filter((e) => e.kind === kind && (e.values || {}).fabricante === co);
+    const fogo = /fogo/.test(alvo);
+    return BUILTINS.filter((e) => {
+      if (e.kind !== kind) return false;
+      const para = String((e.values || {}).para || '');
+      return !para || /qualquer|^arma$/i.test(para) || (fogo ? /fogo/i.test(para) : /corpo/i.test(para));
+    });
+  }
+  function tecRows(list, onRemove) {
+    return h('ul', 'rows tec__list', ...list.map((e, j) => libRow(e, onRemove ? [{ label: 'Tirar', cls: 'btn--ghost', onClick: () => onRemove(j) }] : [])));
+  }
+  function renderTec() {
+    const s = sheetChar.sheet;
+    const p = s.powers.find((x) => x.id === 'of-pod-tecnomancia');
+    const tab = $('#stab-tec');
+    tab.hidden = !p;
+    if (!p) {
+      if (tab.getAttribute('aria-selected') === 'true') showSheetTab($('#spanel-poderes'));
+      $('#tec-body').replaceChildren();
+      return;
+    }
+    const lvl = tecnoLevel(p);
+    const tipo = styleOf(p);
+    const ops = skillOf(s, 'operacoes');
+    const modes = powerPicks(p);
+    const out = [h('p', 'block__hint', 'Nível de Tecnomancia ' + lvl + (tipo ? ' · ' + tipo.name : '') + ' · Operações ' + ops + '. Um efeito ativo por modo de ação; até ' + plural(lvl, 'implemento especial', 'implementos especiais') + ' por operação.'),
+      h('p', 'tec__modes', h('strong', '', 'Modos de ação: '), modes.length ? modes.join(', ') : 'nenhum ainda (marque as opções do poder na aba Poderes).')];
+    if (!lvl || !tipo) {
+      out.push(h('p', 'empty', !lvl ? 'Compre um nível de Tecnomancia (um modo de ação) na aba Poderes.' : 'Escolha o tipo de tecnomante (Engenheiro ou Patrocinado) na aba Poderes.'));
+    } else if (tipo.name === 'Engenheiro') {
+      const picks = tecnoPicks(p);
+      const chaves = p.chaves && typeof p.chaves === 'object' ? p.chaves : {};
+      const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
+      const lists = Array.from(new Set(picks.filter(Boolean)));
+      if (!lists.length) out.push(h('p', 'empty', 'Escolha a lista de cada nível de Tecnomancia na aba Poderes.'));
+      lists.forEach((name) => {
+        const times = picks.filter((x) => x === name).length;
+        const key = TECNO_CHAVES.find((c) => c[0] === chaves[name]) || null;
+        const cap = key ? Math.max(0, (attrOf(s, key[0]) + ops) * times) : 0;
+        const have = Array.isArray(known[name]) ? known[name] : [];
+        const fidKey = nameKey(name).replace(/\s+/g, '-');
+        const add = h('button', 'btn btn--primary btn--sm', 'Escolher componentes');
+        add.type = 'button';
+        add.dataset.fid = 'tec-add-' + fidKey;
+        add.disabled = !key || have.length >= cap;
+        add.addEventListener('click', async () => {
+          const kinds = TECNO_LIST_KINDS[name] || [];
+          const ids = new Set(have.map((x) => x.id));
+          const picked = await openPickerMany({ title: name + ': componentes conhecidos', kinds, filter: (x) => kinds.indexOf(x.kind) >= 0 && !ids.has(x.id) });
+          if (!picked.length) return;
+          const room = cap - have.length;
+          const got = picked.slice(0, Math.max(0, room)).map(tecSnap);
+          p.conhecidos = Object.assign({}, known, { [name]: have.concat(got) });
+          if (picked.length > got.length) toast('Cabem só ' + plural(cap, 'componente', 'componentes') + ' em ' + name + '. Ficaram os ' + got.length + ' primeiros.');
+          changed();
+        });
+        const head = h('div', 'block__head tec__head', h('h3', 'pickchar__sub', name), add);
+        const info = !key ? 'Escolha o atributo chave desta lista na aba Poderes.'
+          : 'Conhecidos: ' + have.length + ' de ' + cap + ' (' + (times > 1 ? times + ' × ' : '') + '(' + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + ')). Até ' + plural(attrOf(s, key[0]), 'implemento', 'implementos') + ' por operação.' + (have.length > cap ? ' Passou do limite: tire ' + (have.length - cap) + '.' : '');
+        out.push(h('section', 'tec__group', head, h('p', 'field__hint' + (have.length > cap ? ' tec__over' : ''), info),
+          have.length ? tecRows(have, (j) => { const l = have.slice(); l.splice(j, 1); p.conhecidos = Object.assign({}, known, { [name]: l }); changed(); }) : h('p', 'empty', 'Nenhum componente escolhido ainda.')));
+      });
+    } else if (tipo.name === 'Patrocinado') {
+      const cats = tecnoCatalogs(p.companhia);
+      const cur = (Array.isArray(p.catalogos) ? p.catalogos : []).slice(0, lvl).filter((c) => cats.some((x) => x.id === c));
+      if (!p.companhia || !cur.length) out.push(h('p', 'empty', 'Escolha a companhia e os catálogos na aba Poderes.'));
+      cur.forEach((c) => {
+        const list = tecnoSponsorKnown(p, c);
+        const label = (cats.find((x) => x.id === c) || {}).label || c;
+        out.push(h('section', 'tec__group', h('h3', 'pickchar__sub', label), h('p', 'field__hint', 'Conhece o catálogo inteiro: ' + plural(list.length, 'componente', 'componentes') + '.'),
+          list.length ? tecRows(list) : h('p', 'empty', 'Nada neste catálogo ainda.')));
+      });
+    }
+    const imps = (window.VORTEX_REGRAS || {}).tecnoImplementos || [];
+    if (imps.length) out.push(h('details', 'tec__std', h('summary', 'pw-sub__title', 'Implementos padrão (todo tecnomante conhece)'),
+      h('ul', 'tec__imps', ...imps.map((x) => h('li', '', h('strong', '', x[0] + ' (' + x[1] + '): '), x[2])))));
+    $('#tec-body').replaceChildren(...out);
   }
 
   function styleRow(s, p, e, fid) {

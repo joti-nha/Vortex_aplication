@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- ?v=N: troque o número a cada versão para o navegador baixar os arquivos novos -->
-  <link rel="stylesheet" href="style.css?v=232">
+  <link rel="stylesheet" href="style.css?v=233">
 </head>
 <body>
   <!-- Desenhos reutilizados (espiral da marca e do fundo do início) -->
@@ -494,6 +494,7 @@
         <button class="sheet-tab" type="button" role="tab" id="stab-combate" data-stab="combate" aria-controls="spanel-combate" aria-selected="true">Combate</button>
         <button class="sheet-tab" type="button" role="tab" id="stab-pericias" data-stab="pericias" aria-controls="spanel-pericias" aria-selected="false" tabindex="-1">Perícias</button>
         <button class="sheet-tab" type="button" role="tab" id="stab-poderes" data-stab="poderes" aria-controls="spanel-poderes" aria-selected="false" tabindex="-1">Poderes</button>
+        <button class="sheet-tab" type="button" role="tab" id="stab-tec" data-stab="tec" aria-controls="spanel-tec" aria-selected="false" tabindex="-1" hidden>Tec</button>
         <button class="sheet-tab" type="button" role="tab" id="stab-inventario" data-stab="inventario" aria-controls="spanel-inventario" aria-selected="false" tabindex="-1">Inventário</button>
         <button class="sheet-tab" type="button" role="tab" id="stab-progressao" data-stab="progressao" aria-controls="spanel-progressao" aria-selected="false" tabindex="-1">Progressão</button>
         <button class="sheet-tab" type="button" role="tab" id="stab-descricao" data-stab="descricao" aria-controls="spanel-descricao" aria-selected="false" tabindex="-1">Descrição</button>
@@ -533,6 +534,15 @@
         </div>
         <ul class="rows" id="perda-list"></ul>
         <p class="empty" id="perda-empty">Nenhuma perda. Cada uma dá +1 UP em troca de uma desvantagem.</p>
+      </section>
+      </div>
+
+      <div class="sheet-panel" id="spanel-tec" role="tabpanel" aria-labelledby="stab-tec" hidden>
+      <section class="block sheet-block" aria-labelledby="tec-title">
+        <div class="block__head">
+          <h2 class="block__title" id="tec-title">Tecnologias conhecidas</h2>
+        </div>
+        <div id="tec-body"></div>
       </section>
       </div>
 
@@ -1185,10 +1195,10 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="pericias.js?v=232"></script>
-  <script src="regras.js?v=232"></script>
-  <script src="items.js?v=232"></script>
-  <script src="pixelart.js?v=232"></script>
-  <script src="app.js?v=232"></script>
+  <script src="pericias.js?v=233"></script>
+  <script src="regras.js?v=233"></script>
+  <script src="items.js?v=233"></script>
+  <script src="pixelart.js?v=233"></script>
+  <script src="app.js?v=233"></script>
 </body>
 </html>
