@@ -4117,3 +4117,15 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .tec__imps { margin: 0.4rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }
 #tec-body > .pw-sub { display: grid; gap: 0.4rem; margin: 0.4rem 0 0.6rem; }
 .tec__bank { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.6rem 0 0; }
+/* Compra de nível de Tecnomancia em etapas */
+.tecwiz__trail { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.7rem; padding: 0; }
+.tecwiz__step { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 36px; padding: 0.2rem 0.7rem 0.2rem 0.3rem; border: 1px solid var(--linha-forte); border-radius: 999px; background: var(--casco-2); color: var(--nevoa-2); font: 600 0.85rem var(--fonte-ui); cursor: pointer; }
+.tecwiz__step:disabled { opacity: 0.5; cursor: default; }
+.tecwiz__step.is-done { color: var(--nevoa); }
+.tecwiz__step.is-on { border-color: var(--ambar); background: rgba(var(--ambar-rgb), 0.12); color: var(--nevoa); }
+.tecwiz__n { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--casco); font-size: 0.78rem; }
+.tecwiz__step.is-done .tecwiz__n { background: rgba(var(--ambar-rgb), 0.3); }
+.tecwiz__key { margin: 0.6rem 0 0; }
+.tecwiz__actions { justify-content: flex-end; }
+.tecwiz .tecwiz__actions { position: sticky; bottom: -1px; z-index: 1; margin-top: 1rem; padding: 0.7rem 0 0.2rem; background: var(--casco); border-top: 1px solid var(--linha); }
+.tecwiz__key { margin: 0.2rem 0 0.6rem; padding: 0.6rem 0.7rem; border: 1px solid var(--ambar); border-radius: var(--r-s); }

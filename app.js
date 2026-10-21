@@ -9170,7 +9170,7 @@ const FIREBASE_CONFIG = {
       }
       if (ups.length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Melhorias'), ...ups.map((u, k) => powerUpRow(p, u, i + '-' + k))));
       if (p.id === 'of-pod-luta') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Ataques por rodada: ' + lutaAttacks(s) + ' (Corpo ' + attrOf(s, 'corpo') + ' + perícia Luta ' + skillOf(s, 'luta') + ')')));
-      if (p.id === 'of-pod-tecnomancia') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Nível de Tecnomancia ' + tecnoLevel(p) + ': um efeito ativo por modo de ação · até ' + plural(tecnoLevel(p), 'implemento especial', 'implementos especiais') + ' por operação')));
+      if (p.id === 'of-pod-tecnomancia') main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', 'Nível de Tecnomancia ' + tecnoLevel(p) + ': um efeito ativo por modo de ação · até ' + plural(tecnoLevel(p), 'implemento especial', 'implementos especiais') + ' por operação ', tecLevelBtn(sheetChar, p, 'pw-tec-nivel-' + i))));
       if (powerStyles(p).length) main.append(h('span', 'pw-sub', h('span', 'pw-sub__title', styleLabel(p)), ...powerStyles(p).map((e, k) => styleRow(s, p, e, i + '-' + k))));
       if (p.id === 'of-pod-tecnomancia' && styleOf(p) && styleOf(p).name === 'Engenheiro' && tecnoLevel(p)) main.append(tecnoListRow(s, p, i));
       if (p.id === 'of-pod-tecnomancia' && styleOf(p) && styleOf(p).name === 'Patrocinado' && tecnoLevel(p)) main.append(tecnoSponsorRow(p, i));
@@ -9324,6 +9324,175 @@ const FIREBASE_CONFIG = {
   function tecRows(list, onRemove) {
     return h('ul', 'rows tec__list', ...list.map((e, j) => libRow(e, onRemove ? [{ label: 'Tirar', cls: 'btn--ghost', onClick: () => onRemove(j) }] : [])));
   }
+  /* Compra de um nível de Tecnomancia, em etapas com Voltar/Próximo: tipo de tecnomante (só na primeira compra),
+     modo de ação, depois a lista e o atributo chave (Engenheiro) ou a companhia e o tipo de catálogo (Patrocinado),
+     e por fim os componentes conhecidos da lista (Engenheiro). Nada muda na ficha até "Concluir". */
+  let tecWizDlg = null;
+  function tecLevelBtn(ch, p, fid) {
+    const b = h('button', 'link-btn pw-sub__more', tecnoLevel(p) >= powerOpts(p).length ? 'Nível máximo' : 'Comprar nível');
+    b.type = 'button';
+    b.dataset.fid = fid;
+    b.disabled = tecnoLevel(p) >= powerOpts(p).length;
+    b.addEventListener('click', () => openTecnoWizard(ch, p));
+    return b;
+  }
+  function openTecnoWizard(ch, cur) {
+    const e = BUILTINS.find((x) => x.id === 'of-pod-tecnomancia');
+    if (!e) return;
+    const s = ch.sheet;
+    const taken = cur ? powerPicks(cur) : [];
+    const modes = powerOpts(e).filter((o) => taken.indexOf(o.name) < 0);
+    if (!modes.length) { toast('Tecnomancia já está no nível máximo: todos os modos de ação foram comprados.'); return; }
+    if (!tecWizDlg) { tecWizDlg = h('dialog', 'dialog pickchar racial powopt tecwiz'); tecWizDlg.setAttribute('aria-labelledby', 'tecwiz-title'); document.body.append(tecWizDlg); }
+    const dlg = tecWizDlg;
+    const lvl = taken.length + 1;
+    const chaves = (cur && cur.chaves && typeof cur.chaves === 'object') ? cur.chaves : {};
+    const st = { tipo: cur ? cur.estilo || '' : '', modo: '', lista: '', chave: '', companhia: (cur && cur.companhia) || '', catalogo: '', comps: [] };
+    const fixedTipo = Boolean(cur && styleOf(cur));
+    const fixedCo = Boolean(st.companhia);
+    const usedCats = (cur && Array.isArray(cur.catalogos) ? cur.catalogos : []).slice(0, taken.length);
+    const ops = skillOf(s, 'operacoes');
+    const keyOf = () => chaves[st.lista] || st.chave;
+    const cap = () => (keyOf() ? Math.max(0, attrOf(s, keyOf()) + ops) : 0);
+    const steps = () => [
+      fixedTipo ? null : ['tipo', 'Tecnomante'],
+      ['modo', 'Modo de ação'],
+      ...(st.tipo === 'Patrocinado' ? [fixedCo ? null : ['companhia', 'Companhia'], ['catalogo', 'Tipo']] : [['lista', 'Lista'], ch.npc ? null : ['comp', 'Componentes']])
+    ].filter(Boolean);
+    let at = 0;
+    const ok = (id) => (id === 'tipo' ? Boolean(st.tipo) : id === 'modo' ? Boolean(st.modo) : id === 'lista' ? Boolean(st.lista && keyOf())
+      : id === 'companhia' ? Boolean(st.companhia) : id === 'catalogo' ? Boolean(st.catalogo) : true);
+    const card = (name, meta, text, on, onPick, fid, off) => {
+      const b = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Escolhido' : 'Escolher');
+      b.type = 'button';
+      b.dataset.fid = ('tecwiz-' + fid).replace(/\s+/g, '-');
+      b.disabled = Boolean(off);
+      b.setAttribute('aria-pressed', String(Boolean(on)));
+      b.addEventListener('click', () => { onPick(); draw(); });
+      return h('li', 'pickchar__card racial__trait' + (on ? ' is-here' : ''), h('span', 'pickchar__info', h('strong', 'pickchar__name', name), meta ? h('span', 'pickchar__meta', meta) : null, text ? h('span', 'racial__text', text) : null), b);
+    };
+    const body = h('div', 'racial__content');
+    const trail = h('ol', 'tecwiz__trail');
+    const back = h('button', 'btn btn--ghost btn--sm', '◀ Voltar');
+    back.type = 'button';
+    back.dataset.fid = 'tecwiz-back';
+    const next = h('button', 'btn btn--primary btn--sm', 'Próximo ▶');
+    next.type = 'button';
+    next.dataset.fid = 'tecwiz-next';
+    const cancel = h('button', 'btn btn--ghost btn--sm', 'Cancelar');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => closeDialog(dlg));
+    function draw() {
+      const list = steps();
+      at = Math.min(at, list.length - 1);
+      const id = list[at][0];
+      trail.replaceChildren(...list.map((x, k) => {
+        const b = h('button', 'tecwiz__step' + (k === at ? ' is-on' : '') + (k < at || ok(x[0]) ? ' is-done' : ''), h('span', 'tecwiz__n', String(k + 1)), ' ', x[1]);
+        b.type = 'button';
+        b.dataset.fid = 'tecwiz-step-' + x[0];
+        b.disabled = k > at && !list.slice(0, k).every((y) => ok(y[0])); // só avança pelo trilho com as etapas de antes feitas
+        if (k === at) b.setAttribute('aria-current', 'step');
+        b.addEventListener('click', () => { at = k; draw(); });
+        return h('li', '', b);
+      }));
+      let parts = [];
+      if (id === 'tipo') {
+        parts = [h('p', 'field__hint', 'Cada jogador tem um só tipo de tecnomante. Ele diz de onde vêm os componentes que você conhece.'),
+          h('ul', 'pickchar__list', ...powerStyles(e).map((t) => card(t.name, t.pendente ? 'Em breve' : '', t.resumo, st.tipo === t.name, () => { if (st.tipo !== t.name) { st.tipo = t.name; st.lista = ''; st.catalogo = ''; st.comps = []; } }, 'tipo-' + nameKey(t.name), t.pendente)))];
+      } else if (id === 'modo') {
+        parts = [h('p', 'field__hint', 'Cada nível compra um modo de ação (1 UP). Um modo não pode ser comprado duas vezes.' + (taken.length ? ' Já tem: ' + taken.join(', ') + '.' : '')),
+          h('ul', 'pickchar__list', ...modes.map((o) => card(o.name, '', o.text, st.modo === o.name, () => { st.modo = o.name; }, 'modo-' + nameKey(o.name))))];
+      } else if (id === 'lista') {
+        const fixed = chaves[st.lista];
+        const keyBox = !st.lista ? null : fixed
+          ? h('p', 'field__hint', 'Atributo chave de ' + st.lista + ': ' + (TECNO_CHAVES.find((c) => c[0] === fixed) || ['', fixed])[1] + ' (já escolhido; repetir a lista mantém).')
+          : h('div', 'tecwiz__key', h('p', 'field__label', 'Atributo chave de ' + st.lista), h('div', 'segmented', ...TECNO_CHAVES.map((c) => {
+            const r = h('input');
+            r.type = 'radio';
+            r.name = 'tecwiz-chave';
+            r.value = c[0];
+            r.checked = st.chave === c[0];
+            r.dataset.fid = 'tecwiz-chave-' + c[0];
+            r.addEventListener('change', () => { st.chave = c[0]; st.comps = st.comps.slice(0, cap()); draw(); });
+            return h('label', 'segmented__opt', r, h('span', '', c[1] + ' ' + attrOf(s, c[0])));
+          })));
+        parts = [h('p', 'field__hint', 'Escolha a lista de componentes deste nível. Pode repetir uma lista que já tem: você conhece mais componentes dela.'),
+          keyBox, keyOf() ? h('p', 'field__hint', 'Conhece ' + plural(cap(), 'componente', 'componentes') + ' novos desta lista (atributo chave ' + attrOf(s, keyOf()) + ' + Operações ' + ops + ').') : null,
+          h('ul', 'pickchar__list', ...tecnoLists().map((l) => card(l[0], cur && tecnoPicks(cur).indexOf(l[0]) >= 0 ? 'Você já tem esta lista' : '', l[1], st.lista === l[0], () => { if (st.lista !== l[0]) { st.lista = l[0]; st.chave = ''; st.comps = []; } }, 'lista-' + nameKey(l[0]))))];
+      } else if (id === 'companhia') {
+        parts = [h('p', 'field__hint', 'A companhia que patrocina você vale para todos os níveis.'),
+          h('ul', 'pickchar__list', ...(ITEM_DATA.fabricantes || []).map((c) => card(c, '', String(makerLore(c) || '').split(/\n/)[0].slice(0, 160), st.companhia === c, () => { if (st.companhia !== c) { st.companhia = c; st.catalogo = ''; } }, 'co-' + nameKey(c))))];
+      } else if (id === 'catalogo') {
+        const cats = tecnoCatalogs(st.companhia);
+        parts = [h('p', 'field__hint', 'Escolha por tipo: você conhece todo o catálogo desse tipo da ' + st.companhia + '. Cada nível dá um tipo diferente.'),
+          h('ul', 'pickchar__list', ...cats.map((x) => {
+            const n = tecnoSponsorKnown({ companhia: st.companhia }, x.id).length;
+            return card(x.label, plural(n, 'componente', 'componentes'), '', st.catalogo === x.id, () => { st.catalogo = x.id; }, 'cat-' + nameKey(x.id), usedCats.indexOf(x.id) >= 0);
+          }))];
+      } else if (id === 'comp') {
+        const kinds = TECNO_LIST_KINDS[st.lista] || [];
+        const add = h('button', 'btn btn--primary btn--sm', 'Escolher do banco');
+        add.type = 'button';
+        add.dataset.fid = 'tecwiz-comp-add';
+        add.disabled = st.comps.length >= cap();
+        add.addEventListener('click', async () => {
+          const ids = new Set(st.comps.map((x) => x.id).concat(((cur && cur.conhecidos) || {})[st.lista] ? cur.conhecidos[st.lista].map((x) => x.id) : []));
+          const picked = await openPickerMany({ title: st.lista + ': componentes conhecidos', kinds, filter: (x) => kinds.indexOf(x.kind) >= 0 && !ids.has(x.id) });
+          const room = cap() - st.comps.length;
+          st.comps = st.comps.concat(picked.slice(0, Math.max(0, room)).map(tecSnap));
+          if (picked.length > room) toast('Cabem só ' + plural(cap(), 'componente', 'componentes') + ' neste nível. Ficaram os ' + Math.max(0, room) + ' primeiros.');
+          draw();
+        });
+        parts = [h('p', 'field__hint', 'Escolha no banco os ' + plural(cap(), 'componente', 'componentes') + ' que você conhece de ' + st.lista + '. Dá para deixar para depois na aba Tec.'),
+          h('p', 'tec__bank', add, ' ', h('span', 'field__hint', st.comps.length + ' de ' + cap())),
+          st.comps.length ? tecRows(st.comps, (j) => { st.comps.splice(j, 1); draw(); }) : null];
+      }
+      const free = freeUpOf(ch) - 1;
+      body.replaceChildren(...[h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres depois da compra: ', h('strong', '', String(free)))].concat(parts).filter(Boolean));
+      back.disabled = at === 0;
+      const last = at === list.length - 1;
+      next.textContent = last ? 'Concluir' : 'Próximo ▶';
+      next.disabled = !ok(id) || (last && !list.every((x) => ok(x[0])));
+    }
+    back.addEventListener('click', () => { if (at > 0) { at--; draw(); } });
+    next.addEventListener('click', () => {
+      const list = steps();
+      if (at < list.length - 1) { at++; draw(); body.scrollTop = 0; return; }
+      // conclui: grava o nível na ficha
+      let p = cur && s.powers.indexOf(cur) >= 0 ? cur : null;
+      if (!p) { p = Object.assign(slotSnap(e), { thumb: e.thumb || '', picks: [] }); s.powers.push(p); }
+      const k = powerPicks(p).length;
+      s.powers.forEach((x) => { if (x.id === p.id && x !== p) delete x.estilo; });
+      p.estilo = st.tipo;
+      p.picks = powerPicks(p).concat([st.modo]);
+      if (st.tipo === 'Patrocinado') {
+        p.companhia = st.companhia;
+        const c = (Array.isArray(p.catalogos) ? p.catalogos : []).slice(0, k);
+        while (c.length < k) c.push('');
+        c[k] = st.catalogo;
+        p.catalogos = c;
+      } else {
+        const l = tecnoPicks(p);
+        l[k] = st.lista;
+        p.listas = l;
+        if (!chaves[st.lista]) p.chaves = Object.assign({}, chaves, { [st.lista]: st.chave });
+        if (st.comps.length) {
+          const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
+          p.conhecidos = Object.assign({}, known, { [st.lista]: (known[st.lista] || []).concat(st.comps) });
+        }
+      }
+      closeDialog(dlg);
+      doneOf(ch);
+      if (!ch.npc && sheetChar === ch) showSheetTab($('#spanel-tec'));
+      toast('Tecnomancia nível ' + (k + 1) + ': ' + st.modo + '.');
+    });
+    const title = h('h2', '', 'Tecnomancia · nível ' + lvl);
+    title.id = 'tecwiz-title';
+    dlg.replaceChildren(h('div', 'pickchar__body', title, trail, body, h('div', 'dialog__actions tecwiz__actions', cancel, back, next)));
+    draw();
+    openDialog(dlg);
+  }
+
   function renderTec() {
     const s = sheetChar.sheet;
     const p = s.powers.find((x) => x.id === 'of-pod-tecnomancia');
@@ -9339,7 +9508,7 @@ const FIREBASE_CONFIG = {
     const ops = skillOf(s, 'operacoes');
     const modes = powerPicks(p);
     const out = [h('p', 'block__hint', 'Nível de Tecnomancia ' + lvl + (tipo ? ' · ' + tipo.name : '') + ' · Operações ' + ops + '. Um efeito ativo por modo de ação; até ' + plural(lvl, 'implemento especial', 'implementos especiais') + ' por operação.'),
-      h('p', 'tec__modes', h('strong', '', 'Modos de ação: '), modes.length ? modes.join(', ') : 'nenhum ainda (marque as opções do poder na aba Poderes).')];
+      h('p', 'tec__modes', h('strong', '', 'Modos de ação: '), modes.length ? modes.join(', ') : 'nenhum ainda.', ' ', tecLevelBtn(sheetChar, p, 'tec-nivel'))];
     if (!lvl || !tipo) {
       out.push(h('p', 'empty', !lvl ? 'Compre um nível de Tecnomancia (um modo de ação) na aba Poderes.' : 'Escolha o tipo de tecnomante (Engenheiro ou Patrocinado) na aba Poderes.'));
     } else if (tipo.name === 'Engenheiro') {
@@ -10861,6 +11030,7 @@ const FIREBASE_CONFIG = {
     const miss = prereqMissing(ch.sheet, e);
     if (miss.length && !(await askConfirm({ title: 'Pré-requisito não cumprido', text: e.name + ' pede: ' + miss.join('; ') + '. Pegar mesmo assim?', ok: 'Pegar mesmo assim' }))) return;
     if (!still()) return;
+    if (e.id === 'of-pod-tecnomancia') { openTecnoWizard(ch, null); return; }
     const kind = CHOICE_POWERS[e.id];
     if (kind) {
       const s = ch.sheet;
