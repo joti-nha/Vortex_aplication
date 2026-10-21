@@ -9347,7 +9347,40 @@ const FIREBASE_CONFIG = {
       const chaves = p.chaves && typeof p.chaves === 'object' ? p.chaves : {};
       const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
       const lists = Array.from(new Set(picks.filter(Boolean)));
-      if (!lists.length) out.push(h('p', 'empty', 'Escolha a lista de cada nível de Tecnomancia na aba Poderes.'));
+      out.push(tecnoListRow(s, p, 'tec')); // lista e atributo chave de cada nível, aqui mesmo
+      // direto do banco: tudo o que as listas aceitam numa busca só; cada item cai na lista do tipo dele, até o limite
+      const room = (name) => {
+        const key = TECNO_CHAVES.find((c) => c[0] === chaves[name]);
+        const have = Array.isArray(known[name]) ? known[name].length : 0;
+        return key ? Math.max(0, (attrOf(s, key[0]) + ops) * picks.filter((x) => x === name).length - have) : 0;
+      };
+      const open = lists.filter((n) => room(n) > 0);
+      const bank = h('button', 'btn btn--primary btn--sm', 'Escolher do banco');
+      bank.type = 'button';
+      bank.dataset.fid = 'tec-bank';
+      bank.disabled = !open.length;
+      bank.addEventListener('click', async () => {
+        const kinds = open.reduce((t, n) => t.concat(TECNO_LIST_KINDS[n] || []), []);
+        const ids = new Set(lists.reduce((t, n) => t.concat((known[n] || []).map((x) => x.id)), []));
+        const chips = open.map((n) => ({ label: n, kinds: TECNO_LIST_KINDS[n] || [] }));
+        const picked = await openPickerMany({ title: 'Componentes conhecidos', kinds, chips, filter: (x) => kinds.indexOf(x.kind) >= 0 && !ids.has(x.id) });
+        if (!picked.length) return;
+        const next = Object.assign({}, known);
+        const left = {};
+        open.forEach((n) => { left[n] = room(n); next[n] = (known[n] || []).slice(); });
+        let skipped = 0;
+        picked.forEach((e) => {
+          const n = open.find((x) => left[x] > 0 && (TECNO_LIST_KINDS[x] || []).indexOf(e.kind) >= 0);
+          if (!n) { skipped++; return; }
+          next[n].push(tecSnap(e));
+          left[n]--;
+        });
+        p.conhecidos = next;
+        if (skipped) toast(plural(skipped, 'componente ficou', 'componentes ficaram') + ' de fora: a lista dele já está no limite.');
+        changed();
+      });
+      if (lists.length) out.push(h('p', 'tec__bank', bank, ' ', h('span', 'field__hint', open.length ? 'Busca no banco tudo o que as suas listas aceitam; cada componente entra na lista do tipo dele.' : 'Todas as listas estão completas.')));
+      else out.push(h('p', 'empty', 'Escolha acima a lista de cada nível de Tecnomancia.'));
       lists.forEach((name) => {
         const times = picks.filter((x) => x === name).length;
         const key = TECNO_CHAVES.find((c) => c[0] === chaves[name]) || null;
@@ -9370,15 +9403,16 @@ const FIREBASE_CONFIG = {
           changed();
         });
         const head = h('div', 'block__head tec__head', h('h3', 'pickchar__sub', name), add);
-        const info = !key ? 'Escolha o atributo chave desta lista na aba Poderes.'
-          : 'Conhecidos: ' + have.length + ' de ' + cap + ' (' + (times > 1 ? times + ' × ' : '') + '(' + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + ')). Até ' + plural(attrOf(s, key[0]), 'implemento', 'implementos') + ' por operação.' + (have.length > cap ? ' Passou do limite: tire ' + (have.length - cap) + '.' : '');
+        const info = !key ? 'Escolha o atributo chave desta lista acima.'
+          : 'Conhecidos: ' + have.length + ' de ' + cap + ' (' + (times > 1 ? times + ' × (' : '') + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + (times > 1 ? ')' : '') + '). Até ' + plural(attrOf(s, key[0]), 'implemento', 'implementos') + ' por operação.' + (have.length > cap ? ' Passou do limite: tire ' + (have.length - cap) + '.' : '');
         out.push(h('section', 'tec__group', head, h('p', 'field__hint' + (have.length > cap ? ' tec__over' : ''), info),
           have.length ? tecRows(have, (j) => { const l = have.slice(); l.splice(j, 1); p.conhecidos = Object.assign({}, known, { [name]: l }); changed(); }) : h('p', 'empty', 'Nenhum componente escolhido ainda.')));
       });
     } else if (tipo.name === 'Patrocinado') {
       const cats = tecnoCatalogs(p.companhia);
       const cur = (Array.isArray(p.catalogos) ? p.catalogos : []).slice(0, lvl).filter((c) => cats.some((x) => x.id === c));
-      if (!p.companhia || !cur.length) out.push(h('p', 'empty', 'Escolha a companhia e os catálogos na aba Poderes.'));
+      out.push(tecnoSponsorRow(p, 'tec')); // companhia e um tipo (catálogo) por nível, aqui mesmo
+      if (!p.companhia || !cur.length) out.push(h('p', 'empty', 'Escolha acima a companhia e o tipo de cada nível.'));
       cur.forEach((c) => {
         const list = tecnoSponsorKnown(p, c);
         const label = (cats.find((x) => x.id === c) || {}).label || c;
