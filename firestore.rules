@@ -55,12 +55,13 @@ service cloud.firestore {
     match /profiles/{code} {
       function validProfile() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['name', 'chars', 'camps', 'gm', 'favs', 'uids', 'updatedAt'])
+        return d.keys().hasOnly(['name', 'chars', 'camps', 'gm', 'favs', 'recent', 'uids', 'updatedAt'])
             && d.name is string && d.name.size() <= 40
             && d.chars is list && d.chars.size() <= 300
             && d.camps is list && d.camps.size() <= 300
             && d.gm is list && d.gm.size() <= 300
             && d.favs is list && d.favs.size() <= 300
+            && (!('recent' in d) || (d.recent is list && d.recent.size() <= 50))
             && (!('uids' in d) || (d.uids is list && d.uids.size() <= 40));
       }
       allow get: if signedIn() && code.matches('[0-9]{1,6}');

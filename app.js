@@ -1164,6 +1164,11 @@ const FIREBASE_CONFIG = {
           name: p.name || '', chars: p.chars || [], camps: p.camps || [], gm: p.gm || [], favs: p.favs || [],
           updatedAt: FV.serverTimestamp()
         }, { merge: true });
+        // Recentes em gravação separada: se as regras publicadas ainda não aceitam o campo, o resto do perfil salva igual
+        if (Array.isArray(p.recent)) {
+          await fs.collection('profiles').doc(code).set({ recent: p.recent.slice(0, 50) }, { merge: true })
+            .catch((e) => console.warn('Recentes não sincronizaram (publique as regras novas do Firestore).', e));
+        }
       },
 
       // Aparelhos que entraram no perfil: as regras deixam qualquer um deles excluir as fichas do perfil
@@ -1600,13 +1605,26 @@ const FIREBASE_CONFIG = {
   let db = LocalDb;
   let quickKey = 'vortex.quick.v1.local'; // uma lista por modo, para nunca misturar local com Firebase
 
-  function quickLoad() {
+  const RECENT_MAX = 50; // quantos "Recentes" vão junto no perfil
+  function quickLocal() {
     try { const l = JSON.parse(localStorage.getItem(quickKey)); return Array.isArray(l) ? l : []; }
     catch (e) { return []; }
+  }
+  // com um perfil aberto, a ordem dos Recentes vem do perfil (vale em todos os aparelhos da conta);
+  // o que só este aparelho conhece (nome, imagem) completa cada item, e refreshQuick busca o resto no banco
+  function quickLoad() {
+    const local = quickLocal();
+    if (!profile || !profile.recent.length) return local;
+    return profile.recent.map((id) => local.find((x) => x.id === id) || { id, name: 'Ficha', type: '', thumb: '', species: '', mine: false, ownerProfile: '' });
   }
   function quickSave(list) {
     try { localStorage.setItem(quickKey, JSON.stringify(list)); }
     catch (e) { toast('Não foi possível salvar o acesso rápido: o armazenamento está cheio.'); }
+    if (!profile) return;
+    const ids = list.map((x) => x.id).slice(0, RECENT_MAX);
+    if (ids.join('|') === profile.recent.join('|')) return;
+    profile.recent = ids;
+    profileSave();
   }
   const quickEntry = (c) => ({ id: c.id, name: c.name, type: c.type, thumb: c.thumb || '', species: c.species || '', mine: Boolean(c.mine), ownerProfile: c.ownerProfile || '' });
   const quickHas = (id) => quickLoad().some((x) => x.id === id);
@@ -1625,6 +1643,14 @@ const FIREBASE_CONFIG = {
 
   // Confere cada item da lista no banco: atualiza nome e imagem, tira o que foi apagado
   async function refreshQuick() {
+    if (profile) { // pega o que outro aparelho do perfil abriu
+      const code = profile.code;
+      await profileQueue;
+      try {
+        const p = await db.getProfile(code);
+        if (p && profile && profile.code === code) profile.recent = idList(p.recent).slice(0, RECENT_MAX);
+      } catch (e) { console.warn(e); /* sem conexão: fica com o que já tinha */ }
+    }
     const list = quickLoad();
     const out = [];
     await Promise.all(list.map(async (q, i) => {
@@ -1645,7 +1671,7 @@ const FIREBASE_CONFIG = {
   let profileKey = 'vortex.profile.v1.local';
   let profile = null; // { code, name, chars, camps, gm, favs }
   const CHAR_FAV_KEY = 'vortex.charfav.v1';
-  const PROFILE_LISTS = ['chars', 'camps', 'gm', 'favs'];
+  const PROFILE_LISTS = ['chars', 'camps', 'gm', 'favs', 'recent'];
   const idList = (l) => (Array.isArray(l) ? l.filter((x) => typeof x === 'string' && x).slice(0, 300) : []);
   function normProfile(p, code) {
     const out = { code, name: String((p && p.name) || '').slice(0, 40) };
@@ -2736,11 +2762,14 @@ const FIREBASE_CONFIG = {
           return;
         }
         profileUse(p, code);
+        // os Recentes deste aparelho entram na lista do perfil, depois dos que já estavam lá
+        const merged = Array.from(new Set(profile.recent.concat(quickLocal().map((x) => x.id)))).slice(0, RECENT_MAX);
+        if (merged.length !== profile.recent.length) { profile.recent = merged; profileSave(); }
         toast('Perfil aberto' + (profile.name ? ': ' + profile.name : '') + '.');
       } else {
-        const fresh = { name: cleanName(inLoginName.value).slice(0, 40), chars: [], camps: [], gm: [], favs: localCharFavs() };
+        const fresh = { name: cleanName(inLoginName.value).slice(0, 40), chars: [], camps: [], gm: [], favs: localCharFavs(), recent: quickLocal().map((x) => x.id).slice(0, RECENT_MAX) };
         if ($('#login-bring').checked) { // traz o que já está neste aparelho
-          fresh.chars = quickLoad().filter((q) => q.mine).map((q) => q.id).concat(fresh.favs);
+          fresh.chars = quickLocal().filter((q) => q.mine).map((q) => q.id).concat(fresh.favs);
           const camps = await db.listMyCampaigns().catch(() => []);
           fresh.camps = camps.map((c) => c.id);
           fresh.gm = camps.filter((c) => c.isOwner).map((c) => c.id);
@@ -3092,7 +3121,7 @@ const FIREBASE_CONFIG = {
     const lb = entryLore(e);
     if (lb) title.append(' ', lb);
     const main = h('span', 'row__main', title, h('span', 'row__meta', entryMeta(e)));
-    const text = entryText(e);
+    const text = String(entryText(e) || '').split(/\s*\n+\s*/).filter(Boolean).map((l) => (/[.:!?;]$/.test(l) ? l : l + '.')).join(' '); // linhas viram frases no resumo
     if (text) main.append(h('span', 'row__text', text));
     const open = h('span', 'row__open lib-row__open', entryIcon(e), main);
     open.tabIndex = 0;
@@ -4325,7 +4354,10 @@ const FIREBASE_CONFIG = {
       ta.maxLength = 1200;
       ta.value = value || '';
       if (field.placeholder) ta.placeholder = field.placeholder;
-      ta.addEventListener('input', () => onChange(ta.value));
+      // o bloco cresce com o texto (sem barra de rolagem dentro do campo)
+      const fit = () => { ta.style.height = 'auto'; if (ta.scrollHeight) ta.style.height = ta.scrollHeight + 2 + 'px'; };
+      ta.addEventListener('input', () => { onChange(ta.value); fit(); });
+      requestAnimationFrame(fit);
       return ta;
     }
     const inp = h('input', 'input');
@@ -8525,6 +8557,7 @@ const FIREBASE_CONFIG = {
     renderGuide(m);
     renderSpeciesLink();
     renderPowers(m);
+    renderTec();
     renderPerdas();
     renderInventory(m);
     renderAlerts(m);
@@ -8553,9 +8586,11 @@ const FIREBASE_CONFIG = {
     try { localStorage.setItem(SHEET_TAB_KEY, panel.id); } catch (e) { /* só nesta visita */ }
     if (panel.id === 'spanel-progressao') requestAnimationFrame(progTrackScroll);
   }
-  $$('.sheet-tab[data-stab]').forEach((tab, i, all) => {
+  $$('.sheet-tab[data-stab]').forEach((tab) => {
     tab.addEventListener('click', () => showSheetTab($('#' + tab.getAttribute('aria-controls'))));
     tab.addEventListener('keydown', (ev) => {
+      const all = $$('.sheet-tab[data-stab]').filter((t) => !t.hidden); // a aba Tec só aparece com Tecnomancia
+      const i = all.indexOf(tab);
       const k = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
       if (ev.key === 'Home' || ev.key === 'End') { ev.preventDefault(); const t2 = all[ev.key === 'Home' ? 0 : all.length - 1]; showSheetTab($('#' + t2.getAttribute('aria-controls')), true); return; }
       if (!k) return;
@@ -9261,6 +9296,100 @@ const FIREBASE_CONFIG = {
     }) : [h('span', 'pw-opt__text', 'Escolha a companhia para ver os catálogos dela.')];
     return h('span', 'pw-sub', h('span', 'pw-sub__title', 'Patrocínio: uma companhia e um catálogo por nível de Tecnomancia'),
       h('span', 'pw-opt' + (co ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Companhia'), coSel)), ...rows);
+  }
+
+  /* Aba Tec: quem tem Tecnomancia vê os modos, os limites e as tecnologias conhecidas.
+     Engenheiro: escolhe os componentes de cada lista (atributo chave + Operações por nível que pegou a lista).
+     Patrocinado: conhece os catálogos inteiros, então a lista sai pronta. */
+  const TECNO_LIST_KINDS = {
+    'Poderes': ['poder'],
+    'Equipamento': ['arma-melee', 'arma-fogo', 'granada', 'municao', 'armadura', 'vestivel', 'escudo-energetico', 'nucleo', 'item-geral'],
+    'Propriedades': ['propriedade'],
+    'Mods': ['mod-arma'],
+    'Próteses e módulos': ['protese-modulo']
+  };
+  const tecSnap = (e) => ({ id: e.id, kind: e.kind, typeId: e.typeId || '', name: e.name, values: Object.assign({}, e.values || {}), oficial: Boolean(e.oficial) });
+  function tecnoSponsorKnown(p, catId) {
+    const co = p.companhia;
+    if (!co || !catId) return [];
+    const [kind, alvo] = catId.split(':');
+    if (!alvo) return BUILTINS.filter((e) => e.kind === kind && (e.values || {}).fabricante === co);
+    const fogo = /fogo/.test(alvo);
+    return BUILTINS.filter((e) => {
+      if (e.kind !== kind) return false;
+      const para = String((e.values || {}).para || '');
+      return !para || /qualquer|^arma$/i.test(para) || (fogo ? /fogo/i.test(para) : /corpo/i.test(para));
+    });
+  }
+  function tecRows(list, onRemove) {
+    return h('ul', 'rows tec__list', ...list.map((e, j) => libRow(e, onRemove ? [{ label: 'Tirar', cls: 'btn--ghost', onClick: () => onRemove(j) }] : [])));
+  }
+  function renderTec() {
+    const s = sheetChar.sheet;
+    const p = s.powers.find((x) => x.id === 'of-pod-tecnomancia');
+    const tab = $('#stab-tec');
+    tab.hidden = !p;
+    if (!p) {
+      if (tab.getAttribute('aria-selected') === 'true') showSheetTab($('#spanel-poderes'));
+      $('#tec-body').replaceChildren();
+      return;
+    }
+    const lvl = tecnoLevel(p);
+    const tipo = styleOf(p);
+    const ops = skillOf(s, 'operacoes');
+    const modes = powerPicks(p);
+    const out = [h('p', 'block__hint', 'Nível de Tecnomancia ' + lvl + (tipo ? ' · ' + tipo.name : '') + ' · Operações ' + ops + '. Um efeito ativo por modo de ação; até ' + plural(lvl, 'implemento especial', 'implementos especiais') + ' por operação.'),
+      h('p', 'tec__modes', h('strong', '', 'Modos de ação: '), modes.length ? modes.join(', ') : 'nenhum ainda (marque as opções do poder na aba Poderes).')];
+    if (!lvl || !tipo) {
+      out.push(h('p', 'empty', !lvl ? 'Compre um nível de Tecnomancia (um modo de ação) na aba Poderes.' : 'Escolha o tipo de tecnomante (Engenheiro ou Patrocinado) na aba Poderes.'));
+    } else if (tipo.name === 'Engenheiro') {
+      const picks = tecnoPicks(p);
+      const chaves = p.chaves && typeof p.chaves === 'object' ? p.chaves : {};
+      const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
+      const lists = Array.from(new Set(picks.filter(Boolean)));
+      if (!lists.length) out.push(h('p', 'empty', 'Escolha a lista de cada nível de Tecnomancia na aba Poderes.'));
+      lists.forEach((name) => {
+        const times = picks.filter((x) => x === name).length;
+        const key = TECNO_CHAVES.find((c) => c[0] === chaves[name]) || null;
+        const cap = key ? Math.max(0, (attrOf(s, key[0]) + ops) * times) : 0;
+        const have = Array.isArray(known[name]) ? known[name] : [];
+        const fidKey = nameKey(name).replace(/\s+/g, '-');
+        const add = h('button', 'btn btn--primary btn--sm', 'Escolher componentes');
+        add.type = 'button';
+        add.dataset.fid = 'tec-add-' + fidKey;
+        add.disabled = !key || have.length >= cap;
+        add.addEventListener('click', async () => {
+          const kinds = TECNO_LIST_KINDS[name] || [];
+          const ids = new Set(have.map((x) => x.id));
+          const picked = await openPickerMany({ title: name + ': componentes conhecidos', kinds, filter: (x) => kinds.indexOf(x.kind) >= 0 && !ids.has(x.id) });
+          if (!picked.length) return;
+          const room = cap - have.length;
+          const got = picked.slice(0, Math.max(0, room)).map(tecSnap);
+          p.conhecidos = Object.assign({}, known, { [name]: have.concat(got) });
+          if (picked.length > got.length) toast('Cabem só ' + plural(cap, 'componente', 'componentes') + ' em ' + name + '. Ficaram os ' + got.length + ' primeiros.');
+          changed();
+        });
+        const head = h('div', 'block__head tec__head', h('h3', 'pickchar__sub', name), add);
+        const info = !key ? 'Escolha o atributo chave desta lista na aba Poderes.'
+          : 'Conhecidos: ' + have.length + ' de ' + cap + ' (' + (times > 1 ? times + ' × ' : '') + '(' + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + ')). Até ' + plural(attrOf(s, key[0]), 'implemento', 'implementos') + ' por operação.' + (have.length > cap ? ' Passou do limite: tire ' + (have.length - cap) + '.' : '');
+        out.push(h('section', 'tec__group', head, h('p', 'field__hint' + (have.length > cap ? ' tec__over' : ''), info),
+          have.length ? tecRows(have, (j) => { const l = have.slice(); l.splice(j, 1); p.conhecidos = Object.assign({}, known, { [name]: l }); changed(); }) : h('p', 'empty', 'Nenhum componente escolhido ainda.')));
+      });
+    } else if (tipo.name === 'Patrocinado') {
+      const cats = tecnoCatalogs(p.companhia);
+      const cur = (Array.isArray(p.catalogos) ? p.catalogos : []).slice(0, lvl).filter((c) => cats.some((x) => x.id === c));
+      if (!p.companhia || !cur.length) out.push(h('p', 'empty', 'Escolha a companhia e os catálogos na aba Poderes.'));
+      cur.forEach((c) => {
+        const list = tecnoSponsorKnown(p, c);
+        const label = (cats.find((x) => x.id === c) || {}).label || c;
+        out.push(h('section', 'tec__group', h('h3', 'pickchar__sub', label), h('p', 'field__hint', 'Conhece o catálogo inteiro: ' + plural(list.length, 'componente', 'componentes') + '.'),
+          list.length ? tecRows(list) : h('p', 'empty', 'Nada neste catálogo ainda.')));
+      });
+    }
+    const imps = (window.VORTEX_REGRAS || {}).tecnoImplementos || [];
+    if (imps.length) out.push(h('details', 'tec__std', h('summary', 'pw-sub__title', 'Implementos padrão (todo tecnomante conhece)'),
+      h('ul', 'tec__imps', ...imps.map((x) => h('li', '', h('strong', '', x[0] + ' (' + x[1] + '): '), x[2])))));
+    $('#tec-body').replaceChildren(...out);
   }
 
   function styleRow(s, p, e, fid) {
@@ -10911,7 +11040,21 @@ const FIREBASE_CONFIG = {
     const qLab = h('label', 'visually-hidden', 'Buscar espécime');
     qLab.htmlFor = 'racial-q';
     const content = h('div', 'racial__content');
-    const search = h('div', 'field racial__search', qLab, q);
+    // filtro por origem do espécime: todos, só os oficiais do livro ou só os da Oficina
+    let src = '';
+    const srcSeg = h('div', 'segmented racial__src');
+    const srcOpts = [['', 'Todos'], ['oficial', 'Oficiais'], ['oficina', 'Da Oficina']].map(([val, label]) => {
+      const r = h('input');
+      r.type = 'radio';
+      r.name = 'racial-src';
+      r.value = val;
+      r.checked = val === src;
+      r.dataset.fid = 'racial-src-' + (val || 'todos');
+      r.addEventListener('change', () => { src = val; draw(); });
+      srcSeg.append(h('label', 'segmented__opt', r, h('span', '', label)));
+      return r;
+    });
+    const search = h('div', 'field racial__search', qLab, q, srcSeg);
     const draw = () => {
       const s = ch.sheet;
       const free = freeUpOf(ch);
@@ -10919,7 +11062,8 @@ const FIREBASE_CONFIG = {
       search.hidden = Boolean(esp); // dentro de um espécime, a busca dá lugar ao botão de voltar
       const counter = mode === 'inspirado' ? h('p', 'racial__free', 'Escolhida: ', h('strong', '', racialCount(s) + ' de ' + RACIAL_FREE)) : h('p', 'racial__free' + (free < 0 ? ' is-over' : ''), 'UP livres: ', h('strong', '', String(free)));
       if (!esp) { // lista de espécimes, como uma busca: tocar num abre as habilidades raciais dele
-        const shown = rankSearch(list, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
+        const pool = src ? list.filter((e) => (src === 'oficial') === Boolean(e.oficial)) : list;
+        const shown = rankSearch(pool, q.value, (e) => [[e.name, 10], [racialLines(e.values).map((t) => t.name).join(' '), 4], [[e.values.descricao, e.values.lore].filter(Boolean).join(' '), 1]]);
         content.replaceChildren(...[counter, warn ? h('p', 'field__hint', 'Os espécimes da Oficina não carregaram agora (' + warn + '). Feche e abra de novo.') : null].filter(Boolean), shown.length ? h('ul', 'racial__results', ...shown.map((e) => {
           const n = racialLines(e.values).length;
           const taken = racialTaken(s, e);
@@ -10928,7 +11072,7 @@ const FIREBASE_CONFIG = {
           b.dataset.fid = 'racial-esp-' + nameKey(e.name).replace(/\s+/g, '-');
           b.addEventListener('click', () => { racialPick = e.id; draw(); const k = $('.racial__back', content); if (k) k.focus(); });
           return h('li', '', b);
-        })) : h('p', 'empty', q.value ? 'Nenhum espécime encontrado.' : 'Nenhum espécime com características raciais.'));
+        })) : h('p', 'empty', q.value ? 'Nenhum espécime encontrado.' : src === 'oficina' ? 'Nenhum espécime criado na Oficina ainda.' : 'Nenhum espécime com características raciais.'));
         return;
       }
       const traits = racialLines(esp.values).map((t) => {
@@ -10963,6 +11107,17 @@ const FIREBASE_CONFIG = {
     const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
     close.type = 'button';
     close.addEventListener('click', () => closeDialog(dlg));
+    // atalho no fundo: volta para a lista mostrando só os espécimes criados na Oficina
+    const fromShop = h('button', 'btn btn--ghost btn--sm', 'Da Oficina');
+    fromShop.type = 'button';
+    fromShop.dataset.fid = 'racial-from-oficina';
+    fromShop.addEventListener('click', () => {
+      src = 'oficina';
+      srcOpts.forEach((r) => { r.checked = r.value === src; });
+      racialPick = '';
+      draw();
+      q.focus();
+    });
     const title = h('h2', '', 'Características raciais');
     title.id = 'racial-title';
     dlg.replaceChildren(h('div', 'pickchar__body', title,
@@ -10972,7 +11127,7 @@ const FIREBASE_CONFIG = {
         : 'Compre com UP habilidades raciais de qualquer espécime, inclusive dos criados na Oficina. Busque um espécime e toque nele para ver as habilidades raciais.'),
       search,
       content,
-      h('div', 'dialog__actions', close)));
+      h('div', 'dialog__actions', fromShop, close)));
     draw();
     openDialog(dlg);
   }
@@ -15965,15 +16120,38 @@ const FIREBASE_CONFIG = {
     catch (err) { return { list: rankSearch(BUILTINS.filter((e) => kinds.indexOf(e.kind) >= 0), q, entryFields), warn: errorMessage(err), suggest: '' }; }
   }
   let itemsSeq = 0;
+  // como os outros menus só de item (inventário, kit, loja): chips de categoria, busca e "Só favoritos"
+  const gmlibOn = new Set();
+  $('#gmlib-chips').replaceChildren(h('span', 'picker__filter-label', 'Filtro (toque para mostrar só as escolhidas):'), ...INV_CHIPS.map((c) => {
+    const b = h('button', 'chip chip--toggle', c.label);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', 'false');
+    b.dataset.fid = 'gmlib-chip-' + nameKey(c.label).replace(/\s+/g, '-');
+    b.addEventListener('click', () => {
+      if (gmlibOn.has(c.label)) gmlibOn.delete(c.label); else gmlibOn.add(c.label);
+      b.setAttribute('aria-pressed', String(gmlibOn.has(c.label)));
+      gmFacets.reset();
+      runItems();
+    });
+    return b;
+  }));
   async function runItems() {
-    const kinds = GMLIB_KINDS[$('#gmlib-kind').value] || GMLIB_KINDS.armas;
+    const kinds = INVENTORY_KINDS;
     const seq = ++itemsSeq;
-    const r = await libFind(kinds, $('#gmlib-q').value);
+    const q = $('#gmlib-q').value;
+    const r = await libFind(kinds, q);
     if (seq !== itemsSeq) return;
-    const list = gmFacets.apply(r.list, kinds);
+    const favs = favLoad();
+    const favOnly = $('#gmlib-fav').checked;
+    const picked = INV_CHIPS.filter((c) => gmlibOn.has(c.label));
+    const allowed = picked.length ? picked.reduce((t, c) => t.concat(c.kinds), []) : null;
+    let list = r.list.filter((e) => (!favOnly || favs.has(e.id)) && (!allowed || allowed.indexOf(e.kind) >= 0));
+    list = gmFacets.apply(list, allowed || kinds);
+    // com texto, vale a relevância; sem texto, favoritos primeiro e o resto em ordem alfabética
+    if (!hasQuery(q)) list.sort((a, b) => (Number(favs.has(b.id)) - Number(favs.has(a.id))) || a.name.localeCompare(b.name, 'pt-BR'));
     suggestAfter($('#gmlib-list'), r.suggest, $('#gmlib-q'), runItems);
     const noChars = !members.some((mb) => mb.sheet && mb.sheet.attrs);
-    $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }])));
+    $('#gmlib-list').replaceChildren(...list.slice(0, GMLIB_MAX).map((e) => libRow(e, noChars ? [] : [{ label: 'Dar', cls: 'btn--primary', onClick: () => giveItem(deep(e)) }], () => { if (favOnly) runItems(); })));
     gmMulti.paint();
     $('#gmlib-hint').textContent = r.warn || (!list.length ? 'Nada encontrado.'
       : plural(list.length, 'resultado', 'resultados') + (list.length > GMLIB_MAX ? ' (mostrando ' + GMLIB_MAX + '; refine a busca)' : '') + '.'
@@ -16045,12 +16223,30 @@ const FIREBASE_CONFIG = {
     q.placeholder = 'Buscar ficha por nome, espécie ou origem';
     q.setAttribute('aria-label', 'Buscar ficha');
     q.autocomplete = 'off';
+    // só as fichas que o mestre criou ou fixou no acesso rápido; filtro Todos / Personagens / Criaturas como na busca de Personagens
+    let kind = '';
+    const seg = h('div', 'segmented');
+    [['', 'Todos'], ['personagem', 'Personagens'], ['criatura', 'Criaturas']].forEach(([val, label]) => {
+      const r = h('input');
+      r.type = 'radio';
+      r.name = 'sheetnpc-type';
+      r.value = val;
+      r.checked = val === kind;
+      r.addEventListener('change', () => { kind = val; search(); });
+      seg.append(h('label', 'segmented__opt', r, h('span', '', label)));
+    });
     let seq = 0;
     const search = debounce(async () => {
       const my = ++seq;
       let list = [];
-      try { list = await db.searchCharacters(q.value.trim()); } catch (err) { if (my === seq) found.replaceChildren(h('li', 'field__hint', errorMessage(err))); return; }
-      if (my !== seq) return;
+      try {
+        const quick = await refreshQuick().catch(() => quickLoad());
+        const text = q.value.trim();
+        const found = text ? rankSearch(quick, text, charFields) : quick;
+        const own = text ? (await db.searchCharacters(text)).filter((c) => c.mine || isMyChar(c.id)) : [];
+        list = found.concat(own.filter((c) => !found.some((x) => x.id === c.id)));
+        if (kind) list = list.filter((c) => (kind === 'criatura') === isCreature(c.type));
+      } catch (err) { if (my === seq) found0(err); return; }
       list = list.slice(0, 20);
       found.replaceChildren(...list.map((c) => {
         const k = 'c:' + c.id;
@@ -16077,8 +16273,9 @@ const FIREBASE_CONFIG = {
         return h('li', 'pickchar__card' + (here ? ' is-here' : ''), art,
           h('span', 'pickchar__info', h('strong', 'pickchar__name', c.name), h('span', 'pickchar__meta', [c.species, c.origin].filter(Boolean).join(' · ') || (isCreature(c.type) ? 'Criatura' : 'Personagem'))), b);
       }));
-      if (!list.length) found.replaceChildren(h('li', 'field__hint', 'Nenhuma ficha com esse nome.'));
+      if (!list.length) found.replaceChildren(h('li', 'field__hint', q.value.trim() ? 'Nenhuma ficha sua ou fixada com esse nome.' : 'Nenhuma ficha criada ou fixada por você. Fixe uma ficha no acesso rápido (Personagens) para ela aparecer aqui.'));
     }, 250);
+    const found0 = (err) => found.replaceChildren(h('li', 'field__hint', errorMessage(err)));
     q.addEventListener('input', search);
     const close = h('button', 'btn btn--ghost btn--sm', 'Fechar');
     close.type = 'button';
@@ -16086,8 +16283,8 @@ const FIREBASE_CONFIG = {
     const title = h('h2', '', 'Ficha como NPC');
     title.id = 'sheetnpc-title';
     dlg.replaceChildren(h('div', 'pickchar__body', title,
-      h('p', 'field__hint', 'Qualquer ficha de personagem ou criatura vira um NPC da campanha: atributos, perícias, Resistência, poderes e inventário vêm da ficha. Na arena entra uma cópia, então a ficha não perde vida.'),
-      q, found, h('div', 'dialog__actions', close)));
+      h('p', 'field__hint', 'Aparecem as fichas de personagem ou criatura que você criou ou fixou no acesso rápido. Atributos, perícias, Resistência, poderes e inventário vêm da ficha. Na arena entra uma cópia, então a ficha não perde vida.'),
+      q, h('fieldset', 'field', h('legend', 'field__label', 'Tipo'), seg), found, h('div', 'dialog__actions', close)));
     openDialog(dlg);
     search();
   }
@@ -16296,12 +16493,12 @@ const FIREBASE_CONFIG = {
       toast(e.name + ' foi para a mochila de ' + mb.name + '.');
     } catch (err) { toast(errorMessage(err)); }
   }
-  const gmFacets = facetBox(() => runItems());
+  const gmFacets = facetBox(() => runItems(), { skip: ['_kind'] }); // a categoria já tem os chips do topo
   $('#gmlib-hint').before(gmFacets.box);
   // a categoria do bestiário já tem os chips coloridos da revista
   const beastFacets = facetBox(() => runBeast(), { skip: ['categoria'] });
   $('#gmlib-cats').after(beastFacets.box);
-  $('#gmlib-kind').addEventListener('change', () => { gmFacets.reset(); runItems(); });
+  $('#gmlib-fav').addEventListener('change', runItems);
   $('#gmlib-q').addEventListener('input', debounce(runItems, 250));
   $('#beast-q').addEventListener('input', debounce(runBeast, 250));
   $('#beast-new').addEventListener('click', () => openHostedForm($('#beast-form-slot'), 'npc', null, runBeast));

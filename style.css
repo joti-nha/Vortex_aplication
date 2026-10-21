@@ -3257,12 +3257,19 @@ html, body { max-width: 100%; overflow-x: clip; }
 .creator .gear__budget .setup__pool { margin: 0; }
 .picker > * { flex-shrink: 0; } /* a lista não encolhe por baixo do "Não achou?" no celular */
 .racial__search { margin: 0.2rem 0 0.6rem; }
+.racial__src { margin-top: 0.45rem; flex-wrap: wrap; }
 .racial__only { align-self: flex-start; }
 @media (max-width: 480px) { /* listas de busca no celular: nome inteiro na linha de cima, estrela e botão embaixo */
   .picker__tools { grid-template-columns: minmax(0, 1fr); }
   .picker .lib-row .row__open { flex-basis: 100%; }
   .picker .lib-row { justify-content: flex-end; gap: 0.4rem 0.6rem; }
   .picker .row__title { overflow-wrap: break-word; }
+}
+/* Oficina e demais listas do banco no celular: o texto usa a linha inteira e os botões descem para baixo dele */
+@media (max-width: 560px) {
+  .lib-row .row__open { flex-basis: 100%; }
+  .lib-row { justify-content: flex-end; gap: 0.2rem 0.6rem; padding-bottom: 0.4rem; }
+  .lib-row .row__title, .lib-row .row__text, .lib-row .row__meta { overflow-wrap: break-word; }
 }
 /* caixa com botãozinho de opções (sexo): o texto continua livre */
 .pick-wrap { position: relative; }
@@ -4100,3 +4107,11 @@ dt.rule-hot:hover, dt.rule-hot:focus-visible { color: var(--mare, #5ef2ff); }
 .racial__back { align-self: flex-start; margin: 0 0 0.3rem; }
 .fsec__toggle { grid-column: 1 / -1; justify-self: start; }
 .fsec__more[hidden] { display: none; }
+/* Aba Tec (Tecnomancia) */
+.tec__modes { margin: 0 0 0.6rem; }
+.tec__group { margin-top: 0.9rem; }
+.tec__head { margin-bottom: 0.2rem; }
+.tec__head h3 { margin: 0; }
+.tec__over { color: var(--erro); }
+.tec__std { margin-top: 1rem; }
+.tec__imps { margin: 0.4rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }
