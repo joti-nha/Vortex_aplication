@@ -9308,7 +9308,7 @@ const FIREBASE_CONFIG = {
     'Mods': ['mod-arma'],
     'Próteses e módulos': ['protese-modulo']
   };
-  // Fanático: dispositivos de qualquer lista, num grupo só; conhece max(Essência, Operações) por nível (retroativo)
+  // Insano: dispositivos de qualquer lista, num grupo só; conhece max(Essência, Operações) por nível (retroativo)
   const FAN_POOL = 'Dispositivos';
   const FAN_KINDS = Object.keys(TECNO_LIST_KINDS).reduce((t, k) => t.concat(TECNO_LIST_KINDS[k]), []);
   const fanPer = (s) => Math.max(0, attrOf(s, 'essencia'), skillOf(s, 'operacoes'));
@@ -9357,9 +9357,9 @@ const FIREBASE_CONFIG = {
     const usedCats = (cur && Array.isArray(cur.catalogos) ? cur.catalogos : []).slice(0, taken.length);
     const ops = skillOf(s, 'operacoes');
     const keyOf = () => chaves[st.lista] || st.chave;
-    const fan = () => st.tipo === 'Fanático';
+    const fan = () => st.tipo === 'Insano';
     const fanHave = (((cur && cur.conhecidos) || {})[FAN_POOL] || []).length;
-    // o que este nível libera; no Fanático, o total novo (retroativo) menos o que já conhece
+    // o que este nível libera; no Insano, o total novo (retroativo) menos o que já conhece
     const cap = () => (fan() ? Math.max(0, fanPer(s) * lvl - fanHave) : keyOf() ? Math.max(0, attrOf(s, keyOf()) + ops) : 0);
     const pool = () => (fan() ? FAN_POOL : st.lista);
     const steps = () => [
@@ -9595,13 +9595,13 @@ const FIREBASE_CONFIG = {
         out.push(h('section', 'tec__group', head, h('p', 'field__hint' + (have.length > cap ? ' tec__over' : ''), info),
           have.length ? tecRows(have, (j) => { const l = have.slice(); l.splice(j, 1); p.conhecidos = Object.assign({}, known, { [name]: l }); changed(); }) : h('p', 'empty', 'Nenhum componente escolhido ainda.')));
       });
-    } else if (tipo.name === 'Fanático') {
+    } else if (tipo.name === 'Insano') {
       const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
       const have = Array.isArray(known[FAN_POOL]) ? known[FAN_POOL] : [];
       const cap = fanPer(s) * lvl;
       const add = h('button', 'btn btn--primary btn--sm', 'Escolher do banco');
       add.type = 'button';
-      add.dataset.fid = 'tec-add-fanatico';
+      add.dataset.fid = 'tec-add-insano';
       add.disabled = have.length >= cap;
       add.addEventListener('click', async () => {
         const ids = new Set(have.map((x) => x.id));
