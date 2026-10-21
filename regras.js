@@ -94,7 +94,7 @@ const LUTA_ESTILOS = [
 ];
 /* Tecnomancia: o poder principal dos tecnomantes. Cada nível compra um modo de ação e uma lista de componentes.
    Toda operação é uma base (ataque, ação efetiva ou item) + implementos (padrão ou especiais, vindos das listas).
-   Um tipo de tecnomante por jogador: Engenheiro (listas) e Patrocinado (catálogos de uma companhia); o Insano chega depois. */
+   Um tipo de tecnomante por jogador: Engenheiro (listas), Patrocinado (catálogos de uma companhia) e Insano (dispositivos de qualquer lista). */
 const TECNO_ACOES = [
   ['Instantâneo', 'Ação', 'Gera um efeito explosivo na hora. A duração em campo ou no alvo é a do efeito.'],
   ['Passivo', 'Nenhuma', 'Fica ativo sem gastar ação. Paga a sustentação (o PE da operação) uma vez por cena, então dura até uma cena. Só serve para efeitos que aprimoram ou energizam o alvo: nunca ataque, condição negativa ou habilidade que precise ser ativada ou gaste ação.'],
@@ -134,6 +134,7 @@ const TECNO_TIPOS = [
       ['Atributo chave (característica do Engenheiro)', 'Para cada lista, o Engenheiro escolhe se ela usa Precisão ou Essência. Esse é o atributo chave: entra nos testes das operações e define quantos implementos cabem nelas.'],
       ['Listas', 'A cada nível de Tecnomancia (cada compra do poder), escolha uma lista de componentes (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos) e o atributo chave dela.'],
       ['Componentes conhecidos', 'Em cada lista, você conhece um número de componentes igual a atributo chave + Operações. Eles servem de base Item ou de implementos especiais.'],
+      ['Retroativo', 'O número de conhecidos de cada lista usa os valores atuais: quando o atributo chave ou Operações sobem, ele sobe junto em todos os níveis já comprados, e você escolhe os componentes novos.'],
       ['Repetir uma lista', 'Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes conhecidos dela.'],
       ['Limite de implementos', 'Numa operação, o número de implementos é no máximo o atributo chave da lista usada.'],
       ['Consertar Escudo (exclusivo do Engenheiro)', 'Uma ação efetiva pode recarregar o Escudo de um alvo, seguindo a regra de Cura: teste de atributo chave + Operações contra a CD; o alvo recupera a diferença.']
@@ -144,7 +145,11 @@ const TECNO_TIPOS = [
       ['Catálogos', 'A cada nível de Tecnomancia, escolha um catálogo da companhia, como todas as armas dela ou todas as armaduras dela, e conheça todos os componentes desse catálogo. Cada nível dá um catálogo diferente.'],
       ['Categorias universais', 'Propriedades, acessórios e mods não têm patrocinador, porque o valor deles é mecânico. Para eles, o catálogo é um tipo de arma: todos os de armas corpo a corpo ou todos os de armas de fogo.']
     ] },
-  { name: 'Insano', cost: 0, pendente: true, resumo: 'Obtém componentes de outro jeito. Em breve.' }
+  { name: 'Insano', cost: 0, resumo: 'Conhece dispositivos de qualquer lista: a cada nível, Essência ou Operações componentes, o que for maior.',
+    passivas: [
+      ['Dispositivos', 'A cada nível de Tecnomancia, escolha dispositivos de qualquer lista (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos): você conhece um número de componentes igual à sua Essência ou às suas Operações, o que for maior.'],
+      ['Retroativo', 'O número usa os valores atuais: quando a Essência ou Operações sobem, ele sobe junto em todos os níveis já comprados, e você escolhe os componentes novos.']
+    ] },
 ];
 window.VORTEX_REGRAS = {
   perdas: PERDAS,
@@ -1336,12 +1341,14 @@ window.VORTEX_REGRAS = {
           ['p', 'Define de onde vêm os seus componentes.'],
           ['p', '**Engenheiro.** Característica do Engenheiro: ele escolhe o atributo chave de cada lista, **Precisão ou Essência**. A cada nível de Tecnomancia, escolha uma lista de componentes e o atributo chave dela. Você conhece um número de componentes da lista igual a atributo chave + Operações, e eles servem de base Item ou de implementos especiais. Escolher de novo uma lista que já tem dá mais atributo chave + Operações componentes dela.'],
           ['example', 'O Engenheiro compra Tecnomancia: escolhe a lista Equipamento com Precisão como atributo chave e o modo Instantâneo. Com Precisão 2 e Operações 1, conhece 3 itens (por exemplo, uma armadura, uma arma e uma granada).'],
+          ['p', '**É retroativo:** o número de conhecidos usa os valores atuais. Quando o atributo chave ou Operações sobem, ele sobe junto em todas as listas e níveis já comprados, e você escolhe os componentes novos.'],
           ['p', '**Consertar Escudo (exclusivo do Engenheiro).** Uma ação efetiva do Engenheiro pode recarregar o Escudo de um alvo, seguindo a regra de Cura: teste de atributo chave + Operações contra a CD; o alvo recupera a diferença.'],
           ['dl', TECNO_LISTAS],
           ['p', '**Patrocinado.** Uma companhia patrocina você. Escolha a companhia uma vez; a cada nível de Tecnomancia, escolha um catálogo dela (todas as armas dela, todas as armaduras dela...) e conheça todos os componentes desse catálogo. Cada nível dá um catálogo diferente.'],
           ['p', 'Propriedades, acessórios e mods não têm patrocinador, porque o valor deles é mecânico. Para essas categorias, o catálogo é um tipo de arma: todas as de armas corpo a corpo ou todas as de armas de fogo.'],
           ['example', 'Um Patrocinado escolhe a Wathrever. No nível 1 de Tecnomancia, pega o catálogo de armas de fogo dela e conhece todas. No nível 2, pega acessórios de armas de fogo.'],
-          ['p', '**Insano.** Obtém componentes de um jeito diferente. Em breve.']
+          ['p', '**Insano.** A cada nível de Tecnomancia, escolha dispositivos de qualquer lista (Poderes, Equipamento, Propriedades, Mods, Próteses e módulos). Você conhece um número de componentes igual à sua **Essência ou às suas Operações, o que for maior**, por nível. Também é retroativo: subir a Essência ou Operações aumenta os conhecidos de todos os níveis já comprados.'],
+          ['example', 'Um Insano com Essência 3 e Operações 1 conhece 3 componentes por nível: no nível 2, 6 componentes, como uma arma, uma granada, dois poderes e dois mods. Se a Essência subir para 4, passa a conhecer 8.'],
         ]],
         ['card', 'Telecinese', [
           ['kv', '', [['Custo', '1 UP (+1 UP por melhoria)']]],
