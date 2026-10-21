@@ -9251,7 +9251,7 @@ const FIREBASE_CONFIG = {
       }
       const known = key ? attrOf(s, key[0]) + ops : 0;
       const detail = !cur ? null : !key ? 'Escolha o atributo chave (Precisão ou Essência) desta lista.'
-        : (again ? 'Repetida: mais ' : 'Conhece ') + plural(Math.max(0, known), 'componente', 'componentes') + ' (' + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + '). Até ' + plural(Math.max(0, attrOf(s, key[0])), 'implemento', 'implementos') + ' por operação.';
+        : (again ? 'Repetida: mais ' : 'Conhece ') + plural(Math.max(0, known), 'componente', 'componentes') + ' (' + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + '; retroativo: sobe junto quando eles sobem). Até ' + plural(Math.max(0, attrOf(s, key[0])), 'implemento', 'implementos') + ' por operação.';
       return h('span', 'pw-opt' + (cur ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1) + ' de Tecnomancia'), sel, keySel),
         cur ? h('span', 'pw-opt__text', info) : null, detail ? h('span', 'pw-opt__text', detail) : null);
     }));
@@ -9308,6 +9308,10 @@ const FIREBASE_CONFIG = {
     'Mods': ['mod-arma'],
     'Próteses e módulos': ['protese-modulo']
   };
+  // Fanático: dispositivos de qualquer lista, num grupo só; conhece max(Essência, Operações) por nível (retroativo)
+  const FAN_POOL = 'Dispositivos';
+  const FAN_KINDS = Object.keys(TECNO_LIST_KINDS).reduce((t, k) => t.concat(TECNO_LIST_KINDS[k]), []);
+  const fanPer = (s) => Math.max(0, attrOf(s, 'essencia'), skillOf(s, 'operacoes'));
   const tecSnap = (e) => ({ id: e.id, kind: e.kind, typeId: e.typeId || '', name: e.name, values: Object.assign({}, e.values || {}), oficial: Boolean(e.oficial) });
   function tecnoSponsorKnown(p, catId) {
     const co = p.companhia;
@@ -9353,11 +9357,17 @@ const FIREBASE_CONFIG = {
     const usedCats = (cur && Array.isArray(cur.catalogos) ? cur.catalogos : []).slice(0, taken.length);
     const ops = skillOf(s, 'operacoes');
     const keyOf = () => chaves[st.lista] || st.chave;
-    const cap = () => (keyOf() ? Math.max(0, attrOf(s, keyOf()) + ops) : 0);
+    const fan = () => st.tipo === 'Fanático';
+    const fanHave = (((cur && cur.conhecidos) || {})[FAN_POOL] || []).length;
+    // o que este nível libera; no Fanático, o total novo (retroativo) menos o que já conhece
+    const cap = () => (fan() ? Math.max(0, fanPer(s) * lvl - fanHave) : keyOf() ? Math.max(0, attrOf(s, keyOf()) + ops) : 0);
+    const pool = () => (fan() ? FAN_POOL : st.lista);
     const steps = () => [
       fixedTipo ? null : ['tipo', 'Tecnomante'],
       ['modo', 'Modo de ação'],
-      ...(st.tipo === 'Patrocinado' ? [fixedCo ? null : ['companhia', 'Companhia'], ['catalogo', 'Tipo']] : [['lista', 'Lista'], ch.npc ? null : ['comp', 'Componentes']])
+      ...(st.tipo === 'Patrocinado' ? [fixedCo ? null : ['companhia', 'Companhia'], ['catalogo', 'Tipo']]
+        : fan() ? [ch.npc ? null : ['comp', 'Dispositivos']]
+          : [['lista', 'Lista'], ch.npc ? null : ['comp', 'Componentes']])
     ].filter(Boolean);
     let at = 0;
     const ok = (id) => (id === 'tipo' ? Boolean(st.tipo) : id === 'modo' ? Boolean(st.modo) : id === 'lista' ? Boolean(st.lista && keyOf())
@@ -9417,7 +9427,7 @@ const FIREBASE_CONFIG = {
             return h('label', 'segmented__opt', r, h('span', '', c[1] + ' ' + attrOf(s, c[0])));
           })));
         parts = [h('p', 'field__hint', 'Escolha a lista de componentes deste nível. Pode repetir uma lista que já tem: você conhece mais componentes dela.'),
-          keyBox, keyOf() ? h('p', 'field__hint', 'Conhece ' + plural(cap(), 'componente', 'componentes') + ' novos desta lista (atributo chave ' + attrOf(s, keyOf()) + ' + Operações ' + ops + ').') : null,
+          keyBox, keyOf() ? h('p', 'field__hint', 'Conhece ' + plural(cap(), 'componente', 'componentes') + ' novos desta lista (atributo chave ' + attrOf(s, keyOf()) + ' + Operações ' + ops + '). É retroativo: se o atributo chave ou Operações subirem depois, todos os níveis desta lista ganham mais conhecidos.') : null,
           h('ul', 'pickchar__list', ...tecnoLists().map((l) => card(l[0], cur && tecnoPicks(cur).indexOf(l[0]) >= 0 ? 'Você já tem esta lista' : '', l[1], st.lista === l[0], () => { if (st.lista !== l[0]) { st.lista = l[0]; st.chave = ''; st.comps = []; } }, 'lista-' + nameKey(l[0]))))];
       } else if (id === 'companhia') {
         parts = [h('p', 'field__hint', 'A companhia que patrocina você vale para todos os níveis.'),
@@ -9430,20 +9440,23 @@ const FIREBASE_CONFIG = {
             return card(x.label, plural(n, 'componente', 'componentes'), '', st.catalogo === x.id, () => { st.catalogo = x.id; }, 'cat-' + nameKey(x.id), usedCats.indexOf(x.id) >= 0);
           }))];
       } else if (id === 'comp') {
-        const kinds = TECNO_LIST_KINDS[st.lista] || [];
+        const kinds = fan() ? FAN_KINDS : TECNO_LIST_KINDS[st.lista] || [];
         const add = h('button', 'btn btn--primary btn--sm', 'Escolher do banco');
         add.type = 'button';
         add.dataset.fid = 'tecwiz-comp-add';
         add.disabled = st.comps.length >= cap();
         add.addEventListener('click', async () => {
-          const ids = new Set(st.comps.map((x) => x.id).concat(((cur && cur.conhecidos) || {})[st.lista] ? cur.conhecidos[st.lista].map((x) => x.id) : []));
-          const picked = await openPickerMany({ title: st.lista + ': componentes conhecidos', kinds, filter: (x) => kinds.indexOf(x.kind) >= 0 && !ids.has(x.id) });
+          const ids = new Set(st.comps.map((x) => x.id).concat(((cur && cur.conhecidos) || {})[pool()] ? cur.conhecidos[pool()].map((x) => x.id) : []));
+          const chips = fan() ? Object.keys(TECNO_LIST_KINDS).map((n) => ({ label: n, kinds: TECNO_LIST_KINDS[n] })) : undefined;
+          const picked = await openPickerMany({ title: pool() + ': componentes conhecidos', kinds, chips, filter: (x) => kinds.indexOf(x.kind) >= 0 && !ids.has(x.id) });
           const room = cap() - st.comps.length;
           st.comps = st.comps.concat(picked.slice(0, Math.max(0, room)).map(tecSnap));
           if (picked.length > room) toast('Cabem só ' + plural(cap(), 'componente', 'componentes') + ' neste nível. Ficaram os ' + Math.max(0, room) + ' primeiros.');
           draw();
         });
-        parts = [h('p', 'field__hint', 'Escolha no banco os ' + plural(cap(), 'componente', 'componentes') + ' que você conhece de ' + st.lista + '. Dá para deixar para depois na aba Tec.'),
+        parts = [h('p', 'field__hint', fan()
+          ? 'Escolha no banco dispositivos de qualquer lista. Por nível, você conhece ' + plural(fanPer(s), 'componente', 'componentes') + ' (Essência ' + attrOf(s, 'essencia') + ' ou Operações ' + ops + ', o maior). É retroativo: no nível ' + lvl + ' são ' + fanPer(s) * lvl + ' no total, e já tem ' + fanHave + '. Dá para deixar para depois na aba Tec.'
+          : 'Escolha no banco os ' + plural(cap(), 'componente', 'componentes') + ' que você conhece de ' + st.lista + '. Dá para deixar para depois na aba Tec.'),
           h('p', 'tec__bank', add, ' ', h('span', 'field__hint', st.comps.length + ' de ' + cap())),
           st.comps.length ? tecRows(st.comps, (j) => { st.comps.splice(j, 1); draw(); }) : null];
       }
@@ -9465,7 +9478,12 @@ const FIREBASE_CONFIG = {
       s.powers.forEach((x) => { if (x.id === p.id && x !== p) delete x.estilo; });
       p.estilo = st.tipo;
       p.picks = powerPicks(p).concat([st.modo]);
-      if (st.tipo === 'Patrocinado') {
+      if (fan()) {
+        if (st.comps.length) {
+          const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
+          p.conhecidos = Object.assign({}, known, { [FAN_POOL]: (known[FAN_POOL] || []).concat(st.comps) });
+        }
+      } else if (st.tipo === 'Patrocinado') {
         p.companhia = st.companhia;
         const c = (Array.isArray(p.catalogos) ? p.catalogos : []).slice(0, k);
         while (c.length < k) c.push('');
@@ -9573,10 +9591,30 @@ const FIREBASE_CONFIG = {
         });
         const head = h('div', 'block__head tec__head', h('h3', 'pickchar__sub', name), add);
         const info = !key ? 'Escolha o atributo chave desta lista acima.'
-          : 'Conhecidos: ' + have.length + ' de ' + cap + ' (' + (times > 1 ? times + ' × (' : '') + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + (times > 1 ? ')' : '') + '). Até ' + plural(attrOf(s, key[0]), 'implemento', 'implementos') + ' por operação.' + (have.length > cap ? ' Passou do limite: tire ' + (have.length - cap) + '.' : '');
+          : 'Conhecidos: ' + have.length + ' de ' + cap + ' (' + (times > 1 ? times + ' × (' : '') + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + (times > 1 ? ')' : '') + '; retroativo: sobe junto quando o atributo chave ou Operações sobem). Até ' + plural(attrOf(s, key[0]), 'implemento', 'implementos') + ' por operação.' + (have.length > cap ? ' Passou do limite: tire ' + (have.length - cap) + '.' : '');
         out.push(h('section', 'tec__group', head, h('p', 'field__hint' + (have.length > cap ? ' tec__over' : ''), info),
           have.length ? tecRows(have, (j) => { const l = have.slice(); l.splice(j, 1); p.conhecidos = Object.assign({}, known, { [name]: l }); changed(); }) : h('p', 'empty', 'Nenhum componente escolhido ainda.')));
       });
+    } else if (tipo.name === 'Fanático') {
+      const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
+      const have = Array.isArray(known[FAN_POOL]) ? known[FAN_POOL] : [];
+      const cap = fanPer(s) * lvl;
+      const add = h('button', 'btn btn--primary btn--sm', 'Escolher do banco');
+      add.type = 'button';
+      add.dataset.fid = 'tec-add-fanatico';
+      add.disabled = have.length >= cap;
+      add.addEventListener('click', async () => {
+        const ids = new Set(have.map((x) => x.id));
+        const picked = await openPickerMany({ title: 'Dispositivos conhecidos', kinds: FAN_KINDS, chips: Object.keys(TECNO_LIST_KINDS).map((n) => ({ label: n, kinds: TECNO_LIST_KINDS[n] })), filter: (x) => FAN_KINDS.indexOf(x.kind) >= 0 && !ids.has(x.id) });
+        if (!picked.length) return;
+        const got = picked.slice(0, Math.max(0, cap - have.length)).map(tecSnap);
+        p.conhecidos = Object.assign({}, known, { [FAN_POOL]: have.concat(got) });
+        if (picked.length > got.length) toast('Cabem só ' + plural(cap, 'dispositivo', 'dispositivos') + '. Ficaram os ' + got.length + ' primeiros.');
+        changed();
+      });
+      const info = 'Conhecidos: ' + have.length + ' de ' + cap + ' (' + (lvl > 1 ? lvl + ' níveis × ' : '') + fanPer(s) + ': Essência ' + attrOf(s, 'essencia') + ' ou Operações ' + ops + ', o maior; retroativo: sobe junto quando a Essência ou Operações sobem). Dispositivos de qualquer lista.' + (have.length > cap ? ' Passou do limite: tire ' + (have.length - cap) + '.' : '');
+      out.push(h('section', 'tec__group', h('div', 'block__head tec__head', h('h3', 'pickchar__sub', 'Dispositivos'), add), h('p', 'field__hint' + (have.length > cap ? ' tec__over' : ''), info),
+        have.length ? tecRows(have, (j) => { const l = have.slice(); l.splice(j, 1); p.conhecidos = Object.assign({}, known, { [FAN_POOL]: l }); changed(); }) : h('p', 'empty', 'Nenhum dispositivo escolhido ainda.')));
     } else if (tipo.name === 'Patrocinado') {
       const cats = tecnoCatalogs(p.companhia);
       const cur = (Array.isArray(p.catalogos) ? p.catalogos : []).slice(0, lvl).filter((c) => cats.some((x) => x.id === c));
