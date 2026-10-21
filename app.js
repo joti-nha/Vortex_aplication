@@ -3490,7 +3490,7 @@ const FIREBASE_CONFIG = {
   const tecnoView = () => {
     const R = window.VORTEX_REGRAS || {};
     return [h('h3', 'entry__sub', 'Operação = base + implementos'),
-      h('p', 'pwview__efeito', 'Toda operação começa por uma base. Depois você soma implementos, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o seu atributo chave, que vem do seu tipo de tecnomante (o Engenheiro escolhe Precisão ou Essência para cada lista).'),
+      h('p', 'pwview__efeito', 'Toda operação começa por uma base. Depois você soma implementos, pagando o PE de cada um. Numa operação, o número de implementos é no máximo o seu atributo chave, que vem do seu tipo de tecnomante (o Engenheiro escolhe Precisão ou Essência uma vez, para toda a Tecnomancia).'),
       ruleTable(['Base', 'Custo', 'Como funciona'], R.tecnoBases || []),
       h('p', 'pwview__efeito', 'Dano: toda forma de causar dano segue a regra de ataque, com o multiplicador da cadência. Dado de dano ou dano que passa pela Defesa só vem de dano fixo ou dano de efeito de um componente conhecido, como o Sangramento ou o dano adicional de alguns itens.'),
       h('h3', 'entry__sub', 'Implementos padrão'),
@@ -9219,15 +9219,27 @@ const FIREBASE_CONFIG = {
   const styleBody = (e) => [
     ...(e.passivas || []).map((x) => h('span', 'pw-opt__text', h('strong', '', x[0] + ': '), x[1])),
     e.tecnicas && e.tecnicas.length ? h('details', 'pw-man', h('summary', 'pw-sub__title', 'Técnicas (custo em ataques)'), manobraTable(e.tecnicas.map((r) => ({ name: r[0], text: r[1], cost: r[2] })))) : null];
-  /* Engenheiro: em cada nível, uma lista e o atributo chave dela (Precisão ou Essência). O atributo chave vale
-     para a lista toda (repetir a lista mantém o mesmo); conhece atributo chave + Operações componentes por escolha. */
+  /* Engenheiro: um atributo chave (Precisão ou Essência) para toda a Tecnomancia, escolhido primeiro; em cada
+     nível, uma lista. Conhece atributo chave + Operações componentes por nível da lista (retroativo).
+     Fichas antigas guardavam um atributo por lista (p.chaves): vale o primeiro que houver. */
   const TECNO_CHAVES = [['precisao', 'Precisão'], ['essencia', 'Essência']];
+  const isKey = (k) => TECNO_CHAVES.some((c) => c[0] === k);
+  const engKey = (p) => (p && isKey(p.chave) ? p.chave : (Object.values((p && p.chaves) || {}).find(isKey) || ''));
   function tecnoListRow(s, p, fid) {
     const picks = tecnoPicks(p);
-    const chaves = p.chaves && typeof p.chaves === 'object' ? p.chaves : {};
     const ops = skillOf(s, 'operacoes');
     const seen = {};
-    return h('span', 'pw-sub', h('span', 'pw-sub__title', 'Listas de componentes (uma por nível de Tecnomancia)'), ...picks.map((cur, k) => {
+    const key = TECNO_CHAVES.find((c) => c[0] === engKey(p)) || null;
+    const keySel = h('select', 'input');
+    keySel.dataset.fid = 'pw-chave-' + fid;
+    keySel.setAttribute('aria-label', 'Atributo chave do Engenheiro');
+    keySel.append(h('option', '', 'Atributo chave…'), ...TECNO_CHAVES.map((c) => { const o = h('option', '', c[1]); o.value = c[0]; return o; }));
+    keySel.options[0].value = '';
+    keySel.value = key ? key[0] : '';
+    keySel.addEventListener('change', () => { p.chave = keySel.value; delete p.chaves; changed(); });
+    const keyRow = h('span', 'pw-opt' + (key ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Atributo chave (vale para toda a Tecnomancia)'), keySel),
+      h('span', 'pw-opt__text', key ? key[1] + ' ' + attrOf(s, key[0]) + ': entra nos testes e é o limite de implementos por operação.' : 'Escolha primeiro: Precisão ou Essência.'));
+    return h('span', 'pw-sub', h('span', 'pw-sub__title', 'Engenheiro: atributo chave e uma lista por nível de Tecnomancia'), keyRow, ...picks.map((cur, k) => {
       const sel = h('select', 'input');
       sel.dataset.fid = 'pw-lista-' + fid + '-' + k;
       sel.setAttribute('aria-label', 'Lista do nível ' + (k + 1));
@@ -9238,21 +9250,10 @@ const FIREBASE_CONFIG = {
       const again = cur && seen[cur];
       if (cur) seen[cur] = true;
       const info = cur ? (tecnoLists().find((x) => x[0] === cur) || [])[1] : '';
-      const key = TECNO_CHAVES.find((c) => c[0] === chaves[cur]) || null;
-      let keySel = null;
-      if (cur && !again) {
-        keySel = h('select', 'input');
-        keySel.dataset.fid = 'pw-chave-' + fid + '-' + k;
-        keySel.setAttribute('aria-label', 'Atributo chave da lista ' + cur);
-        keySel.append(h('option', '', 'Atributo chave…'), ...TECNO_CHAVES.map((c) => { const o = h('option', '', c[1]); o.value = c[0]; return o; }));
-        keySel.options[0].value = '';
-        keySel.value = key ? key[0] : '';
-        keySel.addEventListener('change', () => { p.chaves = Object.assign({}, chaves, { [cur]: keySel.value }); if (!keySel.value) delete p.chaves[cur]; changed(); });
-      }
       const known = key ? attrOf(s, key[0]) + ops : 0;
-      const detail = !cur ? null : !key ? 'Escolha o atributo chave (Precisão ou Essência) desta lista.'
+      const detail = !cur ? null : !key ? 'Escolha o atributo chave acima.'
         : (again ? 'Repetida: mais ' : 'Conhece ') + plural(Math.max(0, known), 'componente', 'componentes') + ' (' + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + '; retroativo: sobe junto quando eles sobem). Até ' + plural(Math.max(0, attrOf(s, key[0])), 'implemento', 'implementos') + ' por operação.';
-      return h('span', 'pw-opt' + (cur ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1) + ' de Tecnomancia'), sel, keySel),
+      return h('span', 'pw-opt' + (cur ? ' pw-opt--on' : ''), h('label', 'pw-opt__head', h('strong', '', 'Nível ' + (k + 1) + ' de Tecnomancia'), sel),
         cur ? h('span', 'pw-opt__text', info) : null, detail ? h('span', 'pw-opt__text', detail) : null);
     }));
   }
@@ -9350,13 +9351,13 @@ const FIREBASE_CONFIG = {
     if (!tecWizDlg) { tecWizDlg = h('dialog', 'dialog pickchar racial powopt tecwiz'); tecWizDlg.setAttribute('aria-labelledby', 'tecwiz-title'); document.body.append(tecWizDlg); }
     const dlg = tecWizDlg;
     const lvl = taken.length + 1;
-    const chaves = (cur && cur.chaves && typeof cur.chaves === 'object') ? cur.chaves : {};
+    const oldKey = engKey(cur);
     const st = { tipo: cur ? cur.estilo || '' : '', modo: '', lista: '', chave: '', companhia: (cur && cur.companhia) || '', catalogo: '', comps: [] };
     const fixedTipo = Boolean(cur && styleOf(cur));
     const fixedCo = Boolean(st.companhia);
     const usedCats = (cur && Array.isArray(cur.catalogos) ? cur.catalogos : []).slice(0, taken.length);
     const ops = skillOf(s, 'operacoes');
-    const keyOf = () => chaves[st.lista] || st.chave;
+    const keyOf = () => oldKey || st.chave;
     const fan = () => st.tipo === 'Insano';
     const fanHave = (((cur && cur.conhecidos) || {})[FAN_POOL] || []).length;
     // o que este nível libera; no Insano, o total novo (retroativo) menos o que já conhece
@@ -9364,13 +9365,14 @@ const FIREBASE_CONFIG = {
     const pool = () => (fan() ? FAN_POOL : st.lista);
     const steps = () => [
       fixedTipo ? null : ['tipo', 'Tecnomante'],
+      st.tipo === 'Engenheiro' && !oldKey ? ['chave', 'Atributo chave'] : null, // a primeira escolha do Engenheiro
       ['modo', 'Modo de ação'],
       ...(st.tipo === 'Patrocinado' ? [fixedCo ? null : ['companhia', 'Companhia'], ['catalogo', 'Tipo']]
         : fan() ? [ch.npc ? null : ['comp', 'Dispositivos']]
           : [['lista', 'Lista'], ch.npc ? null : ['comp', 'Componentes']])
     ].filter(Boolean);
     let at = 0;
-    const ok = (id) => (id === 'tipo' ? Boolean(st.tipo) : id === 'modo' ? Boolean(st.modo) : id === 'lista' ? Boolean(st.lista && keyOf())
+    const ok = (id) => (id === 'tipo' ? Boolean(st.tipo) : id === 'modo' ? Boolean(st.modo) : id === 'chave' ? Boolean(keyOf()) : id === 'lista' ? Boolean(st.lista && keyOf())
       : id === 'companhia' ? Boolean(st.companhia) : id === 'catalogo' ? Boolean(st.catalogo) : true);
     const card = (name, meta, text, on, onPick, fid, off) => {
       const b = h('button', 'btn btn--sm ' + (on ? 'btn--ghost' : 'btn--primary'), on ? 'Escolhido' : 'Escolher');
@@ -9409,26 +9411,16 @@ const FIREBASE_CONFIG = {
       if (id === 'tipo') {
         parts = [h('p', 'field__hint', 'Cada jogador tem um só tipo de tecnomante. Ele diz de onde vêm os componentes que você conhece.'),
           h('ul', 'pickchar__list', ...powerStyles(e).map((t) => card(t.name, t.pendente ? 'Em breve' : '', t.resumo, st.tipo === t.name, () => { if (st.tipo !== t.name) { st.tipo = t.name; st.lista = ''; st.catalogo = ''; st.comps = []; } }, 'tipo-' + nameKey(t.name), t.pendente)))];
+      } else if (id === 'chave') {
+        parts = [h('p', 'field__hint', 'A primeira escolha do Engenheiro. O atributo chave vale para toda a sua Tecnomancia: entra nos testes das operações, é o limite de implementos por operação e soma com Operações nos componentes conhecidos de cada lista.'),
+          h('ul', 'pickchar__list', ...TECNO_CHAVES.map((c) => card(c[1] + ' ' + attrOf(s, c[0]), '', 'Por lista: conhece ' + plural(Math.max(0, attrOf(s, c[0]) + ops), 'componente', 'componentes') + ' (' + c[1] + ' + Operações ' + ops + '). Até ' + plural(Math.max(0, attrOf(s, c[0])), 'implemento', 'implementos') + ' por operação.', st.chave === c[0], () => { st.chave = c[0]; st.comps = st.comps.slice(0, cap()); }, 'chave-' + c[0])))];
       } else if (id === 'modo') {
         parts = [h('p', 'field__hint', 'Cada nível compra um modo de ação (1 UP). Um modo não pode ser comprado duas vezes.' + (taken.length ? ' Já tem: ' + taken.join(', ') + '.' : '')),
           h('ul', 'pickchar__list', ...modes.map((o) => card(o.name, '', o.text, st.modo === o.name, () => { st.modo = o.name; }, 'modo-' + nameKey(o.name))))];
       } else if (id === 'lista') {
-        const fixed = chaves[st.lista];
-        const keyBox = !st.lista ? null : fixed
-          ? h('p', 'field__hint', 'Atributo chave de ' + st.lista + ': ' + (TECNO_CHAVES.find((c) => c[0] === fixed) || ['', fixed])[1] + ' (já escolhido; repetir a lista mantém).')
-          : h('div', 'tecwiz__key', h('p', 'field__label', 'Atributo chave de ' + st.lista), h('div', 'segmented', ...TECNO_CHAVES.map((c) => {
-            const r = h('input');
-            r.type = 'radio';
-            r.name = 'tecwiz-chave';
-            r.value = c[0];
-            r.checked = st.chave === c[0];
-            r.dataset.fid = 'tecwiz-chave-' + c[0];
-            r.addEventListener('change', () => { st.chave = c[0]; st.comps = st.comps.slice(0, cap()); draw(); });
-            return h('label', 'segmented__opt', r, h('span', '', c[1] + ' ' + attrOf(s, c[0])));
-          })));
         parts = [h('p', 'field__hint', 'Escolha a lista de componentes deste nível. Pode repetir uma lista que já tem: você conhece mais componentes dela.'),
-          keyBox, keyOf() ? h('p', 'field__hint', 'Conhece ' + plural(cap(), 'componente', 'componentes') + ' novos desta lista (atributo chave ' + attrOf(s, keyOf()) + ' + Operações ' + ops + '). É retroativo: se o atributo chave ou Operações subirem depois, todos os níveis desta lista ganham mais conhecidos.') : null,
-          h('ul', 'pickchar__list', ...tecnoLists().map((l) => card(l[0], cur && tecnoPicks(cur).indexOf(l[0]) >= 0 ? 'Você já tem esta lista' : '', l[1], st.lista === l[0], () => { if (st.lista !== l[0]) { st.lista = l[0]; st.chave = ''; st.comps = []; } }, 'lista-' + nameKey(l[0]))))];
+          keyOf() ? h('p', 'field__hint', 'Conhece ' + plural(cap(), 'componente', 'componentes') + ' novos desta lista (atributo chave ' + attrOf(s, keyOf()) + ' + Operações ' + ops + '). É retroativo: se o atributo chave ou Operações subirem depois, todos os níveis desta lista ganham mais conhecidos.') : null,
+          h('ul', 'pickchar__list', ...tecnoLists().map((l) => card(l[0], cur && tecnoPicks(cur).indexOf(l[0]) >= 0 ? 'Você já tem esta lista' : '', l[1], st.lista === l[0], () => { if (st.lista !== l[0]) { st.lista = l[0]; st.comps = []; } }, 'lista-' + nameKey(l[0]))))];
       } else if (id === 'companhia') {
         parts = [h('p', 'field__hint', 'A companhia que patrocina você vale para todos os níveis.'),
           h('ul', 'pickchar__list', ...(ITEM_DATA.fabricantes || []).map((c) => card(c, '', String(makerLore(c) || '').split(/\n/)[0].slice(0, 160), st.companhia === c, () => { if (st.companhia !== c) { st.companhia = c; st.catalogo = ''; } }, 'co-' + nameKey(c))))];
@@ -9493,7 +9485,8 @@ const FIREBASE_CONFIG = {
         const l = tecnoPicks(p);
         l[k] = st.lista;
         p.listas = l;
-        if (!chaves[st.lista]) p.chaves = Object.assign({}, chaves, { [st.lista]: st.chave });
+        p.chave = keyOf();
+        delete p.chaves;
         if (st.comps.length) {
           const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
           p.conhecidos = Object.assign({}, known, { [st.lista]: (known[st.lista] || []).concat(st.comps) });
@@ -9531,13 +9524,12 @@ const FIREBASE_CONFIG = {
       out.push(h('p', 'empty', !lvl ? 'Compre um nível de Tecnomancia (um modo de ação) na aba Poderes.' : 'Escolha o tipo de tecnomante (Engenheiro ou Patrocinado) na aba Poderes.'));
     } else if (tipo.name === 'Engenheiro') {
       const picks = tecnoPicks(p);
-      const chaves = p.chaves && typeof p.chaves === 'object' ? p.chaves : {};
       const known = p.conhecidos && typeof p.conhecidos === 'object' ? p.conhecidos : {};
       const lists = Array.from(new Set(picks.filter(Boolean)));
       out.push(tecnoListRow(s, p, 'tec')); // lista e atributo chave de cada nível, aqui mesmo
       // direto do banco: tudo o que as listas aceitam numa busca só; cada item cai na lista do tipo dele, até o limite
       const room = (name) => {
-        const key = TECNO_CHAVES.find((c) => c[0] === chaves[name]);
+        const key = TECNO_CHAVES.find((c) => c[0] === engKey(p));
         const have = Array.isArray(known[name]) ? known[name].length : 0;
         return key ? Math.max(0, (attrOf(s, key[0]) + ops) * picks.filter((x) => x === name).length - have) : 0;
       };
@@ -9570,7 +9562,7 @@ const FIREBASE_CONFIG = {
       else out.push(h('p', 'empty', 'Escolha acima a lista de cada nível de Tecnomancia.'));
       lists.forEach((name) => {
         const times = picks.filter((x) => x === name).length;
-        const key = TECNO_CHAVES.find((c) => c[0] === chaves[name]) || null;
+        const key = TECNO_CHAVES.find((c) => c[0] === engKey(p)) || null;
         const cap = key ? Math.max(0, (attrOf(s, key[0]) + ops) * times) : 0;
         const have = Array.isArray(known[name]) ? known[name] : [];
         const fidKey = nameKey(name).replace(/\s+/g, '-');
@@ -9590,7 +9582,7 @@ const FIREBASE_CONFIG = {
           changed();
         });
         const head = h('div', 'block__head tec__head', h('h3', 'pickchar__sub', name), add);
-        const info = !key ? 'Escolha o atributo chave desta lista acima.'
+        const info = !key ? 'Escolha o atributo chave acima.'
           : 'Conhecidos: ' + have.length + ' de ' + cap + ' (' + (times > 1 ? times + ' × (' : '') + key[1] + ' ' + attrOf(s, key[0]) + ' + Operações ' + ops + (times > 1 ? ')' : '') + '; retroativo: sobe junto quando o atributo chave ou Operações sobem). Até ' + plural(attrOf(s, key[0]), 'implemento', 'implementos') + ' por operação.' + (have.length > cap ? ' Passou do limite: tire ' + (have.length - cap) + '.' : '');
         out.push(h('section', 'tec__group', head, h('p', 'field__hint' + (have.length > cap ? ' tec__over' : ''), info),
           have.length ? tecRows(have, (j) => { const l = have.slice(); l.splice(j, 1); p.conhecidos = Object.assign({}, known, { [name]: l }); changed(); }) : h('p', 'empty', 'Nenhum componente escolhido ainda.')));
