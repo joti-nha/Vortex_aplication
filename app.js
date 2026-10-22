@@ -3381,7 +3381,7 @@ const FIREBASE_CONFIG = {
     carga: () => ['carga', 'Cálculo da Carga'],
     efetivo: () => ['ataque-e-defesa', 'Tipos de Resistência'],
     escudo: () => ['ataque-e-defesa', 'Escudo (E)'],
-    bonusRec: () => ['cura', 'Itens de recuperação (Live Service)'],
+    bonusRec: () => ['cura', 'Itens de recuperação'],
     encaixes: () => ['mods-e-acessorios', 'Mods'],
     corpo: () => ['atributos-e-recursos', 'Atributos'], precisao: () => ['atributos-e-recursos', 'Atributos'], essencia: () => ['atributos-e-recursos', 'Atributos'],
     luta: () => ['pericias', 'Lista de Perícias'], mira: () => ['pericias', 'Lista de Perícias'], operacoes: () => ['pericias', 'Lista de Perícias'], resistencia: () => ['pericias', 'Lista de Perícias'],
@@ -7331,7 +7331,7 @@ const FIREBASE_CONFIG = {
       if (i.slot && slotsFor(i).indexOf(i.slot) < 0) i.slot = '';
       if (!was) return;
       const free = slotsFor(i).find((id) => MULTI_SLOTS[id] || !s.inventory.some((x) => x.slot === id));
-      if (free && !(free === 'mao-e' && s.inventory.some((x) => x.slot === 'mao-d' && twoHanded(x)))) i.slot = twoHanded(i) && free === 'mao-e' ? '' : free;
+      if (free && !(free === 'mao-e' && s.inventory.some((x) => x.slot === 'mao-d' && twoHanded(x, s)))) i.slot = twoHanded(i, s) && free === 'mao-e' ? '' : free;
     });
     // Simbionte: catálogo de assimilações (tudo que já passou pelo inventário) e presets
     const as = r.assim && typeof r.assim === 'object' ? r.assim : {};
@@ -7442,8 +7442,8 @@ const FIREBASE_CONFIG = {
     ['engenharia', 'acopla + ccnucleo + ccattr (a Engenharia do Robô)'],
     ['inspirado', 'escolhe de graça uma habilidade racial de qualquer espécime (UP dados por ela: no máximo 1)'],
     ['humanidade', 'testes contra efeitos de PEM com CD; metade da Blindagem/Escudo regenera como PV'],
-    ['eletronico', 'ser eletrônico: efeitos de PEM atordoam'],
-    ['naovivo', 'não vivo: a vida não volta por descanso nem cura, só com conserto (Tecnologia)'],
+    ['eletronico', 'ser eletrônico: vulnerável a tudo o que afeta eletrônicos (o PEM atordoa)'],
+    ['naovivo', 'não vivo: imune a efeitos biológicos; a vida não volta descansando, só com conserto pela regra de Cura'],
     ['pv: 5', 'bônus fixo (também pe, pa, escudo, blindagem, carga, armadura)'],
     ['deslocamento: 3', 'metros a mais de deslocamento (o padrão é 9 m)'],
     ['pericia: Reflexos +1', 'perícia de graça; se passar do limite, vira um ponto livre para outra perícia']
@@ -7545,7 +7545,8 @@ const FIREBASE_CONFIG = {
   const skillCap = (s, id) => (doutorOf(s).indexOf(id) >= 0 || peritoOf(s).indexOf(id) >= 0 ? 4 : 3);
   const ccOf = (i) => (i.values.cc === '' || i.values.cc === undefined ? 1 : num(i.values.cc));
   const isModule = (i) => i.kind === 'protese-modulo' && i.values.classe === 'Módulo';
-  const twoHanded = (i) => /duas/i.test(String((i.values && i.values.empunhadura) || ''));
+  // Submetralhadora: quem é proficiente usa com uma mão
+  const twoHanded = (i, s) => /duas/i.test(String((i.values && i.values.empunhadura) || '')) && !(s && i.typeId === 'submetralhadora' && isProficient(s, i));
   // Módulo de I.A.: só funciona instalada num item Épico ou Lendário equipado (próteses e módulos não têm raridade)
   const iaHost = (s) => s.inventory.find((x) => x.slot && x.slot !== 'assim' && x.kind !== 'protese-modulo' && /^(lend|epic)/.test(nameKey((x.values || {}).raridade || ''))) || null;
 
@@ -9719,7 +9720,7 @@ const FIREBASE_CONFIG = {
     const s = sheetChar.sheet;
     if (slotsFor(i).indexOf(slotId) < 0) { toast((slotDef(slotId) || {}).full + ' não aceita ' + i.name + '.'); return false; }
     const hand = slotId === 'mao-d' || slotId === 'mao-e';
-    const two = hand && twoHanded(i);
+    const two = hand && twoHanded(i, s);
     const occupant = MULTI_SLOTS[slotId] ? null : s.inventory.find((x) => x.slot === slotId && x !== i);
     if (slotId === 'vestivel' && i.slot !== 'vestivel' && s.inventory.filter((x) => x.slot === 'vestivel').length >= vestMaxOf(s)) {
       toast('Limite de vestíveis: ' + vestMaxOf(s) + ' (3 + Corpo). Guarde um antes de vestir ' + i.name + '.');
@@ -9757,7 +9758,7 @@ const FIREBASE_CONFIG = {
     if (hand) {
       s.inventory.forEach((x) => { // arma de duas mãos ocupa as duas; e sai de cena se outra coisa entrar em qualquer mão
         if (x === i || (x.slot !== 'mao-d' && x.slot !== 'mao-e')) return;
-        if (two || twoHanded(x) || x.slot === slotId) stow(x);
+        if (two || twoHanded(x, s) || x.slot === slotId) stow(x);
       });
       i.slot = two ? 'mao-d' : slotId;
     } else {
@@ -9835,7 +9836,7 @@ const FIREBASE_CONFIG = {
       const opts = slotsFor(i);
       if (opts[0] === 'modulo' || opts[0] === 'protese') actions.append(act(opts[0] === 'modulo' ? 'Instalar' : 'Implantar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
       else if (opts[0] === 'vestivel') actions.append(act('Vestir', 'btn--primary', () => { if (equipItem(i, 'vestivel')) changed(); }));
-      else if (opts[0] === 'mao-d' && twoHanded(i)) actions.append(act('Empunhar (duas mãos)', 'btn--primary', () => { if (equipItem(i, 'mao-d')) changed(); }));
+      else if (opts[0] === 'mao-d' && twoHanded(i, sheetChar.sheet)) actions.append(act('Empunhar (duas mãos)', 'btn--primary', () => { if (equipItem(i, 'mao-d')) changed(); }));
       else if (opts.length === 1) actions.append(act('Equipar', 'btn--primary', () => { if (equipItem(i, opts[0])) changed(); }));
       else opts.forEach((id) => actions.append(act(slotDef(id).full, 'btn--primary', () => { if (equipItem(i, id)) changed(); })));
     }
@@ -9954,7 +9955,7 @@ const FIREBASE_CONFIG = {
     $('#equip-doll').replaceChildren(...EQUIP.map((def) => {
       let i = inv.find((x) => x.slot === def.id);
       let ghost = false;
-      if (!i && def.id === 'mao-e') { const d = inv.find((x) => x.slot === 'mao-d'); if (d && twoHanded(d)) { i = d; ghost = true; } }
+      if (!i && def.id === 'mao-e') { const d = inv.find((x) => x.slot === 'mao-d'); if (d && twoHanded(d, s)) { i = d; ghost = true; } }
       return makeCell(i || null, m, def, ghost);
     }));
     $('#acopla-row').hidden = !m.acopla;
@@ -9990,7 +9991,7 @@ const FIREBASE_CONFIG = {
       $('#equip-assim').replaceChildren(...as.map((x) => makeCell(x, m, ASSIM_SLOT, false)), ...plus);
     }
     const hands = ['mao-d', 'mao-e'].map((id) => inv.find((x) => x.slot === id));
-    const handText = hands[0] && twoHanded(hands[0]) ? hands[0].name + ' (duas mãos)' : [hands[0] ? hands[0].name : 'direita livre', hands[1] ? hands[1].name : 'esquerda livre'].join(' · ');
+    const handText = hands[0] && twoHanded(hands[0], s) ? hands[0].name + ' (duas mãos)' : [hands[0] ? hands[0].name : 'direita livre', hands[1] ? hands[1].name : 'esquerda livre'].join(' · ');
     const line = (k, v, bad) => h('div', 'equip-line' + (bad ? ' equip-line--bad' : ''), h('span', 'equip-line__k', k), h('span', 'equip-line__v', v));
     $('#equip-info').replaceChildren(
       line('Mãos', handText),
@@ -10341,9 +10342,9 @@ const FIREBASE_CONFIG = {
     const t = takenPositions({ slots: normSlots(i.slots) });
     return Object.keys(t).map((k) => t[k].acc);
   }
-  // Akimbo: um item de uma mão em cada mão (submetralhadora só com proficiência); a recarga sobe uma categoria
+  // Akimbo: um item de uma mão em cada mão (a submetralhadora é de uma mão para quem é proficiente); a recarga sobe uma categoria
   const hasAkimbo = (s) => ((s && s.powers) || []).some((p) => p.id === 'of-pod-akimbo' || nameKey(p.name) === 'akimbo');
-  const akimboOk = (s, x) => Boolean(x) && isWeapon(x.kind) && !twoHanded(x) && (x.typeId !== 'submetralhadora' || isProficient(s, x));
+  const akimboOk = (s, x) => Boolean(x) && isWeapon(x.kind) && !twoHanded(x, s);
   const akimboPair = (s) => { const hands = ['mao-d', 'mao-e'].map((id) => s.inventory.find((x) => x.slot === id)); return hasAkimbo(s) && hands.every((x) => akimboOk(s, x)) ? hands : null; };
   const dualLight = (s) => Boolean(akimboPair(s)) && akimboPair(s).some(isGun);
   // o que a arma é depois dos acessórios: pente, capacidade, ação de recarga, alcance
@@ -13496,7 +13497,7 @@ const FIREBASE_CONFIG = {
     ]],
     ['Estados', [
       ['Caído', '–2 na defesa até se levantar (ação de movimento)'],
-      ['Guarda aberta', '–2 na defesa até a próxima rodada'],
+      ['Guarda aberta', 'usa a Defesa mínima até a próxima rodada'],
       ['Cobertura parcial', 'absorve 1d2 disparos de uma cadência à distância'],
       ['Meia cobertura', 'absorve 1d4 disparos de uma cadência à distância'],
       ['Cobertura completa', 'absorve todo o dano'],
@@ -13507,7 +13508,7 @@ const FIREBASE_CONFIG = {
   ];
   const CONDITIONS = CONDITION_GROUPS.reduce((t, g) => t.concat(g[1].map((c) => c[0])), []);
   // Afetar (manobra): o efeito de cada parte do corpo, até o alvo receber qualquer cura
-  const AFETAR_FX = { pernas: '–3 m de deslocamento', 'braços': '–2 nos ataques', peito: '–2 na defesa', 'cabeça': 'ficou atordoado com o golpe' };
+  const AFETAR_FX = { pernas: 'perde metade do deslocamento', 'braços': 'desvantagem nas ações com os braços', peito: 'sangra até o fim da cena', 'cabeça': 'atordoado até o começo do próximo turno' };
   const conditionText = (n) => {
     const af = /^afetad[oa]s?:\s*(.+)$/i.exec(String(n || ''));
     if (af) return (AFETAR_FX[af[1].trim().toLowerCase()] || 'efeito na parte do corpo') + ' (até receber qualquer cura)';
@@ -14003,7 +14004,7 @@ const FIREBASE_CONFIG = {
      custo dela. O gasto fica neste aparelho, só conta na vez de quem age e zera quando a vez muda.
      Empunhadura: uma vez por turno dá para sacar ou guardar um item de Saque sem gastar ações. */
   const COST_LABEL = { padrao: 'Padrão', movimento: 'Movimento', bonus: 'Bônus', completa: 'Completa', livre: 'Livre', reacao: 'Reação', saque: 'Saque' };
-  const COST_LONG = { padrao: 'ação padrão', movimento: 'ação de movimento', bonus: 'ação bônus', completa: 'ação completa', livre: 'ação livre', reacao: 'reação', saque: 'saque grátis do turno' };
+  const COST_LONG = { padrao: 'ação padrão', movimento: 'ação de movimento', bonus: 'ação bônus', completa: 'ação completa', livre: 'ação livre', reacao: 'reação', saque: 'saque grátis' };
   const econ = {};
   function econOf(id) {
     const key = sceneOn() ? scene.round + ':' + scene.turn : 'off';
@@ -14019,7 +14020,6 @@ const FIREBASE_CONFIG = {
     if (cost === 'movimento') return e.movimento && e.padrao ? 'Sem ação de movimento (nem a padrão para trocar).' : '';
     if (cost === 'bonus') return e.bonus ? 'A ação bônus deste turno já foi usada.' : '';
     if (cost === 'completa') return e.padrao || e.movimento ? 'A ação completa precisa da padrão e da de movimento livres.' : '';
-    if (cost === 'saque') return e.saque ? 'O saque grátis deste turno já foi usado.' : '';
     return '';
   }
   // marca o gasto e devolve o texto para o registro
@@ -14037,7 +14037,7 @@ const FIREBASE_CONFIG = {
   const costChip = (cost) => (cost ? h('span', 'cost cost--' + cost, COST_LABEL[cost]) : null);
 
   // condições que mexem na defesa (a mesa pode tirar a qualquer hora)
-  const DEF_TAGS = { 'Caído': -2, 'Guarda aberta': -2, 'Zonzo': -2, 'Ferido': -1, 'Protegido': 2, 'Afetado: peito': -2 };
+  const DEF_TAGS = { 'Caído': -2, 'Zonzo': -2, 'Ferido': -1, 'Protegido': 2 };
   // condições negativas (capítulo Condições): cada uma soma +2 na CD da cura; estados e marcadores não contam
   const NEG_TAGS = ['Zonzo', 'Atordoado', 'Sem movimento', 'Ofuscado', 'Cego', 'Imóvel', 'Envenenado', 'Necrose', 'Sangrando', 'Ferido', 'Em chamas', 'Agarrado', 'Inconsciente', 'Paralisado'];
   const tagsOf = (id) => sceneTags()[id] || [];
@@ -14045,6 +14045,7 @@ const FIREBASE_CONFIG = {
   function tagDef(id, base, min) {
     const tags = tagsOf(id);
     if (tags.some((t) => nameKey(t.n) === nameKey('Atordoado'))) return { def: min, note: 'Atordoado: defesa mínima' };
+    if (tags.some((t) => nameKey(t.n) === nameKey('Guarda aberta'))) return { def: min, note: 'Guarda aberta: defesa mínima' };
     let d = 0;
     const why = [];
     tags.forEach((t) => { const k = Object.keys(DEF_TAGS).find((n) => nameKey(n) === nameKey(t.n)); if (k) { d += DEF_TAGS[k]; why.push(k + ' ' + signed(DEF_TAGS[k])); } });
@@ -14076,9 +14077,9 @@ const FIREBASE_CONFIG = {
     { id: 'empurrar', label: 'Empurrar', text: 'Se vencer, o alvo é empurrado para onde você escolher: 1,5 m, mais 1,5 m a cada 3 pontos acima do teste dele (o dobro se ele for Pequeno ou menor).' },
     { id: 'desarmar', label: 'Desarmar', text: 'Se vencer, o alvo larga o que tem nas mãos (pela regra, você escolhe: no chão, arremessado ou na sua mão livre).' },
     { id: 'agarrar', label: 'Agarrar', tag: 'Agarrado', grab: true, text: 'O alvo resiste com Luta ou Reflexos, o melhor dele. Se vencer, ele fica Agarrado (anda junto com você, os dois com metade do deslocamento, e conta como Imóvel) até se soltar.' },
-    { id: 'guarda', label: 'Quebrar guarda', tag: 'Guarda aberta', rounds: 1, text: 'Se vencer, a defesa do alvo cai 2 até a próxima rodada.' },
+    { id: 'guarda', label: 'Quebrar guarda', tag: 'Guarda aberta', rounds: 1, text: 'Se vencer, o alvo fica com a guarda aberta: usa a Defesa mínima até a próxima rodada.' },
     { id: 'finalizar', label: 'Finalizar', attack: true, text: 'Só contra quem está com 0 PV ou menos, inconsciente ou paralisado: um ataque normal, mas os dados contam no máximo (só rolam para ver o crítico) e o dano vai contra a Defesa mínima.' },
-    { id: 'afetar', label: 'Afetar', attack: true, text: 'Mire uma parte do corpo e ataque normalmente. Se acertar com 6 nos dois dados, o alvo fica com um efeito nessa parte até receber qualquer cura: pernas –3 m de deslocamento, braços –2 nos ataques, peito –2 na defesa, cabeça atordoado. Seres abióticos (sem PV ou não vivos, como Robô e Android) são imunes.' }
+    { id: 'afetar', label: 'Afetar', attack: true, text: 'Mire uma parte do corpo e ataque normalmente. Se acertar com 2 críticos naturais (6 nos dois dados), o alvo fica com um efeito nessa parte até receber qualquer cura: pernas, perde metade do deslocamento; braços, desvantagem nas ações com os braços; peito, sangramento até o fim da cena; cabeça, atordoado até o começo do próximo turno. Seres abióticos (sem PV ou não vivos, como Robô e Android) são imunes.' }
   ];
   const BODY_PARTS = ['pernas', 'braços', 'peito', 'cabeça'];
   // testes usados nas manobras, para personagem e inimigo
@@ -14111,10 +14112,10 @@ const FIREBASE_CONFIG = {
 
   // as ações do turno; cada uma abre a tela com o que dá para fazer com ela
   const SLOTS = [
-    { id: 'padrao', label: 'Padrão', sub: 'Atacar, manobra, usar item' },
+    { id: 'padrao', label: 'Padrão', sub: 'Atacar, manobra, curar, usar item' },
     { id: 'movimento', label: 'Movimento', sub: 'Andar, mirar, sacar arma' },
     { id: 'bonus', label: 'Bônus', sub: 'Poderes, sacar pistola' },
-    { id: 'completa', label: 'Completa', sub: 'Avançar, curar, saquear' },
+    { id: 'completa', label: 'Completa', sub: 'Avançar, saquear' },
     { id: 'livre', label: 'Livre', sub: 'Testes, disputa, defesa' }
   ];
   /* go: 'now' faz na hora; 'aim' volta para a arena para escolher o alvo; 'cfg' abre as opções antes;
@@ -14124,6 +14125,8 @@ const FIREBASE_CONFIG = {
       { id: 'atacar', label: 'Atacar', go: 'cfg' },
       { id: 'manobra', label: 'Manobra', go: 'cfg' },
       { id: 'usar', label: 'Usar item', go: 'itens', char: true },
+      { id: 'curar', label: 'Curar', go: 'aim', char: true },
+      { id: 'apoiar', label: 'Apoiar equipamento', go: 'now' },
       { id: 'reanimar', label: 'Reanimar', go: 'aim', char: true, when: (x) => downAllies(combatants(), x).length > 0 },
       { id: 'esconder', label: 'Esconder-se', go: 'now' }
     ],
@@ -14142,8 +14145,6 @@ const FIREBASE_CONFIG = {
     ],
     completa: [
       { id: 'avancar', label: 'Avançar', go: 'cfg' },
-      { id: 'curar', label: 'Curar', go: 'aim', char: true },
-      { id: 'apoiar', label: 'Apoiar equipamento', go: 'now' },
       { id: 'saquear', label: 'Saquear', go: 'now' }
     ],
     livre: [
@@ -14179,7 +14180,7 @@ const FIREBASE_CONFIG = {
     teste: 'Qualquer teste da ficha.',
     disputa: 'Teste contra teste: escolha o seu teste e depois o adversário na arena.',
     defesa: 'A Defesa deste combate (2d6 + Corpo + Resistência; abaixo da mínima, vale a mínima). Rola uma vez por combate.',
-    saque: 'Uma vez por turno, sacar ou guardar um item de Saque sem gastar ações.',
+    saque: 'Sacar ou guardar um item de Saque sem gastar ações.',
     passar: 'Passa a vez.'
   };
   const SLOT_LONG = { padrao: 'Ação padrão', movimento: 'Ação de movimento', bonus: 'Ação bônus', completa: 'Ação completa', livre: 'Ações livres' };
@@ -15007,9 +15008,9 @@ const FIREBASE_CONFIG = {
     return h('div', 'cmd__stack', fields, revive,
       h('p', 'cmd__note', 'Usa ' + kit.name + (bonus ? ' (+' + bonus + ' ' + hl.label + ' mesmo na falha)' : '') + '. CD ' + cd + ' (' + (low ? 'abaixo da metade: 10' : 'metade ou mais: 6') + (neg ? ', +' + 2 * neg + ' de ' + plural(neg, 'condição negativa', 'condições negativas') : '') + '). Recupera o que passar da CD.' + (t.note ? ' ' + t.note + '.' : '') + (sb ? ' ' + sb.name + ' montada: +' + sb.n + ' no teste.' : st ? ' ' + st.name + ' montada, mas só ajuda quem tem +1 na perícia do teste.' : '')),
       gmBtn('Curar ' + hl.label + ' · ' + (t.skillName || t.attrName) + ' ' + signed(fixedOf(t)) + ' contra CD ' + cd, revive ? 'btn--ghost' : 'btn--primary', async () => {
-        const why = econWhy(actor, 'completa');
+        const why = econWhy(actor, 'padrao');
         if (why) { toast(why); return; }
-        const paid = econPay(actor, 'completa');
+        const paid = econPay(actor, 'padrao');
         const r = rollTest(t);
         const got = (r.flag !== 'falha' && r.total > cd ? r.total - cd : 0) + bonus;
         let left = '';
@@ -15025,12 +15026,12 @@ const FIREBASE_CONFIG = {
   }
 
   /* Itens: só o que o personagem tem, separado em mãos e mochila. Pegar um item custa a ação do capítulo
-     Ações (arma: movimento; pistola: bônus; Saque: grátis uma vez por turno) e precisa de mão livre
+     Ações (arma: movimento; pistola: bônus; Saque: grátis) e precisa de mão livre
      (Duas mãos precisa das duas). Usar consumível ou utilitário é ação padrão, com o saque incluído. */
   const handOf = (i) => i.slot === 'mao-d' || i.slot === 'mao-e' || (i.slot === 'acoplado' && isWeapon(i.kind)); // arma acoplada: sempre empunhada
   const isSaque = (i) => i.kind === 'granada' || /saque/i.test(String((i.values && i.values.empunhadura) || '')); // granada: sempre de Saque
   function drawCost(actor, i) {
-    if (isSaque(i)) return econLive(actor) && econOf(actor.id).saque ? 'movimento' : 'saque';
+    if (isSaque(i)) return 'saque';
     if (i.typeId === 'pistola' || i.typeId === 'revolver') return 'bonus';
     return 'movimento';
   }
@@ -15038,8 +15039,8 @@ const FIREBASE_CONFIG = {
   function handRoom(s, i) {
     const held = s.inventory.filter(handOf);
     const busy = new Set();
-    held.forEach((x) => { if (twoHanded(x)) { busy.add('mao-d'); busy.add('mao-e'); } else busy.add(x.slot); });
-    if (twoHanded(i)) return busy.size ? { why: 'Duas mãos: guarde o que está nas mãos antes.' } : { slot: 'mao-d' };
+    held.forEach((x) => { if (twoHanded(x, s)) { busy.add('mao-d'); busy.add('mao-e'); } else busy.add(x.slot); });
+    if (twoHanded(i, s)) return busy.size ? { why: 'Duas mãos: guarde o que está nas mãos antes.' } : { slot: 'mao-d' };
     const slot = ['mao-d', 'mao-e'].find((k) => !busy.has(k));
     return slot ? { slot } : { why: 'As duas mãos estão ocupadas: guarde algo antes.' };
   }
@@ -15164,14 +15165,6 @@ const FIREBASE_CONFIG = {
     if (down) got.push(long ? 'reanimado' : 'continua caído: precisa ser reanimado');
     return got.length ? got.join(', ') : 'nada a recuperar';
   }
-  /* Conserto do Robô (raça Robô, Não vivo): no descanso longo, fora de serviço, quem tiver a melhor Tecnologia no grupo
-     testa e o Robô recupera Blindagem igual ao resultado; precisa de um kit técnico na mochila de alguém do grupo. */
-  function repairPlan(list) {
-    const kitOwner = list.find((mb) => sheetOf(mb).sheet.inventory.some((i) => isKit(i, HEAL[2])));
-    if (!kitOwner) return null;
-    const tech = list.slice().sort((a, b) => skillOf(sheetOf(b).sheet, 'tecnologia') - skillOf(sheetOf(a).sheet, 'tecnologia'))[0];
-    return { kitOwner, tech };
-  }
   // Descanso fica no Grupo: o mestre descansa todos; o jogador, os personagens dele
   const restWho = () => members.filter((m) => m.sheet && m.sheet.attrs && (currentCamp.gm || m.mine));
   function renderRest() {
@@ -15197,22 +15190,14 @@ const FIREBASE_CONFIG = {
 
   async function restMembers(list, long) {
     const lines = [];
-    const plan = long ? repairPlan(list) : null;
     for (const mb of list) {
       try {
         let txt = '';
         await patchMemberSheet(mb, (s) => {
           const m = compute(Object.assign({}, mb, { sheet: s }));
           txt = restSheet(s, m, long);
-          if (!m.naovivo || !m.max[m.base]) return;
-          if (!long) { txt += ' · não vivo: a vida só volta com conserto'; return; }
-          if (!plan) { txt += ' · sem kit técnico para o conserto'; return; }
-          const tc = sheetOf(plan.tech);
-          const r = rollTest(skillTest(tc.sheet, compute(tc), 'tecnologia'));
-          const gain = r.flag === 'falha' ? 0 : Math.max(0, r.total);
-          const before = getCur(s, m.base, m.max[m.base]);
-          setCur(s, m.base, before + gain, m.max[m.base]);
-          txt += ' · conserto por ' + plan.tech.name + ' (Tecnologia ' + r.total + (r.flag === 'falha' ? ', falha' : '') + '): +' + (getCur(s, m.base, m.max[m.base]) - before) + ' ' + RES_LABEL[m.base];
+          // não vivo: a vida não volta descansando, só com conserto (a regra de Cura, com Kit Técnico)
+          if (m.naovivo && m.max[m.base]) txt += ' · não vivo: a vida só volta com conserto (Curar)';
         });
         lines.push(mb.name + ': ' + txt);
       } catch (err) { lines.push(mb.name + ': ' + errorMessage(err)); }
@@ -15698,8 +15683,11 @@ const FIREBASE_CONFIG = {
     // estados (capítulo Condições e Estados): No ar –3, Ferido –1; vantagem contra Imóvel e Agarrado; Cego e Ofuscado erram no 1d4
     const pre = [];
     if (hasTag(atkId, 'No ar')) t.mods = (t.mods || []).concat([['no ar', -3]]);
-    if (hasTag(atkId, 'Afetado: braços')) t.mods = (t.mods || []).concat([['braços afetados', -2]]);
     if (hasTag(atkId, 'Ferido')) t.mods = (t.mods || []).concat([['ferido', -1]]);
+    if (hasTag(atkId, 'Afetado: braços')) { // Afetar nos braços: desvantagem nas ações com os braços
+      if (t.adv === 'vantagem') { t.adv = ''; pre.push('braços afetados: a desvantagem anula a vantagem'); }
+      else { t.adv = 'desvantagem'; pre.push('desvantagem: braços afetados'); }
+    }
     if (list.every((x) => hasTag(x.id, 'Imóvel') || hasTag(x.id, 'Agarrado'))) {
       if (t.adv === 'desvantagem') { t.adv = ''; pre.push('alvo imóvel: a vantagem anula a desvantagem'); }
       else if (!t.adv) { t.adv = 'vantagem'; pre.push('vantagem: alvo imóvel'); }
@@ -15753,11 +15741,13 @@ const FIREBASE_CONFIG = {
         if (!ok && critFx.bleed && pv) { const d = randInt(6); pv.cur = Math.max(-pv.max, pv.cur - d); fx += ' (–' + d + ' PV)'; }
         if (!ok && critFx.stun) await addTag(x.id, 'Atordoado', 2);
       }
-      // Afetar: acertando com 6 nos dois dados, um efeito na parte mirada até a próxima cura (seres eletrônicos são imunes)
+      /* Afetar: acertando com 2 críticos naturais (6 nos dois dados), um efeito na parte mirada (seres eletrônicos são imunes):
+         pernas e braços até a próxima cura; peito sangra até o fim da cena; cabeça fica atordoada até o próximo turno */
       if (part && hits && sixes >= 2 && !nonLiving(x)) {
-        await addTag(x.id, 'Afetado: ' + part, 0);
         if (part === 'cabeça') await addTag(x.id, 'Atordoado', 2);
-        fx += ' · ' + part + ' afetados: ' + AFETAR_FX[part] + ' (até a próxima cura)';
+        else if (part === 'peito') await addTag(x.id, 'Sangrando', 0, { d: '1d6' });
+        else await addTag(x.id, 'Afetado: ' + part, 0);
+        fx += ' · ' + part + ': ' + AFETAR_FX[part] + (part === 'pernas' || part === 'braços' ? ' (até a próxima cura)' : '');
       }
       // efeito da ação da criatura (o "script"): entra ao acertar, ou só no crítico
       if (act && act.cond && hits && (act.quando !== 'crit' || r.flag === 'crit') && lifeState(res.layers) !== 'morto') fx += await npcActEffect(act, x);
