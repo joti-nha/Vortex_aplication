@@ -381,7 +381,7 @@ window.VORTEX_REGRAS = {
         ['dl', [
           ['Ação padrão', 'A ação principal: atacar, fazer uma manobra, usar efeitos utilitários e afins.'],
           ['Ação de movimento', 'Em geral, serve para se deslocar, mas efeitos e habilidades também podem usá-la. Você pode trocar a ação padrão por mais uma ação de movimento.'],
-          ['Ação completa', 'A ação padrão e a de movimento juntas, gastas numa coisa só (como avançar ou curar).'],
+          ['Ação completa', 'A ação padrão e a de movimento juntas, gastas numa coisa só (como avançar ou saquear).'],
           ['Ação bônus', 'Uma ação menor, para usar recursos rápidos e acionar mecanismos ou habilidades.'],
           ['Ação livre', 'Algo feito espontaneamente ou junto com as outras ações. Não há limite de ações livres por turno.'],
           ['Reação', 'Uma resposta à ação de outra pessoa. Não há limite de reações por rodada, mas cada uma responde a um gatilho só.']
@@ -499,7 +499,7 @@ window.VORTEX_REGRAS = {
         ['example', 'Contra CD 10, um teste 13 recupera 3 PV. Com um item de +2 PV, recupera 5; se o teste tivesse dado 9, recuperaria só os 2 do item.'],
 
         ['h2', 'Pré-requisitos'],
-        ['p', 'O Ofício conta com a especialidade certa (Medicina para PV, Engenharia para Blindagem) ou quando nenhuma especialidade foi escrita; com outra especialidade, o teste usa só o atributo.'],
+        ['p', 'O Ofício conta com a especialidade certa (Medicina para PV, Engenharia ou Tecnologia para Blindagem) ou quando nenhuma especialidade foi escrita; com outra especialidade, o teste usa só o atributo.'],
         ['h3', 'Pontos de Vida (PV)'],
         ['p', 'É necessário um **Kit Médico** (ou outro item médico).'],
         ['formula', 'Teste', '2d6 + Precisão + Ofício (Medicina)'],
@@ -510,7 +510,7 @@ window.VORTEX_REGRAS = {
         ['p', 'É necessário um **Kit Técnico** ou **Componentes Mecânicos**. Vale o melhor dos dois testes.'],
         ['formula', 'Teste', '2d6 + Precisão + Ofício (Engenharia) ou Tecnologia'],
 
-        ['h2', 'Itens de recuperação (Live Service)'],
+        ['h2', 'Itens de recuperação'],
         ['h3', 'Tipos'],
         ['dl', [
           ['Ferramenta', 'Não é consumida pelo uso.'],
@@ -535,7 +535,7 @@ window.VORTEX_REGRAS = {
           ['Ataque', 'Qualquer ataque custa uma ação padrão.'],
           ['Arremessar', 'Arremessar um objeto é um ataque à distância (ação padrão, 2d6 + Precisão + Mira) com alcance de 9 m. Granadas também são arremessadas assim, com o dano da regra delas (veja [Granadas](armas#Granadas)).'],
           ['Deslocamento', 'Usar o seu deslocamento custa uma ação de movimento.'],
-          ['Curar', 'Além do item, curar consome uma ação completa (veja [Cura](cura)).'],
+          ['Curar', 'Além do item, curar consome uma ação padrão (veja [Cura](cura)).'],
           ['Reanimar', 'Trazer de volta alguém caído custa uma ação padrão (veja [Reanimar](morte-e-agonia#Reanimar)).']
         ]],
 
@@ -544,7 +544,7 @@ window.VORTEX_REGRAS = {
           ['Percepções', 'Analisar, procurar ou investigar custa uma ação de movimento.'],
           ['Esconder-se', 'Você precisa de algo que engane os sentidos, como fumaça, escuridão, silêncio ou camuflagem. Em combate, esconder-se é uma ação padrão com um teste de furtividade (2d6 + Precisão + Manha, com a penalidade de armadura). Você fica [Escondido](condicoes-e-estados#Específicos), e o resultado vira a dificuldade para quem tentar achar você.'],
           ['Mirar', 'Ação de movimento: você engaja a mira, e ela vale até o início do seu próximo turno.'],
-          ['Apoiar equipamento', 'Apoiar a arma numa [cobertura](condicoes-e-estados#Benéficos) para atirar pelo campo de visão não coberto: ação completa. Sair de uma cobertura é uma ação livre.'],
+          ['Apoiar equipamento', 'Apoiar a arma numa [cobertura](condicoes-e-estados#Benéficos) para atirar pelo campo de visão não coberto: ação padrão. Sair de uma cobertura é uma ação livre.'],
           ['Avançar', 'Você usa sua ação completa para se deslocar em linha reta o dobro do seu deslocamento. Ao final, pode fazer um ataque corpo a corpo como parte da ação; esse ataque não ativa habilidades. Se houver no caminho uma criatura de tamanho igual ou menor que o seu, você a atropela.'],
           ['Atropelar', 'Durante um Avançar, faça um teste de manobra contra a Resistência ou os Reflexos de quem está no seu caminho. Se você vencer, o alvo é empurrado para fora do caminho, na direção que você escolher, 1,5 m mais 1,5 m a cada 3 pontos que o seu teste superar o dele, e fica Caído. Se o alvo vencer usando Resistência, você perde o restante da ação e do movimento. Se vencer usando Reflexos, você continua o movimento normalmente e ele não sofre os efeitos da manobra.']
         ]],
@@ -555,18 +555,18 @@ window.VORTEX_REGRAS = {
           ['Agarrar', 'Teste de manobra contra o teste que o alvo escolher: Corpo + Luta ou Precisão + Reflexos. Se você vencer, o alvo fica [Agarrado](condicoes-e-estados#Passageiras) por você. O teste de quem é agarrado ganha +2 para cada categoria de [tamanho](atributos-e-recursos#Tamanho) de diferença entre ele e quem agarra.'],
           ['Empurrar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se o alvo perder, é empurrado na direção que você escolher: 1,5 m, mais 1,5 m a cada 3 pontos que o seu teste superar o dele. A distância dobra se o alvo for Pequeno ou menor.'],
           ['Derrubar', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, o alvo fica [Caído](condicoes-e-estados#Específicos).'],
-          ['Quebrar a guarda', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, ele fica com a guarda aberta: –2 na Defesa até a próxima rodada.'],
+          ['Quebrar a guarda', 'Teste de manobra contra a Resistência ou os Reflexos do alvo. Se você vencer, ele fica com a guarda aberta, usando a Defesa mínima até a próxima rodada.'],
           ['Desarmar', 'Você faz a manobra contra um objeto empunhado, e quem o empunha faz um teste de Resistência ou Reflexos contra o seu. Se você vencer, escolhe: jogar o item no chão, arremessá-lo (como em Arremessar, até 9 m) ou ficar com ele, se tiver uma mão livre. Pegar um item do chão custa uma ação de movimento.'],
           ['Finalizar', 'Só contra um alvo inconsciente, paralisado ou com 0 PV ou menos. Você faz um ataque normal, mas o dano é calculado apenas contra a Defesa mínima do alvo, com o valor cheio do seu ataque: os dados contam como o máximo, e você só os rola para ver se houve crítico.'],
-          ['Afetar', 'Um ataque normal mirando uma parte do corpo do alvo: pernas, braços, peito ou cabeça. Se o ataque acertar e o teste tiver 2 críticos (6 nos dois dados), além do dano o alvo fica afetado naquela parte até receber qualquer cura: **pernas**, –3 m de deslocamento; **braços**, –2 nos ataques; **peito**, –2 na Defesa; **cabeça**, Atordoado. Seres abióticos (não vivos ou sem PV, como o Robô e o Android) são imunes a esse efeito.']
+          ['Afetar', 'Um ataque normal mirando uma parte do corpo do alvo: pernas, braços, peito ou cabeça. Se o ataque acertar e o teste tiver 2 críticos naturais (exclusivamente 6 nos dois dados), além do dano o alvo fica afetado naquela parte até receber qualquer cura: **pernas**, perde metade do deslocamento; **braços**, recebe desvantagem em ações com os braços; **peito**, recebe sangramento até o final da cena; **cabeça**, fica Atordoado até o começo do próximo turno. Seres abióticos (não vivos ou sem PV, como o Robô e o Android) são imunes a esse efeito.']
         ]],
 
         ['h3', 'Equipamento'],
         ['dl', [
           ['Saquear', 'Revistar um lugar ou um corpo custa uma ação completa.'],
           ['Vestir / Entrar na direção de veículos', 'Ação completa. Conduzir numa situação difícil pede um teste de Precisão + Pilotagem contra a CD que o mestre definir.'],
-          ['Sacar ou guardar', ['Armas: ação de movimento (pistola e revólver: ação bônus).', 'Itens de empunhadura [Saque](empunhadura#Saque): uma vez por turno, sem gastar ações. Utilitários e consumíveis de Saque também saem como parte da ação de usá-los.', 'Pegar um item do chão: ação de movimento.']],
-          ['Usar', ['Consumíveis e utilitários: ação padrão (o saque já está incluído).', 'Ferramentas: o custo da ação em que são usadas (curar com um Kit Médico é a ação completa de Curar).', 'Estações: instalar ou retirar custa uma ação completa; montada, a estação soma o bônus dela na cura (veja [Cura](cura#Tipos)).']]
+          ['Sacar ou guardar', ['Armas: ação de movimento (pistola e revólver: ação bônus).', 'Itens de empunhadura [Saque](empunhadura#Saque): sem gastar ações. Utilitários e consumíveis de Saque também saem como parte da ação de usá-los.', 'Pegar um item do chão: ação de movimento.']],
+          ['Usar', ['Consumíveis e utilitários: ação padrão (o saque já está incluído).', 'Ferramentas: o custo da ação em que são usadas (curar com um Kit Médico é a ação padrão de Curar).', 'Estações: instalar ou retirar custa uma ação completa; montada, a estação soma o bônus dela na cura (veja [Cura](cura#Tipos)).']]
         ]],
 
         ['h2', 'Salto, queda e fôlego'],
@@ -698,7 +698,7 @@ window.VORTEX_REGRAS = {
         ['p', 'Estados vêm da situação, do local, da preparação ou da habilidade de quem age, e podem ser benéficos ou maléficos. Estados que dão o mesmo bônus ou a mesma penalidade não se acumulam: vale só o maior. Um benefício pode anular um malefício e vice-versa.'],
         ['h3', 'Benéficos'],
         ['dl', [
-          ['Local benéfico', 'Estar em um terreno vantajoso para a sua ação, como lançar uma magia em um campo mágico, atirar de um ponto mais alto que o alvo, fazer o dever de casa numa biblioteca (não de última hora) ou domesticar um animal selvagem num ambiente controlado. Você tem vantagem no teste.'],
+          ['Local benéfico', 'Estar em um terreno vantajoso para a sua ação, como lançar uma magia em um campo mágico, atirar de um ponto mais alto que o alvo, fazer o dever de casa numa biblioteca (não de última hora) ou domesticar um animal selvagem num ambiente controlado. Você tem vantagem no teste ou um ganho, a critério do mestre.'],
           ['Cobertura', ['Entre você e o atacante há um objeto maciço, como uma parede ou uma barricada. Parte da cadência dirigida a você acerta a cobertura, conforme o quanto você está protegido na direção do atacante:', 'Cobertura parcial: absorve 1d2 disparos da cadência.', 'Meia cobertura: absorve 1d4 disparos da cadência.', 'Cobertura completa: absorve todo o dano. Um dano em área ou outro efeito só atinge você se o ponto central dele tiver uma linha reta até você.', 'Contra disparos a distância, a cobertura parcial e a meia também aumentam a CD da [Acuidade](penalidades#Acuidade).']],
           ['Preparação', 'Você se preparou para aquele teste. Gasta horas, dias, até meses para o grande teste final! Mentira, não adianta tanto preparo. Cada hora de preparo custa 3 PE e dá um ganho, que você usa quando quiser na cena para a qual se preparou. Esse tempo não conta como descanso, e os ganhos só valem nessa cena.']
         ]],
@@ -710,7 +710,7 @@ window.VORTEX_REGRAS = {
         ['h3', 'Específicos'],
         ['dl', [
           ['Caído', 'No chão: –2 na Defesa até se levantar, o que custa uma ação de movimento.'],
-          ['Guarda aberta', 'Depois de [Quebrar a guarda](acoes#Manobras): –2 na Defesa até a próxima rodada.'],
+          ['Guarda aberta', 'Depois de [Quebrar a guarda](acoes#Manobras): usa a Defesa mínima até a próxima rodada.'],
           ['No ar', 'Um alvo caindo sem meio de voo (ou voando, se nada disser o contrário) tem –3 em testes.'],
           ['Muito perto!', 'Atirar em um alvo adjacente com uma arma à distância dá –2 no ataque.'],
           ['Escondido', 'Quem passou no teste de [esconder-se](acoes#Táticas). O resultado do teste é a dificuldade para achar você (Sentidos) e a CD da [Acuidade](penalidades#Acuidade) contra você, se for maior. Atacar revela a sua posição.'],
@@ -808,7 +808,7 @@ window.VORTEX_REGRAS = {
           ['Mira laser', 'Mirando, dispensa o teste de Acuidade a média distância, mesmo contra cobertura parcial, mas dá –1 em furtividade de curta a média distância.'],
           ['Lanterna', 'Liga quando você quiser e ilumina um cone de 9 m à frente da arma.'],
           ['Lanterna UV', 'Como a lanterna, mas a luz é UV e não serve para enxergar no escuro.'],
-          ['Tripé', 'Apoiar a arma custa só uma ação de movimento, em vez de uma ação completa.']
+          ['Tripé', 'Apoiar a arma custa só uma ação de movimento, em vez de uma ação padrão.']
         ]]
       ]
     },
@@ -840,7 +840,7 @@ window.VORTEX_REGRAS = {
         ['p', 'A empunhadura define quantas mãos são necessárias para usar um item corretamente. Usar uma arma ou equipamento fora da empunhadura ideal deixa você **sem proficiência** com aquele item, mesmo que tenha a proficiência correspondente.'],
 
         ['h2', 'Saque'],
-        ['p', 'Itens de empunhadura **Saque** podem ser sacados e manipulados rapidamente, sem atrapalhar as outras empunhaduras, desde que a ação não envolva os itens já empunhados. Uma vez por turno, você pode sacar ou guardar **um** item de Saque sem gastar ações. Itens de **Uma Mão** e **Duas Mãos** não podem ser usados como itens de Saque.'],
+        ['p', 'Itens de empunhadura **Saque** podem ser sacados e manipulados rapidamente, sem atrapalhar as outras empunhaduras, desde que a ação não envolva os itens já empunhados. Você pode sacar ou guardar um item de Saque sem gastar ações. Itens de **Uma Mão** e **Duas Mãos** não podem ser usados como itens de Saque.'],
 
         ['h2', 'Uma Mão'],
         ['p', 'Itens que ocupam uma mão inteira durante o uso.'],
@@ -882,7 +882,7 @@ window.VORTEX_REGRAS = {
           ['kv', 'Média de criação', [['Carga', 'Máximo de 3.'], ['Dano', 'Contundente ou Cortante.']]]
         ]],
         ['card', 'Pistola', [
-          ['p', 'Sacar e guardar a pistola custa uma ação bônus. Ela não sofre a penalidade por atirar em inimigos adjacentes e pode ser usada com a habilidade Akimbo.'],
+          ['p', 'Sacar e guardar a pistola custa uma ação bônus. Ela não sofre a penalidade por atirar em inimigos adjacentes.'],
           ['kv', 'Média de criação', [['Pente', 'Pente leve.'], ['Modo', 'semi, único e automático.'], ['Carga', 'Máximo de 1'], ['Alcance', 'Curto a Médio.']]],
           ['p', '*Variante:*'],
           ['p', 'Revólver: mantém as propriedades da pistola e pode ser usado com a habilidade Gatilho do velho mundo.'],
@@ -911,11 +911,11 @@ window.VORTEX_REGRAS = {
           ['kv', 'Média de criação', [['Pente', 'Pente médio, pente pesado.'], ['Modo', 'Automático e semi automático.'], ['Carga', 'Máximo de 3.'], ['Alcance', 'Médio a longo.']]]
         ]],
         ['card', 'Metralhadora leve', [
-          ['p', 'Com tripé, ou apoiada numa cobertura que não seja completa (apoiar custa a ação completa), a penalidade de cadência cai 1 a cada 5 disparos. Se você for proficiente, cai 1 a cada 3 disparos.'],
+          ['p', 'Com tripé, ou apoiada numa cobertura que não seja completa (apoiar custa a ação padrão), a penalidade de cadência cai 1 a cada 5 disparos. Se você for proficiente, cai 1 a cada 3 disparos.'],
           ['kv', 'Média de criação', [['Pente', 'Pente médio. Pente pesado. Sobrecarga.'], ['Modo', 'semi e automático.'], ['Carga', 'Máximo de 5.'], ['Alcance', 'Médio a longo.']]]
         ]],
         ['card', 'Submetralhadora', [
-          ['p', 'Você pode atirar com Essência no lugar de Precisão, mas com –1 no ataque mesmo no disparo único, somado à penalidade de cadência. Se for proficiente com submetralhadoras, pode usá-las com a habilidade Akimbo e não sofre a penalidade por atirar com Essência.'],
+          ['p', 'Você pode atirar com Essência no lugar de Precisão, mas com –1 no ataque mesmo no disparo único, somado à penalidade de cadência. Se for proficiente com submetralhadoras, pode usá-las com uma mão e não sofre a penalidade por atirar com Essência.'],
           ['kv', 'Média de criação', [['Pente', 'Pente leve. Pente médio.'], ['Modo', 'semi e automático.'], ['Carga', 'Máximo de 2.'], ['Alcance', 'Médio a curto.']]]
         ]],
         ['card', 'Laser', [
@@ -925,7 +925,7 @@ window.VORTEX_REGRAS = {
         ]],
 
         ['h2', 'Granadas'],
-        ['p', 'Granadas são **consumíveis** de empunhadura **Saque**: sacar uma é grátis uma vez por turno, e cada uma é usada uma vez.'],
+        ['p', 'Granadas são **consumíveis** de empunhadura **Saque**: sacar uma não gasta ações, e cada uma é usada uma vez.'],
         ['p', 'Toda granada tem **alcance curto** de arremesso. Arremessar uma granada funciona como um **ataque normal** (ação padrão, 2d6 + Precisão + Mira), com um teste só contra a Defesa de cada um que está na área. Em vez de dados de dano, a granada tem um **multiplicador de dano fixo**:'],
         ['formula', 'Dano da granada', '(ataque – Defesa do alvo, mínimo 1) × multiplicador da granada'],
         ['example', 'Uma Acid Bloom (×2) com ataque 11 contra Defesa 8 causa (11 – 8) × 2 = 6 de dano. Contra Defesa 12, é um raspão: 1 × 2 = 2.'],
@@ -991,7 +991,7 @@ window.VORTEX_REGRAS = {
       blocks: [
         ['h2', 'Núcleo'],
         ['p', 'O Núcleo sustenta todos os sistemas de próteses e módulos.'],
-        ['p', 'Sem um Núcleo, próteses funcionam apenas como substituições de órgãos naturais e todos os módulos permanecem inativos.'],
+        ['p', 'Sem um Núcleo, próteses funcionam apenas como substituições de órgãos naturais e todos os módulos permanecem inativos (somente próteses de suporte funcionam).'],
         ['p', 'Um Núcleo implantado, seja em um personagem ou em uma armadura, **não conta para o limite máximo de Carga**. Independentemente do modelo, **todo Núcleo possui Carga 1**.'],
         ['h3', 'Ficha de Núcleo'],
         ['fields', ['Modelo/Fabricante', 'Carga Cibernética', 'Raridade']],
@@ -1218,13 +1218,13 @@ window.VORTEX_REGRAS = {
         ['card', 'Robô', [
           ['p', 'Meio que é… feito de lata né não?'],
           ['h4', 'Núcleo'],
-          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as camadas da sua Resistência zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é atordoado pelos efeitos de [PEM](condicoes-e-estados#Específicos).'],
+          ['p', 'Você tem um núcleo! E depende dele, acoplado a você, para sobreviver. Você começa o jogo com um núcleo +2 comum, e seus PV viram Blindagem: a sua vida é a Blindagem. Quando todas as camadas da sua Resistência zeram, você fica fora de combate em vez de agonizar (veja [Morte e Agonia](morte-e-agonia)). Como ser eletrônico, você é vulnerável a tudo o que afeta eletrônicos (como o [PEM](condicoes-e-estados#Específicos)). Você não precisa de uma prótese para acoplar módulos.'],
           ['h4', 'Engenharia'],
           ['p', 'Como um bom pedaço de lata, você pode equipar itens normalmente ou acoplá-los ao próprio corpo. Acoplar exige 2 horas de trabalho (Tecnologia ou Ofício (Engenharia)) para cada ponto de Carga do item e vale para armaduras, armas, acessórios, mods, propriedades e demais itens, exceto consumíveis. Um item acoplado ocupa Carga Cibernética igual à Carga dele.'],
           ['p', 'Você se beneficia de uma armadura por vez, e as armas acopladas contam como sempre empunhadas. Para mods e acessórios, você conta ao mesmo tempo como um item **Lendário** de arma de fogo e de arma corpo a corpo: os mods e acessórios acoplados em você valem para você e para qualquer arma da mesma categoria que você estiver usando.'],
           ['p', 'A cada +2 de Carga Cibernética dados pelo núcleo acoplado, você ganha +1 de Carga Cibernética a mais, e você escolhe o atributo-chave do cálculo da sua Carga Cibernética (na ficha, aba Inventário).'],
           ['h4', 'Não vivo'],
-          ['p', 'Você é lata, e lata não é afetada por coisas biológicas nem precisa descansar: é só colocar na tomada! Você não recupera a vida (Blindagem) descansando, mas pode ser consertado: no descanso longo, fora de serviço, quem tiver a melhor Tecnologia do grupo faz o teste com um Kit Técnico, e você recupera Blindagem igual ao resultado do teste. Em combate, o conserto é a cura de Blindagem (veja [Cura](cura#Blindagem (BL))).']
+          ['p', 'Você é lata, e lata não é afetada por coisas biológicas (doenças, sangramento, sono, Afetar etc.). Você não precisa descansar, mas ainda precisa ficar inerte por ao menos 2 horas para recuperar recursos. Você não recupera a vida (Blindagem) descansando, mas pode ser consertado normalmente usando a regra de cura (veja [Cura](cura#Blindagem (BL))).']
         ]],
         ['card', 'Android', [
           ['p', 'Você é um robô, só que humanoide...'],
@@ -1237,7 +1237,6 @@ window.VORTEX_REGRAS = {
           ['p', 'Efeitos de [PEM](condicoes-e-estados#Específicos) atordoam automaticamente seres elétricos ou eletrônicos e desativam Escudos. Com a Humanidade, o Android faz o teste quando houver CD; se não houver, ele não é afetado pelo PEM.']
         ]],
         ['card', 'Etheriano', [
-          ['p', 'Cria do Éter.'],
           ['h4', 'Cria do Éter'],
           ['p', 'Quando é afetado por energia Ether pura, você recupera recursos iguais ao tamanho do Ether: 10 de PV e de PE para a pequena, 25 para a média e 50 para a grande. O que passar do máximo conta como recurso bônus até o próximo descanso (não acumula com outra fonte: vale o maior bônus). Você também pode tornar um Éter instável e forçar a absorção dele, dividindo com todos na área o XP que o Éter cede.'],
           ['h4', 'Dom do Éter'],
@@ -1364,7 +1363,7 @@ window.VORTEX_REGRAS = {
         ]],
         ['card', 'Akimbo', [
           ['kv', '', [['Custo', '1 UP']]],
-          ['p', 'Você pode empunhar dois itens de Uma mão (ou de Saque), um em cada mão (ou um de cada tipo, seja irado!). Submetralhadoras só entram no Akimbo se você for proficiente com elas (veja [Submetralhadora](armas#Submetralhadora)). A recarga sobe uma categoria de ação: livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
+          ['p', 'Você pode empunhar dois itens de Uma mão (ou de Saque), um em cada mão (ou um de cada tipo, seja irado!). A recarga sobe uma categoria de ação: livre vira bônus, bônus vira movimento, movimento vira padrão e padrão vira completa.'],
           ['p', 'Em troca, você pode mirar num único alvo com os dois itens ou escolher até dois alvos. Os disparos saem na mesma ação, mas cada arma faz o seu teste de ataque e causa o seu dano separado.']
         ]],
         ['card', 'Gatilho do velho mundo', [
